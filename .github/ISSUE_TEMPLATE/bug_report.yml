@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible DSH Desktop problem
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove API keys, private repository content, personal paths, and session text before submitting. Security vulnerabilities belong in private vulnerability reporting, not a public issue.
+  - type: input
+    id: version
+    attributes:
+      label: DSH Desktop version
+      placeholder: 0.3.7
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: dropdown
+    id: permission
+    attributes:
+      label: Harness permission mode
+      options:
+        - Workspace Write
+        - Full Access
+        - Read-only or restricted
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use the smallest safe example that reproduces the problem.
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Add screenshots or log excerpts only after removing secrets and private content.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed API keys, private paths, repository content, and session text.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true

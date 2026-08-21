@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a focused product improvement
+title: "[Feature]: "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the workflow problem before proposing a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: harness
+    attributes:
+      label: Relationship to DeepSeek Harness
+      description: Explain whether this belongs in the desktop shell, official Harness UI, or both.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance evidence
+      description: What observable result would show that the request is complete?
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Product boundaries
+      options:
+        - label: This request does not require DSH Desktop to create a second Agent loop.
+          required: true
+        - label: This request does not imply official DeepSeek endorsement.
+          required: true
