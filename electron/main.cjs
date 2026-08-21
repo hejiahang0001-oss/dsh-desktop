@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell }
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { GitChangeReviewer } = require('./change-review.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
 const { invokeHarnessUiAction, isAgentActionSettled, readHarnessAgentState } = require('./harness-ui-actions.cjs');
@@ -14,6 +15,7 @@ app.setName('DSH Desktop');
 let mainWindow;
 let supervisor;
 let workspaceStore;
+let changeReviewer;
 let dataRoot;
 let harnessOrigin = null;
 let allowQuit = false;
@@ -40,9 +42,24 @@ const unavailableAgentDiagnostics = () => Object.freeze({
   latestTestExitCode: null,
   permissionMode: 'unknown',
   canOpenPermission: false,
-  powerShellCompatibility: 'unknown'
+  powerShellCompatibility: 'unknown',
+  diffCount: 0,
+  producedPaths: Object.freeze([]),
+  latestProducedPath: '',
+  canFocusChange: false
 });
 let agentDiagnostics = unavailableAgentDiagnostics();
+const emptyChangeReviewDiagnostics = (reason = 'no-change') => Object.freeze({
+  status: reason === 'no-change' ? 'none' : 'unavailable',
+  path: '',
+  repoPath: '',
+  canAccept: false,
+  canReject: false,
+  protected: false,
+  untracked: false,
+  reason
+});
+let changeReviewDiagnostics = emptyChangeReviewDiagnostics();
 let desktopDiagnostics = Object.freeze({
   credential: Object.freeze({ status: 'missing', source: 'managed-file', reason: 'not-checked', message: '尚未检查软件模型配置。', policy: 'software-first', environmentIgnored: false }),
   sessions: Object.freeze({ available: true, count: 0, latestUpdatedAt: null, encodings: Object.freeze({ zstd: 0, jsonl: 0 }) })
@@ -89,6 +106,9 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
   stopAgentPolling();
   harnessOrigin = null;
   loadFailureHandled = false;
+  agentDiagnostics = unavailableAgentDiagnostics();
+  changeReviewDiagnostics = emptyChangeReviewDiagnostics();
+  installApplicationMenu();
   await showStatusPage();
   try {
     const url = restart ? await supervisor.restart() : await supervisor.start();
@@ -124,7 +144,8 @@ const applyWindowTitle = () => {
 const getDiagnosticsState = () => ({
   credential: { ...desktopDiagnostics.credential },
   sessions: { ...desktopDiagnostics.sessions, encodings: { ...desktopDiagnostics.sessions.encodings } },
-  agent: { ...agentDiagnostics }
+  agent: { ...agentDiagnostics, producedPaths: [...agentDiagnostics.producedPaths] },
+  changes: { ...changeReviewDiagnostics }
 });
 
 const refreshDesktopDiagnostics = async ({ rebuildMenu = true } = {}) => {
@@ -161,6 +182,10 @@ const harnessUiReady = () => {
   }
 };
 
+const sameStringArray = (left = [], right = []) => (
+  left.length === right.length && left.every((value, index) => value === right[index])
+);
+
 const sameAgentDiagnostics = (left, right) => (
   left.status === right.status
   && left.canStop === right.canStop
@@ -183,7 +208,35 @@ const sameAgentDiagnostics = (left, right) => (
   && left.permissionMode === right.permissionMode
   && left.canOpenPermission === right.canOpenPermission
   && left.powerShellCompatibility === right.powerShellCompatibility
+  && left.diffCount === right.diffCount
+  && sameStringArray(left.producedPaths, right.producedPaths)
+  && left.latestProducedPath === right.latestProducedPath
+  && left.canFocusChange === right.canFocusChange
 );
+
+const sameChangeReviewDiagnostics = (left, right) => (
+  left.status === right.status
+  && left.path === right.path
+  && left.repoPath === right.repoPath
+  && left.canAccept === right.canAccept
+  && left.canReject === right.canReject
+  && left.protected === right.protected
+  && left.untracked === right.untracked
+  && left.reason === right.reason
+);
+
+const refreshChangeReviewDiagnostics = async ({ rebuildMenu = true } = {}) => {
+  let next = emptyChangeReviewDiagnostics();
+  const latestPath = agentDiagnostics.latestProducedPath;
+  if (latestPath && changeReviewer) next = await changeReviewer.inspect(latestPath);
+  const changed = !sameChangeReviewDiagnostics(changeReviewDiagnostics, next);
+  changeReviewDiagnostics = Object.freeze({ ...next });
+  if (changed && rebuildMenu) installApplicationMenu();
+  if (changed && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('diagnostics:state', getDiagnosticsState());
+  }
+  return changed;
+};
 
 const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
   let next = unavailableAgentDiagnostics();
@@ -194,10 +247,20 @@ const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
       // A navigation can invalidate the page between the readiness check and DOM read.
     }
   }
+  const enteringActiveTurn = !['running', 'waiting'].includes(agentDiagnostics.status)
+    && ['running', 'waiting'].includes(next.status);
+  if (enteringActiveTurn && changeReviewer) {
+    try {
+      await changeReviewer.captureBaseline();
+    } catch {
+      // Baseline capture is conservative safety metadata; Git state remains untouched on failure.
+    }
+  }
   const changed = !sameAgentDiagnostics(agentDiagnostics, next);
-  agentDiagnostics = Object.freeze({ ...next });
-  if (changed && rebuildMenu) installApplicationMenu();
-  if (changed && mainWindow && !mainWindow.isDestroyed()) {
+  agentDiagnostics = Object.freeze({ ...next, producedPaths: Object.freeze([...(next.producedPaths || [])]) });
+  const reviewChanged = await refreshChangeReviewDiagnostics({ rebuildMenu: false });
+  if ((changed || reviewChanged) && rebuildMenu) installApplicationMenu();
+  if ((changed || reviewChanged) && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('diagnostics:state', getDiagnosticsState());
   }
   return { ...agentDiagnostics };
@@ -323,6 +386,76 @@ const powerShellCompatibilityLabel = () => agentDiagnostics.powerShellCompatibil
   ? 'PowerShell：受限模式不兼容（0xC0000005）'
   : 'PowerShell：尚未检测到兼容问题';
 
+const changeStatusLabel = () => {
+  const fileName = changeReviewDiagnostics.path ? path.basename(changeReviewDiagnostics.path) : '';
+  const suffix = fileName ? ` — ${fileName}` : '';
+  const labels = {
+    pending: `变更状态：待审查${suffix}`,
+    protected: `变更状态：已有修改，拒绝已保护${suffix}`,
+    accepted: `变更状态：已接受并暂存${suffix}`,
+    clean: `变更状态：工作区已恢复${suffix}`,
+    unavailable: `变更状态：仅可查看${suffix}`,
+    none: '变更状态：尚未检测到产物文件'
+  };
+  return labels[changeReviewDiagnostics.status] || labels.none;
+};
+
+const showChangeReviewFailure = async (error) => {
+  const protectedChange = error?.code === 'preexisting-unstaged-change';
+  await dialog.showMessageBox(mainWindow, {
+    type: protectedChange ? 'warning' : 'error',
+    title: protectedChange ? '已保护原有修改' : '无法处理文件变更',
+    message: protectedChange
+      ? '这个文件在打开仓库时已经有未暂存修改。'
+      : '没有执行接受或拒绝操作。',
+    detail: error?.message || String(error),
+    buttons: ['确定'],
+    defaultId: 0
+  });
+};
+
+const reviewLatestChange = async (action) => {
+  try {
+    await refreshChangeReviewDiagnostics();
+    const state = changeReviewDiagnostics;
+    if (!state.path || !changeReviewer) throw new Error('尚未检测到 Harness 产物文件。');
+    if (agentDiagnostics.canStop || agentDiagnostics.status === 'waiting') {
+      throw new Error('Agent 仍在运行或等待确认，请完成当前操作后再审查变更。');
+    }
+    if (state.protected && action === 'reject') {
+      const error = new Error('为避免覆盖你打开仓库前已有的内容，一键拒绝已禁用。你仍可先查看 Diff，再手动处理。');
+      error.code = 'preexisting-unstaged-change';
+      throw error;
+    }
+    const fileName = path.basename(state.path);
+    const accepting = action === 'accept';
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: accepting ? 'question' : 'warning',
+      title: accepting ? '接受文件变更' : '拒绝文件变更',
+      message: accepting
+        ? `接受并暂存 ${fileName}？`
+        : `拒绝并恢复 ${fileName}？`,
+      detail: accepting
+        ? '这会把该文件当前内容加入 Git 暂存区，作为后续拒绝操作的恢复基线；不会提交或推送。'
+        : state.untracked
+          ? '这是新文件。拒绝后会移动到 Windows 回收站，仍可从回收站恢复。'
+          : '这会把工作区文件恢复到当前 Git 暂存版本；已有暂存内容会保留，不会提交或推送。',
+      buttons: [accepting ? '接受并暂存' : '拒绝并恢复', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    });
+    if (result.response !== 0) return false;
+    if (accepting) await changeReviewer.accept(state.path);
+    else await changeReviewer.reject(state.path);
+    await refreshChangeReviewDiagnostics();
+    return true;
+  } catch (error) {
+    await showChangeReviewFailure(error);
+    return false;
+  }
+};
+
 const showPowerShellCompatibility = async () => {
   const affected = agentDiagnostics.powerShellCompatibility === 'sandbox-crash';
   const canOpenPermission = harnessUiReady() && agentDiagnostics.canOpenPermission;
@@ -387,6 +520,8 @@ const showWorkspaceError = async (error) => {
 const activateWorkspace = async (workspacePath) => {
   try {
     const workspace = await workspaceStore.activate(workspacePath);
+    await changeReviewer.activate(workspace.activePath);
+    changeReviewDiagnostics = emptyChangeReviewDiagnostics();
     supervisor.setLaunchDir(workspace.activePath);
     installApplicationMenu();
     applyWindowTitle();
@@ -411,6 +546,7 @@ const chooseWorkspace = async () => {
 function installApplicationMenu() {
   const workspace = getWorkspaceState();
   const harnessReady = harnessUiReady();
+  const reviewIdle = !agentDiagnostics.canStop && agentDiagnostics.status !== 'waiting';
   const recentItems = workspace.recentPaths.length > 0
     ? workspace.recentPaths.map((recentPath) => ({
       label: `${path.basename(recentPath) || path.parse(recentPath).root} — ${path.dirname(recentPath)}`,
@@ -544,6 +680,36 @@ function installApplicationMenu() {
           label: '刷新工具状态',
           enabled: harnessReady,
           click: () => { void refreshAgentDiagnostics(); }
+        }
+      ]
+    },
+    {
+      label: '变更',
+      submenu: [
+        { label: changeStatusLabel(), enabled: false },
+        {
+          label: '定位最近 Diff',
+          accelerator: 'CmdOrCtrl+Shift+D',
+          enabled: harnessReady && agentDiagnostics.canFocusChange,
+          click: () => { void runHarnessUiAction('focus-latest-change'); }
+        },
+        { type: 'separator' },
+        {
+          label: '接受并暂存最近文件…',
+          enabled: harnessReady && reviewIdle && changeReviewDiagnostics.canAccept,
+          click: () => { void reviewLatestChange('accept'); }
+        },
+        {
+          label: '拒绝最近文件并恢复…',
+          enabled: harnessReady && reviewIdle && changeReviewDiagnostics.canReject,
+          click: () => { void reviewLatestChange('reject'); }
+        },
+        { label: '接受只写入暂存区；拒绝不会提交或推送', enabled: false },
+        { type: 'separator' },
+        {
+          label: '刷新变更状态',
+          enabled: harnessReady,
+          click: () => { void refreshChangeReviewDiagnostics(); }
         }
       ]
     },
@@ -710,6 +876,10 @@ app.whenReady().then(async () => {
     fallbackDir: path.join(dataRoot, 'launch-root')
   });
   const workspace = await workspaceStore.init();
+  changeReviewer = new GitChangeReviewer({
+    trashItem: (target) => shell.trashItem(target)
+  });
+  await changeReviewer.activate(workspace.activePath);
   supervisor = createSupervisor(dataRoot, workspace.activePath);
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   installApplicationMenu();

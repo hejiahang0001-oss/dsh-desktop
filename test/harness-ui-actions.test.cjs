@@ -30,7 +30,11 @@ const NO_TOOL_STATE = {
   latestTestExitCode: null,
   permissionMode: 'unknown',
   canOpenPermission: false,
-  powerShellCompatibility: 'unknown'
+  powerShellCompatibility: 'unknown',
+  diffCount: 0,
+  producedPaths: [],
+  latestProducedPath: '',
+  canFocusChange: false
 };
 
 test('Harness UI actions are fixed to rc.8 bilingual labels', () => {
@@ -50,6 +54,7 @@ test('Agent UI actions remain a fixed whitelist with no arbitrary script input',
   assert.ok(SUPPORTED_ACTIONS.includes('steer-queued'));
   assert.ok(SUPPORTED_ACTIONS.includes('focus-pending'));
   assert.ok(SUPPORTED_ACTIONS.includes('focus-latest-tool'));
+  assert.ok(SUPPORTED_ACTIONS.includes('focus-latest-change'));
   assert.ok(SUPPORTED_ACTIONS.includes('open-trajectory'));
   assert.ok(SUPPORTED_ACTIONS.includes('open-permission-mode'));
   assert.match(getHarnessUiActionScript('stop-agent'), /Stop generating/);
@@ -58,6 +63,8 @@ test('Agent UI actions remain a fixed whitelist with no arbitrary script input',
   assert.match(getHarnessUiActionScript('focus-pending'), /data-approval-key/);
   assert.match(getHarnessUiActionScript('focus-latest-tool'), /data-tool/);
   assert.match(getHarnessUiActionScript('focus-latest-tool'), /data-kind/);
+  assert.match(getHarnessUiActionScript('focus-latest-change'), /data-diff/);
+  assert.match(getHarnessUiActionScript('focus-latest-change'), /data-produced-files-row/);
   assert.match(getHarnessUiActionScript('open-trajectory'), /Trajectory/);
   assert.match(getHarnessUiActionScript('open-permission-mode'), /Access mode/);
 });
@@ -102,7 +109,10 @@ test('Tool and test signals are bounded and normalized before reaching desktop s
     latestTestState: 'failed',
     latestTestExitCode: 2,
     permissionMode: 'workspace-write',
-    canOpenPermission: true
+    canOpenPermission: true,
+    diffCount: 2,
+    producedPaths: ['src/first.js', 'src/latest.js'],
+    canFocusChange: true
   });
   assert.deepEqual(state, {
     status: 'ready',
@@ -125,7 +135,11 @@ test('Tool and test signals are bounded and normalized before reaching desktop s
     latestTestExitCode: 2,
     permissionMode: 'workspace-write',
     canOpenPermission: true,
-    powerShellCompatibility: 'unknown'
+    powerShellCompatibility: 'unknown',
+    diffCount: 2,
+    producedPaths: ['src/first.js', 'src/latest.js'],
+    latestProducedPath: 'src/latest.js',
+    canFocusChange: true
   });
   assert.equal(classifyAgentSignals({ toolCount: 1, latestToolState: 'forged', latestToolKind: 'shell-script' }).latestToolKind, 'none');
   assert.equal(classifyAgentSignals({ toolCount: 1, testCount: 1, latestTestState: 'failed', latestTestExitCode: 3221225477 }).latestTestExitCode, 3221225477);
@@ -159,6 +173,8 @@ test('Agent state script returns only bounded UI signals', () => {
   assert.match(script, /permissionMode/);
   assert.match(script, /workspace\\s\*write/i);
   assert.match(script, /0xC0000005/);
+  assert.match(script, /data-diff/);
+  assert.match(script, /data-produced-files-row/);
   assert.match(script, /slice\(-20000\)/);
   assert.doesNotMatch(script, /innerHTML/);
   assert.doesNotMatch(script, /outerHTML/);
@@ -228,6 +244,35 @@ test('Trajectory fallback preserves a Windows tool failure and unsigned exit cod
   assert.equal(result.canOpenPermission, true);
 });
 
+test('Official Diff and produced-file markers expose a bounded latest change path', () => {
+  const makeElement = (attributes = {}, textContent = '') => ({
+    disabled: false,
+    textContent,
+    getAttribute: (name) => attributes[name] ?? null,
+    hasAttribute: (name) => Object.hasOwn(attributes, name)
+  });
+  const document = {
+    body: { textContent: '' },
+    querySelector: () => null,
+    querySelectorAll: (selector) => {
+      if (selector === '[data-diff]') return [makeElement(), makeElement()];
+      if (selector === '[data-produced-files-row] button[title]') {
+        return [
+          makeElement({ title: 'src/first.js' }),
+          makeElement({ title: 'src/latest.js' })
+        ];
+      }
+      return [];
+    }
+  };
+  const signals = Function('document', 'return ' + getHarnessAgentStateScript())(document);
+  const state = classifyAgentSignals(signals);
+  assert.equal(state.diffCount, 2);
+  assert.deepEqual(state.producedPaths, ['src/first.js', 'src/latest.js']);
+  assert.equal(state.latestProducedPath, 'src/latest.js');
+  assert.equal(state.canFocusChange, true);
+});
+
 test('Harness UI action execution uses an isolated generated script', async () => {
   const calls = [];
   const webContents = {
@@ -265,7 +310,10 @@ test('Agent state reader classifies isolated browser signals', async () => {
         latestTestState: 'running',
         latestTestExitCode: null,
         permissionMode: 'workspace-write',
-        canOpenPermission: true
+        canOpenPermission: true,
+        diffCount: 1,
+        producedPaths: ['src/latest.js'],
+        canFocusChange: true
       };
     }
   };
@@ -290,7 +338,11 @@ test('Agent state reader classifies isolated browser signals', async () => {
     latestTestExitCode: null,
     permissionMode: 'workspace-write',
     canOpenPermission: true,
-    powerShellCompatibility: 'unknown'
+    powerShellCompatibility: 'unknown',
+    diffCount: 1,
+    producedPaths: ['src/latest.js'],
+    latestProducedPath: 'src/latest.js',
+    canFocusChange: true
   });
   assert.equal(calls[0][1], true);
   assert.equal((await readHarnessAgentState(null)).status, 'unavailable');

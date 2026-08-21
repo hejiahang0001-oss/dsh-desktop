@@ -23,6 +23,7 @@ const SUPPORTED_ACTIONS = Object.freeze([
   'focus-pending',
   'open-permission-mode',
   'focus-latest-tool',
+  'focus-latest-change',
   'open-trajectory'
 ]);
 
@@ -51,7 +52,10 @@ const classifyAgentSignals = ({
   latestTestState = 'none',
   latestTestExitCode = null,
   permissionMode = 'unknown',
-  canOpenPermission = false
+  canOpenPermission = false,
+  diffCount = 0,
+  producedPaths = [],
+  canFocusChange = false
 } = {}) => {
   const safePendingCount = Number.isSafeInteger(pendingCount) && pendingCount > 0 ? pendingCount : 0;
   const safeSteerCount = Number.isSafeInteger(steerCount) && steerCount > 0 ? steerCount : 0;
@@ -70,6 +74,12 @@ const classifyAgentSignals = ({
     ? latestTestExitCode
     : null;
   const safePermissionMode = PERMISSION_MODES.includes(permissionMode) ? permissionMode : 'unknown';
+  const safeDiffCount = safeCount(diffCount);
+  const safeProducedPaths = Array.isArray(producedPaths)
+    ? [...new Set(producedPaths
+      .filter((value) => typeof value === 'string' && value.length > 0 && value.length <= 2048 && !value.includes('\0'))
+      .slice(-20))]
+    : [];
   const powerShellCompatibility = safeLatestTestState === 'failed'
     && safeLatestTestExitCode === 3221225477
     && ['read-only', 'workspace-write'].includes(safePermissionMode)
@@ -103,7 +113,11 @@ const classifyAgentSignals = ({
     latestTestExitCode: safeLatestTestExitCode,
     permissionMode: safePermissionMode,
     canOpenPermission: Boolean(canOpenPermission),
-    powerShellCompatibility
+    powerShellCompatibility,
+    diffCount: safeDiffCount,
+    producedPaths: Object.freeze(safeProducedPaths),
+    latestProducedPath: safeProducedPaths.at(-1) || '',
+    canFocusChange: Boolean(canFocusChange) && (safeDiffCount > 0 || safeProducedPaths.length > 0)
   });
 };
 
@@ -111,6 +125,7 @@ const isAgentActionSettled = (action, state = {}) => (
   (action === 'stop-agent' && !state.canStop)
   || (action === 'steer-queued' && !state.canSteer)
   || (action === 'focus-pending' && !state.canFocusPending)
+  || (action === 'focus-latest-change' && !state.canFocusChange)
 );
 
 const getHarnessUiActionScript = (action) => {
@@ -185,6 +200,21 @@ const getHarnessUiActionScript = (action) => {
       row.scrollIntoView({ block: 'center', inline: 'nearest' });
       if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '-1');
       row.focus({ preventScroll: true });
+      return true;
+    }
+    if (action === 'focus-latest-change') {
+      const diffs = Array.from(document.querySelectorAll('[data-diff]'));
+      const diff = diffs.at(-1) || null;
+      if (diff) {
+        diff.scrollIntoView({ block: 'center', inline: 'nearest' });
+        if (!diff.hasAttribute('tabindex')) diff.setAttribute('tabindex', '-1');
+        diff.focus({ preventScroll: true });
+        return true;
+      }
+      const produced = Array.from(document.querySelectorAll('[data-produced-files-row] button[title]')).at(-1) || null;
+      if (!produced || produced.disabled) return false;
+      produced.scrollIntoView({ block: 'center', inline: 'nearest' });
+      produced.focus({ preventScroll: true });
       return true;
     }
     if (action === 'open-trajectory') return activate(labels.trajectory);
@@ -298,6 +328,11 @@ const getHarnessAgentStateScript = () => {
       : latestTest.state === 'ok' ? 'passed'
         : latestTest.state === 'error' ? 'failed'
           : latestTest.state;
+    const diffCount = document.querySelectorAll('[data-diff]').length;
+    const producedPaths = Array.from(document.querySelectorAll('[data-produced-files-row] button[title]'))
+      .map((element) => (element.getAttribute('title') || '').trim())
+      .filter((value) => value.length > 0 && value.length <= 2048)
+      .slice(-20);
     const canOpenTrajectory = allControls.some((element) => enabled(element) && matches(element, labels.trajectory));
     return {
       canStop,
@@ -316,7 +351,10 @@ const getHarnessAgentStateScript = () => {
       latestTestState,
       latestTestExitCode: Number.isSafeInteger(exitCode) ? exitCode : null,
       permissionMode,
-      canOpenPermission: Boolean(permissionControl && enabled(permissionControl))
+      canOpenPermission: Boolean(permissionControl && enabled(permissionControl)),
+      diffCount,
+      producedPaths,
+      canFocusChange: diffCount > 0 || producedPaths.length > 0
     };
   })()`;
 };

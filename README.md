@@ -2,11 +2,11 @@
 
 DSH Desktop 是一个面向 Windows 的 DeepSeek Harness 桌面宿主，产品体验以 Claude Code 为对标。
 
-当前版本：**V0.3.5 Daily Build（V0.3 第六切片）**  
+当前版本：**V0.3.6 Daily Build（V0.3 第七切片）**
 固定内核：`@deepseek-ai/dsh@0.1.0-rc.8`  
 固定运行时：Node.js `v24.19.0`、Electron `35.7.5`
 
-## V0.3.5 已具备
+## V0.3.6 已具备
 
 - 双击桌面应用启动官方 DeepSeek Harness Web UI，不由 Electron 另建 Agent loop。
 - 通过 Windows 原生“项目 → 打开代码仓库…”或 `Ctrl+O` 选择本地仓库。
@@ -27,6 +27,11 @@ DSH Desktop 是一个面向 Windows 的 DeepSeek Harness 桌面宿主，产品�
 - 测试结果可显示通过、失败、运行中、已停止和退出码；状态来自官方 Harness 对话或轨迹 DOM，不建立第二套工具执行器。
 - 原生“工具”菜单显示当前权限模式，并可打开官方 Harness 权限入口；应用不会自动切换权限。
 - 对受限模式下 PowerShell 的 `0xC0000005` 精确失败提供兼容性说明，同时明确 Full Access 会绕过命令沙盒。
+- 新增 Windows 原生“变更”菜单，从官方 Harness Diff 卡和 Produced 文件入口定位最近变更，不建立第二套 Agent loop。
+- 可将最近产物文件“接受并暂存”到当前 Git 暂存区；不会自动提交或推送。
+- 可拒绝最近的已跟踪文件修改并恢复到当前暂存版本；新文件拒绝时进入 Windows 回收站。
+- Agent 运行或等待确认时禁止接受/拒绝；非 Git 工作区保持只读查看。
+- 打开仓库和进入新 Agent 回合时记录已有未暂存/未跟踪文件，命中这些原有修改时禁用一键拒绝，避免覆盖用户内容。
 - Windows 环境变量本身不会被修改，其他软件仍可继续使用；诊断只报告 Key 状态，不显示、记录或传输密钥。
 - 首次进入会直接显示可编辑的 API Key 输入框，不再因启动环境变量而锁定为只读。
 - 未选择仓库时保持空白 `launch-root`，不向用户预置演示项目或业务内容。
@@ -78,23 +83,23 @@ pnpm dist:win
 构建产物：
 
 - 解包版：`dist/win-unpacked/DSH Desktop.exe`
-- 安装包：`dist/DSH-Desktop-Setup-0.3.5.exe`
-- 更新块映射：`dist/DSH-Desktop-Setup-0.3.5.exe.blockmap`
+- 安装包：`dist/DSH-Desktop-Setup-0.3.6.exe`
+- 更新块映射：`dist/DSH-Desktop-Setup-0.3.6.exe.blockmap`
 
 `electron:fetch` 和 `runtime:fetch` 只接受固定版本、固定 SHA-256 的官方 Electron/Node 压缩包；`runtime:deploy` 根据锁文件生成固定、无目录联接的 Harness 生产闭包。
 
 ## 已验证
 
-- 28 项 Supervisor、工作区、回环安全、健康检查、会话目录、模型诊断、软件凭据优先级、Agent 状态/动作白名单及工具/测试状态测试通过。
+- 36 项 Supervisor、工作区、回环安全、健康检查、会话目录、模型诊断、软件凭据优先级、Agent/工具/Diff 状态及真实临时 Git 仓库接受/拒绝测试通过。
 - 开发态、正式 hoisted runtime 与 Windows x64 解包版均真实启动 Harness，随机回环地址返回 HTTP 200。
 - 安装包内 Harness 为 29,201 个文件、0 个 reparse point，避免 NSIS 重复展开 pnpm 联接。
 - NSIS 安装介质通过 7-Zip 结构完整性检查，内部文件 `Everything is Ok`。
-- V0.3.5 安装包为 158,426,165 字节，SHA-256 为 `DC35B5A083E9D2788DFF381A3F0898AD0BF132FCC996B258075C26FAF1C0D369`。
-- 已将 V0.3.5 直接覆盖 V0.3.4；最终安装器退出码 0。
-- NSIS 安装介质包含 29,277 个文件；正式安装版 `app.asar` 与 `win-unpacked` SHA-256 一致，均为 `CB9B91C6A47FC4038BC3AF98819A309FBEA25E16C059F304DCB03CD95B82DBF9`。
+- V0.3.6 安装包为 158,429,726 字节，SHA-256 为 `40C68DF82BD7090AEC7903CE5EE723612323462FC2E4E6B699AB9F6F307F616B`。
+- 已将 V0.3.6 直接覆盖 V0.3.5；最终安装器退出码 0。
+- NSIS 安装介质包含 29,278 个文件；正式安装版 `app.asar` 与 `win-unpacked` SHA-256 一致，均为 `459A2E09353AB938CEFE764431C65274A9394F1B08B7C120C91F96B0AC7D6181`。
 - 正式安装版在随机回环端口返回 HTTP 200，标题为 `DeepSeek Harness`，窗口标题为 `DSH Desktop — 未选择仓库`。
-- 系统卸载信息为 `DSH Desktop 0.3.5`；当前 5 个持久会话文件可见，覆盖前会话未丢失。
-- 软件 Key 已保存并在两次覆盖安装后保持可用；验证期间未读取、显示或复制 Key 明文。
+- 系统卸载信息为 `DSH Desktop 0.3.6`；覆盖前 5 个持久会话文件全部保留，真实验证另生成 1 个测试会话。
+- 软件 Key 已保存并在连续覆盖安装后保持可用；验证期间未读取、显示或复制 Key 明文。
 - 使用 `DeepSeek-V4-Flash High` 完成真实模型调用：一次 1,000 项平方输出正常结束，约 29 秒、3.1K 输出 tokens。
 - 真实长输出中验证了运行状态、补充输入、排队消息、插话发送和桌面菜单停止；停止后回到空闲且无误报弹窗。
 - 使用软件中保存的 Key 发起一次真实 `pwsh` 只读测试；模型成功调用工具，但 rc.8 Workspace Write 工具进程以 `3221225477 (0xC0000005)` 退出且无输出，因此不宣称测试通过。
@@ -103,11 +108,13 @@ pnpm dist:win
 
 ## 当前边界
 
-- DeepSeek Harness 仍是 developer preview；V0.3.5 固定 rc.8，不自动追踪 latest。
+- DeepSeek Harness 仍是 developer preview；V0.3.6 固定 rc.8，不自动追踪 latest。
 - Windows 安装包尚未代码签名，SmartScreen 可能提示风险。
 - 软件 Key 仍由 Harness rc.8 的 `.credentials.yaml` 管理，Windows 下依赖用户目录 ACL；尚未接入 Credential Manager/DPAPI。
 - rc.8 官方 UI 已具备会话搜索、继续、重命名、归档和分支入口；V0.3.1 增加桌面原生入口和持久化可见性，不重做第二套会话系统。
-- V0.3 总目标中的真实模型会话、Stop/steer、工具过程、失败可见性及隔离的成功读改测路径已通过；Workspace Write 的 PowerShell 兼容问题和 Diff 接受/拒绝闭环尚未完成。
+- V0.3.6 已完成“最近产物文件”的安全接受/拒绝最小能力，但还不是独立多文件 Diff 面板，也不包含批量审查、Checkpoint 或会话级 Rewind。
+- 安装版真实模型复验发现：桌面活动路径和 rc.8 客户端内部“DSH工作区”没有自动对齐，导致未选择/切换仓库时模型可能看不到目标文件；该轮已停止且临时文件未被修改。这是下一切片的首要缺口。
+- Workspace Write 的 PowerShell `0xC0000005` 兼容问题仍存在；应用会准确显示失败，不会自动切换 Full Access。
 - 旧的自建聊天原型文件仍保留在源码中作历史参考，但不进入正式包。
 
 路线图见 [DSH_DESKTOP_ITERATION_PLAN.md](DSH_DESKTOP_ITERATION_PLAN.md)，当前交接见 [PROGRESS.md](PROGRESS.md)。

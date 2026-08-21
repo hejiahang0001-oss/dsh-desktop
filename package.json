@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
