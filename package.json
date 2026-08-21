@@ -1,0 +1,84 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.3.5",
+  "description": "A Windows desktop host for DeepSeek Harness.",
+  "main": "electron/main.cjs",
+  "author": "DSH Desktop",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/start-electron.cjs",
+    "test": "node --test test/*.test.cjs",
+    "electron:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-electron-runtime.ps1",
+    "runtime:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-node-runtime.ps1",
+    "runtime:deploy": "pnpm --filter dsh-harness-runtime deploy vendor/harness-hoisted-0.1.0-rc.8 --prod --legacy --config.node-linker=hoisted",
+    "pack:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --dir --win --x64",
+    "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "35.7.5",
+    "electron-builder": "26.8.1"
+  },
+  "build": {
+    "appId": "com.dsh.desktop",
+    "productName": "DSH Desktop",
+    "asar": true,
+    "compression": "store",
+    "electronDist": "build/electron-v35.7.5-win32-x64.zip",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "harness-status.html",
+      "assets/harness-status.css",
+      "assets/harness-status.js",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/runtime/win32-x64",
+        "to": "runtime",
+        "filter": [
+          "node.exe",
+          "LICENSE",
+          "README.md"
+        ]
+      },
+      {
+        "from": "vendor/harness-hoisted-0.1.0-rc.8/node_modules",
+        "to": "harness/node_modules"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "DSH-Desktop-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DSH Desktop",
+      "runAfterFinish": false,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
+      "language": "2052",
+      "displayLanguageSelector": false
+    }
+  }
+}

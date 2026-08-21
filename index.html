@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>DSH Desktop · 项目型 AI 工作台</title>
+  <link rel="stylesheet" href="assets/gpt-simple.css?v=0.1.1">
+</head>
+<body>
+  <a class="skip-link" href="#main-content" data-i18n="a11y.skip">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="project-sidebar" data-i18n-aria="a11y.projects" aria-label="项目">
+      <div class="sidebar-header">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">D</span><span class="brand-name">DSH Desktop</span></div>
+        <button class="icon-button mobile-only" type="button" data-sidebar-close data-i18n-aria="a11y.closeProjects" aria-label="关闭项目栏"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button>
+      </div>
+      <button class="new-project-button" type="button" data-new-project><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="sidebar.newProject">新建项目</span></button>
+      <label class="project-search"><span class="visually-hidden" data-i18n="sidebar.searchLabel">搜索项目</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input type="search" name="projectSearch" autocomplete="off" data-project-search data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="搜索项目"></label>
+      <div class="project-section">
+        <div class="section-label"><span data-i18n="sidebar.projects">项目</span><small data-project-count>0</small></div>
+        <div class="project-list" data-project-list></div>
+        <p class="empty-projects" data-empty-projects data-i18n="sidebar.noProjects">还没有项目</p>
+      </div>
+      <div class="sidebar-footer">
+        <span class="profile-avatar" aria-hidden="true" data-i18n="sidebar.localAvatar">本</span><span class="profile-copy"><strong data-i18n="sidebar.localWorkspace">本地工作区</strong><small data-i18n="sidebar.localNote">项目数据保存在本机</small></span>
+        <button class="small-icon-button" type="button" data-settings-open data-i18n-aria="a11y.openSettings" aria-label="打开设置"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.4 6a8 8 0 0 0-1.5.9l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2.2l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.5.9l.3 2.6h4l.3-2.6a8 8 0 0 0 1.5-.9l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1Z"/></svg></button>
+      </div>
+    </aside>
+    <button class="sidebar-scrim" type="button" data-sidebar-scrim hidden data-i18n-aria="a11y.closeProjects" aria-label="关闭项目栏"></button>
+
+    <main class="workspace" id="main-content" tabindex="-1">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" type="button" data-sidebar-open aria-controls="project-sidebar" aria-expanded="false" data-i18n-aria="a11y.openProjects" aria-label="打开项目栏"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <div class="project-title"><h1 data-project-title data-i18n="workspace.noProjectHeader">项目</h1><span data-project-stage data-i18n="workspace.stage">工作空间</span></div>
+        <div class="topbar-actions">
+          <button class="language-button" type="button" data-language-toggle data-i18n-aria="a11y.switchEnglish" aria-label="Switch to English">EN</button>
+          <button class="icon-button detail-trigger" type="button" data-detail-open aria-controls="project-detail" aria-expanded="false" data-i18n-aria="a11y.openDetail" aria-label="打开项目详情" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.2"/></svg></button>
+          <div class="theme-switch" data-i18n-aria="a11y.appearance" aria-label="选择外观"><button type="button" data-theme-option="light" aria-pressed="true" data-i18n="theme.light">白</button><button type="button" data-theme-option="dark" aria-pressed="false" data-i18n="theme.dark">黑</button></div>
+        </div>
+      </header>
+
+      <section class="conversation-scroll" data-i18n-aria="a11y.conversation" aria-label="项目对话">
+        <div class="conversation" data-message-stream>
+          <section class="workspace-empty" data-workspace-empty>
+            <span class="workspace-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4Z"/><path d="M12 12v4m-2-2h4"/></svg></span>
+            <h2 data-i18n="workspace.emptyTitle">还没有项目</h2>
+            <p data-i18n="workspace.emptySubtitle">新建一个项目，把相关对话和资料放在同一个工作空间。</p>
+            <button class="primary-button" type="button" data-empty-new-project data-i18n="actions.createFirstProject">新建第一个项目</button>
+          </section>
+          <section class="workspace-ready" data-workspace-ready hidden>
+            <h2 data-i18n="workspace.readyTitle">项目工作空间已就绪</h2>
+            <p data-i18n="workspace.readySubtitle">可以从下方输入一个问题或任务开始。</p>
+          </section>
+        </div>
+      </section>
+
+      <footer class="composer-area">
+        <form class="composer" data-composer><label class="visually-hidden" for="project-prompt" data-i18n="composer.label">输入项目要求</label><textarea id="project-prompt" name="prompt" rows="1" autocomplete="off" data-i18n-placeholder="composer.disabledPlaceholder" placeholder="请先新建或选择项目…" disabled></textarea><div class="composer-toolbar"><button class="composer-icon" type="button" data-i18n-aria="a11y.addFile" aria-label="添加项目资料" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><span class="composer-mode" data-i18n="composer.mode">项目助手</span><button class="send-button" type="submit" data-i18n-aria="a11y.send" aria-label="发送" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5"/></svg></button></div></form>
+        <p class="composer-note" data-i18n="composer.note">AI 可能会出错，重要内容请复核。</p>
+      </footer>
+    </main>
+  </div>
+
+  <button class="detail-backdrop" type="button" data-detail-backdrop hidden data-i18n-aria="a11y.closeDetail" aria-label="关闭项目详情"></button>
+  <aside class="detail-panel" id="project-detail" data-detail-panel hidden role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="detail-header"><div><h2 id="detail-title" data-i18n="detail.title">项目详情</h2><p data-detail-project-name></p></div><button class="icon-button" type="button" data-detail-close data-i18n-aria="a11y.closeDetail" aria-label="关闭项目详情"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button></div>
+    <div class="detail-body">
+      <section class="detail-section"><h3 data-i18n="detail.about">项目信息</h3><dl class="detail-list detail-list-stacked"><div><dt data-i18n="detail.description">项目说明</dt><dd data-detail-description data-i18n="detail.noDescription">未填写</dd></div><div><dt data-i18n="detail.storage">存储位置</dt><dd data-i18n="detail.storageValue">仅保存在本机</dd></div></dl></section>
+      <section class="detail-section danger-zone"><h3 data-i18n="detail.deleteTitle">删除项目</h3><p data-i18n="detail.deleteHelp">删除后，该项目将从本机工作区移除，且无法恢复。</p><button class="danger-button" type="button" data-delete-project-open data-i18n="actions.deleteProject">删除项目</button></section>
+    </div>
+  </aside>
+
+  <div class="modal-layer" data-new-project-modal hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="new-project-title">
+      <div class="modal-header"><div><h2 id="new-project-title" data-i18n="newProject.title">新建项目</h2><p data-i18n="newProject.subtitle">创建一个独立的项目工作空间。</p></div><button class="icon-button" type="button" data-modal-close data-i18n-aria="a11y.closeNewProject" aria-label="关闭新建项目"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button></div>
+      <form class="modal-form" data-new-project-form><label class="field"><span data-i18n="newProject.name">项目名称</span><input type="text" name="name" autocomplete="off" maxlength="80" required aria-describedby="new-project-status" data-new-project-name data-i18n-placeholder="newProject.namePlaceholder" placeholder="例如：年度产品规划…"></label><label class="field"><span data-i18n="newProject.description">项目说明（可选）</span><textarea name="description" rows="3" autocomplete="off" maxlength="240" data-i18n-placeholder="newProject.descriptionPlaceholder" placeholder="简要描述目标、范围或背景…"></textarea></label><p class="form-status" id="new-project-status" data-new-project-status aria-live="polite"></p><div class="modal-actions"><button class="secondary-button" type="button" data-modal-close data-i18n="actions.cancel">取消</button><button class="primary-button" type="submit" data-i18n="actions.create">创建项目</button></div></form>
+    </section>
+    <button class="modal-backdrop" type="button" tabindex="-1" data-modal-close data-i18n-aria="a11y.closeNewProject" aria-label="关闭新建项目"></button>
+  </div>
+
+  <div class="modal-layer" data-settings-modal hidden>
+    <section class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-header"><div><h2 id="settings-title" data-i18n="settings.title">模型设置</h2><p data-i18n="settings.subtitle">连接 DeepSeek 或其他 OpenAI 兼容服务。</p></div><button class="icon-button" type="button" data-modal-close data-i18n-aria="a11y.closeSettings" aria-label="关闭设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button></div>
+      <form class="modal-form" data-settings-form><label class="field"><span data-i18n="settings.endpoint">API 地址</span><input type="url" name="endpoint" autocomplete="off" required value="https://api.deepseek.com" spellcheck="false" aria-describedby="settings-status"></label><label class="field"><span data-i18n="settings.model">模型</span><input type="text" name="model" autocomplete="off" required value="deepseek-chat" spellcheck="false" aria-describedby="settings-status"></label><label class="field"><span>API Key</span><input type="password" name="apiKey" autocomplete="off" data-i18n-placeholder="settings.keyPlaceholder" placeholder="输入密钥；留空则保留现有密钥…" aria-describedby="settings-status"></label><p class="security-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span data-i18n="settings.security">密钥仅保存在本机，并使用 Windows 系统加密能力保护。</span></p><p class="form-status" id="settings-status" data-settings-status aria-live="polite"></p><div class="modal-actions"><button class="secondary-button" type="button" data-modal-close data-i18n="actions.cancel">取消</button><button class="primary-button" type="submit" data-i18n="actions.save">保存设置</button></div></form>
+    </section>
+    <button class="modal-backdrop" type="button" tabindex="-1" data-modal-close data-i18n-aria="a11y.closeSettings" aria-label="关闭设置"></button>
+  </div>
+
+  <div class="modal-layer" data-delete-project-modal hidden>
+    <section class="modal-card confirm-card" role="dialog" aria-modal="true" aria-labelledby="delete-project-title" aria-describedby="delete-project-description">
+      <div class="modal-header"><div><h2 id="delete-project-title" data-i18n="deleteProject.title">删除项目？</h2><p data-i18n="deleteProject.subtitle">此操作无法撤销。</p></div><button class="icon-button" type="button" data-modal-close data-i18n-aria="a11y.closeDeleteProject" aria-label="关闭删除项目确认"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button></div>
+      <div class="confirm-body"><p id="delete-project-description" data-i18n="deleteProject.description">将永久删除以下项目：</p><strong class="delete-project-name" data-delete-project-name></strong><div class="modal-actions"><button class="secondary-button" type="button" data-modal-close data-delete-cancel data-i18n="actions.cancel">取消</button><button class="danger-button danger-button-solid" type="button" data-delete-project-confirm data-i18n="actions.delete">删除</button></div></div>
+    </section>
+    <button class="modal-backdrop" type="button" tabindex="-1" data-modal-close data-i18n-aria="a11y.closeDeleteProject" aria-label="关闭删除项目确认"></button>
+  </div>
+
+  <div class="visually-hidden" data-live-status aria-live="polite" aria-atomic="true"></div>
+  <script src="assets/i18n.js?v=0.1.1"></script>
+  <script src="assets/gpt-simple.js?v=0.1.1"></script>
+</body>
+</html>

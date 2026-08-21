@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN" data-ui-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0e1117">
+  <title>方案 B · ERP 实施指挥台</title>
+  <link rel="stylesheet" href="assets/base.css">
+  <link rel="stylesheet" href="assets/concept-b.css">
+</head>
+<body class="tech-fx">
+  <a class="skip-link" href="#main-content-b">跳到实施内容</a>
+  <main class="app-shell" aria-label="DSH ERP Advisor 实施指挥台方案">
+    <nav class="activity-rail" aria-label="活动栏">
+      <span class="rail-mark" aria-hidden="true">DSH</span>
+      <button class="rail-button active" type="button" aria-label="客户项目">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3Z"/></svg>
+      </button>
+      <button class="rail-button" type="button" aria-label="业务流程">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.8a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+      </button>
+      <button class="rail-button" type="button" aria-label="测试与缺陷">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10m2-6c4 0 4-4 8-4"/></svg>
+      </button>
+      <button class="rail-button" type="button" aria-label="交付物">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8v5h5v8h-5v5H8v-5H3V8h5Z"/></svg>
+      </button>
+      <div class="rail-bottom">
+        <button class="rail-button" type="button" data-open-command aria-label="打开命令中心">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+        </button>
+        <button class="rail-button" type="button" aria-label="设置">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        </button>
+      </div>
+    </nav>
+
+    <header class="titlebar">
+      <div class="brand"><span class="brand-title">DSH ERP Advisor</span></div>
+      <button class="command-center" type="button" data-open-command>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+        <span>搜索项目、议题、责任人或交付物</span>
+        <span class="keycap">Ctrl K</span>
+      </button>
+      <div class="window-controls" aria-label="窗口控制示意">
+        <button class="window-button" type="button" aria-label="最小化"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"/></svg></button>
+        <button class="window-button" type="button" aria-label="最大化"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10"/></svg></button>
+        <button class="window-button close" type="button" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button>
+      </div>
+    </header>
+
+    <aside class="sidebar" aria-label="上线准备清单">
+      <div class="sidebar-head">
+        <h2>上线准备</h2>
+        <button class="icon-button" type="button" aria-label="新增实施事项"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <div class="sidebar-scroll">
+        <div class="section-heading"><span>本周红线</span><span class="badge running">2</span></div>
+        <ul class="task-list">
+          <li><button class="task-item" type="button" data-task aria-current="page"><span class="task-dot running">•</span><span><span class="task-name">上线准备与切换</span><span class="task-meta">24 项 · 3 项阻塞</span></span><span class="task-meta">P0</span></button></li>
+          <li><button class="task-item" type="button" data-task><span class="task-dot waiting">!</span><span><span class="task-name">接口对账异常</span><span class="task-meta">等待业务确认</span></span><span class="task-meta">P1</span></button></li>
+        </ul>
+        <div class="section-heading"><span>实施工作流</span><span>3</span></div>
+        <ul class="task-list">
+          <li><button class="task-item" type="button" data-task><span class="task-dot complete">✓</span><span><span class="task-name">数据迁移模拟</span><span class="task-meta">第二轮已完成</span></span><span class="task-meta">D-14</span></button></li>
+          <li><button class="task-item" type="button" data-task><span class="task-dot complete">✓</span><span><span class="task-name">总账月结演练</span><span class="task-meta">差异 2 项</span></span><span class="task-meta">D-10</span></button></li>
+          <li><button class="task-item" type="button" data-task><span class="task-dot waiting">!</span><span><span class="task-name">UAT 缺陷闭环</span><span class="task-meta">7 项未关闭</span></span><span class="task-meta">D-7</span></button></li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="main conversation" id="main-content-b" aria-labelledby="task-title-b" tabindex="-1">
+      <header class="conversation-header">
+        <div class="header-crumbs"><span>昆仑集团 ERP</span><span>/</span><h1 id="task-title-b" data-task-title>上线准备与切换</h1></div>
+        <span class="toolbar-spacer"></span>
+        <span class="badge running">WAR ROOM ACTIVE</span>
+        <button class="icon-button" type="button" data-toggle-theme aria-label="切换到浅色外观"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8 8 0 0 1 8.8 4 8 8 0 1 0 20 15.2Z"/></svg></button>
+        <button class="icon-button" type="button" aria-label="暂停自动刷新"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6v12M16 6v12"/></svg></button>
+        <button class="icon-button" type="button" aria-label="更多操作"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+      </header>
+      <div class="message-scroll">
+        <div class="message-stream" data-message-stream>
+          <article class="message user">
+            <div class="avatar" aria-hidden="true">你</div>
+            <div class="message-content">
+              <div class="message-label">项目经理 · 10:55</div>
+              <div class="message-bubble"><p>把本周切换计划、未关闭缺陷、主数据冻结和接口对账放进上线指挥清单。</p></div>
+            </div>
+          </article>
+          <article class="message">
+            <div class="avatar agent" aria-hidden="true">DSH</div>
+            <div class="message-content">
+              <div class="message-label">ERP ADVISOR · 10:55</div>
+              <div class="message-bubble"><p>已汇总 24 项切换任务、7 项未关闭缺陷和 3 项上线红线。主数据冻结窗口与两项接口对账仍需客户确认。</p></div>
+              <section class="permission-card" aria-label="权限请求">
+                <div class="permission-title"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5c0 4.8 3 8.2 7.5 10 4.5-1.8 7.5-5.2 7.5-10V6Z"/></svg><span>发布上线评审包？</span></div>
+                <p>将切换计划、阻塞项和待决策事项固化为本周评审版，不会覆盖已基线化版本。</p>
+                <div class="permission-actions">
+                  <button class="primary-button small-button" type="button" data-permission-allow data-approved-title="上线评审包已发布" data-approved-body="本周评审版已生成，上一版基线保持不变。">发布评审版</button>
+                  <button class="text-button small-button" type="button">预览变更</button>
+                  <button class="text-button small-button" type="button" data-permission-deny data-denied-title="本次未发布" data-denied-body="当前基线和项目资料均未改动。">暂不发布</button>
+                </div>
+              </section>
+              <section class="progress-card" aria-label="执行轨迹">
+                <div class="progress-head"><span class="spinner" aria-hidden="true"></span>CONTROL 04 · CUTOVER READINESS</div>
+                <div class="progress-body">
+                  <div class="progress-row"><span class="status-dot complete">✓</span><strong>核对切换任务责任人与时间窗</strong><time>24/24</time></div>
+                  <div class="progress-row"><span class="status-dot complete">✓</span><strong>汇总未关闭缺陷与规避措施</strong><time>7 项</time></div>
+                  <div class="progress-row"><span class="status-dot running">•</span><strong>校验主数据冻结清单</strong><time>86%</time></div>
+                  <div class="progress-row"><span class="status-dot">4</span><span>生成上线决策材料</span><time>QUEUED</time></div>
+                </div>
+              </section>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="composer-wrap">
+        <form class="composer" data-composer>
+          <label class="screen-reader-status" for="prompt-b">补充实施要求</label>
+          <textarea id="prompt-b" name="prompt" autocomplete="off" placeholder="补充切换任务、风险、责任人或决策要求…"></textarea>
+          <div class="composer-bar">
+            <button class="icon-button" type="button" aria-label="添加上下文"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="composer-mode" type="button">VIEW · CUTOVER</button>
+            <button class="composer-mode" type="button">SCOPE · FINANCE</button>
+            <button class="send-button" type="submit" aria-label="发送实施要求"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg></button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="terminal" aria-label="实施控制记录">
+      <div class="terminal-tabs">
+        <button class="terminal-tab active" type="button">EVIDENCE</button>
+        <button class="terminal-tab" type="button">DECISIONS <span class="badge">3</span></button>
+        <button class="terminal-tab" type="button">DELIVERY</button>
+        <span class="toolbar-spacer"></span>
+        <button class="icon-button" type="button" aria-label="最大化控制记录"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/></svg></button>
+      </div>
+      <pre class="terminal-output"><span class="muted">昆仑集团 ERP · 上线控制证据流</span>
+<span class="prompt">[访谈]</span> 财务共享确认 8 月 29 日 18:00 停止业务入账
+<span class="prompt">[差异]</span> <span class="path">GAP-FI-023</span> 跨组织冲销审批路径仍待决策
+<span class="prompt">[接口]</span> <span class="path">IF-011</span> 采购发票回传差异 12 笔，责任人已指定
+<span class="prompt">[交付]</span> 上线准备评审包_v0.8.docx 等待发布<span class="spinner" aria-hidden="true"></span></pre>
+    </section>
+
+    <aside class="inspector" aria-label="实施项目检查器">
+      <div class="inspector-tabs" role="tablist" aria-label="检查器视图">
+        <button class="tab-button" type="button" role="tab" aria-selected="true" data-tab-target="activity">PROJECT</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab-target="files">ISSUES</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab-target="plugins">DELIVERY</button>
+      </div>
+      <div class="inspector-scroll">
+        <section class="tab-panel" data-tab-panel="activity">
+          <div class="inspector-card"><h2>PROJECT STATUS</h2><dl class="key-value"><dt>phase</dt><dd>上线准备</dd><dt>go-live</dt><dd>09-01</dd><dt>blockers</dt><dd>3</dd><dt>readiness</dt><dd>86%</dd></dl></div>
+          <div class="inspector-card"><h3>OWNERS</h3><div class="subagent-row"><span class="status-dot waiting">!</span><span class="row-copy"><span class="row-title">客户项目经理</span><span class="row-subtitle">确认冻结窗口</span></span><span class="task-meta">P0</span></div><div class="subagent-row"><span class="status-dot complete">✓</span><span class="row-copy"><span class="row-title">数据迁移负责人</span><span class="row-subtitle">第二轮模拟通过</span></span><span class="task-meta">DONE</span></div></div>
+        </section>
+        <section class="tab-panel" data-tab-panel="files" hidden>
+          <div class="inspector-card"><h2>OPEN ISSUES</h2><div class="file-row"><span class="status-dot waiting">!</span><span class="row-copy"><span class="row-title">GAP-FI-023</span><span class="row-subtitle">跨组织冲销审批</span></span><span class="task-meta">P0</span></div><div class="file-row"><span class="status-dot running">•</span><span class="row-copy"><span class="row-title">IF-011</span><span class="row-subtitle">采购发票回传差异</span></span><span class="task-meta">P1</span></div></div>
+        </section>
+        <section class="tab-panel" data-tab-panel="plugins" hidden>
+          <div class="inspector-card"><h2>DELIVERABLES</h2><div class="plugin-row"><span class="status-dot running">•</span><span class="row-copy"><span class="row-title">上线准备评审包</span><span class="row-subtitle">v0.8 · 待发布</span></span><span class="task-meta">DOCX</span></div><div class="plugin-row"><span class="status-dot complete">✓</span><span class="row-copy"><span class="row-title">切换任务清单</span><span class="row-subtitle">24 项 · 已核责</span></span><span class="task-meta">XLSX</span></div><div class="plugin-row"><span class="status-dot waiting">!</span><span class="row-copy"><span class="row-title">上线决策纪要</span><span class="row-subtitle">评审后生成</span></span><span class="task-meta">PENDING</span></div></div>
+        </section>
+      </div>
+    </aside>
+
+    <footer class="statusbar"><span>● PROJECT SYNCED</span><span>GO-LIVE 09-01</span><span>3 BLOCKERS</span><span>READINESS 86%</span><span>B · DELIVERY DECK</span></footer>
+  </main>
+
+  <div class="command-overlay" data-command-overlay hidden>
+    <section class="command-dialog" role="dialog" aria-modal="true" aria-label="实施操作中心">
+      <div class="command-search"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input type="search" name="command-search" autocomplete="off" placeholder="搜索项目、缺陷、决策或交付物…" aria-label="搜索实施操作"><span class="keycap">Esc</span></div>
+      <div class="command-list">
+        <button class="command-item" type="button" data-command-item><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>新增上线事项</span><span class="keycap">Ctrl N</span></button>
+        <button class="command-item" type="button" data-command-item><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9-3 3 3 3m8-6 3 3-3 3"/></svg><span>打开缺陷与风险清单</span><span></span></button>
+        <button class="command-item" type="button" data-command-item><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/></svg><span>切换实施控制面板</span><span class="keycap">Ctrl J</span></button>
+      </div>
+    </section>
+  </div>
+  <p class="screen-reader-status" data-live-status aria-live="polite"></p>
+  <script src="assets/prototype.js"></script>
+</body>
+</html>

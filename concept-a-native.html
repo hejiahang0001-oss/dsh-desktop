@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN" data-ui-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>方案 A · ERP 咨询总控台</title>
+  <link rel="stylesheet" href="assets/base.css">
+  <link rel="stylesheet" href="assets/concept-a.css">
+</head>
+<body class="tech-fx">
+  <a class="skip-link" href="#main-content-a">跳到咨询内容</a>
+  <main class="app-shell" aria-label="DSH ERP Advisor 咨询总控台方案">
+    <header class="titlebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">DSH</span>
+        <span class="brand-copy">
+          <span class="brand-title">DSH ERP Advisor</span>
+          <span class="brand-subtitle">ERP 咨询顾问工作台</span>
+        </span>
+      </div>
+      <div class="titlebar-center">
+        <button class="icon-button" type="button" data-toggle-pane="sidebar" aria-expanded="true" aria-label="显示或隐藏项目栏">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+        </button>
+        <button class="workspace-pill" type="button" data-open-command aria-label="打开顾问操作中心">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.8a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+          <span>昆仑集团 · ERP 财务域升级</span>
+          <span class="keycap">Ctrl K</span>
+        </button>
+        <button class="icon-button" type="button" data-toggle-pane="inspector" aria-expanded="true" aria-label="显示或隐藏检查器">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+        </button>
+      </div>
+      <div class="window-controls" aria-label="窗口控制示意">
+        <button class="window-button" type="button" aria-label="最小化"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"/></svg></button>
+        <button class="window-button" type="button" aria-label="最大化"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10"/></svg></button>
+        <button class="window-button close" type="button" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8m0-8-8 8"/></svg></button>
+      </div>
+    </header>
+
+    <aside class="sidebar pane" aria-label="客户项目导航">
+      <div class="sidebar-toolbar">
+        <button class="primary-button" type="button">新建议题</button>
+        <button class="icon-button" type="button" aria-label="更多议题操作">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-scroll">
+        <nav aria-label="主导航">
+          <button class="nav-link active" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3Z"/></svg>
+            客户项目
+          </button>
+          <button class="nav-link" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+            需求与差异
+          </button>
+          <button class="nav-link" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 8.5 7 7m0-7-7 7"/><circle cx="12" cy="12" r="9"/></svg>
+            交付物
+          </button>
+        </nav>
+
+        <div class="section-heading"><span>本周关键议题</span><span>4</span></div>
+        <ul class="task-list">
+          <li>
+            <button class="task-item" type="button" data-task aria-current="page">
+              <span class="task-dot running" aria-label="分析中">•</span>
+              <span>
+                <span class="task-name">总账关账蓝图评审</span>
+                <span class="task-meta">分析中 · 5 个差异</span>
+              </span>
+              <span class="task-meta">现在</span>
+            </button>
+          </li>
+          <li>
+            <button class="task-item" type="button" data-task>
+              <span class="task-dot complete" aria-label="已完成">✓</span>
+              <span>
+                <span class="task-name">应收与合同负债差异</span>
+                <span class="task-meta">已形成评审稿</span>
+              </span>
+              <span class="task-meta">10:42</span>
+            </button>
+          </li>
+          <li>
+            <button class="task-item" type="button" data-task>
+              <span class="task-dot waiting" aria-label="等待确认">!</span>
+              <span>
+                <span class="task-name">科目及组织映射确认</span>
+                <span class="task-meta">等待客户确认</span>
+              </span>
+              <span class="task-meta">09:18</span>
+            </button>
+          </li>
+          <li>
+            <button class="task-item" type="button" data-task>
+              <span class="task-dot" aria-label="排队中">4</span>
+              <span>
+                <span class="task-name">数据迁移与切换计划</span>
+                <span class="task-meta">待补充责任人</span>
+              </span>
+              <span class="task-meta">08:36</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="section-heading"><span>最近交付</span><span>2</span></div>
+        <ul class="task-list">
+          <li><button class="task-item" type="button" data-task><span class="task-dot complete">✓</span><span><span class="task-name">现状调研纪要汇编</span><span class="task-meta">客户已确认</span></span><span class="task-meta">周一</span></button></li>
+          <li><button class="task-item" type="button" data-task><span class="task-dot complete">✓</span><span><span class="task-name">财务域范围说明</span><span class="task-meta">已基线化</span></span><span class="task-meta">上周</span></button></li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="main conversation pane" id="main-content-a" aria-labelledby="task-title-a" tabindex="-1">
+      <header class="conversation-header">
+        <div class="conversation-title">
+          <h1 id="task-title-a" data-task-title>总账关账蓝图评审</h1>
+          <p>昆仑集团 · ERP 财务域升级 · 蓝图设计阶段</p>
+        </div>
+        <div class="header-actions">
+          <span class="badge running">分析中</span>
+          <select class="model-select" name="view" aria-label="选择顾问视角">
+            <option>财务顾问视角</option>
+            <option>项目经理视角</option>
+          </select>
+          <button class="icon-button" type="button" data-toggle-theme aria-label="切换到深色外观">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8 8 0 0 1 8.8 4 8 8 0 1 0 20 15.2Z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="message-scroll">
+        <div class="message-stream" data-message-stream>
+          <article class="message user">
+            <div class="avatar" aria-hidden="true">你</div>
+            <div class="message-content">
+              <div class="message-label">你 · 10:55</div>
+              <div class="message-bubble"><p>把总账、应收、合同负债相关的现状流程、目标蓝图和待客户决策事项整理成评审包。</p></div>
+            </div>
+          </article>
+
+          <article class="message">
+            <div class="avatar agent" aria-hidden="true">DSH</div>
+            <div class="message-content">
+              <div class="message-label">DSH ERP Advisor · 10:55</div>
+              <div class="message-bubble">
+                <p>已按流程、组织、数据、接口和控制五个维度归集材料。当前识别 12 个差异，其中 6 个需要客户在蓝图评审会上决策。</p>
+              </div>
+              <section class="progress-card" aria-label="蓝图编制进度">
+                <div class="progress-head"><span class="spinner" aria-hidden="true"></span>正在生成蓝图评审包</div>
+                <div class="progress-body">
+                  <div class="progress-row"><span class="status-dot complete">✓</span><strong>汇总访谈纪要与现行口径</strong><time>18 项</time></div>
+                  <div class="progress-row"><span class="status-dot complete">✓</span><strong>对齐目标流程和系统边界</strong><time>7 流程</time></div>
+                  <div class="progress-row"><span class="status-dot running">•</span><strong>生成差异与决策议题清单</strong><time>12 项</time></div>
+                  <div class="progress-row"><span class="status-dot">4</span><span>输出客户评审版蓝图</span><time>待生成</time></div>
+                </div>
+              </section>
+              <section class="permission-card" aria-label="权限请求">
+                <div class="permission-title">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5c0 4.8 3 8.2 7.5 10 4.5-1.8 7.5-5.2 7.5-10V6Z"/><path d="M9.5 12 11 13.5l3.5-4"/></svg>
+                  <span>生成客户评审版交付物？</span>
+                </div>
+                <p>将蓝图、差异清单和待决策事项写入当前项目交付区；不会改动来源材料。</p>
+                <div class="permission-actions">
+                  <button class="primary-button small-button" type="button" data-permission-allow data-approved-title="已生成评审版" data-approved-body="交付物已保存到当前项目，来源材料未被修改。">生成评审版</button>
+                  <button class="text-button small-button" type="button">先看差异</button>
+                  <button class="text-button small-button" type="button" data-permission-deny data-denied-title="本次未生成" data-denied-body="来源材料和已有交付物均未改动，可补充要求后重新生成。">暂不生成</button>
+                </div>
+              </section>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <form class="composer" data-composer>
+          <label class="screen-reader-status" for="prompt-a">补充咨询要求</label>
+          <textarea id="prompt-a" name="prompt" autocomplete="off" placeholder="继续补充流程、口径、组织范围或交付要求…"></textarea>
+          <div class="composer-bar">
+            <button class="icon-button" type="button" aria-label="添加附件"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 12 5-5a3 3 0 0 1 4 4l-7 7a5 5 0 0 1-7-7l7-7"/></svg></button>
+            <button class="composer-mode" type="button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9-3 3 3 3m8-6 3 3-3 3m-2-9-4 12"/></svg>蓝图分析</button>
+            <button class="composer-mode" type="button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg>项目证据</button>
+            <button class="send-button" type="submit" aria-label="发送补充要求"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-5Z"/><path d="m12 14 7-9"/></svg></button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <aside class="inspector pane" aria-label="项目检查器">
+      <div class="inspector-tabs" role="tablist" aria-label="检查器视图">
+        <button class="tab-button" type="button" role="tab" aria-selected="true" data-tab-target="activity">项目</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab-target="files">证据</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab-target="plugins">交付</button>
+      </div>
+      <div class="inspector-scroll">
+        <section class="tab-panel" data-tab-panel="activity">
+          <div class="inspector-card">
+            <h2>项目状态</h2>
+            <dl class="key-value">
+              <dt>阶段</dt><dd>蓝图设计</dd>
+              <dt>里程碑</dt><dd>蓝图确认</dd>
+              <dt>待决策</dt><dd>6 项</dd>
+              <dt>下次评审</dt><dd>8 月 25 日</dd>
+            </dl>
+          </div>
+          <div class="inspector-card">
+            <h3>关键责任方</h3>
+            <div class="subagent-row"><span class="status-dot waiting">!</span><span class="row-copy"><span class="row-title">客户财务负责人</span><span class="row-subtitle">确认关账周期与审批控制</span></span><span class="task-meta">待确认</span></div>
+            <div class="subagent-row"><span class="status-dot complete">✓</span><span class="row-copy"><span class="row-title">总账顾问</span><span class="row-subtitle">目标流程与系统边界</span></span><span class="task-meta">已对齐</span></div>
+          </div>
+        </section>
+        <section class="tab-panel" data-tab-panel="files" hidden>
+          <div class="inspector-card">
+            <h2>项目证据</h2>
+            <div class="file-row"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg><span class="row-copy"><span class="row-title">总账访谈纪要_0818.docx</span><span class="row-subtitle">已提取 24 条业务口径</span></span><span class="task-meta">纪要</span></div>
+            <div class="file-row"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg><span class="row-copy"><span class="row-title">现行关账制度.pdf</span><span class="row-subtitle">已关联 GAP-FI-001~005</span></span><span class="task-meta">制度</span></div>
+          </div>
+        </section>
+        <section class="tab-panel" data-tab-panel="plugins" hidden>
+          <div class="inspector-card">
+            <h2>当前交付</h2>
+            <div class="plugin-row"><span class="status-dot running">•</span><span class="row-copy"><span class="row-title">财务域蓝图设计说明</span><span class="row-subtitle">客户评审版 v0.6</span></span><span class="task-meta">编制中</span></div>
+            <div class="plugin-row"><span class="status-dot complete">✓</span><span class="row-copy"><span class="row-title">业务差异清单</span><span class="row-subtitle">12 项差异 · 6 项待决策</span></span><span class="task-meta">已更新</span></div>
+            <div class="plugin-row"><span class="status-dot waiting">!</span><span class="row-copy"><span class="row-title">蓝图评审纪要</span><span class="row-subtitle">评审后自动生成</span></span><span class="task-meta">待评审</span></div>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <footer class="statusbar">
+      <span class="statusbar-item"><span class="status-dot" aria-hidden="true"></span>客户项目已同步</span>
+      <span class="statusbar-item">蓝图设计</span>
+      <span class="statusbar-item">6 个议题待确认</span>
+      <span class="statusbar-item">评审版 v0.6</span>
+      <span class="statusbar-item">A · CONSULTING HUB</span>
+    </footer>
+  </main>
+
+  <div class="command-overlay" data-command-overlay hidden>
+    <section class="command-dialog" role="dialog" aria-modal="true" aria-label="顾问操作中心">
+      <div class="command-search">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+        <input type="search" name="command-search" autocomplete="off" placeholder="搜索项目、议题、交付物或操作…" aria-label="搜索顾问操作">
+        <span class="keycap">Esc</span>
+      </div>
+      <div class="command-list">
+        <button class="command-item" type="button" data-command-item><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>新建业务议题</span><span class="keycap">Ctrl N</span></button>
+        <button class="command-item" type="button" data-command-item><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="M7 10h10"/></svg><span>打开差异清单</span><span></span></button>
+        <button class="command-item" type="button" data-command-item><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"/></svg><span>生成客户交付物</span><span></span></button>
+      </div>
+    </section>
+  </div>
+  <p class="screen-reader-status" data-live-status aria-live="polite"></p>
+  <script src="assets/prototype.js"></script>
+</body>
+</html>

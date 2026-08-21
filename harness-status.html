@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>DSH Desktop · 正在连接 Harness</title>
+  <link rel="stylesheet" href="assets/harness-status.css">
+</head>
+<body>
+  <main class="status-shell">
+    <section class="status-card" aria-labelledby="status-title" aria-describedby="status-description">
+      <div class="brand-row">
+        <span class="brand-mark" aria-hidden="true">D</span>
+        <div><strong>DSH Desktop</strong><span>DeepSeek Harness 工作台</span></div>
+      </div>
+      <div class="state-visual" data-state-visual aria-hidden="true"><span></span></div>
+      <p class="eyebrow" data-status-label>正在启动</p>
+      <h1 id="status-title" data-status-title>正在连接 DeepSeek Harness</h1>
+      <p id="status-description" class="description" data-status-description>首次启动需要初始化本地 Profile，请稍候。</p>
+      <dl class="runtime-meta">
+        <div><dt>桌面版本</dt><dd data-app-version>—</dd></div>
+        <div><dt>运行状态</dt><dd data-runtime-status>排队中</dd></div>
+        <div class="workspace-meta"><dt>当前仓库</dt><dd class="workspace-value" data-workspace-path title="未选择仓库">未选择仓库</dd></div>
+        <div><dt>已保存会话</dt><dd data-session-count>0</dd></div>
+        <div><dt>软件 Key</dt><dd data-credential-status>检查中</dd></div>
+      </dl>
+      <p class="error-detail" data-error-detail role="alert" hidden></p>
+      <div class="actions">
+        <button class="secondary-button" type="button" data-choose-workspace>选择代码仓库…</button>
+        <button class="primary-button" type="button" data-retry hidden>重新启动 Harness</button>
+        <button class="secondary-button" type="button" data-open-log>打开运行日志</button>
+      </div>
+      <p class="footnote" aria-live="polite" data-live-status>应用仅连接随机的 127.0.0.1 本机端口。</p>
+    </section>
+  </main>
+  <script src="assets/harness-status.js"></script>
+</body>
+</html>

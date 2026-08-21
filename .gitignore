@@ -1,0 +1,28 @@
+node_modules/
+/dist/
+/vendor/
+/backups/
+/artifacts/
+
+# Generated runtimes, Electron archives, smoke data, and caches.
+/build/*
+!/build/icon.ico
+
+# Local application/runtime data and credentials.
+**/.credentials.yaml
+**/settings.yaml
+**/*.log
+.env
+.env.*
+!.env.example
+
+# Packaged binaries and update metadata.
+*.exe
+*.zip
+*.7z
+*.blockmap
+
+# Editor and operating-system noise.
+.DS_Store
+Thumbs.db
+*.swp
