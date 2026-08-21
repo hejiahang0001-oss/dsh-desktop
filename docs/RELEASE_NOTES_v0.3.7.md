@@ -34,4 +34,4 @@ V0.3.7 首次打通“选择本地仓库 → 同步 Harness Workspace → 复用
 
 当前安装包尚未代码签名；DeepSeek Harness 仍为 developer preview。本项目是独立社区项目，不代表 DeepSeek 官方。
 
-Detailed validation evidence is available in [`docs/VALIDATION.md`](VALIDATION.md).
+Detailed validation evidence is available in [`docs/VALIDATION.md`](https://github.com/hejiahang0001-oss/dsh-desktop/blob/main/docs/VALIDATION.md).
