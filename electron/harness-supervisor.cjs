@@ -32,12 +32,13 @@ const isSafeHarnessUrl = (value) => {
 
 const firstExistingFile = (candidates) => candidates.find((candidate) => candidate && fs.existsSync(candidate));
 
-const buildHarnessEnvironment = ({ baseEnv = process.env, overrides = {}, homeDir }) => {
+const buildHarnessEnvironment = ({ baseEnv = process.env, overrides = {}, homeDir, workspaceDir }) => {
   const environment = { ...baseEnv, ...overrides };
   for (const name of Object.keys(environment)) {
     if (SOFTWARE_MANAGED_CREDENTIALS.has(name.toUpperCase())) delete environment[name];
   }
   environment.DSH_HOME = homeDir;
+  if (workspaceDir) environment.DSH_CWD = workspaceDir;
   environment.NO_COLOR = '1';
   return environment;
 };
@@ -215,7 +216,8 @@ class HarnessSupervisor extends EventEmitter {
         cwd: this.options.launchDir,
         env: buildHarnessEnvironment({
           overrides: this.options.env,
-          homeDir: this.options.homeDir
+          homeDir: this.options.homeDir,
+          workspaceDir: this.options.launchDir
         }),
         windowsHide: true,
         shell: false,

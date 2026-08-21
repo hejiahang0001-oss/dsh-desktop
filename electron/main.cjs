@@ -5,6 +5,11 @@ const path = require('node:path');
 const { GitChangeReviewer } = require('./change-review.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
+const {
+  selectHarnessSession,
+  synchronizeHarnessWorkspace,
+  waitForHarnessSessionSelection
+} = require('./harness-workspace-sync.cjs');
 const { invokeHarnessUiAction, isAgentActionSettled, readHarnessAgentState } = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
@@ -21,6 +26,16 @@ let harnessOrigin = null;
 let allowQuit = false;
 let loadFailureHandled = false;
 let agentPollTimer;
+const unavailableWorkspaceSync = (status = 'pending', error = null) => Object.freeze({
+  status,
+  workspacePath: '',
+  workspaceId: '',
+  workspaceTitle: '',
+  sessionId: '',
+  sessionCreated: false,
+  error
+});
+let workspaceSyncDiagnostics = unavailableWorkspaceSync();
 const unavailableAgentDiagnostics = () => Object.freeze({
   status: 'unavailable',
   canStop: false,
@@ -108,6 +123,7 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
   loadFailureHandled = false;
   agentDiagnostics = unavailableAgentDiagnostics();
   changeReviewDiagnostics = emptyChangeReviewDiagnostics();
+  workspaceSyncDiagnostics = unavailableWorkspaceSync('syncing');
   installApplicationMenu();
   await showStatusPage();
   try {
@@ -115,11 +131,23 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
     await probeHarness(url);
     if (!isSafeHarnessUrl(url)) throw new Error('Harness 地址未通过回环安全校验。');
     harnessOrigin = new URL(url).origin;
+    const workspace = getWorkspaceState();
+    workspaceSyncDiagnostics = await synchronizeHarnessWorkspace({
+      origin: harnessOrigin,
+      workspacePath: workspace.activePath,
+      fallbackTitle: workspace.isFallback ? 'DSH 临时工作区' : undefined
+    });
     await mainWindow.loadURL(url);
+    const selection = await selectHarnessSession(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
+    if (selection.changed) {
+      await mainWindow.loadURL(url);
+      await waitForHarnessSessionSelection(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
+    }
     void refreshDesktopDiagnostics();
     startAgentPolling();
     return { ok: true, url };
   } catch (error) {
+    workspaceSyncDiagnostics = unavailableWorkspaceSync('failed', error.message);
     harnessOrigin = null;
     supervisor.reportFailure(error);
     await showStatusPage();
@@ -141,11 +169,19 @@ const applyWindowTitle = () => {
   mainWindow.setTitle(`DSH Desktop — ${workspace.displayName}`);
 };
 
+const workspaceSyncLabel = () => {
+  if (workspaceSyncDiagnostics.status === 'synced') return `Harness：已同步到 ${workspaceSyncDiagnostics.workspaceTitle}`;
+  if (workspaceSyncDiagnostics.status === 'syncing') return 'Harness：正在同步工作区…';
+  if (workspaceSyncDiagnostics.status === 'failed') return 'Harness：工作区同步失败';
+  return 'Harness：等待工作区同步';
+};
+
 const getDiagnosticsState = () => ({
   credential: { ...desktopDiagnostics.credential },
   sessions: { ...desktopDiagnostics.sessions, encodings: { ...desktopDiagnostics.sessions.encodings } },
   agent: { ...agentDiagnostics, producedPaths: [...agentDiagnostics.producedPaths] },
-  changes: { ...changeReviewDiagnostics }
+  changes: { ...changeReviewDiagnostics },
+  workspaceSync: { ...workspaceSyncDiagnostics }
 });
 
 const refreshDesktopDiagnostics = async ({ rebuildMenu = true } = {}) => {
@@ -563,6 +599,7 @@ function installApplicationMenu() {
         { label: '最近使用', submenu: recentItems },
         { type: 'separator' },
         { label: `当前：${workspace.displayName}`, enabled: false },
+        { label: workspaceSyncLabel(), enabled: false },
         {
           label: '在文件资源管理器中显示',
           enabled: !workspace.isFallback,
@@ -842,7 +879,23 @@ const runHarnessSmoke = async (target) => {
   try {
     const url = await supervisor.start();
     const probe = await probeHarness(url);
-    result = { ok: true, name: app.getName(), version: app.getVersion(), url, ...probe };
+    const workspaceSync = await synchronizeHarnessWorkspace({
+      origin: url,
+      workspacePath: supervisor.getState().workspacePath,
+      fallbackTitle: 'DSH 临时工作区'
+    });
+    result = {
+      ok: true,
+      name: app.getName(),
+      version: app.getVersion(),
+      url,
+      ...probe,
+      workspaceSync: {
+        status: workspaceSync.status,
+        workspaceTitle: workspaceSync.workspaceTitle,
+        sessionCreated: workspaceSync.sessionCreated
+      }
+    };
   } catch (error) {
     result = { ok: false, name: app.getName(), version: app.getVersion(), error: error.message };
     process.exitCode = 1;

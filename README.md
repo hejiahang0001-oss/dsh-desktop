@@ -2,16 +2,19 @@
 
 DSH Desktop 是一个面向 Windows 的 DeepSeek Harness 桌面宿主，产品体验以 Claude Code 为对标。
 
-当前版本：**V0.3.6 Daily Build（V0.3 第七切片）**
+当前版本：**V0.3.7 Daily Build（V0.3 第八切片）**
 固定内核：`@deepseek-ai/dsh@0.1.0-rc.8`  
 固定运行时：Node.js `v24.19.0`、Electron `35.7.5`
 
-## V0.3.6 已具备
+## V0.3.7 已具备
 
 - 双击桌面应用启动官方 DeepSeek Harness Web UI，不由 Electron 另建 Agent loop。
 - 通过 Windows 原生“项目 → 打开代码仓库…”或 `Ctrl+O` 选择本地仓库。
 - 记忆当前仓库和最多 8 个最近仓库；失效路径会在启动时自动剔除。
 - 切换仓库后重启 Harness，并把所选仓库作为 Harness 子进程工作目录。
+- 通过 rc.8 官方 `workspace.create/list` 与 `session.list/create` 接口，把桌面所选目录注册为同一路径的 Harness Workspace。
+- 显式注入 `DSH_CWD`，复用目标 Workspace 的未归档空白会话；没有可复用会话时创建并绑定新会话。
+- 启动时将官方 UI 稳定切换到目标会话，并处理 rc.8 会话列表初始化期间的持久化竞态；原生“项目”菜单显示实际同步目标。
 - 新增 Windows 原生“会话”菜单，可新建会话、打开会话搜索、定位会话列表、查看已保存会话数和打开会话数据目录。
 - 原生会话入口只调用固定动作白名单；会话内容仍由官方 Harness UI 和持久化组件管理。
 - 扫描 `DSH_HOME/sessions` 的 JSONL/Zstd 元数据，状态页可显示已保存会话数，但不读取或回传对话正文。
@@ -83,37 +86,37 @@ pnpm dist:win
 构建产物：
 
 - 解包版：`dist/win-unpacked/DSH Desktop.exe`
-- 安装包：`dist/DSH-Desktop-Setup-0.3.6.exe`
-- 更新块映射：`dist/DSH-Desktop-Setup-0.3.6.exe.blockmap`
+- 安装包：`dist/DSH-Desktop-Setup-0.3.7.exe`
+- 更新块映射：`dist/DSH-Desktop-Setup-0.3.7.exe.blockmap`
 
 `electron:fetch` 和 `runtime:fetch` 只接受固定版本、固定 SHA-256 的官方 Electron/Node 压缩包；`runtime:deploy` 根据锁文件生成固定、无目录联接的 Harness 生产闭包。
 
 ## 已验证
 
-- 36 项 Supervisor、工作区、回环安全、健康检查、会话目录、模型诊断、软件凭据优先级、Agent/工具/Diff 状态及真实临时 Git 仓库接受/拒绝测试通过。
+- 48 项 Supervisor、工作区映射、回环安全、健康检查、会话目录、模型诊断、软件凭据优先级、Agent/工具/Diff 状态及真实临时 Git 仓库接受/拒绝测试通过。
 - 开发态、正式 hoisted runtime 与 Windows x64 解包版均真实启动 Harness，随机回环地址返回 HTTP 200。
 - 安装包内 Harness 为 29,201 个文件、0 个 reparse point，避免 NSIS 重复展开 pnpm 联接。
 - NSIS 安装介质通过 7-Zip 结构完整性检查，内部文件 `Everything is Ok`。
-- V0.3.6 安装包为 158,429,726 字节，SHA-256 为 `40C68DF82BD7090AEC7903CE5EE723612323462FC2E4E6B699AB9F6F307F616B`。
-- 已将 V0.3.6 直接覆盖 V0.3.5；最终安装器退出码 0。
-- NSIS 安装介质包含 29,278 个文件；正式安装版 `app.asar` 与 `win-unpacked` SHA-256 一致，均为 `459A2E09353AB938CEFE764431C65274A9394F1B08B7C120C91F96B0AC7D6181`。
-- 正式安装版在随机回环端口返回 HTTP 200，标题为 `DeepSeek Harness`，窗口标题为 `DSH Desktop — 未选择仓库`。
-- 系统卸载信息为 `DSH Desktop 0.3.6`；覆盖前 5 个持久会话文件全部保留，真实验证另生成 1 个测试会话。
+- V0.3.7 安装包为 158,432,047 字节，SHA-256 为 `005C4F7FA224E71E1BDC284053F0BF6C998A424792F1F89BD7F0EBE9F77892E6`。
+- 已将 V0.3.7 直接覆盖 V0.3.6；系统卸载信息为 `DSH Desktop 0.3.7`。
+- NSIS 安装介质包含 29,278 个文件；正式安装版 `app.asar` 与 `win-unpacked` SHA-256 一致，均为 `B7A17CFEE05BB63270AA4A360360C65422B73EEE0B45892CE14F1A2A2C83F1D2`。
+- 正式安装版在随机回环端口返回 HTTP 200，标题为 `DeepSeek Harness`，packaged smoke 同时确认 Workspace 同步成功。
+- 覆盖安装后 8 个持久会话文件保留，软件 Key 仍为“已配置、软件优先”；验证期间未读取、显示或复制 Key 明文。
 - 软件 Key 已保存并在连续覆盖安装后保持可用；验证期间未读取、显示或复制 Key 明文。
 - 使用 `DeepSeek-V4-Flash High` 完成真实模型调用：一次 1,000 项平方输出正常结束，约 29 秒、3.1K 输出 tokens。
 - 真实长输出中验证了运行状态、补充输入、排队消息、插话发送和桌面菜单停止；停止后回到空闲且无误报弹窗。
 - 使用软件中保存的 Key 发起一次真实 `pwsh` 只读测试；模型成功调用工具，但 rc.8 Workspace Write 工具进程以 `3221225477 (0xC0000005)` 退出且无输出，因此不宣称测试通过。
 - 正式安装版已在对话和轨迹两种视图中准确识别这次失败；原生“工具”菜单显示“最近失败”“命令”“测试失败（退出码 3221225477）”及 `1 次调用 · 1 次失败 · 0 次停止`。
 - 在隔离的 Full Access 验证会话中，使用软件 Key 完成真实文件读取、定点修改和一次 `pwsh` 测试；测试 1/1 通过，工具退出码 0，并经独立测试复核。
+- V0.3.7 在隔离 Git 仓库中使用软件 Key 和 `DeepSeek-V4-Flash High` 完成两轮真实编辑：`alpha=1 → alpha=2` 后通过桌面接受并暂存，`alpha=2 → alpha=3` 后通过桌面拒绝并恢复；最终工作区与暂存区均稳定在 `alpha=2`。
 
 ## 当前边界
 
-- DeepSeek Harness 仍是 developer preview；V0.3.6 固定 rc.8，不自动追踪 latest。
+- DeepSeek Harness 仍是 developer preview；V0.3.7 固定 rc.8，不自动追踪 latest。
 - Windows 安装包尚未代码签名，SmartScreen 可能提示风险。
 - 软件 Key 仍由 Harness rc.8 的 `.credentials.yaml` 管理，Windows 下依赖用户目录 ACL；尚未接入 Credential Manager/DPAPI。
 - rc.8 官方 UI 已具备会话搜索、继续、重命名、归档和分支入口；V0.3.1 增加桌面原生入口和持久化可见性，不重做第二套会话系统。
-- V0.3.6 已完成“最近产物文件”的安全接受/拒绝最小能力，但还不是独立多文件 Diff 面板，也不包含批量审查、Checkpoint 或会话级 Rewind。
-- 安装版真实模型复验发现：桌面活动路径和 rc.8 客户端内部“DSH工作区”没有自动对齐，导致未选择/切换仓库时模型可能看不到目标文件；该轮已停止且临时文件未被修改。这是下一切片的首要缺口。
+- V0.3.7 已完成桌面仓库、Harness Workspace、目标会话和真实单文件 Diff 确认闭环，但还不是独立多文件 Diff 面板，也不包含批量审查、Checkpoint 或会话级 Rewind。
 - Workspace Write 的 PowerShell `0xC0000005` 兼容问题仍存在；应用会准确显示失败，不会自动切换 Full Access。
 - 旧的自建聊天原型文件仍保留在源码中作历史参考，但不进入正式包。
 

@@ -37,6 +37,15 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
   assert.equal(overrides.DEEPSEEK_API_KEY, 'override-secret');
 });
 
+test('desktop workspace is explicit in the Harness environment', () => {
+  const environment = buildHarnessEnvironment({
+    baseEnv: { DSH_CWD: 'C:\\stale-workspace' },
+    homeDir: 'C:\\DSH_HOME',
+    workspaceDir: 'C:\\selected-workspace'
+  });
+  assert.equal(environment.DSH_CWD, 'C:\\selected-workspace');
+});
+
 test('parseHarnessUrl accepts only a random IPv4 loopback origin', () => {
   assert.equal(parseHarnessUrl('dsh web: http://127.0.0.1:61045\n'), 'http://127.0.0.1:61045');
   assert.equal(parseHarnessUrl('\u001b[32mdsh web: http://127.0.0.1:3080\u001b[0m'), 'http://127.0.0.1:3080');
