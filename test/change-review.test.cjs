@@ -8,6 +8,7 @@ const { promisify } = require('node:util');
 const {
   ChangeReviewError,
   GitChangeReviewer,
+  parsePorcelainEntries,
   resolveReportedPath
 } = require('../electron/change-review.cjs');
 
@@ -35,6 +36,13 @@ test('reported paths stay inside the active workspace', () => {
   assert.equal(resolveReportedPath(workspace, 'src/file.js'), path.join(workspace, 'src', 'file.js'));
   assert.throws(() => resolveReportedPath(workspace, '../outside.js'), ChangeReviewError);
   assert.throws(() => resolveReportedPath(workspace, path.join(workspace, 'absolute.js')), ChangeReviewError);
+});
+
+test('porcelain parser keeps rename records paired instead of inventing another file', () => {
+  assert.deepEqual(parsePorcelainEntries('R  renamed.txt\0original.txt\0?? new.txt\0'), [
+    { code: 'R ', path: 'renamed.txt', originalPath: 'original.txt' },
+    { code: '??', path: 'new.txt', originalPath: '' }
+  ]);
 });
 
 test('reject restores a tracked Harness change to the current index', async (t) => {
@@ -121,4 +129,87 @@ test('accept stages a newly produced untracked file', async (t) => {
   const accepted = await reviewer.accept('new-file.txt');
   assert.equal(accepted.status, 'accepted');
   assert.equal(accepted.canReject, false);
+});
+
+test('multi-file list reports pending, protected, and accepted files independently', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  await fsp.writeFile(path.join(root, 'protected.txt'), 'protected baseline\n', 'utf8');
+  await git(root, ['add', '--', 'protected.txt']);
+  await git(root, ['commit', '-q', '-m', 'add protected file']);
+  await fsp.writeFile(path.join(root, 'protected.txt'), 'user edit\n', 'utf8');
+
+  const reviewer = new GitChangeReviewer();
+  await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, 'tracked.txt'), 'agent edit\n', 'utf8');
+  await fsp.writeFile(path.join(root, 'new.txt'), 'new output\n', 'utf8');
+  await fsp.writeFile(path.join(root, 'accepted.txt'), 'accepted output\n', 'utf8');
+  await git(root, ['add', '--', 'accepted.txt']);
+
+  const list = await reviewer.listChanges();
+  assert.equal(list.total, 4);
+  assert.equal(list.pendingCount, 2);
+  assert.equal(list.protectedCount, 1);
+  assert.equal(list.acceptedCount, 1);
+  assert.equal(list.canAcceptCount, 2);
+  assert.equal(list.canRejectCount, 2);
+  assert.deepEqual(list.items.map((item) => [item.path, item.status]), [
+    ['accepted.txt', 'accepted'],
+    ['new.txt', 'pending'],
+    ['protected.txt', 'protected'],
+    ['tracked.txt', 'pending']
+  ]);
+});
+
+test('batch accept stages every selected Agent change', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const reviewer = new GitChangeReviewer();
+  await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, 'tracked.txt'), 'agent edit\n', 'utf8');
+  await fsp.writeFile(path.join(root, 'new.txt'), 'new output\n', 'utf8');
+
+  const result = await reviewer.acceptMany(['tracked.txt', 'new.txt']);
+  assert.equal(result.processed, 2);
+  const list = await reviewer.listChanges();
+  assert.equal(list.pendingCount, 0);
+  assert.equal(list.acceptedCount, 2);
+  assert.deepEqual(list.items.map((item) => item.status), ['accepted', 'accepted']);
+});
+
+test('batch reject restores tracked files and trashes new files after one preflight', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const trashed = [];
+  const reviewer = new GitChangeReviewer({
+    trashItem: async (target) => {
+      trashed.push(target);
+      await fsp.rm(target);
+    }
+  });
+  await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, 'tracked.txt'), 'agent edit\n', 'utf8');
+  await fsp.writeFile(path.join(root, 'new.txt'), 'new output\n', 'utf8');
+
+  const result = await reviewer.rejectMany(['tracked.txt', 'new.txt']);
+  assert.equal(result.processed, 2);
+  assert.equal(await readNormalized(path.join(root, 'tracked.txt')), 'baseline\n');
+  assert.deepEqual(trashed, [path.join(root, 'new.txt')]);
+  assert.equal((await reviewer.listChanges()).total, 0);
+});
+
+test('batch operations refuse every file when one selected path is protected', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  await fsp.writeFile(path.join(root, 'tracked.txt'), 'user edit\n', 'utf8');
+  const reviewer = new GitChangeReviewer();
+  await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, 'new.txt'), 'agent output\n', 'utf8');
+
+  await assert.rejects(
+    () => reviewer.acceptMany(['tracked.txt', 'new.txt']),
+    { code: 'preexisting-unstaged-change' }
+  );
+  assert.equal((await reviewer.inspect('new.txt')).status, 'pending');
+  assert.equal(await readNormalized(path.join(root, 'tracked.txt')), 'user edit\n');
 });

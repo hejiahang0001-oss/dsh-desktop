@@ -3,14 +3,18 @@ const test = require('node:test');
 const {
   ACTION_LABELS,
   PERMISSION_MODES,
+  PLAN_MODES,
   POWERSHELL_COMPATIBILITY_STATES,
   SUPPORTED_ACTIONS,
+  SUPPORTED_COMMAND_ACTIONS,
   TEST_STATES,
   TOOL_KINDS,
   TOOL_STATES,
   classifyAgentSignals,
   getHarnessAgentStateScript,
+  getHarnessCommandPreparationScript,
   getHarnessUiActionScript,
+  invokeHarnessCommandAction,
   invokeHarnessUiAction,
   isAgentActionSettled,
   readHarnessAgentState
@@ -30,6 +34,9 @@ const NO_TOOL_STATE = {
   latestTestExitCode: null,
   permissionMode: 'unknown',
   canOpenPermission: false,
+  planMode: 'unavailable',
+  canEnterPlan: false,
+  canExitPlan: false,
   powerShellCompatibility: 'unknown',
   diffCount: 0,
   producedPaths: [],
@@ -44,6 +51,7 @@ test('Harness UI actions are fixed to rc.8 bilingual labels', () => {
   assert.deepEqual(ACTION_LABELS['steer-queued'], ['插话发送', 'Steer queued message']);
   assert.deepEqual(ACTION_LABELS.trajectory, ['轨迹', 'Trajectory']);
   assert.deepEqual(ACTION_LABELS['permission-mode'], ['访问模式', 'Access mode']);
+  assert.deepEqual(ACTION_LABELS['plan-mode-on'], ['plan mode 已开启，按下关闭', 'Plan mode on, press to turn off']);
   assert.match(getHarnessUiActionScript('models-settings'), /Models/);
   assert.throws(() => getHarnessUiActionScript('arbitrary-script'), /Unsupported/);
 });
@@ -57,6 +65,8 @@ test('Agent UI actions remain a fixed whitelist with no arbitrary script input',
   assert.ok(SUPPORTED_ACTIONS.includes('focus-latest-change'));
   assert.ok(SUPPORTED_ACTIONS.includes('open-trajectory'));
   assert.ok(SUPPORTED_ACTIONS.includes('open-permission-mode'));
+  assert.ok(SUPPORTED_ACTIONS.includes('exit-plan-mode'));
+  assert.deepEqual(SUPPORTED_COMMAND_ACTIONS, ['enter-plan-mode']);
   assert.match(getHarnessUiActionScript('stop-agent'), /Stop generating/);
   assert.match(getHarnessUiActionScript('focus-agent-input'), /data-composer-card/);
   assert.match(getHarnessUiActionScript('steer-queued'), /Steer queued message/);
@@ -67,6 +77,7 @@ test('Agent UI actions remain a fixed whitelist with no arbitrary script input',
   assert.match(getHarnessUiActionScript('focus-latest-change'), /data-produced-files-row/);
   assert.match(getHarnessUiActionScript('open-trajectory'), /Trajectory/);
   assert.match(getHarnessUiActionScript('open-permission-mode'), /Access mode/);
+  assert.match(getHarnessUiActionScript('exit-plan-mode'), /plan-mode-on/);
 });
 
 test('Agent state classifier gives pending confirmation precedence over running', () => {
@@ -95,6 +106,7 @@ test('Tool and test signals are bounded and normalized before reaching desktop s
   assert.ok(TEST_STATES.includes('passed'));
   assert.deepEqual(PERMISSION_MODES, ['unknown', 'read-only', 'workspace-write', 'danger-full-access']);
   assert.deepEqual(POWERSHELL_COMPATIBILITY_STATES, ['unknown', 'sandbox-crash']);
+  assert.deepEqual(PLAN_MODES, ['unavailable', 'off', 'on']);
   const state = classifyAgentSignals({
     hasComposer: true,
     toolCount: 3,
@@ -110,6 +122,8 @@ test('Tool and test signals are bounded and normalized before reaching desktop s
     latestTestExitCode: 2,
     permissionMode: 'workspace-write',
     canOpenPermission: true,
+    planMode: 'off',
+    canExitPlan: false,
     diffCount: 2,
     producedPaths: ['src/first.js', 'src/latest.js'],
     canFocusChange: true
@@ -135,6 +149,9 @@ test('Tool and test signals are bounded and normalized before reaching desktop s
     latestTestExitCode: 2,
     permissionMode: 'workspace-write',
     canOpenPermission: true,
+    planMode: 'off',
+    canEnterPlan: true,
+    canExitPlan: false,
     powerShellCompatibility: 'unknown',
     diffCount: 2,
     producedPaths: ['src/first.js', 'src/latest.js'],
@@ -146,6 +163,10 @@ test('Tool and test signals are bounded and normalized before reaching desktop s
   assert.equal(classifyAgentSignals({ toolCount: 1, testCount: 1, latestTestState: 'failed', latestTestExitCode: 3221225477, permissionMode: 'workspace-write' }).powerShellCompatibility, 'sandbox-crash');
   assert.equal(classifyAgentSignals({ toolCount: 1, testCount: 1, latestTestState: 'failed', latestTestExitCode: 3221225477, permissionMode: 'danger-full-access' }).powerShellCompatibility, 'unknown');
   assert.equal(classifyAgentSignals({ permissionMode: 'forged', canOpenPermission: 1 }).permissionMode, 'unknown');
+  assert.equal(classifyAgentSignals({ planMode: 'forged', canExitPlan: true }).planMode, 'unavailable');
+  assert.equal(classifyAgentSignals({ hasComposer: true, planMode: 'off' }).canEnterPlan, true);
+  assert.equal(classifyAgentSignals({ hasComposer: true, canStop: true, planMode: 'off' }).canEnterPlan, false);
+  assert.equal(classifyAgentSignals({ hasComposer: true, planMode: 'on', canExitPlan: true }).canExitPlan, true);
   assert.equal(classifyAgentSignals({ toolCount: 1, testCount: 1, latestTestState: 'failed', latestTestExitCode: 9999999999 }).latestTestExitCode, null);
 });
 
@@ -155,6 +176,7 @@ test('State-dependent Agent actions treat a completed race as settled', () => {
   assert.equal(isAgentActionSettled('steer-queued', { canSteer: false }), true);
   assert.equal(isAgentActionSettled('focus-pending', { canFocusPending: false }), true);
   assert.equal(isAgentActionSettled('focus-agent-input', { canFocusInput: false }), false);
+  assert.equal(isAgentActionSettled('exit-plan-mode', { planMode: 'off' }), true);
 });
 
 test('Agent state script returns only bounded UI signals', () => {
@@ -171,6 +193,8 @@ test('Agent state script returns only bounded UI signals', () => {
   assert.match(script, /exit\[ _-\]\?code/);
   assert.match(script, /node.*--test/);
   assert.match(script, /permissionMode/);
+  assert.match(script, /planMode/);
+  assert.match(script, /plan-mode-on/);
   assert.match(script, /workspace\\s\*write/i);
   assert.match(script, /0xC0000005/);
   assert.match(script, /data-diff/);
@@ -207,6 +231,7 @@ test('Collapsed failed PowerShell card recovers the exact Windows crash code fro
   assert.equal(result.latestTestState, 'failed');
   assert.equal(result.latestTestExitCode, 3221225477);
   assert.equal(result.permissionMode, 'workspace-write');
+  assert.equal(result.planMode, 'unavailable');
   assert.equal(classifyAgentSignals(result).powerShellCompatibility, 'sandbox-crash');
 });
 
@@ -242,6 +267,7 @@ test('Trajectory fallback preserves a Windows tool failure and unsigned exit cod
   assert.equal(result.latestTestExitCode, 3221225477);
   assert.equal(result.permissionMode, 'workspace-write');
   assert.equal(result.canOpenPermission, true);
+  assert.equal(result.planMode, 'unavailable');
 });
 
 test('Official Diff and produced-file markers expose a bounded latest change path', () => {
@@ -271,6 +297,51 @@ test('Official Diff and produced-file markers expose a bounded latest change pat
   assert.deepEqual(state.producedPaths, ['src/first.js', 'src/latest.js']);
   assert.equal(state.latestProducedPath, 'src/latest.js');
   assert.equal(state.canFocusChange, true);
+});
+
+test('Plan mode signals use the official rc.8 chip and never infer from page copy', () => {
+  const planButton = {
+    disabled: false,
+    textContent: 'Plan',
+    getAttribute: (name) => name === 'aria-label' ? 'Plan mode on, press to turn off' : null,
+    hasAttribute: () => false
+  };
+  const composer = { disabled: false };
+  const document = {
+    body: { textContent: 'Plan mode may be mentioned in conversation text.' },
+    querySelector: (selector) => selector === '[data-composer-card] textarea:not([disabled])' ? composer : null,
+    querySelectorAll: (selector) => selector === 'button, [role="button"], [role="tab"]' || selector === 'button, [role="button"]'
+      ? [planButton]
+      : []
+  };
+  const state = classifyAgentSignals(Function('document', 'return ' + getHarnessAgentStateScript())(document));
+  assert.equal(state.planMode, 'on');
+  assert.equal(state.canEnterPlan, false);
+  assert.equal(state.canExitPlan, true);
+});
+
+test('Plan command action refuses drafts and submits only the fixed slash command', async () => {
+  assert.match(getHarnessCommandPreparationScript('enter-plan-mode'), /composer-has-draft/);
+  assert.throws(() => getHarnessCommandPreparationScript('arbitrary-command'), /Unsupported/);
+  const calls = [];
+  const webContents = {
+    executeJavaScript: async (script, userGesture) => {
+      calls.push(['script', script, userGesture]);
+      return { ready: true, reason: 'ready' };
+    },
+    insertText: async (value) => calls.push(['text', value]),
+    sendInputEvent: (event) => calls.push(['input', event])
+  };
+  assert.deepEqual(await invokeHarnessCommandAction(webContents, 'enter-plan-mode'), { ok: true, reason: 'submitted' });
+  assert.deepEqual(calls.slice(1), [
+    ['text', '/plan'],
+    ['input', { type: 'keyDown', keyCode: 'ENTER' }],
+    ['input', { type: 'keyUp', keyCode: 'ENTER' }],
+    ['input', { type: 'keyDown', keyCode: 'ENTER' }],
+    ['input', { type: 'keyUp', keyCode: 'ENTER' }]
+  ]);
+  webContents.executeJavaScript = async () => ({ ready: false, reason: 'composer-has-draft' });
+  assert.deepEqual(await invokeHarnessCommandAction(webContents, 'enter-plan-mode'), { ok: false, reason: 'composer-has-draft' });
 });
 
 test('Harness UI action execution uses an isolated generated script', async () => {
@@ -311,6 +382,8 @@ test('Agent state reader classifies isolated browser signals', async () => {
         latestTestExitCode: null,
         permissionMode: 'workspace-write',
         canOpenPermission: true,
+        planMode: 'off',
+        canExitPlan: false,
         diffCount: 1,
         producedPaths: ['src/latest.js'],
         canFocusChange: true
@@ -338,6 +411,9 @@ test('Agent state reader classifies isolated browser signals', async () => {
     latestTestExitCode: null,
     permissionMode: 'workspace-write',
     canOpenPermission: true,
+    planMode: 'off',
+    canEnterPlan: false,
+    canExitPlan: false,
     powerShellCompatibility: 'unknown',
     diffCount: 1,
     producedPaths: ['src/latest.js'],

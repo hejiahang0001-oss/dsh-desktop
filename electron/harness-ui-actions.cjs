@@ -7,6 +7,10 @@ const ACTION_LABELS = Object.freeze({
   'stop-agent': Object.freeze(['停止生成', 'Stop generating']),
   'steer-queued': Object.freeze(['插话发送', 'Steer queued message']),
   'permission-mode': Object.freeze(['访问模式', 'Access mode']),
+  'plan-mode-on': Object.freeze([
+    'plan mode 已开启，按下关闭',
+    'Plan mode on, press to turn off'
+  ]),
   trajectory: Object.freeze(['轨迹', 'Trajectory']),
   'pending-state': Object.freeze(['等待审批', 'Waiting for approval', '等待回答', 'waiting']),
   'pending-control': Object.freeze(['允许一次', 'Allow once', '拒绝', 'Reject'])
@@ -22,6 +26,7 @@ const SUPPORTED_ACTIONS = Object.freeze([
   'steer-queued',
   'focus-pending',
   'open-permission-mode',
+  'exit-plan-mode',
   'focus-latest-tool',
   'focus-latest-change',
   'open-trajectory'
@@ -31,7 +36,9 @@ const TOOL_STATES = Object.freeze(['none', 'running', 'ok', 'error', 'stopped'])
 const TOOL_KINDS = Object.freeze(['none', 'read', 'search', 'write', 'edit', 'command', 'code', 'web', 'skill', 'task', 'other']);
 const TEST_STATES = Object.freeze(['none', 'running', 'passed', 'failed', 'stopped']);
 const PERMISSION_MODES = Object.freeze(['unknown', 'read-only', 'workspace-write', 'danger-full-access']);
+const PLAN_MODES = Object.freeze(['unavailable', 'off', 'on']);
 const POWERSHELL_COMPATIBILITY_STATES = Object.freeze(['unknown', 'sandbox-crash']);
+const SUPPORTED_COMMAND_ACTIONS = Object.freeze(['enter-plan-mode']);
 
 const safeCount = (value) => (Number.isSafeInteger(value) && value > 0 ? value : 0);
 
@@ -53,6 +60,8 @@ const classifyAgentSignals = ({
   latestTestExitCode = null,
   permissionMode = 'unknown',
   canOpenPermission = false,
+  planMode = 'unavailable',
+  canExitPlan = false,
   diffCount = 0,
   producedPaths = [],
   canFocusChange = false
@@ -74,6 +83,7 @@ const classifyAgentSignals = ({
     ? latestTestExitCode
     : null;
   const safePermissionMode = PERMISSION_MODES.includes(permissionMode) ? permissionMode : 'unknown';
+  const safePlanMode = PLAN_MODES.includes(planMode) ? planMode : 'unavailable';
   const safeDiffCount = safeCount(diffCount);
   const safeProducedPaths = Array.isArray(producedPaths)
     ? [...new Set(producedPaths
@@ -113,6 +123,9 @@ const classifyAgentSignals = ({
     latestTestExitCode: safeLatestTestExitCode,
     permissionMode: safePermissionMode,
     canOpenPermission: Boolean(canOpenPermission),
+    planMode: safePlanMode,
+    canEnterPlan: safePlanMode === 'off' && Boolean(hasComposer) && !Boolean(canStop) && safePendingCount === 0,
+    canExitPlan: safePlanMode === 'on' && Boolean(canExitPlan),
     powerShellCompatibility,
     diffCount: safeDiffCount,
     producedPaths: Object.freeze(safeProducedPaths),
@@ -125,6 +138,7 @@ const isAgentActionSettled = (action, state = {}) => (
   (action === 'stop-agent' && !state.canStop)
   || (action === 'steer-queued' && !state.canSteer)
   || (action === 'focus-pending' && !state.canFocusPending)
+  || (action === 'exit-plan-mode' && state.planMode !== 'on')
   || (action === 'focus-latest-change' && !state.canFocusChange)
 );
 
@@ -176,6 +190,7 @@ const getHarnessUiActionScript = (action) => {
       element.focus({ preventScroll: true });
       return true;
     }
+    if (action === 'exit-plan-mode') return activate(labels['plan-mode-on']);
     if (action === 'focus-pending') {
       const approval = document.querySelector('[data-approval-key] button:not([disabled])');
       if (approval) {
@@ -271,6 +286,8 @@ const getHarnessAgentStateScript = () => {
       : /(?:danger(?:ous)?\\s*full\\s*access|full\\s*access|完全访问)/i.test(permissionText) ? 'danger-full-access'
         : /(?:read[ -]?only|只读)/i.test(permissionText) ? 'read-only'
           : 'unknown';
+    const planControl = allControls.find((element) => labels['plan-mode-on'].includes(normalized(element))) || null;
+    const planMode = planControl ? 'on' : hasComposer ? 'off' : 'unavailable';
     const acceptedStates = new Set(['running', 'ok', 'error', 'stopped']);
     const toolKind = (element, text = '') => {
       const explicit = element.getAttribute('data-tool') || (element.getAttribute('data-sample') === 'bash' ? 'shell' : '');
@@ -352,11 +369,45 @@ const getHarnessAgentStateScript = () => {
       latestTestExitCode: Number.isSafeInteger(exitCode) ? exitCode : null,
       permissionMode,
       canOpenPermission: Boolean(permissionControl && enabled(permissionControl)),
+      planMode,
+      canExitPlan: Boolean(planControl && enabled(planControl)),
       diffCount,
       producedPaths,
       canFocusChange: diffCount > 0 || producedPaths.length > 0
     };
   })()`;
+};
+
+const getHarnessCommandPreparationScript = (action) => {
+  if (!SUPPORTED_COMMAND_ACTIONS.includes(action)) {
+    throw new Error(`Unsupported Harness command action: ${action}`);
+  }
+  return `(() => {
+    const input = document.querySelector('[data-composer-card] textarea:not([disabled])');
+    if (!input) return { ready: false, reason: 'composer-unavailable' };
+    if ((input.value || '').trim() !== '') return { ready: false, reason: 'composer-has-draft' };
+    input.focus({ preventScroll: true });
+    return { ready: true, reason: 'ready' };
+  })()`;
+};
+
+const invokeHarnessCommandAction = async (webContents, action) => {
+  if (!webContents
+    || typeof webContents.executeJavaScript !== 'function'
+    || typeof webContents.insertText !== 'function'
+    || typeof webContents.sendInputEvent !== 'function') return Object.freeze({ ok: false, reason: 'web-contents-unavailable' });
+  const preparation = await webContents.executeJavaScript(getHarnessCommandPreparationScript(action), true);
+  if (preparation?.ready !== true) {
+    return Object.freeze({ ok: false, reason: preparation?.reason || 'composer-unavailable' });
+  }
+  const command = action === 'enter-plan-mode' ? '/plan' : '';
+  await webContents.insertText(command);
+  webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ENTER' });
+  webContents.sendInputEvent({ type: 'keyUp', keyCode: 'ENTER' });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ENTER' });
+  webContents.sendInputEvent({ type: 'keyUp', keyCode: 'ENTER' });
+  return Object.freeze({ ok: true, reason: 'submitted' });
 };
 
 const invokeHarnessUiAction = async (webContents, action) => {
@@ -373,15 +424,19 @@ const readHarnessAgentState = async (webContents) => {
 module.exports = {
   ACTION_LABELS,
   PERMISSION_MODES,
+  PLAN_MODES,
   POWERSHELL_COMPATIBILITY_STATES,
   SUPPORTED_ACTIONS,
+  SUPPORTED_COMMAND_ACTIONS,
   TEST_STATES,
   TOOL_KINDS,
   TOOL_STATES,
   classifyAgentSignals,
   getHarnessAgentStateScript,
+  getHarnessCommandPreparationScript,
   getHarnessUiActionScript,
   invokeHarnessUiAction,
+  invokeHarnessCommandAction,
   isAgentActionSettled,
   readHarnessAgentState
 };

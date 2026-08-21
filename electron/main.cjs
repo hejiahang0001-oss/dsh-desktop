@@ -10,7 +10,12 @@ const {
   synchronizeHarnessWorkspace,
   waitForHarnessSessionSelection
 } = require('./harness-workspace-sync.cjs');
-const { invokeHarnessUiAction, isAgentActionSettled, readHarnessAgentState } = require('./harness-ui-actions.cjs');
+const {
+  invokeHarnessCommandAction,
+  invokeHarnessUiAction,
+  isAgentActionSettled,
+  readHarnessAgentState
+} = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 
@@ -57,6 +62,9 @@ const unavailableAgentDiagnostics = () => Object.freeze({
   latestTestExitCode: null,
   permissionMode: 'unknown',
   canOpenPermission: false,
+  planMode: 'unavailable',
+  canEnterPlan: false,
+  canExitPlan: false,
   powerShellCompatibility: 'unknown',
   diffCount: 0,
   producedPaths: Object.freeze([]),
@@ -72,7 +80,16 @@ const emptyChangeReviewDiagnostics = (reason = 'no-change') => Object.freeze({
   canReject: false,
   protected: false,
   untracked: false,
-  reason
+  staged: false,
+  reason,
+  total: 0,
+  pendingCount: 0,
+  protectedCount: 0,
+  acceptedCount: 0,
+  canAcceptCount: 0,
+  canRejectCount: 0,
+  truncated: false,
+  items: Object.freeze([])
 });
 let changeReviewDiagnostics = emptyChangeReviewDiagnostics();
 let desktopDiagnostics = Object.freeze({
@@ -180,7 +197,10 @@ const getDiagnosticsState = () => ({
   credential: { ...desktopDiagnostics.credential },
   sessions: { ...desktopDiagnostics.sessions, encodings: { ...desktopDiagnostics.sessions.encodings } },
   agent: { ...agentDiagnostics, producedPaths: [...agentDiagnostics.producedPaths] },
-  changes: { ...changeReviewDiagnostics },
+  changes: {
+    ...changeReviewDiagnostics,
+    items: changeReviewDiagnostics.items.map((item) => ({ ...item }))
+  },
   workspaceSync: { ...workspaceSyncDiagnostics }
 });
 
@@ -243,6 +263,9 @@ const sameAgentDiagnostics = (left, right) => (
   && left.latestTestExitCode === right.latestTestExitCode
   && left.permissionMode === right.permissionMode
   && left.canOpenPermission === right.canOpenPermission
+  && left.planMode === right.planMode
+  && left.canEnterPlan === right.canEnterPlan
+  && left.canExitPlan === right.canExitPlan
   && left.powerShellCompatibility === right.powerShellCompatibility
   && left.diffCount === right.diffCount
   && sameStringArray(left.producedPaths, right.producedPaths)
@@ -259,14 +282,48 @@ const sameChangeReviewDiagnostics = (left, right) => (
   && left.protected === right.protected
   && left.untracked === right.untracked
   && left.reason === right.reason
+  && left.total === right.total
+  && left.pendingCount === right.pendingCount
+  && left.protectedCount === right.protectedCount
+  && left.acceptedCount === right.acceptedCount
+  && left.canAcceptCount === right.canAcceptCount
+  && left.canRejectCount === right.canRejectCount
+  && left.truncated === right.truncated
+  && left.items.length === right.items.length
+  && left.items.every((item, index) => {
+    const other = right.items[index];
+    return item.path === other.path
+      && item.status === other.status
+      && item.canAccept === other.canAccept
+      && item.canReject === other.canReject
+      && item.protected === other.protected
+      && item.untracked === other.untracked;
+  })
 );
 
 const refreshChangeReviewDiagnostics = async ({ rebuildMenu = true } = {}) => {
   let next = emptyChangeReviewDiagnostics();
-  const latestPath = agentDiagnostics.latestProducedPath;
-  if (latestPath && changeReviewer) next = await changeReviewer.inspect(latestPath);
+  if (changeReviewer) {
+    const list = await changeReviewer.listChanges({ limit: 30 });
+    const latestPath = agentDiagnostics.latestProducedPath;
+    const latest = latestPath ? await changeReviewer.inspect(latestPath) : emptyChangeReviewDiagnostics(list.reason);
+    next = {
+      ...latest,
+      total: list.total,
+      pendingCount: list.pendingCount,
+      protectedCount: list.protectedCount,
+      acceptedCount: list.acceptedCount,
+      canAcceptCount: list.canAcceptCount,
+      canRejectCount: list.canRejectCount,
+      truncated: list.truncated,
+      items: list.items
+    };
+  }
   const changed = !sameChangeReviewDiagnostics(changeReviewDiagnostics, next);
-  changeReviewDiagnostics = Object.freeze({ ...next });
+  changeReviewDiagnostics = Object.freeze({
+    ...next,
+    items: Object.freeze([...(next.items || [])])
+  });
   if (changed && rebuildMenu) installApplicationMenu();
   if (changed && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('diagnostics:state', getDiagnosticsState());
@@ -351,6 +408,81 @@ const runHarnessUiAction = async (action) => {
   }
 };
 
+const enterPlanMode = async () => {
+  if (!harnessUiReady()) {
+    await showHarnessActionFailure();
+    return false;
+  }
+  await refreshAgentDiagnostics();
+  if (!agentDiagnostics.canEnterPlan) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '当前无法进入 Plan 模式',
+      message: agentDiagnostics.planMode === 'on' ? '当前会话已经处于 Plan 模式。' : '请等待当前 Agent 操作结束后重试。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return false;
+  }
+  const confirmation = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '进入 Plan 模式',
+    message: '让当前会话先分析并形成计划？',
+    detail: 'DSH Desktop 将通过 Harness 官方 /plan 命令进入 Plan 模式。完成的计划仍由 Harness 官方确认卡审批；Plan 状态不替代访问模式和命令权限。现有输入草稿不会被覆盖。',
+    buttons: ['进入 Plan 模式', '取消'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  });
+  if (confirmation.response !== 0) return false;
+  const result = await invokeHarnessCommandAction(mainWindow.webContents, 'enter-plan-mode');
+  if (!result.ok) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '未进入 Plan 模式',
+      message: result.reason === 'composer-has-draft'
+        ? '输入区已有未发送内容，应用没有覆盖。'
+        : 'Harness 输入区尚未准备好。',
+      detail: result.reason === 'composer-has-draft'
+        ? '请先发送、保存或清空现有草稿，再从 Agent 菜单进入 Plan 模式。'
+        : '请等待当前页面和会话完成加载后重试。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return false;
+  }
+  setTimeout(() => { void refreshAgentDiagnostics(); }, 200);
+  return true;
+};
+
+const exitPlanModeWithoutApproval = async () => {
+  await refreshAgentDiagnostics();
+  if (agentDiagnostics.planMode !== 'on') return true;
+  if (agentDiagnostics.status === 'waiting') {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '计划正在等待确认',
+      message: '请在 Harness 计划确认卡中选择“批准”或“继续规划”。',
+      detail: '桌面端不会把关闭 Plan 模式冒充成批准计划。可以使用“定位 Plan 确认”直接回到确认卡。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return false;
+  }
+  const confirmation = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: '退出 Plan 模式',
+    message: '退出 Plan 模式并返回默认执行模式？',
+    detail: '这会调用 Harness 官方 /plan off。它不会批准某个计划，也不会自动运行命令；后续执行仍受当前访问模式和审批策略控制。',
+    buttons: ['退出 Plan 模式', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  });
+  if (confirmation.response !== 0) return false;
+  return runHarnessUiAction('exit-plan-mode');
+};
+
 const agentStatusLabel = () => {
   const labels = {
     ready: 'Agent 状态：空闲',
@@ -418,11 +550,27 @@ const permissionModeLabel = () => {
   return labels[agentDiagnostics.permissionMode] || labels.unknown;
 };
 
+const planModeLabel = () => {
+  const labels = {
+    on: 'Plan 模式：已开启',
+    off: 'Plan 模式：已关闭',
+    unavailable: 'Plan 模式：不可用'
+  };
+  const base = labels[agentDiagnostics.planMode] || labels.unavailable;
+  return agentDiagnostics.planMode === 'on' && agentDiagnostics.status === 'waiting'
+    ? `${base}（等待计划确认）`
+    : base;
+};
+
 const powerShellCompatibilityLabel = () => agentDiagnostics.powerShellCompatibility === 'sandbox-crash'
   ? 'PowerShell：受限模式不兼容（0xC0000005）'
   : 'PowerShell：尚未检测到兼容问题';
 
 const changeStatusLabel = () => {
+  if (changeReviewDiagnostics.total > 0) {
+    const truncated = changeReviewDiagnostics.truncated ? '+' : '';
+    return `变更：${changeReviewDiagnostics.total}${truncated} 个 · 待审 ${changeReviewDiagnostics.pendingCount} · 保护 ${changeReviewDiagnostics.protectedCount} · 已接受 ${changeReviewDiagnostics.acceptedCount}`;
+  }
   const fileName = changeReviewDiagnostics.path ? path.basename(changeReviewDiagnostics.path) : '';
   const suffix = fileName ? ` — ${fileName}` : '';
   const labels = {
@@ -434,6 +582,29 @@ const changeStatusLabel = () => {
     none: '变更状态：尚未检测到产物文件'
   };
   return labels[changeReviewDiagnostics.status] || labels.none;
+};
+
+const changeItemStatusLabel = (state) => {
+  const labels = {
+    pending: '待审查',
+    protected: '原有修改已保护',
+    accepted: '已接受并暂存',
+    clean: '已恢复',
+    unavailable: '仅可查看'
+  };
+  return labels[state.status] || '状态未知';
+};
+
+const changeItemMenuLabel = (state) => {
+  const prefix = {
+    pending: '待审',
+    protected: '保护',
+    accepted: '已接受',
+    clean: '已恢复',
+    unavailable: '只读'
+  }[state.status] || '未知';
+  const value = `${state.path}`;
+  return `[${prefix}] ${value.length > 90 ? `${value.slice(0, 87)}…` : value}`;
 };
 
 const showChangeReviewFailure = async (error) => {
@@ -450,11 +621,12 @@ const showChangeReviewFailure = async (error) => {
   });
 };
 
-const reviewLatestChange = async (action) => {
+const reviewChangePath = async (reportedPath, action) => {
   try {
     await refreshChangeReviewDiagnostics();
-    const state = changeReviewDiagnostics;
-    if (!state.path || !changeReviewer) throw new Error('尚未检测到 Harness 产物文件。');
+    if (!reportedPath || !changeReviewer) throw new Error('尚未检测到可审查文件。');
+    const state = await changeReviewer.inspect(reportedPath);
+    if (state.status === 'unavailable') throw new Error('当前文件无法安全审查。');
     if (agentDiagnostics.canStop || agentDiagnostics.status === 'waiting') {
       throw new Error('Agent 仍在运行或等待确认，请完成当前操作后再审查变更。');
     }
@@ -472,10 +644,10 @@ const reviewLatestChange = async (action) => {
         ? `接受并暂存 ${fileName}？`
         : `拒绝并恢复 ${fileName}？`,
       detail: accepting
-        ? '这会把该文件当前内容加入 Git 暂存区，作为后续拒绝操作的恢复基线；不会提交或推送。'
+        ? `${state.path}\n\n这会把该文件当前内容加入 Git 暂存区，作为后续拒绝操作的恢复基线；不会提交或推送。`
         : state.untracked
-          ? '这是新文件。拒绝后会移动到 Windows 回收站，仍可从回收站恢复。'
-          : '这会把工作区文件恢复到当前 Git 暂存版本；已有暂存内容会保留，不会提交或推送。',
+          ? `${state.path}\n\n这是新文件。拒绝后会移动到 Windows 回收站，仍可从回收站恢复。`
+          : `${state.path}\n\n这会把工作区文件恢复到当前 Git 暂存版本；已有暂存内容会保留，不会提交或推送。`,
       buttons: [accepting ? '接受并暂存' : '拒绝并恢复', '取消'],
       defaultId: 1,
       cancelId: 1,
@@ -484,6 +656,45 @@ const reviewLatestChange = async (action) => {
     if (result.response !== 0) return false;
     if (accepting) await changeReviewer.accept(state.path);
     else await changeReviewer.reject(state.path);
+    await refreshChangeReviewDiagnostics();
+    return true;
+  } catch (error) {
+    await showChangeReviewFailure(error);
+    return false;
+  }
+};
+
+const reviewLatestChange = async (action) => reviewChangePath(changeReviewDiagnostics.path, action);
+
+const reviewChangeBatch = async (action) => {
+  try {
+    if (!changeReviewer) throw new Error('当前没有可用的 Git 审查器。');
+    if (agentDiagnostics.canStop || agentDiagnostics.status === 'waiting') {
+      throw new Error('Agent 仍在运行或等待确认，请完成当前操作后再审查变更。');
+    }
+    const list = await changeReviewer.listChanges({ limit: 100 });
+    const candidates = list.items.filter((item) => item.status === 'pending' && !item.protected);
+    if (candidates.length === 0) throw new Error('当前没有可批量处理的 Agent 变更。');
+    const accepting = action === 'accept';
+    const newFileCount = candidates.filter((item) => item.untracked).length;
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: accepting ? 'question' : 'warning',
+      title: accepting ? '接受全部待审文件' : '拒绝全部待审文件',
+      message: accepting
+        ? `接受并暂存 ${candidates.length} 个文件？`
+        : `拒绝并恢复 ${candidates.length} 个文件？`,
+      detail: accepting
+        ? `只处理标记为“待审”的文件；${list.protectedCount} 个原有修改保护文件不会包含。操作只写入 Git 暂存区，不会提交或推送。`
+        : `只处理标记为“待审”的文件；${list.protectedCount} 个原有修改保护文件不会包含。其中 ${newFileCount} 个新文件会进入 Windows 回收站，其余文件恢复到当前 Git 暂存版本。`,
+      buttons: [accepting ? '全部接受并暂存' : '全部拒绝并恢复', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    });
+    if (result.response !== 0) return false;
+    const paths = candidates.map((item) => item.path);
+    if (accepting) await changeReviewer.acceptMany(paths);
+    else await changeReviewer.rejectMany(paths);
     await refreshChangeReviewDiagnostics();
     return true;
   } catch (error) {
@@ -591,6 +802,29 @@ function installApplicationMenu() {
       click: () => { void activateWorkspace(recentPath); }
     }))
     : [{ label: '暂无最近仓库', enabled: false }];
+  const changeFileItems = changeReviewDiagnostics.items.length > 0
+    ? changeReviewDiagnostics.items.map((state) => ({
+      label: changeItemMenuLabel(state),
+      submenu: [
+        { label: `状态：${changeItemStatusLabel(state)}`, enabled: false },
+        { label: state.path, enabled: false },
+        { type: 'separator' },
+        {
+          label: '接受并暂存…',
+          enabled: harnessReady && reviewIdle && state.canAccept,
+          click: () => { void reviewChangePath(state.path, 'accept'); }
+        },
+        {
+          label: '拒绝并恢复…',
+          enabled: harnessReady && reviewIdle && state.canReject,
+          click: () => { void reviewChangePath(state.path, 'reject'); }
+        }
+      ]
+    }))
+    : [{ label: '暂无 Git 变更', enabled: false }];
+  if (changeReviewDiagnostics.truncated) {
+    changeFileItems.push({ label: '仅显示前 30 个文件，请先处理后刷新', enabled: false });
+  }
   const template = [
     {
       label: '项目',
@@ -647,6 +881,23 @@ function installApplicationMenu() {
       label: 'Agent',
       submenu: [
         { label: agentStatusLabel(), enabled: false },
+        { label: planModeLabel(), enabled: false },
+        {
+          label: '进入 Plan 模式…',
+          enabled: harnessReady && agentDiagnostics.canEnterPlan,
+          click: () => { void enterPlanMode(); }
+        },
+        {
+          label: '定位 Plan 确认',
+          enabled: harnessReady && agentDiagnostics.planMode === 'on' && agentDiagnostics.canFocusPending,
+          click: () => { void runHarnessUiAction('focus-pending'); }
+        },
+        {
+          label: '退出 Plan 模式（不批准计划）…',
+          enabled: harnessReady && agentDiagnostics.canExitPlan && agentDiagnostics.status !== 'waiting',
+          click: () => { void exitPlanModeWithoutApproval(); }
+        },
+        { type: 'separator' },
         {
           label: '停止当前生成',
           accelerator: 'Esc',
@@ -730,6 +981,22 @@ function installApplicationMenu() {
           enabled: harnessReady && agentDiagnostics.canFocusChange,
           click: () => { void runHarnessUiAction('focus-latest-change'); }
         },
+        { type: 'separator' },
+        {
+          label: `多文件审查（${changeReviewDiagnostics.total}${changeReviewDiagnostics.truncated ? '+' : ''}）`,
+          submenu: changeFileItems
+        },
+        {
+          label: `全部接受待审文件…（${changeReviewDiagnostics.canAcceptCount}）`,
+          enabled: harnessReady && reviewIdle && changeReviewDiagnostics.canAcceptCount > 0,
+          click: () => { void reviewChangeBatch('accept'); }
+        },
+        {
+          label: `全部拒绝待审文件…（${changeReviewDiagnostics.canRejectCount}）`,
+          enabled: harnessReady && reviewIdle && changeReviewDiagnostics.canRejectCount > 0,
+          click: () => { void reviewChangeBatch('reject'); }
+        },
+        { label: '批量操作自动排除打开仓库前已有修改', enabled: false },
         { type: 'separator' },
         {
           label: '接受并暂存最近文件…',

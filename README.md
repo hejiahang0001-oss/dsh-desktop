@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.3.7.exe"><strong>Download for Windows</strong></a>
+  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.3.8.exe"><strong>Download for Windows</strong></a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#中文说明">中文说明</a>
   · <a href="DSH_DESKTOP_ITERATION_PLAN.md">Roadmap</a>
@@ -33,17 +33,17 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Native workspace flow** — open a local Git repository with `Ctrl+O`, remember recent repositories, and bind the matching Harness workspace and session.
 - **Persistent sessions** — create, search, resume, rename, archive, and branch sessions while keeping Harness as the source of truth.
 - **Agent visibility and control** — see whether the agent is idle, running, waiting for approval, or unavailable; stop or redirect a running turn from native menus.
-- **Safer change review** — locate the latest produced change, accept it into Git staging, or reject it with protections for pre-existing user edits.
+- **Plan and safer multi-file review** — enter official Harness Plan mode, locate its execution approval, inspect all produced Git changes, then accept or reject one file or a safe batch while protecting pre-existing edits.
 - **Packaged runtime** — the installer includes pinned Node.js and Harness runtimes; users do not need to install Node.js first.
 - **Constrained desktop shell** — loopback-only service, random port, renderer sandbox, context isolation, no Node integration, and restricted navigation.
 
 <p align="center">
-  <img src="docs/assets/app-screenshot.png" alt="DSH Desktop V0.3.7 running DeepSeek Harness on Windows" width="100%">
+  <img src="docs/assets/app-screenshot.png" alt="DSH Desktop V0.3.8 running DeepSeek Harness on Windows" width="100%">
 </p>
 
 ## Quick start
 
-1. Download [`DSH-Desktop-Setup-0.3.7.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.3.7.exe).
+1. Download [`DSH-Desktop-Setup-0.3.8.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.3.8.exe).
 2. Install and launch DSH Desktop. The current installer is not code-signed, so Windows SmartScreen may show a warning.
 3. Open **Project → Open code repository…** or press `Ctrl+O`.
 4. Open **Model** to configure your DeepSeek API key, then start a Harness session.
@@ -52,21 +52,22 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current release
 
-**V0.3.7** completes the first end-to-end workspace and single-file review flow:
+**V0.3.8** completes the first end-to-end Plan and multi-file review flow:
 
 ```text
-Open repository → bind Harness workspace → resume/create session
-→ run agent → inspect produced change → accept and stage, or reject
+Open repository → enter Plan mode → approve execution in Harness
+→ run agent → inspect the multi-file change list
+→ accept/stage or reject one file or a safe batch
 ```
 
-The release has 43 automated tests plus development, packaged-runtime, unpacked-app, installed-app, persistence, real-model, and isolated-Git smoke evidence. See [validation details](docs/VALIDATION.md) and the [V0.3.7 release notes](docs/RELEASE_NOTES_v0.3.7.md).
+The release has 50 automated tests plus packaged-runtime, unpacked-app, installed-app, persistence, real-model, official Plan approval, and isolated multi-file Git evidence. See [validation details](docs/VALIDATION.md) and the [V0.3.8 release notes](docs/RELEASE_NOTES_v0.3.8.md).
 
 ## Security and current limits
 
 - The Windows installer is not code-signed yet.
 - Harness credentials are currently stored by Harness rc.8 in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
 - A known rc.8 Workspace Write compatibility issue may cause PowerShell to exit with `0xC0000005` in restricted mode. DSH Desktop reports the failure and never switches to Full Access automatically.
-- V0.3.7 supports a real single-file Diff confirmation loop, but it is not yet a standalone multi-file review panel and does not include batch review, checkpoints, or session rewind.
+- V0.3.8 provides a native multi-file change list with per-file and guarded batch actions, but it is not yet a persistent standalone Diff panel and does not include checkpoints or session rewind.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Architecture and product boundaries are documented in [the iteration plan](DSH_DESKTOP_ITERATION_PLAN.md).
 
@@ -98,12 +99,13 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.3.7 已打通以下真实流程：
+V0.3.8 已打通以下真实流程：
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
+- 从桌面菜单进入官方 Plan 模式，定位 Harness 的执行确认，并在批准后执行；
 - 查看 Agent、工具调用和测试状态；
-- 将最近产物接受并加入 Git 暂存区，或安全拒绝修改；
+- 查看多文件变更列表，逐文件或批量接受并加入 Git 暂存区，或安全拒绝修改；
 - 在覆盖升级后保留工作区、会话和软件 Key 状态。
 
 首次使用请从 [GitHub Releases](https://github.com/hejiahang0001-oss/dsh-desktop/releases) 下载 Windows 安装包。当前版本尚未代码签名，SmartScreen 可能提示风险；DeepSeek Harness 仍处于 developer preview。

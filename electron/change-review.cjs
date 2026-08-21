@@ -16,6 +16,25 @@ const splitNull = (value) => String(value || '').split('\0').filter(Boolean);
 const toGitPath = (value) => value.split(path.sep).join('/');
 const pathKey = (value) => process.platform === 'win32' ? value.toLowerCase() : value;
 
+const parsePorcelainEntries = (output) => {
+  const records = splitNull(output);
+  const entries = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (record.length < 4) continue;
+    const code = record.slice(0, 2);
+    const entryPath = record.slice(3);
+    if (!entryPath) continue;
+    let originalPath = '';
+    if (code !== '??' && /[RC]/.test(code)) {
+      originalPath = records[index + 1] || '';
+      index += 1;
+    }
+    entries.push({ code, path: entryPath, originalPath });
+  }
+  return entries;
+};
+
 const isInside = (parent, candidate) => {
   const relative = path.relative(parent, candidate);
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
@@ -36,15 +55,25 @@ const resolveReportedPath = (workspacePath, reportedPath) => {
 };
 
 const classifyPorcelain = (output) => {
-  const entries = splitNull(output).map((entry) => ({
-    code: entry.slice(0, 2),
-    path: entry.slice(3)
-  })).filter((entry) => entry.path);
+  const entries = parsePorcelainEntries(output);
   const untracked = entries.some((entry) => entry.code === '??');
   const staged = entries.some((entry) => entry.code !== '??' && entry.code[0] !== ' ');
   const unstaged = entries.some((entry) => entry.code !== '??' && entry.code[1] !== ' ');
   return { entries, untracked, staged, unstaged };
 };
+
+const emptyChangeList = (reason = 'no-change') => Object.freeze({
+  available: reason === 'no-change',
+  reason,
+  total: 0,
+  pendingCount: 0,
+  protectedCount: 0,
+  acceptedCount: 0,
+  canAcceptCount: 0,
+  canRejectCount: 0,
+  truncated: false,
+  items: Object.freeze([])
+});
 
 class GitChangeReviewer {
   constructor({ run = execFileAsync, trashItem } = {}) {
@@ -170,6 +199,59 @@ class GitChangeReviewer {
     }
   }
 
+  async listChanges({ limit = 30 } = {}) {
+    if (!this.available) return emptyChangeList(this.reason);
+    const safeLimit = Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 100) : 30;
+    try {
+      const workspaceRepoPath = toGitPath(path.relative(this.repoRoot, this.workspacePath));
+      const pathspec = workspaceRepoPath ? ['--', workspaceRepoPath] : ['--'];
+      const output = await this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all', ...pathspec]);
+      const allItems = parsePorcelainEntries(output)
+        .map((entry) => {
+          const absolutePath = path.resolve(this.repoRoot, entry.path);
+          if (!isInside(this.workspacePath, absolutePath) || absolutePath === this.workspacePath) return null;
+          const reportedPath = toGitPath(path.relative(this.workspacePath, absolutePath));
+          const untracked = entry.code === '??';
+          const staged = !untracked && entry.code[0] !== ' ';
+          const unstaged = !untracked && entry.code[1] !== ' ';
+          const protectedPath = this.protectedPaths.has(pathKey(entry.path))
+            || (entry.originalPath && this.protectedPaths.has(pathKey(entry.originalPath)));
+          const pending = untracked || unstaged;
+          const status = pending
+            ? protectedPath ? 'protected' : 'pending'
+            : staged ? 'accepted' : 'clean';
+          return Object.freeze({
+            status,
+            path: reportedPath,
+            repoPath: entry.path,
+            canAccept: pending,
+            canReject: pending && !protectedPath,
+            protected: protectedPath,
+            untracked,
+            staged,
+            reason: protectedPath && pending ? 'preexisting-unstaged-change' : status
+          });
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.path.localeCompare(right.path, 'zh-CN'));
+      const items = allItems.slice(0, safeLimit);
+      return Object.freeze({
+        available: true,
+        reason: allItems.length > 0 ? 'ready' : 'no-change',
+        total: allItems.length,
+        pendingCount: allItems.filter((item) => item.status === 'pending').length,
+        protectedCount: allItems.filter((item) => item.status === 'protected').length,
+        acceptedCount: allItems.filter((item) => item.status === 'accepted').length,
+        canAcceptCount: allItems.filter((item) => item.canAccept && !item.protected).length,
+        canRejectCount: allItems.filter((item) => item.canReject).length,
+        truncated: allItems.length > items.length,
+        items: Object.freeze(items)
+      });
+    } catch (error) {
+      return emptyChangeList(error?.code || 'git-status-failed');
+    }
+  }
+
   async accept(reportedPath) {
     const state = await this.inspect(reportedPath);
     if (!state.canAccept) return state;
@@ -193,11 +275,55 @@ class GitChangeReviewer {
     }
     return this.inspect(reportedPath);
   }
+
+  async processMany(action, reportedPaths) {
+    if (!['accept', 'reject'].includes(action)) {
+      throw new ChangeReviewError('invalid-action', '不支持的批量变更操作。');
+    }
+    if (!Array.isArray(reportedPaths)) {
+      throw new ChangeReviewError('invalid-paths', '批量变更路径无效。');
+    }
+    const paths = [...new Set(reportedPaths)].filter((value) => typeof value === 'string' && value.length > 0);
+    if (paths.length > 100) throw new ChangeReviewError('too-many-paths', '单次最多处理 100 个文件。');
+    const states = await Promise.all(paths.map((reportedPath) => this.inspect(reportedPath)));
+    const protectedState = states.find((state) => state.protected);
+    if (protectedState) {
+      throw new ChangeReviewError(
+        'preexisting-unstaged-change',
+        `批量操作包含打开仓库前已有修改的文件：${protectedState.path}`
+      );
+    }
+    const unavailableState = states.find((state) => state.status === 'unavailable');
+    if (unavailableState) {
+      throw new ChangeReviewError('batch-path-unavailable', `无法安全处理文件：${unavailableState.path}`);
+    }
+    const actionable = states.filter((state) => action === 'accept' ? state.canAccept : state.canReject);
+    const results = [];
+    for (const state of actionable) {
+      results.push(action === 'accept' ? await this.accept(state.path) : await this.reject(state.path));
+    }
+    return Object.freeze({
+      action,
+      requested: paths.length,
+      processed: results.length,
+      items: Object.freeze(results)
+    });
+  }
+
+  async acceptMany(reportedPaths) {
+    return this.processMany('accept', reportedPaths);
+  }
+
+  async rejectMany(reportedPaths) {
+    return this.processMany('reject', reportedPaths);
+  }
 }
 
 module.exports = {
   ChangeReviewError,
   GitChangeReviewer,
   classifyPorcelain,
+  emptyChangeList,
+  parsePorcelainEntries,
   resolveReportedPath
 };
