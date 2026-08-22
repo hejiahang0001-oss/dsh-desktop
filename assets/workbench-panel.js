@@ -74,10 +74,16 @@
   const diff = create('section', 'dsh-review-diff');
   diff.setAttribute('aria-labelledby', 'dsh-review-diff-path');
   const diffHeader = create('div', 'dsh-review-diff-header');
+  const diffIdentity = create('div', 'dsh-review-diff-identity');
   const diffPath = create('span', 'dsh-review-diff-path', '未选择文件');
   diffPath.id = 'dsh-review-diff-path';
   const diffNote = create('span', 'dsh-review-diff-note', '选择文件后显示有界 Git Diff');
-  diffHeader.append(diffPath, diffNote);
+  diffIdentity.append(diffPath, diffNote);
+  const revealFileButton = create('button', 'dsh-review-view-file', '查看文件');
+  revealFileButton.type = 'button';
+  revealFileButton.disabled = true;
+  revealFileButton.title = '在工作区文件中定位并只读查看';
+  diffHeader.append(diffIdentity, revealFileButton);
   const diffScroll = create('div', 'dsh-review-diff-scroll');
   diffScroll.tabIndex = 0;
   diffScroll.setAttribute('aria-label', '所选文件的 Git Diff');
@@ -179,6 +185,7 @@
     const changes = diagnostics.changes || {};
     acceptAllButton.disabled = !idle || !(changes.canAcceptCount > 0);
     rejectAllButton.disabled = !idle || !(changes.canRejectCount > 0);
+    revealFileButton.disabled = !selectedPath;
   };
 
   const selectPath = (pathValue) => {
@@ -283,6 +290,11 @@
   rejectButton.addEventListener('click', () => void runAction('reject'));
   acceptAllButton.addEventListener('click', () => void runAction('accept', true));
   rejectAllButton.addEventListener('click', () => void runAction('reject', true));
+  revealFileButton.addEventListener('click', async () => {
+    if (!selectedPath) return;
+    const revealed = await window.__DSH_FILES__?.reveal?.(selectedPath);
+    if (!revealed) setLive('无法在工作区文件中定位该路径。');
+  });
 
   let dragStartWidth = 0;
   let dragStartX = 0;

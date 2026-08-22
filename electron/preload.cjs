@@ -27,10 +27,17 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   }),
   workbench: Object.freeze({
     getState: () => ipcRenderer.invoke('workbench:get-state'),
+    setFilePanelOpen: (open) => ipcRenderer.invoke('workbench:set-file-panel-open', open),
+    setFilePanelWidth: (width) => ipcRenderer.invoke('workbench:set-file-panel-width', width),
     setReviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-review-panel-open', open),
     setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width),
     setTerminalPanelOpen: (open) => ipcRenderer.invoke('workbench:set-terminal-panel-open', open),
     setTerminalPanelHeight: (height) => ipcRenderer.invoke('workbench:set-terminal-panel-height', height)
+  }),
+  files: Object.freeze({
+    list: (directoryPath = '') => ipcRenderer.invoke('files:list', directoryPath),
+    read: (filePath) => ipcRenderer.invoke('files:read', filePath),
+    search: (query) => ipcRenderer.invoke('files:search', query)
   }),
   terminal: Object.freeze({
     getState: () => ipcRenderer.invoke('terminal:get-state'),

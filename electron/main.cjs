@@ -23,6 +23,7 @@ const {
   getWorkbenchPanelLayoutScript
 } = require('./workbench-panel.cjs');
 const { WorkbenchStore, normalizeWorkbenchState } = require('./workbench-store.cjs');
+const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
@@ -34,6 +35,7 @@ let workspaceStore;
 let workbenchStore;
 let changeReviewer;
 let terminalRunner;
+let workspaceFiles;
 let dataRoot;
 let harnessOrigin = null;
 let allowQuit = false;
@@ -111,10 +113,14 @@ const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css'
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchTerminalCssPath = path.join(rootDir, 'assets', 'workbench-terminal.css');
 const workbenchTerminalScriptPath = path.join(rootDir, 'assets', 'workbench-terminal.js');
+const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
+const workbenchFilesScriptPath = path.join(rootDir, 'assets', 'workbench-files.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
 let workbenchTerminalCss = '';
 let workbenchTerminalScript = '';
+let workbenchFilesCss = '';
+let workbenchFilesScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 
@@ -261,10 +267,13 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
   if (!workbenchTerminalCss) workbenchTerminalCss = await fsp.readFile(workbenchTerminalCssPath, 'utf8');
   if (!workbenchTerminalScript) workbenchTerminalScript = await fsp.readFile(workbenchTerminalScriptPath, 'utf8');
+  if (!workbenchFilesCss) workbenchFilesCss = await fsp.readFile(workbenchFilesCssPath, 'utf8');
+  if (!workbenchFilesScript) workbenchFilesScript = await fsp.readFile(workbenchFilesScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${workbenchTerminalCss}`,
+    css: `${workbenchPanelCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}`,
     reviewScript: workbenchPanelScript,
-    terminalScript: workbenchTerminalScript
+    terminalScript: workbenchTerminalScript,
+    filesScript: workbenchFilesScript
   };
 };
 
@@ -276,7 +285,8 @@ const installWorkbenchPanel = async () => {
     await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
     const reviewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.reviewScript, true));
     const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
-    return reviewInstalled && terminalInstalled;
+    const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
+    return reviewInstalled && terminalInstalled && filesInstalled;
   } catch {
     return false;
   }
@@ -289,7 +299,11 @@ const applyWorkbenchPanelLayout = async ({ focus = false, focusTarget = 'review'
     true
   ));
   if (applied && focus) {
-    const globalName = focusTarget === 'terminal' ? '__DSH_TERMINAL__' : '__DSH_WORKBENCH__';
+    const globalName = {
+      files: '__DSH_FILES__',
+      terminal: '__DSH_TERMINAL__',
+      review: '__DSH_WORKBENCH__'
+    }[focusTarget] || '__DSH_WORKBENCH__';
     await mainWindow.webContents.executeJavaScript(`Boolean(window.${globalName}?.focus?.())`, true);
   }
   return applied;
@@ -307,6 +321,25 @@ const setReviewPanelOpen = async (open, { focus = false } = {}) => {
 
 const setReviewPanelWidth = async (width) => {
   const state = await workbenchStore.setReviewPanelWidth(width);
+  if (harnessUiReady()) await applyWorkbenchPanelLayout();
+  return state;
+};
+
+const setFilePanelOpen = async (open, { focus = false } = {}) => {
+  const state = await workbenchStore.setFilePanelOpen(Boolean(open));
+  installApplicationMenu();
+  if (harnessUiReady()) {
+    const applied = await applyWorkbenchPanelLayout({
+      focus: focus && state.filePanelOpen,
+      focusTarget: 'files'
+    });
+    if (!applied) await installWorkbenchPanel();
+  }
+  return state;
+};
+
+const setFilePanelWidth = async (width) => {
+  const state = await workbenchStore.setFilePanelWidth(width);
   if (harnessUiReady()) await applyWorkbenchPanelLayout();
   return state;
 };
@@ -929,6 +962,7 @@ const activateWorkspace = async (workspacePath) => {
     if (terminalRunner?.isActive()) await terminalRunner.stop();
     await terminalSettlePromise;
     const workspace = await workspaceStore.activate(workspacePath);
+    await workspaceFiles.activate(workspace.activePath);
     await changeReviewer.activate(workspace.activePath);
     changeReviewDiagnostics = emptyChangeReviewDiagnostics();
     terminalRunner?.setWorkspace(workspace.activePath);
@@ -1203,6 +1237,26 @@ function installApplicationMenu() {
       label: '视图',
       submenu: [
         {
+          label: '显示工作区文件',
+          type: 'checkbox',
+          accelerator: 'CmdOrCtrl+Alt+E',
+          checked: getWorkbenchState().filePanelOpen,
+          enabled: harnessReady,
+          click: (item) => { void setFilePanelOpen(item.checked, { focus: item.checked }); }
+        },
+        {
+          label: '聚焦文件搜索',
+          accelerator: 'CmdOrCtrl+Alt+F',
+          enabled: harnessReady && getWorkbenchState().filePanelOpen,
+          click: () => { void applyWorkbenchPanelLayout({ focus: true, focusTarget: 'files' }); }
+        },
+        {
+          label: '重置文件面板宽度',
+          enabled: harnessReady,
+          click: () => { void setFilePanelWidth(260); }
+        },
+        { type: 'separator' },
+        {
           label: '显示集成终端',
           type: 'checkbox',
           accelerator: 'CmdOrCtrl+Alt+T',
@@ -1311,8 +1365,16 @@ ipcMain.handle('changes:reject-all', async (event) => {
 ipcMain.handle('workbench:get-state', (event) => (
   desktopIpcAllowed(event)
     ? getWorkbenchState()
-    : normalizeWorkbenchState({ reviewPanelOpen: false, terminalPanelOpen: false })
+    : normalizeWorkbenchState({ filePanelOpen: false, reviewPanelOpen: false, terminalPanelOpen: false })
 ));
+ipcMain.handle('workbench:set-file-panel-open', async (event, open) => {
+  if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
+  return setFilePanelOpen(open);
+});
+ipcMain.handle('workbench:set-file-panel-width', async (event, width) => {
+  if (!harnessIpcAllowed(event) || !Number.isFinite(width)) return getWorkbenchState();
+  return setFilePanelWidth(width);
+});
 ipcMain.handle('workbench:set-review-panel-open', async (event, open) => {
   if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
   return setReviewPanelOpen(open);
@@ -1329,6 +1391,28 @@ ipcMain.handle('workbench:set-terminal-panel-height', async (event, height) => {
   if (!harnessIpcAllowed(event) || !Number.isFinite(height)) return getWorkbenchState();
   return setTerminalPanelHeight(height);
 });
+const runWorkspaceFilesRequest = async (event, operation) => {
+  if (!harnessIpcAllowed(event) || !workspaceFiles) {
+    return { available: false, reason: 'untrusted-or-unavailable', message: '文件面板请求来源未通过安全校验。' };
+  }
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof WorkspaceFilesError) {
+      return { available: false, reason: error.code, message: error.message };
+    }
+    return { available: false, reason: 'unavailable', message: '文件状态已变化，请刷新后重试。' };
+  }
+};
+ipcMain.handle('files:list', (event, directoryPath) => (
+  runWorkspaceFilesRequest(event, () => workspaceFiles.listDirectory(directoryPath))
+));
+ipcMain.handle('files:read', (event, filePath) => (
+  runWorkspaceFilesRequest(event, () => workspaceFiles.readFile(filePath))
+));
+ipcMain.handle('files:search', (event, query) => (
+  runWorkspaceFilesRequest(event, () => workspaceFiles.search(query))
+));
 ipcMain.handle('terminal:get-state', (event) => (
   harnessIpcAllowed(event) && terminalRunner
     ? terminalRunner.getState()
@@ -1479,6 +1563,8 @@ app.whenReady().then(async () => {
   });
   await workbenchStore.init();
   const workspace = await workspaceStore.init();
+  workspaceFiles = new WorkspaceFiles();
+  await workspaceFiles.activate(workspace.activePath);
   terminalRunner = new TerminalRunner({ workspacePath: workspace.activePath });
   bindTerminalRunner(terminalRunner);
   changeReviewer = new GitChangeReviewer({

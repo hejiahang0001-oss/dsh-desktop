@@ -152,9 +152,13 @@ html[data-dsh-review-open="true"] #dsh-workbench-review {
 .dsh-review-empty p { margin: 4px 0 0; font-size: 11px; }
 
 .dsh-review-diff { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--dsh-panel-surface); }
-.dsh-review-diff-header { padding: 8px 10px; border-bottom: 1px solid var(--dsh-panel-border); }
+.dsh-review-diff-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--dsh-panel-border); }
+.dsh-review-diff-identity { min-width: 0; }
 .dsh-review-diff-path { display: block; overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .dsh-review-diff-note { display: block; margin-top: 2px; color: var(--dsh-panel-muted); font-size: 10px; }
+.dsh-review-view-file { min-height: 28px; padding: 3px 8px; border: 1px solid var(--dsh-panel-border); border-radius: 6px; color: var(--dsh-panel-text); background: var(--dsh-panel-raised); font: inherit; font-size: 10px; cursor: pointer; }
+.dsh-review-view-file:hover:not(:disabled) { background: var(--dsh-panel-subtle); }
+.dsh-review-view-file:disabled { cursor: not-allowed; opacity: .45; }
 
 .dsh-review-diff-scroll {
   min-height: 0;
