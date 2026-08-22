@@ -17,6 +17,7 @@ const {
   readHarnessAgentState
 } = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
+const { TerminalRunner, normalizeTerminalCommand } = require('./terminal-runner.cjs');
 const {
   getWorkbenchPanelBootstrapScript,
   getWorkbenchPanelLayoutScript
@@ -32,6 +33,7 @@ let supervisor;
 let workspaceStore;
 let workbenchStore;
 let changeReviewer;
+let terminalRunner;
 let dataRoot;
 let harnessOrigin = null;
 let allowQuit = false;
@@ -107,8 +109,12 @@ const rootDir = path.resolve(__dirname, '..');
 const statusPage = path.join(rootDir, 'harness-status.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
+const workbenchTerminalCssPath = path.join(rootDir, 'assets', 'workbench-terminal.css');
+const workbenchTerminalScriptPath = path.join(rootDir, 'assets', 'workbench-terminal.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
+let workbenchTerminalCss = '';
+let workbenchTerminalScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 
@@ -253,7 +259,13 @@ const getWorkbenchState = () => workbenchStore?.getState() || normalizeWorkbench
 const loadWorkbenchPanelAssets = async () => {
   if (!workbenchPanelCss) workbenchPanelCss = await fsp.readFile(workbenchPanelCssPath, 'utf8');
   if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
-  return { css: workbenchPanelCss, script: workbenchPanelScript };
+  if (!workbenchTerminalCss) workbenchTerminalCss = await fsp.readFile(workbenchTerminalCssPath, 'utf8');
+  if (!workbenchTerminalScript) workbenchTerminalScript = await fsp.readFile(workbenchTerminalScriptPath, 'utf8');
+  return {
+    css: `${workbenchPanelCss}\n${workbenchTerminalCss}`,
+    reviewScript: workbenchPanelScript,
+    terminalScript: workbenchTerminalScript
+  };
 };
 
 const installWorkbenchPanel = async () => {
@@ -262,20 +274,23 @@ const installWorkbenchPanel = async () => {
     const assets = await loadWorkbenchPanelAssets();
     await mainWindow.webContents.insertCSS(assets.css, { cssOrigin: 'author' });
     await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
-    return Boolean(await mainWindow.webContents.executeJavaScript(assets.script, true));
+    const reviewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.reviewScript, true));
+    const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
+    return reviewInstalled && terminalInstalled;
   } catch {
     return false;
   }
 };
 
-const applyWorkbenchPanelLayout = async ({ focus = false } = {}) => {
+const applyWorkbenchPanelLayout = async ({ focus = false, focusTarget = 'review' } = {}) => {
   if (!harnessUiReady()) return false;
   const applied = Boolean(await mainWindow.webContents.executeJavaScript(
     getWorkbenchPanelLayoutScript(getWorkbenchState()),
     true
   ));
   if (applied && focus) {
-    await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_WORKBENCH__?.focus?.())', true);
+    const globalName = focusTarget === 'terminal' ? '__DSH_TERMINAL__' : '__DSH_WORKBENCH__';
+    await mainWindow.webContents.executeJavaScript(`Boolean(window.${globalName}?.focus?.())`, true);
   }
   return applied;
 };
@@ -292,6 +307,25 @@ const setReviewPanelOpen = async (open, { focus = false } = {}) => {
 
 const setReviewPanelWidth = async (width) => {
   const state = await workbenchStore.setReviewPanelWidth(width);
+  if (harnessUiReady()) await applyWorkbenchPanelLayout();
+  return state;
+};
+
+const setTerminalPanelOpen = async (open, { focus = false } = {}) => {
+  const state = await workbenchStore.setTerminalPanelOpen(Boolean(open));
+  installApplicationMenu();
+  if (harnessUiReady()) {
+    const applied = await applyWorkbenchPanelLayout({
+      focus: focus && state.terminalPanelOpen,
+      focusTarget: 'terminal'
+    });
+    if (!applied) await installWorkbenchPanel();
+  }
+  return state;
+};
+
+const setTerminalPanelHeight = async (height) => {
+  const state = await workbenchStore.setTerminalPanelHeight(height);
   if (harnessUiReady()) await applyWorkbenchPanelLayout();
   return state;
 };
@@ -396,6 +430,65 @@ const refreshChangeReviewDiagnostics = async ({ rebuildMenu = true } = {}) => {
     mainWindow.webContents.send('diagnostics:state', getDiagnosticsState());
   }
   return changed;
+};
+
+let terminalWasActive = false;
+let terminalSettlePromise = Promise.resolve();
+const recaptureUserChangeBaseline = async () => {
+  if (!changeReviewer) return;
+  try {
+    await changeReviewer.captureBaseline();
+    await refreshChangeReviewDiagnostics();
+  } catch {
+    // Terminal changes stay on disk even if conservative Git baseline metadata cannot be refreshed.
+  }
+};
+
+const bindTerminalRunner = (runner) => {
+  runner.on('output', (event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:output', event);
+  });
+  runner.on('state', (state) => {
+    const active = state.status === 'running' || state.status === 'stopping';
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:state', state);
+    if (terminalWasActive && !active) terminalSettlePromise = recaptureUserChangeBaseline();
+    terminalWasActive = active;
+    installApplicationMenu();
+  });
+};
+
+const runTerminalCommand = async (value) => {
+  if (!terminalRunner || !harnessUiReady()) {
+    return { ok: false, message: '集成终端尚未就绪。', state: terminalRunner?.getState() };
+  }
+  let command;
+  try {
+    command = normalizeTerminalCommand(value);
+  } catch (error) {
+    return { ok: false, message: error.message, state: terminalRunner.getState() };
+  }
+  if (terminalRunner.isActive()) {
+    return { ok: false, message: '已有终端命令正在运行。', state: terminalRunner.getState() };
+  }
+  const workspace = getWorkspaceState();
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '确认运行终端命令',
+    message: '将在当前工作区运行以下 PowerShell 命令。',
+    detail: `工作区：${workspace.activePath}\n\n${command}\n\n软件内保存的 DeepSeek API Key 不会传入此命令。`,
+    buttons: ['运行', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  });
+  if (result.response !== 0) {
+    return { ok: false, canceled: true, state: terminalRunner.getState() };
+  }
+  try {
+    return { ok: true, state: terminalRunner.start(command) };
+  } catch (error) {
+    return { ok: false, message: error.message, state: terminalRunner.getState() };
+  }
 };
 
 const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
@@ -833,9 +926,12 @@ const showWorkspaceError = async (error) => {
 
 const activateWorkspace = async (workspacePath) => {
   try {
+    if (terminalRunner?.isActive()) await terminalRunner.stop();
+    await terminalSettlePromise;
     const workspace = await workspaceStore.activate(workspacePath);
     await changeReviewer.activate(workspace.activePath);
     changeReviewDiagnostics = emptyChangeReviewDiagnostics();
+    terminalRunner?.setWorkspace(workspace.activePath);
     supervisor.setLaunchDir(workspace.activePath);
     installApplicationMenu();
     applyWindowTitle();
@@ -861,6 +957,8 @@ function installApplicationMenu() {
   const workspace = getWorkspaceState();
   const harnessReady = harnessUiReady();
   const reviewIdle = !agentDiagnostics.canStop && agentDiagnostics.status !== 'waiting';
+  const terminalState = terminalRunner?.getState() || { status: 'idle' };
+  const terminalActive = terminalState.status === 'running' || terminalState.status === 'stopping';
   const recentItems = workspace.recentPaths.length > 0
     ? workspace.recentPaths.map((recentPath) => ({
       label: `${path.basename(recentPath) || path.parse(recentPath).root} — ${path.dirname(recentPath)}`,
@@ -1105,6 +1203,31 @@ function installApplicationMenu() {
       label: '视图',
       submenu: [
         {
+          label: '显示集成终端',
+          type: 'checkbox',
+          accelerator: 'CmdOrCtrl+Alt+T',
+          checked: getWorkbenchState().terminalPanelOpen,
+          enabled: harnessReady,
+          click: (item) => { void setTerminalPanelOpen(item.checked, { focus: item.checked }); }
+        },
+        {
+          label: '聚焦集成终端',
+          accelerator: 'CmdOrCtrl+Alt+K',
+          enabled: harnessReady && getWorkbenchState().terminalPanelOpen,
+          click: () => { void applyWorkbenchPanelLayout({ focus: true, focusTarget: 'terminal' }); }
+        },
+        {
+          label: terminalActive ? '停止当前终端命令' : '终端：当前无运行命令',
+          enabled: harnessReady && terminalActive,
+          click: () => { void terminalRunner.stop(); }
+        },
+        {
+          label: '重置终端高度',
+          enabled: harnessReady,
+          click: () => { void setTerminalPanelHeight(240); }
+        },
+        { type: 'separator' },
+        {
           label: '显示变更审查面板',
           type: 'checkbox',
           accelerator: 'CmdOrCtrl+Alt+D',
@@ -1186,7 +1309,9 @@ ipcMain.handle('changes:reject-all', async (event) => {
   return { ok, diagnostics: getDiagnosticsState() };
 });
 ipcMain.handle('workbench:get-state', (event) => (
-  desktopIpcAllowed(event) ? getWorkbenchState() : normalizeWorkbenchState({ reviewPanelOpen: false })
+  desktopIpcAllowed(event)
+    ? getWorkbenchState()
+    : normalizeWorkbenchState({ reviewPanelOpen: false, terminalPanelOpen: false })
 ));
 ipcMain.handle('workbench:set-review-panel-open', async (event, open) => {
   if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
@@ -1195,6 +1320,28 @@ ipcMain.handle('workbench:set-review-panel-open', async (event, open) => {
 ipcMain.handle('workbench:set-review-panel-width', async (event, width) => {
   if (!harnessIpcAllowed(event) || !Number.isFinite(width)) return getWorkbenchState();
   return setReviewPanelWidth(width);
+});
+ipcMain.handle('workbench:set-terminal-panel-open', async (event, open) => {
+  if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
+  return setTerminalPanelOpen(open);
+});
+ipcMain.handle('workbench:set-terminal-panel-height', async (event, height) => {
+  if (!harnessIpcAllowed(event) || !Number.isFinite(height)) return getWorkbenchState();
+  return setTerminalPanelHeight(height);
+});
+ipcMain.handle('terminal:get-state', (event) => (
+  harnessIpcAllowed(event) && terminalRunner
+    ? terminalRunner.getState()
+    : { status: 'unavailable', cwd: '', runId: 0 }
+));
+ipcMain.handle('terminal:run', (event, command) => (
+  harnessIpcAllowed(event)
+    ? runTerminalCommand(command)
+    : { ok: false, message: '终端请求来源未通过安全校验。' }
+));
+ipcMain.handle('terminal:stop', async (event) => {
+  if (!harnessIpcAllowed(event) || !terminalRunner) return { status: 'unavailable' };
+  return terminalRunner.stop();
 });
 ipcMain.handle('harness:get-state', () => supervisor?.getState() || { status: 'idle' });
 ipcMain.handle('harness:restart', () => startHarnessForWindow({ restart: true }));
@@ -1332,6 +1479,8 @@ app.whenReady().then(async () => {
   });
   await workbenchStore.init();
   const workspace = await workspaceStore.init();
+  terminalRunner = new TerminalRunner({ workspacePath: workspace.activePath });
+  bindTerminalRunner(terminalRunner);
   changeReviewer = new GitChangeReviewer({
     trashItem: (target) => shell.trashItem(target)
   });
@@ -1347,9 +1496,12 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', (event) => {
   stopAgentPolling();
-  if (allowQuit || !supervisor?.isActive()) return;
+  if (allowQuit || (!supervisor?.isActive() && !terminalRunner?.isActive())) return;
   event.preventDefault();
-  void supervisor.stop().finally(() => {
+  const stops = [];
+  if (terminalRunner?.isActive()) stops.push(terminalRunner.stop());
+  if (supervisor?.isActive()) stops.push(supervisor.stop());
+  void Promise.allSettled(stops).then(() => terminalSettlePromise).finally(() => {
     allowQuit = true;
     app.quit();
   });

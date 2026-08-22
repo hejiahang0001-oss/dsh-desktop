@@ -28,7 +28,24 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   workbench: Object.freeze({
     getState: () => ipcRenderer.invoke('workbench:get-state'),
     setReviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-review-panel-open', open),
-    setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width)
+    setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width),
+    setTerminalPanelOpen: (open) => ipcRenderer.invoke('workbench:set-terminal-panel-open', open),
+    setTerminalPanelHeight: (height) => ipcRenderer.invoke('workbench:set-terminal-panel-height', height)
+  }),
+  terminal: Object.freeze({
+    getState: () => ipcRenderer.invoke('terminal:get-state'),
+    run: (command) => ipcRenderer.invoke('terminal:run', command),
+    stop: () => ipcRenderer.invoke('terminal:stop'),
+    onState: (listener) => {
+      const handler = (_event, state) => listener(state);
+      ipcRenderer.on('terminal:state', handler);
+      return () => ipcRenderer.removeListener('terminal:state', handler);
+    },
+    onOutput: (listener) => {
+      const handler = (_event, output) => listener(output);
+      ipcRenderer.on('terminal:output', handler);
+      return () => ipcRenderer.removeListener('terminal:output', handler);
+    }
   }),
   harness: Object.freeze({
     getState: () => ipcRenderer.invoke('harness:get-state'),

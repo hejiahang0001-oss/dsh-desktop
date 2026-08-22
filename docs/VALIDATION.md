@@ -1,55 +1,67 @@
 # Validation evidence
 
-This page preserves the detailed V0.4.0 engineering evidence without making the README front page carry the full verification ledger.
+This page preserves the detailed V0.4.1 engineering evidence without making the README front page carry the full verification ledger.
 
 ## Automated and runtime checks
 
-- 56 Supervisor, workspace mapping, loopback safety, session catalog, credential precedence, Agent/tool/Plan state, Git review, bounded Diff, symbolic-link isolation, and workbench-layout tests pass.
-- Syntax validation passed for every Electron CommonJS module and the injected workbench panel script; `git diff --check` also passed.
-- The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random loopback address.
-- Both runtime smoke checks reported DSH Desktop version 0.4.0, `zh-CN`, and Windows safe storage available.
+- 63 Supervisor, workspace mapping, loopback safety, session catalog, credential precedence, Agent/tool/Plan state, Git review, bounded Diff, workbench layout, and terminal tests pass.
+- The terminal suite includes two real Windows PowerShell checks: execution in an isolated workspace without the managed API Key, and process-tree termination before a long command completes.
+- Syntax validation passed for every changed Electron CommonJS module and injected workbench script; `git diff --check` also passed.
+- The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random IPv4 loopback address.
+- Both final runtime smoke checks reported DSH Desktop version 0.4.1, `zh-CN`, and Windows safe storage available.
 - The installer contains 29,278 files; the embedded Harness closure contains 29,201 files and no reparse points.
 - The NSIS medium passes a 7-Zip structure test with `Everything is Ok`.
-- The installed application reports version 0.4.0 and its packaged `app.asar` exactly matches the unpacked build.
+- The installed application reports version 0.4.1 and its packaged `app.asar` exactly matches the unpacked build.
 
 ## Release integrity
 
-| Item | V0.4.0 value |
+| Item | V0.4.1 value |
 | --- | --- |
-| Installer | `DSH-Desktop-Setup-0.4.0.exe` |
-| Size | `158,441,823` bytes |
-| SHA-256 | `2CB32FAF22F8D76E1CEF30D29209D5B87A50A119EACA26E6262703C3A5DE14E0` |
+| Installer | `DSH-Desktop-Setup-0.4.1.exe` |
+| Size | `158,447,590` bytes |
+| SHA-256 | `164C6DA7603A45C3D90F14AC663B0CCCCDF725CBC01B7B4F59AF755E8A14239D` |
 | Files in installer archive | `29,278` |
-| Packaged `app.asar` SHA-256 | `4BF5251ACD2BCDB92D26A4392DECCB6561789F529F1FA0B2CFCBEB540CEF2690` |
+| Packaged `app.asar` SHA-256 | `6E8AD04C2E28A5027A3AFDF18CB4A15BF324E71B52583125DB93FEEA51DD8E9F` |
 
-The installed `app.asar` and the unpacked build have the same SHA-256.
+The installed `app.asar` and the unpacked build have the same SHA-256. The installed directory contains 29,279 files including the installed uninstaller.
 
 ## Persistence and credential checks
 
-- V0.4.0 was installed directly over V0.3.8; the Windows uninstall record reports `DSH Desktop 0.4.0`.
+- V0.4.1 was installed directly over V0.4.0; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.1`.
 - Nine zstd persisted sessions remained discoverable after the upgrade.
 - The software-managed Key remained configured, retained software-first precedence, and ignored a competing environment value.
-- Validation did not print or copy the plaintext credential value.
-- The usable pre-upgrade snapshot is `backups/pre-v0.4.0-20260822-120413`; it contains 31,582 files, no credential file, and no reparse point.
-- An earlier copy attempt met a locked Chromium cookie file and is explicitly retained as `backups/incomplete-pre-v0.4.0-20260822-120253`; it is not a rollback point.
+- Validation did not print, copy, or pass the plaintext credential to the integrated terminal.
+- The pre-upgrade snapshot is `backups/pre-v0.4.1-20260822-133000`; it contains 31,827 files and 897,588,019 bytes.
+- The snapshot contains no `.credentials.yaml` file and no reparse point.
+- The V0.4.0 workbench state migrated to schema version 2 without resetting the saved review-panel visibility or width; terminal visibility and height were added with safe defaults.
 
-## Persistent review-panel checks
+## Integrated-terminal checks
 
-- An isolated real Git repository exposed three states at once: one pending Agent-produced file, two protected pre-existing files, and later one accepted staged file.
-- Selecting the pending file displayed its bounded worktree Diff. After native acceptance, the same file displayed the staged Diff from `git diff --cached`.
-- The native confirmation dialog kept Cancel as the default. Cancelling left Git unchanged; confirming staged only `agent-output.js`.
-- The panel width was dragged from the 340-pixel default to 418 pixels and persisted to the isolated workbench state.
-- Closing and reopening with `Ctrl+Alt+D` preserved the 418-pixel width. A full Harness page reload restored the panel, file states, and selected staged Diff.
-- Normal and maximized layouts were visually checked without clipping. The compact overlay rule is implemented but has not completed the same visual matrix.
-- The installed V0.4.0 application opened with the right review panel visible and a truthful empty Git state for the current temporary workspace.
+- Every command is normalized to one non-empty line with a 4,096-character limit and is encoded for a fixed absolute Windows PowerShell executable with `shell: false`.
+- The native confirmation dialog displays the exact workspace and command, uses `Cancel` as both the default and cancel action, and states that the software Key is excluded.
+- The child process starts in the active Harness workspace. `DSH_CWD` is set, while `DEEPSEEK_API_KEY` is removed case-insensitively from the child environment.
+- Output strips ANSI/OSC and unsafe control sequences, streams in bounded events, and stops after 200,000 characters. The renderer keeps a smaller bounded display buffer.
+- Only one command can run at a time. A five-minute timeout and the Stop action terminate the full Windows process tree.
+- Switching workspace or quitting stops an active command before the native workspace binding changes or the app exits.
+- When a command settles, the Git review protection baseline is conservatively refreshed so terminal/user modifications are protected from one-click rejection.
+- Terminal state remains native during a Harness reload; output produced before the reload is not replayed.
+
+## Workbench visual checks
+
+- The terminal occupies the full bottom width, while the right Git review panel ends above it. Harness content contracts vertically without covering either workbench panel.
+- The terminal exposes its region, horizontal separator, status, log, command input, and actions through the Windows accessibility tree.
+- `Ctrl+Alt+T` hid and restored the terminal. A full Harness page reload preserved the hidden state, and the same shortcut restored the reinjected panel afterward.
+- The installed V0.4.1 application opened with the bottom terminal visible at 240 pixels and bound to the same DSH temporary workspace path as Harness.
+- The saved review panel remained closed in the user's profile after upgrade, proving migration preserved the previous layout instead of forcing the new default.
+- Normal-window layout was visually checked. The 160–420 pixel clamp, keyboard resize behavior, reduced-motion rule, forced-colors border rule, and compact-height rule are implemented; the complete compact/maximized visual matrix remains pending.
 
 ## Safety boundary
 
-- Diff reads are bounded to 50,000 characters. New untracked previews are limited to 256 KiB; binary files are identified, and symbolic links are never followed for preview.
-- Renderer requests are accepted only from the trusted random IPv4 loopback Harness origin.
-- Accept and reject continue through the existing native confirmation gates and workspace-path validation.
-- Pre-existing changes remain protected from one-click rejection, and batch actions refuse the full batch when any selected path is protected or unavailable.
+- Renderer terminal requests are accepted only from the trusted random IPv4 loopback Harness origin.
+- The renderer cannot choose an executable, working directory, process environment, or shell mode; it can submit only a bounded command string to the native confirmation gate.
+- The terminal does not expose the software Key, bypass Harness permissions, or replace the official Agent/tool loop.
+- Existing Git review path validation, confirmation gates, bounded Diff reads, symbolic-link isolation, staged recovery baseline, and pre-existing-change protection remain in place.
 
 ## Evidence boundary
 
-These statements describe the locally verified V0.4.0 build. V0.4.0 is the first persistent workbench slice; it does not yet include the planned file tree, integrated terminal, preview, checkpoints, or session rewind. This evidence does not imply that DeepSeek endorses DSH Desktop, that Harness rc.8 is production-stable, or that the unsigned installer will pass every Windows reputation check.
+These statements describe the locally verified V0.4.1 build. The terminal is a controlled single-command PowerShell runner, not a persistent interactive PTY. Interactive prompts, terminal tabs, shell-session state, rich ANSI rendering, file tree, preview, checkpoints, and session rewind are not included. UI automation did not enter a command into the terminal because Windows automation policy prohibits automating terminal command entry; the real runner, environment isolation, output path, and process-tree stop were instead verified through native integration tests. This evidence does not imply that DeepSeek endorses DSH Desktop, that Harness rc.8 is production-stable, or that the unsigned installer will pass every Windows reputation check.
