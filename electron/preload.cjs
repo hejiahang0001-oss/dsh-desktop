@@ -17,6 +17,19 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
       return () => ipcRenderer.removeListener('diagnostics:state', handler);
     }
   }),
+  changes: Object.freeze({
+    getDiff: (filePath) => ipcRenderer.invoke('changes:get-diff', filePath),
+    refresh: () => ipcRenderer.invoke('changes:refresh'),
+    accept: (filePath) => ipcRenderer.invoke('changes:accept', filePath),
+    reject: (filePath) => ipcRenderer.invoke('changes:reject', filePath),
+    acceptAll: () => ipcRenderer.invoke('changes:accept-all'),
+    rejectAll: () => ipcRenderer.invoke('changes:reject-all')
+  }),
+  workbench: Object.freeze({
+    getState: () => ipcRenderer.invoke('workbench:get-state'),
+    setReviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-review-panel-open', open),
+    setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width)
+  }),
   harness: Object.freeze({
     getState: () => ipcRenderer.invoke('harness:get-state'),
     restart: () => ipcRenderer.invoke('harness:restart'),

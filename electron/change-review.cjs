@@ -1,4 +1,5 @@
 const { execFile } = require('node:child_process');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { promisify } = require('node:util');
 
@@ -75,10 +76,20 @@ const emptyChangeList = (reason = 'no-change') => Object.freeze({
   items: Object.freeze([])
 });
 
+const boundDiff = (content, { maxChars = 50000, truncated = false } = {}) => {
+  const value = String(content || '').replaceAll('\r\n', '\n');
+  const clipped = value.length > maxChars;
+  return Object.freeze({
+    content: clipped ? `${value.slice(0, maxChars)}\n… Diff 已截断，请在仓库工具中查看完整内容。` : value,
+    truncated: Boolean(truncated || clipped)
+  });
+};
+
 class GitChangeReviewer {
-  constructor({ run = execFileAsync, trashItem } = {}) {
+  constructor({ run = execFileAsync, trashItem, fsPromises = fsp } = {}) {
     this.run = run;
     this.trashItem = trashItem;
+    this.fsPromises = fsPromises;
     this.workspacePath = '';
     this.repoRoot = '';
     this.available = false;
@@ -164,6 +175,7 @@ class GitChangeReviewer {
         canReject: false,
         protected: false,
         untracked: false,
+        staged: false,
         reason: error.code || 'unavailable'
       });
     }
@@ -183,6 +195,7 @@ class GitChangeReviewer {
         canReject: pending && !protectedPath,
         protected: protectedPath,
         untracked: parsed.untracked,
+        staged: parsed.staged,
         reason: protectedPath && pending ? 'preexisting-unstaged-change' : status
       });
     } catch (error) {
@@ -194,7 +207,84 @@ class GitChangeReviewer {
         canReject: false,
         protected: false,
         untracked: false,
+        staged: false,
         reason: error?.code || 'git-status-failed'
+      });
+    }
+  }
+
+  async getDiff(reportedPath, { maxChars = 50000, maxFileBytes = 256 * 1024 } = {}) {
+    const state = await this.inspect(reportedPath);
+    if (state.status === 'unavailable') {
+      return Object.freeze({ ...state, available: false, binary: false, truncated: false, content: '' });
+    }
+    if (!['pending', 'protected', 'accepted'].includes(state.status)) {
+      return Object.freeze({ ...state, available: false, binary: false, truncated: false, content: '', reason: 'no-diff' });
+    }
+    try {
+      let content = '';
+      let fileTruncated = false;
+      let binary = false;
+      if (state.untracked) {
+        const resolved = this.resolveChangePath(reportedPath);
+        const stats = await this.fsPromises.lstat(resolved.absolutePath);
+        if (!stats.isFile()) {
+          content = stats.isSymbolicLink()
+            ? `Symbolic link preview disabled: ${state.repoPath}`
+            : `Non-regular file preview disabled: ${state.repoPath}`;
+        } else {
+          const bytesToRead = Math.min(stats.size, maxFileBytes + 1);
+          const handle = await this.fsPromises.open(resolved.absolutePath, 'r');
+          let buffer;
+          try {
+            buffer = Buffer.alloc(bytesToRead);
+            const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
+            buffer = buffer.subarray(0, bytesRead);
+          } finally {
+            await handle.close();
+          }
+          binary = buffer.includes(0);
+          if (binary) {
+            content = `Binary file: ${state.repoPath}`;
+          } else {
+            const text = buffer.subarray(0, maxFileBytes).toString('utf8').replaceAll('\r\n', '\n');
+            const lines = text.length === 0 ? [] : text.split('\n');
+            const body = lines.map((line) => `+${line}`).join('\n');
+            content = [
+              `diff --git a/${state.repoPath} b/${state.repoPath}`,
+              'new file',
+              '--- /dev/null',
+              `+++ b/${state.repoPath}`,
+              `@@ -0,0 +1,${lines.length} @@`,
+              body
+            ].join('\n');
+          }
+          fileTruncated = stats.size > maxFileBytes;
+        }
+      } else {
+        const args = state.status === 'accepted'
+          ? ['diff', '--cached', '--no-ext-diff', '--unified=3', '--', state.repoPath]
+          : ['diff', '--no-ext-diff', '--unified=3', '--', state.repoPath];
+        content = await this.executeGit(args);
+        binary = /(?:Binary files .* differ|GIT binary patch)/i.test(content);
+      }
+      const bounded = boundDiff(content, { maxChars, truncated: fileTruncated });
+      return Object.freeze({
+        ...state,
+        available: bounded.content.length > 0,
+        binary,
+        truncated: bounded.truncated,
+        content: bounded.content,
+        reason: bounded.content.length > 0 ? 'ready' : 'no-diff'
+      });
+    } catch (error) {
+      return Object.freeze({
+        ...state,
+        available: false,
+        binary: false,
+        truncated: false,
+        content: '',
+        reason: error?.code || 'diff-read-failed'
       });
     }
   }

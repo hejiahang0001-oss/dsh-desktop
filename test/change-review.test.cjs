@@ -131,6 +131,72 @@ test('accept stages a newly produced untracked file', async (t) => {
   assert.equal(accepted.canReject, false);
 });
 
+test('diff preview shows pending worktree changes and accepted staged changes', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const reviewer = new GitChangeReviewer();
+  await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, 'tracked.txt'), 'agent version\n', 'utf8');
+
+  const pending = await reviewer.getDiff('tracked.txt');
+  assert.equal(pending.available, true);
+  assert.equal(pending.status, 'pending');
+  assert.match(pending.content, /-baseline/);
+  assert.match(pending.content, /\+agent version/);
+
+  await reviewer.accept('tracked.txt');
+  const accepted = await reviewer.getDiff('tracked.txt');
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.staged, true);
+  assert.match(accepted.content, /\+agent version/);
+});
+
+test('diff preview bounds new text files and identifies binary files', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const reviewer = new GitChangeReviewer();
+  await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, 'new.txt'), 'first\nsecond\nthird\n', 'utf8');
+  await fsp.writeFile(path.join(root, 'new.bin'), Buffer.from([1, 0, 2, 3]));
+
+  const textPreview = await reviewer.getDiff('new.txt', { maxChars: 80, maxFileBytes: 12 });
+  assert.equal(textPreview.available, true);
+  assert.equal(textPreview.truncated, true);
+  assert.match(textPreview.content, /Diff 已截断/);
+
+  const binaryPreview = await reviewer.getDiff('new.bin');
+  assert.equal(binaryPreview.binary, true);
+  assert.equal(binaryPreview.available, true);
+  assert.match(binaryPreview.content, /Binary file/);
+});
+
+test('untracked preview never follows a symbolic link outside the repository', async () => {
+  let opened = false;
+  const reviewer = new GitChangeReviewer({
+    fsPromises: {
+      lstat: async () => ({ isFile: () => false, isSymbolicLink: () => true }),
+      open: async () => { opened = true; throw new Error('must not open'); }
+    }
+  });
+  reviewer.inspect = async () => ({
+    status: 'pending',
+    path: 'outside-link.txt',
+    repoPath: 'outside-link.txt',
+    canAccept: true,
+    canReject: true,
+    protected: false,
+    untracked: true,
+    staged: false,
+    reason: 'pending'
+  });
+  reviewer.resolveChangePath = () => ({ absolutePath: 'outside-link.txt', repoPath: 'outside-link.txt' });
+
+  const preview = await reviewer.getDiff('outside-link.txt');
+  assert.equal(preview.available, true);
+  assert.equal(opened, false);
+  assert.match(preview.content, /Symbolic link preview disabled/);
+});
+
 test('multi-file list reports pending, protected, and accepted files independently', async (t) => {
   const root = await createRepository();
   t.after(() => fsp.rm(root, { recursive: true, force: true }));

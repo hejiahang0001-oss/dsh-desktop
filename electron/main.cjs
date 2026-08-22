@@ -17,6 +17,11 @@ const {
   readHarnessAgentState
 } = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
+const {
+  getWorkbenchPanelBootstrapScript,
+  getWorkbenchPanelLayoutScript
+} = require('./workbench-panel.cjs');
+const { WorkbenchStore, normalizeWorkbenchState } = require('./workbench-store.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
@@ -25,6 +30,7 @@ app.setName('DSH Desktop');
 let mainWindow;
 let supervisor;
 let workspaceStore;
+let workbenchStore;
 let changeReviewer;
 let dataRoot;
 let harnessOrigin = null;
@@ -99,6 +105,10 @@ let desktopDiagnostics = Object.freeze({
 
 const rootDir = path.resolve(__dirname, '..');
 const statusPage = path.join(rootDir, 'harness-status.html');
+const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
+const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
+let workbenchPanelCss = '';
+let workbenchPanelScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 
@@ -237,6 +247,63 @@ const harnessUiReady = () => {
     return false;
   }
 };
+
+const getWorkbenchState = () => workbenchStore?.getState() || normalizeWorkbenchState();
+
+const loadWorkbenchPanelAssets = async () => {
+  if (!workbenchPanelCss) workbenchPanelCss = await fsp.readFile(workbenchPanelCssPath, 'utf8');
+  if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
+  return { css: workbenchPanelCss, script: workbenchPanelScript };
+};
+
+const installWorkbenchPanel = async () => {
+  if (!harnessUiReady()) return false;
+  try {
+    const assets = await loadWorkbenchPanelAssets();
+    await mainWindow.webContents.insertCSS(assets.css, { cssOrigin: 'author' });
+    await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
+    return Boolean(await mainWindow.webContents.executeJavaScript(assets.script, true));
+  } catch {
+    return false;
+  }
+};
+
+const applyWorkbenchPanelLayout = async ({ focus = false } = {}) => {
+  if (!harnessUiReady()) return false;
+  const applied = Boolean(await mainWindow.webContents.executeJavaScript(
+    getWorkbenchPanelLayoutScript(getWorkbenchState()),
+    true
+  ));
+  if (applied && focus) {
+    await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_WORKBENCH__?.focus?.())', true);
+  }
+  return applied;
+};
+
+const setReviewPanelOpen = async (open, { focus = false } = {}) => {
+  const state = await workbenchStore.setReviewPanelOpen(Boolean(open));
+  installApplicationMenu();
+  if (harnessUiReady()) {
+    const applied = await applyWorkbenchPanelLayout({ focus: focus && state.reviewPanelOpen });
+    if (!applied) await installWorkbenchPanel();
+  }
+  return state;
+};
+
+const setReviewPanelWidth = async (width) => {
+  const state = await workbenchStore.setReviewPanelWidth(width);
+  if (harnessUiReady()) await applyWorkbenchPanelLayout();
+  return state;
+};
+
+const desktopIpcAllowed = (event) => Boolean(
+  mainWindow
+  && !mainWindow.isDestroyed()
+  && event?.sender === mainWindow.webContents
+  && currentUrlAllowed(event.senderFrame?.url || event.sender.getURL())
+);
+
+const harnessIpcAllowed = (event) => desktopIpcAllowed(event) && harnessUiReady();
 
 const sameStringArray = (left = [], right = []) => (
   left.length === right.length && left.every((value, index) => value === right[index])
@@ -1037,6 +1104,26 @@ function installApplicationMenu() {
     {
       label: '视图',
       submenu: [
+        {
+          label: '显示变更审查面板',
+          type: 'checkbox',
+          accelerator: 'CmdOrCtrl+Alt+D',
+          checked: getWorkbenchState().reviewPanelOpen,
+          enabled: harnessReady,
+          click: (item) => { void setReviewPanelOpen(item.checked, { focus: item.checked }); }
+        },
+        {
+          label: '聚焦变更审查面板',
+          accelerator: 'CmdOrCtrl+Alt+J',
+          enabled: harnessReady && getWorkbenchState().reviewPanelOpen,
+          click: () => { void applyWorkbenchPanelLayout({ focus: true }); }
+        },
+        {
+          label: '重置审查面板宽度',
+          enabled: harnessReady,
+          click: () => { void setReviewPanelWidth(340); }
+        },
+        { type: 'separator' },
         { role: 'reload', label: '重新加载页面' },
         { role: 'togglefullscreen', label: '切换全屏' }
       ]
@@ -1067,6 +1154,48 @@ ipcMain.handle('workspace:get-state', () => getWorkspaceState());
 ipcMain.handle('workspace:choose', () => chooseWorkspace());
 ipcMain.handle('diagnostics:get-state', () => getDiagnosticsState());
 ipcMain.handle('diagnostics:refresh', () => refreshDesktopDiagnostics());
+ipcMain.handle('changes:get-diff', async (event, reportedPath) => {
+  if (!harnessIpcAllowed(event) || !changeReviewer) {
+    return { available: false, reason: 'untrusted-or-unavailable', content: '', truncated: false, binary: false };
+  }
+  return changeReviewer.getDiff(reportedPath);
+});
+ipcMain.handle('changes:refresh', async (event) => {
+  if (!harnessIpcAllowed(event)) return getDiagnosticsState();
+  await refreshChangeReviewDiagnostics();
+  return getDiagnosticsState();
+});
+ipcMain.handle('changes:accept', async (event, reportedPath) => {
+  if (!harnessIpcAllowed(event)) return { ok: false, diagnostics: getDiagnosticsState() };
+  const ok = await reviewChangePath(reportedPath, 'accept');
+  return { ok, diagnostics: getDiagnosticsState() };
+});
+ipcMain.handle('changes:reject', async (event, reportedPath) => {
+  if (!harnessIpcAllowed(event)) return { ok: false, diagnostics: getDiagnosticsState() };
+  const ok = await reviewChangePath(reportedPath, 'reject');
+  return { ok, diagnostics: getDiagnosticsState() };
+});
+ipcMain.handle('changes:accept-all', async (event) => {
+  if (!harnessIpcAllowed(event)) return { ok: false, diagnostics: getDiagnosticsState() };
+  const ok = await reviewChangeBatch('accept');
+  return { ok, diagnostics: getDiagnosticsState() };
+});
+ipcMain.handle('changes:reject-all', async (event) => {
+  if (!harnessIpcAllowed(event)) return { ok: false, diagnostics: getDiagnosticsState() };
+  const ok = await reviewChangeBatch('reject');
+  return { ok, diagnostics: getDiagnosticsState() };
+});
+ipcMain.handle('workbench:get-state', (event) => (
+  desktopIpcAllowed(event) ? getWorkbenchState() : normalizeWorkbenchState({ reviewPanelOpen: false })
+));
+ipcMain.handle('workbench:set-review-panel-open', async (event, open) => {
+  if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
+  return setReviewPanelOpen(open);
+});
+ipcMain.handle('workbench:set-review-panel-width', async (event, width) => {
+  if (!harnessIpcAllowed(event) || !Number.isFinite(width)) return getWorkbenchState();
+  return setReviewPanelWidth(width);
+});
 ipcMain.handle('harness:get-state', () => supervisor?.getState() || { status: 'idle' });
 ipcMain.handle('harness:restart', () => startHarnessForWindow({ restart: true }));
 ipcMain.handle('harness:open-log', async () => {
@@ -1108,6 +1237,9 @@ const createWindow = async () => {
   });
   mainWindow.webContents.on('will-redirect', (event, url) => {
     if (!currentUrlAllowed(url)) event.preventDefault();
+  });
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (harnessUiReady()) void installWorkbenchPanel();
   });
   mainWindow.webContents.on('did-fail-load', async (_event, code, description, url, isMainFrame) => {
     if (!isMainFrame || loadFailureHandled || !harnessOrigin || !url.startsWith(harnessOrigin)) return;
@@ -1195,6 +1327,10 @@ app.whenReady().then(async () => {
     filePath: path.join(dataRoot, 'desktop-state.json'),
     fallbackDir: path.join(dataRoot, 'launch-root')
   });
+  workbenchStore = new WorkbenchStore({
+    filePath: path.join(dataRoot, 'workbench-state.json')
+  });
+  await workbenchStore.init();
   const workspace = await workspaceStore.init();
   changeReviewer = new GitChangeReviewer({
     trashItem: (target) => shell.trashItem(target)
