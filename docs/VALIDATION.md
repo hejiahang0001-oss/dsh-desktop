@@ -32,7 +32,7 @@ This page records the locally verified V0.5.0 engineering evidence without makin
 
 The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains `checkpoint-manager.cjs`, the checkpoint renderer/CSS, existing preview and command assets, and the version 5 workbench store. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
 
-GitHub release integrity is recorded after upload rather than inferred from the local installer.
+The published GitHub asset reports the same `162,570,692` byte size and SHA-256 digest as the local installer. The versioned release and `latest` download both resolve to V0.5.0, and the main-branch CI run completed successfully.
 
 ## Automatic code-checkpoint architecture and safety
 

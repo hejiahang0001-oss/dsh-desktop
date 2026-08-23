@@ -2,7 +2,7 @@
 
 > 日期：2026-08-24
 > 当前构建：V0.5.0 Daily Build
-> 状态：自动代码检查点已完成，已直接覆盖 V0.4.8，并通过真实 Harness 输入焦点、Git 不变性、安装一致性、Harness 启动和数据保留验证；GitHub 发布进行中
+> 状态：自动代码检查点已完成，已直接覆盖 V0.4.8，并通过真实 Harness 输入焦点、Git 不变性、安装一致性、Harness 启动、数据保留和 GitHub 发布验证
 
 ## V0.5.0 本轮完成
 
@@ -30,7 +30,7 @@
 | 安装包 SHA-256 | `6705D2DC73A2EBE546D99CC7B996F5E52091A90457E13B00F4224BDE848A53DC` |
 | 安装一致性 | 安装版与解包版 `app.asar` SHA-256 均为 `4263F41ED3ADA22F188995F94AB3DDB7AE2D4F6F7089B6B506C8067509657ED5` |
 | 覆盖前快照 | `backups/pre-v0.5.0-20260824-035352`；21 个文件；13 个会话；0 个凭据副本 |
-| 发布完整性 | 待 GitHub Release 后验证 |
+| 发布完整性 | [v0.5.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.0)；远端大小/摘要一致；latest 直链 HTTP 200；[CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32663110422) |
 
 ### V0.5.0 后计划调整
 
