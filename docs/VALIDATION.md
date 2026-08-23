@@ -1,40 +1,50 @@
 # Validation evidence
 
-This page preserves the detailed V0.4.2 engineering evidence without making the README front page carry the full verification ledger.
+This page preserves the detailed V0.4.3 engineering evidence without making the README front page carry the full verification ledger.
 
 ## Automated and runtime checks
 
-- 70 Supervisor, workspace mapping, loopback safety, session catalog, credential precedence, Agent/tool/Plan state, Git review, terminal, workbench layout, file-service, and file-UI tests pass.
+- 74 Supervisor, workspace mapping, loopback safety, session catalog, credential precedence, Agent/tool/Plan state, Git review, terminal, workbench layout, file-service, file-UI, and Harness-localization tests pass.
 - File-service tests cover relative-path containment, parent traversal, absolute paths, lazy sorted listing, secret/binary/large-file blocking, linked-directory isolation, bounded search, and generated-root skipping.
 - The terminal suite still includes real Windows PowerShell execution without the managed API Key and process-tree termination before a long command completes.
 - Syntax validation passed for all changed Electron CommonJS modules and injected workbench scripts; `git diff --check` also passed.
 - The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random IPv4 loopback address.
-- Final runtime smoke checks report DSH Desktop version 0.4.2, `zh-CN`, Windows safe storage, and successful Workspace synchronization.
-- The installer contains 29,278 files; the embedded Harness closure contains 29,201 files and no reparse points.
+- Final runtime smoke checks report DSH Desktop version 0.4.3, `zh-CN`, Windows safe storage, official Harness `0.1.1-rc.2`, and successful Workspace synchronization.
+- The installer contains 29,311 files; the installed application contains 29,312 files, including 29,233 Harness files and no reparse points.
 - The NSIS medium passes a 7-Zip structure test with `Everything is Ok`.
-- The installed application reports version 0.4.2 and its packaged `app.asar` exactly matches the unpacked build.
+- The installed application reports version 0.4.3 and its packaged `app.asar` exactly matches the unpacked build.
 
 ## Release integrity
 
-| Item | V0.4.2 value |
+| Item | V0.4.3 value |
 | --- | --- |
-| Installer | `DSH-Desktop-Setup-0.4.2.exe` |
-| Size | `158,454,677` bytes |
-| SHA-256 | `90375B47B566619DDBB119A99839DFB28798B7EA52F460ECE0EEF83349EAFC53` |
-| Files in installer archive | `29,278` |
-| Packaged `app.asar` SHA-256 | `CBCD2A07483D340FC7907FC0B9468FC10753A3EA1901E0F8925FD4A8D7076AE3` |
+| Installer | `DSH-Desktop-Setup-0.4.3.exe` |
+| Size | `158,566,564` bytes |
+| SHA-256 | `039460E59FBCDE18F70C724926E473AC74FE02CFE06EEA5C47CAD3E77D5B181E` |
+| Files in installer archive | `29,311` |
+| Packaged `app.asar` SHA-256 | `C37A4B871DC3D8CD999AECF632982E222F350A972E6F25A1943FFD5A0E38C70A` |
+| Desktop patch SHA-256 | `4C3E3ED042A45635055BBDD0A41432212495F686404EE878DB985B7AEBCE3A68` |
 
 The installed `app.asar` and unpacked build have the same SHA-256. The installed directory contains 29,279 files including the installed uninstaller.
 
 ## Persistence and credential checks
 
-- V0.4.2 installed directly over V0.4.1; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.2`.
-- Ten zstd persisted sessions are discoverable after the real-repository visual run and upgrade.
+- V0.4.3 installed directly over the existing desktop runtime; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.3`.
+- Twelve zstd persisted sessions remained discoverable after the upgrade; the real-model verification created a thirteenth session.
 - The software-managed Key remains configured, retains software-first precedence, and ignores a competing environment value.
 - Validation did not print, copy, or pass the plaintext credential to the file panel or integrated terminal.
-- The pre-upgrade snapshot is `backups/pre-v0.4.2-20260822-143830`; it contains 32,234 files and 919,802,566 bytes.
+- The pre-upgrade snapshot is `backups/pre-v0.4.3-rc2-20260823-171542`; it contains 32,560 files and 779,888,842 bytes.
 - The snapshot contains no `.credentials.yaml` file and no reparse point.
 - The V0.4.1 workbench state migrated to schema version 3 without resetting review-panel or terminal state; file-panel visibility and width were added with safe defaults.
+
+## Harness, plugin, and real-model checks
+
+- The npm registry, CLI `--version`, deployed dependency closure, unpacked application, and installed application all report official `@deepseek-ai/dsh@0.1.1-rc.2`.
+- `--dump-default-config` succeeds with 135 official Web-profile plugin rows; the DSH Desktop prompt overlay composes exactly one `system-prompt` row and retains its full language policy.
+- The packaged `@deepseek-ai` scope contains 197 packages, including 188 `dsh` / `dsh-*` packages. The added `dsh-authorization` package is present.
+- The upstream source tree contains 234 package manifests. ACP/SDK, E2B, Claude Code/Codex subagent bridges, experimental team packages, and community plugins are not silently activated by the desktop build.
+- With the software-managed Key, the installed application completed a real `DeepSeek-V4-Flash High` Chinese turn in two seconds and returned the requested Chinese result. The test created no file or terminal operation and did not expose the credential.
+- See `HARNESS_PLUGIN_INVENTORY.md` for the difference between source packages, shipped dependency packages, active plugin rows, and community plugins.
 
 ## Workspace-file safety checks
 
@@ -66,4 +76,4 @@ The installed `app.asar` and unpacked build have the same SHA-256. The installed
 
 ## Evidence boundary
 
-These statements describe the locally verified V0.4.2 build. File viewing is a bounded read-only text surface, not an editor or application preview. The terminal is a controlled single-command runner, not a persistent interactive PTY. Interactive prompts, terminal tabs, shell-session state, rich ANSI rendering, command palette, automatic checkpoints, and session rewind are not included. UI automation did not enter a terminal command because Windows automation policy prohibits terminal command entry; the real runner, environment isolation, output path, and process-tree stop were verified through native integration tests. This evidence does not imply that DeepSeek endorses DSH Desktop, that Harness rc.8 is production-stable, or that the unsigned installer will pass every Windows reputation check.
+These statements describe the locally verified V0.4.3 build. File viewing is a bounded read-only text surface, not an editor or application preview. The terminal is a controlled single-command runner, not a persistent interactive PTY. Interactive prompts, terminal tabs, shell-session state, rich ANSI rendering, command palette, automatic checkpoints, and session rewind are not included. UI automation did not enter a terminal command because Windows automation policy prohibits terminal command entry; the real runner, environment isolation, output path, and process-tree stop were verified through native integration tests. The earlier rc.8 Workspace Write crash was not re-tested with a file-writing model task, so this build does not claim rc.2 fixes it. This evidence does not imply that DeepSeek endorses DSH Desktop, that Harness `0.1.1-rc.2` is production-stable, or that the unsigned installer will pass every Windows reputation check.

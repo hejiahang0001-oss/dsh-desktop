@@ -115,12 +115,14 @@ const workbenchTerminalCssPath = path.join(rootDir, 'assets', 'workbench-termina
 const workbenchTerminalScriptPath = path.join(rootDir, 'assets', 'workbench-terminal.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
 const workbenchFilesScriptPath = path.join(rootDir, 'assets', 'workbench-files.js');
+const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
 let workbenchTerminalCss = '';
 let workbenchTerminalScript = '';
 let workbenchFilesCss = '';
 let workbenchFilesScript = '';
+let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 
@@ -269,11 +271,13 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchTerminalScript) workbenchTerminalScript = await fsp.readFile(workbenchTerminalScriptPath, 'utf8');
   if (!workbenchFilesCss) workbenchFilesCss = await fsp.readFile(workbenchFilesCssPath, 'utf8');
   if (!workbenchFilesScript) workbenchFilesScript = await fsp.readFile(workbenchFilesScriptPath, 'utf8');
+  if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
     css: `${workbenchPanelCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}`,
     reviewScript: workbenchPanelScript,
     terminalScript: workbenchTerminalScript,
-    filesScript: workbenchFilesScript
+    filesScript: workbenchFilesScript,
+    localizationScript: harnessLocalizationScript
   };
 };
 
@@ -283,10 +287,11 @@ const installWorkbenchPanel = async () => {
     const assets = await loadWorkbenchPanelAssets();
     await mainWindow.webContents.insertCSS(assets.css, { cssOrigin: 'author' });
     await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
+    const localizationInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.localizationScript, true));
     const reviewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.reviewScript, true));
     const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
-    return reviewInstalled && terminalInstalled && filesInstalled;
+    return localizationInstalled && reviewInstalled && terminalInstalled && filesInstalled;
   } catch {
     return false;
   }

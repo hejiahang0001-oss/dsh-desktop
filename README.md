@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.2.exe"><strong>Download for Windows</strong></a>
+  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.3.exe"><strong>Download for Windows</strong></a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#中文说明">中文说明</a>
   · <a href="DSH_DESKTOP_ITERATION_PLAN.md">Roadmap</a>
@@ -24,7 +24,7 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; this release pins `@deepseek-ai/dsh@0.1.0-rc.8`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; this release pins `@deepseek-ai/dsh@0.1.1-rc.2`.
 
 ## Why DSH Desktop
 
@@ -45,7 +45,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 
 ## Quick start
 
-1. Download [`DSH-Desktop-Setup-0.4.2.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.2.exe).
+1. Download [`DSH-Desktop-Setup-0.4.3.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.3.exe).
 2. Install and launch DSH Desktop. The current installer is not code-signed, so Windows SmartScreen may show a warning.
 3. Open **Project → Open code repository…** or press `Ctrl+O`.
 4. Open **Model** to configure your DeepSeek API key, then start a Harness session.
@@ -54,7 +54,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current release
 
-**V0.4.2** adds a bounded read-only workspace file browser while preserving the official Harness workflow:
+**V0.4.3** follows official DeepSeek Harness `0.1.1-rc.2`, keeps the desktop workbench intact, and makes new Chinese conversations consistently use Chinese for generated reasoning, plans, tool summaries, questions, and answers:
 
 ```text
 Open repository → run or approve the agent in Harness
@@ -64,14 +64,14 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The release has 70 automated tests plus real PowerShell, path-containment, linked-file isolation, packaged-runtime, unpacked-app, installed-app, three-pane layout, protected-baseline, real Diff, and Diff-to-file reveal evidence. See [validation details](docs/VALIDATION.md) and the [V0.4.2 release notes](docs/RELEASE_NOTES_v0.4.2.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.4.3 release notes](docs/RELEASE_NOTES_v0.4.3.md).
 
 ## Security and current limits
 
 - The Windows installer is not code-signed yet.
-- Harness credentials are currently stored by Harness rc.8 in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
-- A known rc.8 Workspace Write compatibility issue may cause PowerShell to exit with `0xC0000005` in restricted mode. DSH Desktop reports the failure and never switches to Full Access automatically.
-- V0.4.2 provides a read-only text viewer, not a code editor or application preview. Credential-like files, links, binary files, unsupported encodings, and files above 512 KiB are not opened in the panel.
+- Harness credentials are currently stored by Harness `0.1.1-rc.2` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
+- A Workspace Write crash with `0xC0000005` was previously observed on rc.8 in restricted mode. DSH Desktop reports tool failures and never switches to Full Access automatically; the exact rc.2 write path remains a separate compatibility gate.
+- V0.4.3 provides a read-only text viewer, not a code editor or application preview. Credential-like files, links, binary files, unsupported encodings, and files above 512 KiB are not opened in the panel.
 - The terminal remains a controlled single-command PowerShell runner, not a persistent interactive PTY. Interactive prompts, shell-session state, checkpoints, and session rewind are not included yet.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Architecture and product boundaries are documented in [the iteration plan](DSH_DESKTOP_ITERATION_PLAN.md).
@@ -104,7 +104,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.4.2 已打通以下真实流程：
+V0.4.3 已跟随升级到官方 Harness `0.1.1-rc.2`，保留 V0.4.2 已打通的完整桌面工作流，并新增中文过程一致性规则：
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
@@ -117,6 +117,7 @@ V0.4.2 已打通以下真实流程：
 - 在与 Harness 相同的工作目录中运行经过原生确认的 PowerShell 单次命令，流式查看有界输出并停止整个进程树；
 - 软件内保存的 DeepSeek API Key 不进入终端子进程环境；终端开关和高度可持久化；
 - 文件面板不会跟随符号链接/目录联接，也不会显示疑似凭据、私钥、二进制、大文件或不支持编码的内容；
+- 中文提问时，新回合的可见思考、工具说明、计划、进度、问题和结论默认使用简体中文，代码、命令、路径和原始输出保持原文；
 - 在覆盖升级后保留工作区、会话和软件 Key 状态。
 
 首次使用请从 [GitHub Releases](https://github.com/hejiahang0001-oss/dsh-desktop/releases) 下载 Windows 安装包。当前版本尚未代码签名，SmartScreen 可能提示风险；DeepSeek Harness 仍处于 developer preview。

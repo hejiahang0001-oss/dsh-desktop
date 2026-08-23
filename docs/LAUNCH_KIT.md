@@ -15,7 +15,7 @@ I built DSH Desktop, an unofficial Windows desktop host around DeepSeek Harness.
 
 It keeps Harness as the actual agent and Web UI, then adds native repository selection, persistent session entry points, Agent/tool status, official Plan entry, a resizable Git Diff panel, a lazy read-only workspace file browser, and a bottom PowerShell command panel bound to the same workspace. Diff can reveal the exact file in the tree; text preview, filename search, terminal output, and process actions all have explicit bounds. The installer bundles pinned Node.js and Harness runtimes, so users do not need Node preinstalled.
 
-V0.4.2 is an unsigned developer-preview build. I would especially value feedback on Windows compatibility, file-tree navigation, read-only preview, Diff readability, terminal safety, and panel sizing.
+V0.4.3 follows official DeepSeek Harness 0.1.1-rc.2, adds consistent Chinese process language, and remains an unsigned developer-preview build. It ships the complete official default-Web dependency closure, but community plugins stay opt-in rather than receiving silent filesystem, shell, network, or credential access. I would especially value feedback on Windows compatibility, Chinese output consistency, plugin expectations, file-tree navigation, Diff readability, and terminal safety.
 ```
 
 ## 中文标题
@@ -29,7 +29,9 @@ V0.4.2 is an unsigned developer-preview build. I would especially value feedback
 ```text
 DSH Desktop 是一个围绕官方 DeepSeek Harness 构建的非官方 Windows 桌面宿主。它不重新实现 Agent，而是补齐本地仓库选择、会话入口、Agent/工具状态、Plan 入口、Git Diff 审查和工作区文件查看。
 
-V0.4.2 增加了左侧懒加载文件树、受限文件名搜索和只读文本预览；从右侧 Diff 点击“查看文件”会自动展开并定位准确路径。凭据、私钥、链接、二进制、大文件和不支持编码不会在面板中读取。底部同工作区 PowerShell 命令面板继续使用原生确认、有界输出、进程树停止和软件 Key 隔离。
+V0.4.3 已跟随官方 DeepSeek Harness 升级到 0.1.1-rc.2，并让中文提问下新生成的思考、工具说明、计划、问题和答复保持简体中文；代码、命令、路径和原始输出不改写。安装包包含官方默认 Web Profile 的完整依赖闭包，但不会静默启用社区插件或全部实验性官方包。
+
+左侧懒加载文件树、受限文件名搜索、只读文本预览、右侧 Diff 定位和底部同工作区 PowerShell 命令面板继续保留。凭据、私钥、链接、二进制、大文件和不支持编码不会在文件面板中读取，软件 Key 也不会进入终端子进程。
 
 当前仍是未签名的 developer preview；文件查看不是编辑器，终端也还是受控单命令模式。欢迎反馈 Windows 兼容性、文件导航、只读预览、Diff 可读性、终端安全性和面板尺寸。
 ```

@@ -44,7 +44,7 @@ const NO_TOOL_STATE = {
   canFocusChange: false
 };
 
-test('Harness UI actions are fixed to rc.8 bilingual labels', () => {
+test('Harness UI actions are fixed to the verified upstream bilingual labels', () => {
   assert.deepEqual(ACTION_LABELS['new-session'], ['新建会话', 'New session']);
   assert.deepEqual(ACTION_LABELS['search-sessions'], ['搜索会话', 'Search sessions']);
   assert.deepEqual(ACTION_LABELS['stop-agent'], ['停止生成', 'Stop generating']);
@@ -299,7 +299,7 @@ test('Official Diff and produced-file markers expose a bounded latest change pat
   assert.equal(state.canFocusChange, true);
 });
 
-test('Plan mode signals use the official rc.8 chip and never infer from page copy', () => {
+test('Plan mode signals use the official Harness chip and never infer from page copy', () => {
   const planButton = {
     disabled: false,
     textContent: 'Plan',

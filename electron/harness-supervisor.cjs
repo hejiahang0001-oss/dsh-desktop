@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
+const HARNESS_VERSION = '0.1.1-rc.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
 
@@ -47,7 +48,7 @@ const resolvePnpmDshBin = (nodeModulesDir) => {
   const pnpmDir = path.join(nodeModulesDir, '.pnpm');
   try {
     const packageDir = fs.readdirSync(pnpmDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith('@deepseek-ai+dsh@0.1.0-rc.8_'))
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith(`@deepseek-ai+dsh@${HARNESS_VERSION}_`))
       .sort((left, right) => left.name.localeCompare(right.name))[0];
     if (!packageDir) return null;
     const candidate = path.join(
@@ -75,16 +76,21 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
 
   const dshRelative = path.join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   const packagedNodeModules = path.join(resourcesPath, 'harness', 'node_modules');
-  const hoistedNodeModules = path.join(rootDir, 'vendor', 'harness-hoisted-0.1.0-rc.8', 'node_modules');
-  const vendorNodeModules = path.join(rootDir, 'vendor', 'harness-0.1.0-rc.8', 'node_modules');
+  const hoistedNodeModules = path.join(rootDir, 'vendor', `harness-hoisted-${HARNESS_VERSION}`, 'node_modules');
+  const vendorNodeModules = path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, 'node_modules');
   const dshBinPath = firstExistingFile([
     env.DSH_DESKTOP_DSH_BIN,
     isPackaged && resolvePnpmDshBin(packagedNodeModules),
     isPackaged && path.join(resourcesPath, 'harness', dshRelative),
     path.join(hoistedNodeModules, '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     resolvePnpmDshBin(vendorNodeModules),
-    path.join(rootDir, 'vendor', 'harness-0.1.0-rc.8', dshRelative),
+    path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, dshRelative),
     path.join(rootDir, dshRelative)
+  ]);
+  const patchPath = firstExistingFile([
+    env.DSH_DESKTOP_PATCH,
+    isPackaged && path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml'),
+    path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]);
 
   if (!nodePath) {
@@ -97,7 +103,12 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'HARNESS_RUNTIME_MISSING';
     throw error;
   }
-  return { nodePath, dshBinPath };
+  if (!patchPath) {
+    const error = new Error('找不到 DSH Desktop 的 Harness 中文语言补丁。请重新安装应用。');
+    error.code = 'HARNESS_PATCH_MISSING';
+    throw error;
+  }
+  return { nodePath, dshBinPath, patchPath };
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -201,7 +212,7 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(this.options.homeDir, { recursive: true });
     await fsp.mkdir(this.options.launchDir, { recursive: true });
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const { nodePath, dshBinPath } = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath } = resolveHarnessRuntimePaths(this.options);
 
     this.stopRequested = false;
     this.outputBuffer = '';
@@ -212,7 +223,7 @@ class HarnessSupervisor extends EventEmitter {
     });
 
     try {
-      this.child = spawn(nodePath, [dshBinPath, 'web', '--host', '127.0.0.1', '--port', '0', '--no-open'], {
+      this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,
         env: buildHarnessEnvironment({
           overrides: this.options.env,
