@@ -29,6 +29,8 @@ This page records the locally verified V0.4.7 engineering evidence without makin
 
 The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the existing preview assets plus `workbench-command.js` and `workbench-command.css`. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
 
+The published GitHub asset reports the same `162,566,222` byte size and SHA-256 digest as the local installer. The versioned release and `latest` download both resolve to V0.4.7, and the main-branch CI run completed successfully.
+
 ## Global command-palette boundaries
 
 - The palette contains eleven fixed application actions and never evaluates the search text.

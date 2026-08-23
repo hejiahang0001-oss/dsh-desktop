@@ -2,7 +2,7 @@
 
 > 日期：2026-08-24
 > 当前构建：V0.4.7 Daily Build
-> 状态：全局命令面板已完成，已直接覆盖本机 V0.4.6，并通过实机交互、安装一致性、Harness 启动和数据保留验证；GitHub 发布进行中
+> 状态：全局命令面板已完成，已直接覆盖本机 V0.4.6，并通过实机交互、安装一致性、Harness 启动、数据保留和 GitHub 发布验证
 
 ## V0.4.7 本轮完成
 
@@ -27,7 +27,7 @@
 | 安装包 SHA-256 | `2B9842ED34CF2525AF96EE50C52325C1C24D771D61428F44206ADF6690E6A99F` |
 | 安装一致性 | 安装版与解包版 `app.asar` SHA-256 均为 `3E34EA7ED4B317A4C91C9564E4C488BD4279366B42DE8340B8FA6511C2FA2018` |
 | 覆盖前快照 | `backups/pre-v0.4.7-20260824-025712`；21 个文件；13 个会话；0 个凭据副本 |
-| 发布完整性 | 待 GitHub Release 后验证 |
+| 发布完整性 | [v0.4.7](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.4.7)；远端大小/摘要一致；latest 直链 HTTP 200；[CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32660139810) |
 
 ### V0.4.7 后计划调整
 
