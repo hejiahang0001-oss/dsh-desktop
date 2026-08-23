@@ -33,6 +33,13 @@ const fakeRuntime = () => ({
   shellPath: 'powershell.exe'
 });
 
+const realPtyRuntime = resolveTerminalRuntime({ rootDir: path.resolve(__dirname, '..') });
+const realPtySkip = process.platform !== 'win32'
+  ? 'requires Windows ConPTY'
+  : Object.values(realPtyRuntime).some((target) => !fs.existsSync(target))
+    ? 'requires the bundled development Node and node-pty runtime'
+    : false;
+
 const waitForState = (runner, statuses, timeoutMs = 15000) => new Promise((resolve, reject) => {
   const accepted = new Set(Array.isArray(statuses) ? statuses : [statuses]);
   const current = runner.getState();
@@ -174,15 +181,14 @@ test('terminal runner reports a synchronous PTY host launch failure without stay
 });
 
 test('real Windows PTY persists across commands in the workspace without the managed API key', {
-  skip: process.platform !== 'win32',
+  skip: realPtySkip,
   timeout: 25000
 }, async (context) => {
   const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-pty-real-'));
   context.after(() => removeTemporaryWorkspace(workspacePath));
-  const rootDir = path.resolve(__dirname, '..');
   const runner = new TerminalRunner({
     workspacePath,
-    ...resolveTerminalRuntime({ rootDir }),
+    ...realPtyRuntime,
     baseEnv: { ...process.env, DEEPSEEK_API_KEY: 'must-not-leak' }
   });
   context.after(async () => { if (runner.isActive()) await runner.stop(); });
@@ -204,13 +210,12 @@ test('real Windows PTY persists across commands in the workspace without the man
 });
 
 test('real Windows PTY process tree stops before a long interactive command completes', {
-  skip: process.platform !== 'win32',
+  skip: realPtySkip,
   timeout: 20000
 }, async (context) => {
   const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-pty-stop-'));
   context.after(() => removeTemporaryWorkspace(workspacePath));
-  const rootDir = path.resolve(__dirname, '..');
-  const runner = new TerminalRunner({ workspacePath, ...resolveTerminalRuntime({ rootDir }) });
+  const runner = new TerminalRunner({ workspacePath, ...realPtyRuntime });
   context.after(async () => { if (runner.isActive()) await runner.stop(); });
   runner.start();
   await waitForState(runner, 'running');

@@ -4,7 +4,7 @@ This page records the locally verified V0.4.4 engineering evidence without makin
 
 ## Automated and runtime checks
 
-- 78 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, file, terminal, workbench, UI, and localization tests pass.
+- 78 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, file, terminal, workbench, UI, and localization tests pass locally. GitHub CI runs 76 repository-only checks and skips the two live ConPTY checks when the bundled development runtime is intentionally absent from checkout.
 - The terminal tests exercise a real Windows PTY across multiple commands, resize messages, renderer recovery, software-Key isolation, launch failure, and full process-tree termination.
 - The packaged helper was executed with the bundled Node runtime against the filtered packaged `node-pty` resources; the installed helper passed the same test.
 - The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random IPv4 loopback address.
