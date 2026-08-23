@@ -41,7 +41,9 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   }),
   terminal: Object.freeze({
     getState: () => ipcRenderer.invoke('terminal:get-state'),
-    run: (command) => ipcRenderer.invoke('terminal:run', command),
+    start: (size) => ipcRenderer.invoke('terminal:start', size),
+    write: (data) => ipcRenderer.send('terminal:write', data),
+    resize: (size) => ipcRenderer.send('terminal:resize', size),
     stop: () => ipcRenderer.invoke('terminal:stop'),
     onState: (listener) => {
       const handler = (_event, state) => listener(state);

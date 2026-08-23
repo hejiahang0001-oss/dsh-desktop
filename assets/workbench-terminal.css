@@ -20,16 +20,14 @@ html[data-dsh-terminal-open="true"] #root {
   transition: height 120ms ease, max-height 120ms ease;
 }
 
-html[data-dsh-terminal-open="true"] #dsh-workbench-review {
-  bottom: var(--dsh-terminal-height);
-}
+html[data-dsh-terminal-open="true"] #dsh-workbench-review { bottom: var(--dsh-terminal-height); }
 
 #dsh-workbench-terminal {
   position: fixed;
   inset: auto 0 0;
   z-index: 2147483001;
   display: grid;
-  grid-template-rows: 38px minmax(0, 1fr) 40px;
+  grid-template-rows: 38px minmax(0, 1fr) 28px;
   height: var(--dsh-terminal-height);
   min-height: 160px;
   max-height: 420px;
@@ -85,15 +83,25 @@ html[data-dsh-terminal-open="true"] #dsh-workbench-terminal {
 .dsh-terminal-identity {
   display: flex;
   flex: 1;
-  gap: 10px;
+  gap: 8px;
   align-items: baseline;
   min-width: 0;
 }
 
 .dsh-terminal-identity h2 { margin: 0; font-size: 12px; font-weight: 650; letter-spacing: -.01em; }
+.dsh-terminal-mode {
+  flex: none;
+  padding: 1px 4px;
+  border: 1px solid var(--dsh-terminal-border);
+  border-radius: 4px;
+  color: var(--dsh-terminal-muted);
+  font: 600 9px/1.25 "Cascadia Code", Consolas, monospace;
+  letter-spacing: .03em;
+}
 .dsh-terminal-cwd { overflow: hidden; color: var(--dsh-terminal-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .dsh-terminal-state { flex: none; color: var(--dsh-terminal-muted); font-size: 10px; }
 .dsh-terminal-state::before { content: "●"; margin-right: 5px; font-size: 7px; }
+.dsh-terminal-state[data-status="starting"],
 .dsh-terminal-state[data-status="running"] { color: var(--dsh-terminal-accent); }
 .dsh-terminal-state[data-status="stopping"] { color: var(--dsh-terminal-warning); }
 .dsh-terminal-state[data-status="completed"] { color: var(--dsh-terminal-success); }
@@ -101,10 +109,9 @@ html[data-dsh-terminal-open="true"] #dsh-workbench-terminal {
 .dsh-terminal-state[data-status="stopped"] { color: var(--dsh-terminal-danger); }
 .dsh-terminal-actions { display: flex; gap: 2px; align-items: center; }
 
-.dsh-terminal-icon-button,
-.dsh-terminal-run-button {
+.dsh-terminal-icon-button {
   min-height: 28px;
-  padding: 3px 9px;
+  padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: 5px;
   color: var(--dsh-terminal-muted);
@@ -115,69 +122,54 @@ html[data-dsh-terminal-open="true"] #dsh-workbench-terminal {
 
 .dsh-terminal-icon-button:hover:not(:disabled) { color: var(--dsh-terminal-text); background: var(--dsh-terminal-subtle); }
 .dsh-terminal-icon-button:disabled { cursor: not-allowed; opacity: .42; }
+.dsh-terminal-start:not(:disabled) { color: var(--dsh-terminal-accent); }
 .dsh-terminal-close { width: 28px; padding: 0; font-size: 18px; }
 
-.dsh-terminal-output {
+.dsh-terminal-viewport {
+  position: relative;
+  min-width: 0;
   min-height: 0;
-  padding: 9px 12px 14px;
-  overflow: auto;
-  color: var(--dsh-terminal-text);
+  padding: 7px 8px 5px 10px;
+  overflow: hidden;
   background: var(--dsh-terminal-surface);
-  font: 11px/1.55 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 
-.dsh-terminal-output-chunk { display: inline; }
-.dsh-terminal-output-chunk[data-stream="stderr"] { color: var(--dsh-terminal-danger); }
-.dsh-terminal-output-chunk[data-stream="system"] { color: var(--dsh-terminal-muted); }
-.dsh-terminal-output-chunk[data-stream="command"] { color: var(--dsh-terminal-accent); }
+.dsh-terminal-viewport .xterm { height: 100%; }
+.dsh-terminal-viewport .xterm-viewport { overflow-y: auto !important; }
+.dsh-terminal-viewport[data-status="idle"] .xterm,
+.dsh-terminal-viewport[data-status="completed"] .xterm,
+.dsh-terminal-viewport[data-status="failed"] .xterm,
+.dsh-terminal-viewport[data-status="stopped"] .xterm { opacity: .9; }
 
-.dsh-terminal-composer {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
+.dsh-terminal-footer {
+  display: flex;
+  gap: 12px;
   align-items: center;
   min-width: 0;
-  padding: 5px 8px 6px 12px;
+  padding: 0 10px 0 12px;
   border-top: 1px solid var(--dsh-terminal-border);
+  color: var(--dsh-terminal-muted);
   background: var(--dsh-terminal-raised);
+  font-size: 10px;
 }
 
-.dsh-terminal-prompt { color: var(--dsh-terminal-accent); font: 600 11px/1 "Cascadia Code", Consolas, monospace; }
-.dsh-terminal-input-label { min-width: 0; }
-.dsh-terminal-input {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 1px solid var(--dsh-terminal-border);
-  border-radius: 5px;
-  outline: none;
-  color: var(--dsh-terminal-text);
-  background: var(--dsh-terminal-surface);
-  font: 11px/1.4 "Cascadia Code", Consolas, monospace;
-}
-
-.dsh-terminal-input::placeholder { color: var(--dsh-terminal-muted); }
-.dsh-terminal-input:focus { border-color: var(--dsh-terminal-accent); box-shadow: 0 0 0 1px var(--dsh-terminal-accent); }
-.dsh-terminal-run-button { color: #102033; border-color: var(--dsh-terminal-accent); background: var(--dsh-terminal-accent); font-weight: 650; }
-.dsh-terminal-run-button:hover:not(:disabled) { filter: brightness(1.08); }
-.dsh-terminal-run-button:disabled { cursor: not-allowed; filter: saturate(.3); opacity: .48; }
+.dsh-terminal-security { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-terminal-shortcut { flex: none; }
 
 #dsh-workbench-terminal button:focus-visible,
 .dsh-terminal-resizer:focus-visible { outline: 2px solid var(--dsh-terminal-accent); outline-offset: -2px; }
 
 @media (max-height: 680px) {
-  #dsh-workbench-terminal { grid-template-rows: 34px minmax(0, 1fr) 38px; }
+  #dsh-workbench-terminal { grid-template-rows: 34px minmax(0, 1fr) 26px; }
   .dsh-terminal-header { padding-left: 10px; }
-  .dsh-terminal-output { padding-top: 7px; }
+  .dsh-terminal-viewport { padding-top: 5px; }
 }
 
 @media (forced-colors: active) {
   #dsh-workbench-terminal,
   .dsh-terminal-header,
-  .dsh-terminal-composer { border-color: CanvasText; }
+  .dsh-terminal-footer,
+  .dsh-terminal-mode { border-color: CanvasText; }
   .dsh-terminal-resizer:focus-visible { outline: 2px solid Highlight; }
 }
 

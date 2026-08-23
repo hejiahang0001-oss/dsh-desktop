@@ -1,3 +1,5 @@
+'use strict';
+
 const { execFile } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
@@ -5,10 +7,10 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
-const MAX_COMMAND_CHARS = 4096;
-const MAX_OUTPUT_CHARS = 200000;
+const MAX_INPUT_CHARS = 8192;
+const MAX_OUTPUT_BUFFER_CHARS = 200000;
 const MAX_OUTPUT_EVENT_CHARS = 8192;
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_PROTOCOL_BUFFER_CHARS = 1024 * 1024;
 const TERMINAL_SECRET_ENVIRONMENT = new Set(['DEEPSEEK_API_KEY']);
 
 class TerminalRunnerError extends Error {
@@ -19,47 +21,45 @@ class TerminalRunnerError extends Error {
   }
 }
 
-const normalizeTerminalCommand = (value) => {
-  if (typeof value !== 'string') {
-    throw new TerminalRunnerError('TERMINAL_COMMAND_INVALID', '终端命令必须是文本。');
+const boundedPtySize = (cols, rows) => Object.freeze({
+  cols: Math.min(300, Math.max(20, Math.round(Number(cols) || 100))),
+  rows: Math.min(120, Math.max(5, Math.round(Number(rows) || 30)))
+});
+
+const normalizePtyInput = (value) => {
+  if (typeof value !== 'string') throw new TerminalRunnerError('TERMINAL_INPUT_INVALID', '终端输入必须是文本。');
+  if (value.length > MAX_INPUT_CHARS) {
+    throw new TerminalRunnerError('TERMINAL_INPUT_TOO_LONG', `单次终端输入最多 ${MAX_INPUT_CHARS} 个字符。`);
   }
-  const command = value.trim();
-  if (!command) throw new TerminalRunnerError('TERMINAL_COMMAND_EMPTY', '请输入要运行的命令。');
-  if (command.length > MAX_COMMAND_CHARS) {
-    throw new TerminalRunnerError('TERMINAL_COMMAND_TOO_LONG', `单次命令最多 ${MAX_COMMAND_CHARS} 个字符。`);
-  }
-  if (/[\u0000-\u001f\u007f]/.test(command)) {
-    throw new TerminalRunnerError('TERMINAL_COMMAND_CONTROL_CHARACTER', '终端命令不能包含换行或控制字符。');
-  }
-  return command;
+  if (value.includes('\0')) throw new TerminalRunnerError('TERMINAL_INPUT_CONTROL_CHARACTER', '终端输入不能包含空字符。');
+  return value;
 };
 
-const sanitizeTerminalOutput = (value) => String(value || '')
-  .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
-  .replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '')
-  .replaceAll('\r\n', '\n')
-  .replaceAll('\r', '\n')
-  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+const sanitizePtyOutput = (value) => String(value || '')
+  .replace(/\u001b\]52;[^\u0007]*(?:\u0007|\u001b\\)/g, '')
+  .replaceAll('\0', '');
 
-const buildTerminalEnvironment = ({ baseEnv = process.env, workspacePath } = {}) => {
+const buildTerminalEnvironment = ({
+  baseEnv = process.env,
+  workspacePath,
+  ptyModulePath,
+  shellPath,
+  cols,
+  rows
+} = {}) => {
   const environment = { ...baseEnv };
   for (const name of Object.keys(environment)) {
     if (TERMINAL_SECRET_ENVIRONMENT.has(name.toUpperCase())) delete environment[name];
   }
+  const size = boundedPtySize(cols, rows);
   environment.DSH_CWD = workspacePath;
-  environment.NO_COLOR = '1';
-  environment.TERM = 'dumb';
+  environment.DSH_PTY_MODULE = ptyModulePath;
+  environment.DSH_PTY_SHELL = shellPath;
+  environment.DSH_PTY_COLS = String(size.cols);
+  environment.DSH_PTY_ROWS = String(size.rows);
+  environment.TERM = 'xterm-256color';
+  environment.COLORTERM = 'truecolor';
   return environment;
-};
-
-const encodePowerShellCommand = (command) => {
-  const script = [
-    '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
-    '$OutputEncoding = [Console]::OutputEncoding',
-    '$ProgressPreference = "SilentlyContinue"',
-    `& { ${command} }`
-  ].join('; ');
-  return Buffer.from(script, 'utf16le').toString('base64');
 };
 
 const resolveWindowsPowerShell = ({ env = process.env, exists = fs.existsSync } = {}) => {
@@ -71,6 +71,20 @@ const resolveWindowsPowerShell = ({ env = process.env, exists = fs.existsSync } 
   return candidate;
 };
 
+const resolveTerminalRuntime = ({
+  rootDir = path.resolve(__dirname, '..'),
+  resourcesPath = rootDir,
+  isPackaged = false
+} = {}) => Object.freeze(isPackaged ? {
+  nodePath: path.join(resourcesPath, 'runtime', 'node.exe'),
+  helperScriptPath: path.join(resourcesPath, 'terminal', 'terminal-pty-host.cjs'),
+  ptyModulePath: path.join(resourcesPath, 'terminal', 'node_modules', 'node-pty')
+} : {
+  nodePath: path.join(rootDir, 'vendor', 'runtime', 'win32-x64', 'node.exe'),
+  helperScriptPath: path.join(rootDir, 'electron', 'terminal-pty-host.cjs'),
+  ptyModulePath: path.join(rootDir, 'node_modules', 'node-pty')
+});
+
 const defaultKillTree = async (child) => {
   if (!child?.pid) return;
   if (process.platform === 'win32') {
@@ -78,7 +92,7 @@ const defaultKillTree = async (child) => {
       await execFileAsync('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
       return;
     } catch {
-      // The process may have exited between the state check and taskkill.
+      // The helper may have exited while taskkill was resolving its process tree.
     }
   }
   try {
@@ -94,37 +108,45 @@ class TerminalRunner extends EventEmitter {
   constructor({
     workspacePath,
     spawnImpl,
+    nodePath,
+    helperScriptPath,
+    ptyModulePath,
     shellPath,
     baseEnv = process.env,
     killTree = defaultKillTree,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
-    maxOutputChars = MAX_OUTPUT_CHARS
+    maxOutputBufferChars = MAX_OUTPUT_BUFFER_CHARS
   } = {}) {
     super();
+    const runtime = resolveTerminalRuntime();
     this.spawnImpl = spawnImpl || require('node:child_process').spawn;
+    this.nodePath = nodePath || runtime.nodePath;
+    this.helperScriptPath = helperScriptPath || runtime.helperScriptPath;
+    this.ptyModulePath = ptyModulePath || runtime.ptyModulePath;
     this.shellPath = shellPath || resolveWindowsPowerShell();
     this.baseEnv = baseEnv;
     this.killTree = killTree;
-    this.timeoutMs = timeoutMs;
-    this.maxOutputChars = maxOutputChars;
+    this.maxOutputBufferChars = maxOutputBufferChars;
     this.workspacePath = '';
     this.child = null;
     this.runId = 0;
     this.stopRequested = false;
-    this.outputChars = 0;
-    this.outputTruncated = false;
-    this.timeout = null;
-    this.finalized = false;
+    this.protocolBuffer = '';
+    this.outputBuffer = '';
+    this.finalized = true;
     this.state = publicState({
       status: 'idle',
+      mode: 'pty',
       runId: 0,
       cwd: '',
       startedAt: null,
       finishedAt: null,
       exitCode: null,
       signal: null,
-      truncated: false,
-      shell: 'Windows PowerShell'
+      pid: null,
+      cols: 100,
+      rows: 30,
+      shell: 'Windows PowerShell',
+      recoverable: false
     });
     if (workspacePath) this.setWorkspace(workspacePath);
   }
@@ -133,19 +155,31 @@ class TerminalRunner extends EventEmitter {
     return { ...this.state };
   }
 
+  getSnapshot() {
+    return { state: this.getState(), output: this.outputBuffer };
+  }
+
   isActive() {
     return Boolean(this.child);
   }
 
   setWorkspace(workspacePath) {
-    if (this.isActive()) {
-      throw new TerminalRunnerError('TERMINAL_BUSY', '终端命令运行中，无法切换工作区。');
-    }
+    if (this.isActive()) throw new TerminalRunnerError('TERMINAL_BUSY', '交互式终端运行中，无法切换工作区。');
     if (typeof workspacePath !== 'string' || !path.isAbsolute(workspacePath)) {
       throw new TerminalRunnerError('TERMINAL_WORKSPACE_INVALID', '终端工作区必须是绝对目录。');
     }
     this.workspacePath = path.resolve(workspacePath);
-    this._setState({ status: 'idle', cwd: this.workspacePath, exitCode: null, signal: null, truncated: false });
+    this.outputBuffer = '';
+    this._setState({
+      status: 'idle',
+      cwd: this.workspacePath,
+      startedAt: null,
+      finishedAt: null,
+      exitCode: null,
+      signal: null,
+      pid: null,
+      recoverable: false
+    });
     return this.getState();
   }
 
@@ -154,111 +188,171 @@ class TerminalRunner extends EventEmitter {
     this.emit('state', this.getState());
   }
 
-  _emitOutput(stream, value) {
-    if (this.outputTruncated) return;
-    const sanitized = sanitizeTerminalOutput(value);
+  _recordOutput(value, stream = 'pty') {
+    const sanitized = sanitizePtyOutput(value);
     if (!sanitized) return;
-    const remaining = this.maxOutputChars - this.outputChars;
-    if (remaining <= 0) return;
-    const clipped = sanitized.slice(0, remaining);
-    this.outputChars += clipped.length;
-    for (let offset = 0; offset < clipped.length; offset += MAX_OUTPUT_EVENT_CHARS) {
+    this.outputBuffer = `${this.outputBuffer}${sanitized}`.slice(-this.maxOutputBufferChars);
+    for (let offset = 0; offset < sanitized.length; offset += MAX_OUTPUT_EVENT_CHARS) {
       this.emit('output', Object.freeze({
         runId: this.runId,
         stream,
-        text: clipped.slice(offset, offset + MAX_OUTPUT_EVENT_CHARS)
+        text: sanitized.slice(offset, offset + MAX_OUTPUT_EVENT_CHARS)
       }));
     }
-    if (sanitized.length > clipped.length || this.outputChars >= this.maxOutputChars) {
-      this.outputTruncated = true;
-      this.emit('output', Object.freeze({
-        runId: this.runId,
-        stream: 'system',
-        text: `\n… 终端输出已达到 ${this.maxOutputChars} 字符上限，后续内容不再显示。\n`
-      }));
-      this._setState({ truncated: true });
-    }
+    if (!this.state.recoverable) this._setState({ recoverable: true });
   }
 
   _finish(status, exitCode = null, signal = null) {
     if (this.finalized) return;
     this.finalized = true;
-    clearTimeout(this.timeout);
-    this.timeout = null;
     this.child = null;
+    this.protocolBuffer = '';
     this._setState({
       status,
       finishedAt: new Date().toISOString(),
       exitCode: Number.isInteger(exitCode) ? exitCode >>> 0 : null,
       signal: signal || null,
-      truncated: this.outputTruncated
+      pid: null,
+      recoverable: this.outputBuffer.length > 0
     });
   }
 
-  start(value) {
-    if (this.isActive()) throw new TerminalRunnerError('TERMINAL_BUSY', '已有终端命令正在运行。');
-    if (!this.workspacePath) throw new TerminalRunnerError('TERMINAL_WORKSPACE_INVALID', '终端尚未绑定工作区。');
-    const command = normalizeTerminalCommand(value);
-    const args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowerShellCommand(command)];
+  _handleHostMessage(message) {
+    if (!message || typeof message !== 'object') return;
+    if (message.type === 'ready') {
+      const size = boundedPtySize(message.cols, message.rows);
+      this._setState({ status: 'running', pid: Number.isInteger(message.pid) ? message.pid : null, ...size });
+      return;
+    }
+    if (message.type === 'data') {
+      this._recordOutput(message.data, 'pty');
+      return;
+    }
+    if (message.type === 'error') {
+      this._recordOutput(`\r\n[终端] ${message.message || 'PTY 宿主发生错误。'}\r\n`, 'system');
+      this._finish('failed');
+      return;
+    }
+    if (message.type === 'exit') {
+      const status = this.stopRequested ? 'stopped' : message.exitCode === 0 ? 'completed' : 'failed';
+      this._finish(status, message.exitCode, message.signal);
+    }
+  }
 
+  _handleProtocolData(chunk) {
+    this.protocolBuffer += chunk;
+    if (this.protocolBuffer.length > MAX_PROTOCOL_BUFFER_CHARS) {
+      this._recordOutput('\r\n[终端] PTY 输出协议超过安全上限。\r\n', 'system');
+      this._finish('failed');
+      return;
+    }
+    let newline = this.protocolBuffer.indexOf('\n');
+    while (newline >= 0) {
+      const line = this.protocolBuffer.slice(0, newline).trim();
+      this.protocolBuffer = this.protocolBuffer.slice(newline + 1);
+      if (line) {
+        try {
+          this._handleHostMessage(JSON.parse(line));
+        } catch {
+          this._recordOutput('\r\n[终端] 忽略了无效的 PTY 输出帧。\r\n', 'system');
+        }
+      }
+      newline = this.protocolBuffer.indexOf('\n');
+    }
+  }
+
+  _send(message) {
+    if (!this.child?.stdin?.writable) return false;
+    try {
+      this.child.stdin.write(`${JSON.stringify(message)}\n`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  start({ cols, rows } = {}) {
+    if (this.isActive()) throw new TerminalRunnerError('TERMINAL_BUSY', '交互式终端已经在运行。');
+    if (!this.workspacePath) throw new TerminalRunnerError('TERMINAL_WORKSPACE_INVALID', '终端尚未绑定工作区。');
+    for (const target of [this.nodePath, this.helperScriptPath, this.ptyModulePath]) {
+      if (!fs.existsSync(target)) throw new TerminalRunnerError('TERMINAL_RUNTIME_MISSING', `终端运行时不完整：${target}`);
+    }
+    const size = boundedPtySize(cols, rows);
     this.runId += 1;
     this.stopRequested = false;
-    this.outputChars = 0;
-    this.outputTruncated = false;
+    this.protocolBuffer = '';
+    this.outputBuffer = '';
     this.finalized = false;
     const startedAt = new Date().toISOString();
     let child;
     try {
-      child = this.spawnImpl(this.shellPath, args, {
+      child = this.spawnImpl(this.nodePath, [this.helperScriptPath], {
         cwd: this.workspacePath,
-        env: buildTerminalEnvironment({ baseEnv: this.baseEnv, workspacePath: this.workspacePath }),
+        env: buildTerminalEnvironment({
+          baseEnv: this.baseEnv,
+          workspacePath: this.workspacePath,
+          ptyModulePath: this.ptyModulePath,
+          shellPath: this.shellPath,
+          ...size
+        }),
         windowsHide: true,
         shell: false,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe']
       });
     } catch (error) {
       this.finalized = true;
       this._setState({
         status: 'failed',
         runId: this.runId,
-        cwd: this.workspacePath,
         startedAt,
         finishedAt: new Date().toISOString(),
         exitCode: null,
         signal: null,
-        truncated: false
+        pid: null,
+        ...size
       });
-      throw new TerminalRunnerError('TERMINAL_START_FAILED', `无法启动终端命令：${error.message}`);
+      throw new TerminalRunnerError('TERMINAL_START_FAILED', `无法启动交互式终端：${error.message}`);
     }
     this.child = child;
     this._setState({
-      status: 'running',
+      status: 'starting',
       runId: this.runId,
       cwd: this.workspacePath,
       startedAt,
       finishedAt: null,
       exitCode: null,
       signal: null,
-      truncated: false
+      pid: null,
+      recoverable: false,
+      ...size
     });
-
-    child.stdout?.on('data', (chunk) => this._emitOutput('stdout', chunk.toString('utf8')));
-    child.stderr?.on('data', (chunk) => this._emitOutput('stderr', chunk.toString('utf8')));
+    child.stdout?.setEncoding?.('utf8');
+    child.stderr?.setEncoding?.('utf8');
+    child.stdout?.on('data', (chunk) => this._handleProtocolData(String(chunk)));
+    child.stderr?.on('data', (chunk) => this._recordOutput(`\r\n[PTY 宿主] ${String(chunk).trim()}\r\n`, 'system'));
     child.once('error', (error) => {
-      this._emitOutput('system', `无法启动终端命令：${error.message}\n`);
+      this._recordOutput(`\r\n[终端] 无法启动 PTY 宿主：${error.message}\r\n`, 'system');
       this._finish('failed');
     });
     child.once('exit', (code, signal) => {
+      if (this.finalized) return;
       const status = this.stopRequested ? 'stopped' : code === 0 ? 'completed' : 'failed';
       this._finish(status, code, signal);
     });
-    this.timeout = setTimeout(() => {
-      if (!this.child) return;
-      const minutes = Math.max(1, Math.round(this.timeoutMs / 60000));
-      this._emitOutput('system', `\n命令运行超过 ${minutes} 分钟，已请求停止。\n`);
-      void this.stop();
-    }, this.timeoutMs);
-    this.timeout.unref?.();
+    return this.getState();
+  }
+
+  write(value) {
+    const input = normalizePtyInput(value);
+    if (this.state.status !== 'running') return false;
+    return this._send({ type: 'input', data: input });
+  }
+
+  resize(cols, rows) {
+    const size = boundedPtySize(cols, rows);
+    if (!['starting', 'running'].includes(this.state.status)) return this.getState();
+    this._setState(size);
+    this._send({ type: 'resize', ...size });
     return this.getState();
   }
 
@@ -267,6 +361,7 @@ class TerminalRunner extends EventEmitter {
     if (!child) return this.getState();
     this.stopRequested = true;
     this._setState({ status: 'stopping' });
+    this._send({ type: 'stop' });
     await this.killTree(child);
     if (this.child === child) this._finish('stopped');
     return this.getState();
@@ -274,14 +369,14 @@ class TerminalRunner extends EventEmitter {
 }
 
 module.exports = {
-  DEFAULT_TIMEOUT_MS,
-  MAX_COMMAND_CHARS,
-  MAX_OUTPUT_CHARS,
+  MAX_INPUT_CHARS,
+  MAX_OUTPUT_BUFFER_CHARS,
   TerminalRunner,
   TerminalRunnerError,
+  boundedPtySize,
   buildTerminalEnvironment,
-  encodePowerShellCommand,
-  normalizeTerminalCommand,
+  normalizePtyInput,
+  resolveTerminalRuntime,
   resolveWindowsPowerShell,
-  sanitizeTerminalOutput
+  sanitizePtyOutput
 };

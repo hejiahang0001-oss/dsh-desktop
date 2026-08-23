@@ -4,7 +4,7 @@
     terminalPanelOpen: true,
     terminalPanelHeight: 240
   };
-  if (!api?.terminal || !api?.workbench) return false;
+  if (!api?.terminal || !api?.workbench || typeof window.Terminal !== 'function' || !window.FitAddon?.FitAddon) return false;
   if (window.__DSH_TERMINAL__) {
     window.__DSH_TERMINAL__.applyLayout(bootstrap);
     return true;
@@ -13,9 +13,6 @@
   const MIN_HEIGHT = 160;
   const MAX_HEIGHT = 420;
   const DEFAULT_HEIGHT = 240;
-  const MAX_RENDERED_CHARS = 120000;
-  const MAX_RENDERED_NODES = 800;
-
   const create = (tag, className, text) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -29,21 +26,27 @@
     node.setAttribute('aria-label', label);
     return node;
   };
-  const stateLabel = (state = {}) => {
-    const labels = {
-      idle: '就绪',
-      running: '运行中',
-      stopping: '正在停止',
-      completed: state.exitCode === 0 ? '已完成' : `已结束 · 代码 ${state.exitCode ?? '—'}`,
-      failed: `失败${state.exitCode == null ? '' : ` · 代码 ${state.exitCode}`}`,
-      stopped: '已停止'
-    };
-    return labels[state.status] || '不可用';
+  const stateLabel = (state = {}) => ({
+    idle: '未启动',
+    starting: '正在启动',
+    running: '交互中',
+    stopping: '正在停止',
+    completed: state.exitCode === 0 ? '已退出' : `已退出 · 代码 ${state.exitCode ?? '—'}`,
+    failed: `失败${state.exitCode == null ? '' : ` · 代码 ${state.exitCode}`}`,
+    stopped: '已停止'
+  }[state.status] || '不可用');
+  const lightTheme = {
+    background: '#171716', foreground: '#f2f2ef', cursor: '#75b8ff', cursorAccent: '#171716',
+    selectionBackground: '#315f8a', black: '#171716', red: '#ff9a90', green: '#79d9ae',
+    yellow: '#edc16c', blue: '#75b8ff', magenta: '#d6a8ff', cyan: '#74d6d0', white: '#f2f2ef',
+    brightBlack: '#77736e', brightRed: '#ffb5ad', brightGreen: '#9ae7c3', brightYellow: '#f3d68e',
+    brightBlue: '#9acbff', brightMagenta: '#e4c6ff', brightCyan: '#9ce4df', brightWhite: '#ffffff'
   };
+  const darkTheme = { ...lightTheme };
 
   const panel = create('section', 'dsh-terminal-panel');
   panel.id = 'dsh-workbench-terminal';
-  panel.setAttribute('aria-label', '集成终端');
+  panel.setAttribute('aria-label', '交互式集成终端');
   panel.setAttribute('role', 'region');
 
   const resizer = create('div', 'dsh-terminal-resizer');
@@ -58,77 +61,75 @@
   const header = create('header', 'dsh-terminal-header');
   const identity = create('div', 'dsh-terminal-identity');
   const title = create('h2', '', '终端');
+  const mode = create('span', 'dsh-terminal-mode', 'PTY');
   const cwd = create('span', 'dsh-terminal-cwd', '正在读取工作区…');
-  identity.append(title, cwd);
-  const stateBadge = create('span', 'dsh-terminal-state', '就绪');
+  identity.append(title, mode, cwd);
+  const stateBadge = create('span', 'dsh-terminal-state', '未启动');
   stateBadge.id = 'dsh-terminal-state-description';
   stateBadge.dataset.status = 'idle';
   stateBadge.setAttribute('role', 'status');
   const actions = create('div', 'dsh-terminal-actions');
-  const clearButton = button('dsh-terminal-icon-button', '清空', '清空终端输出');
-  const stopButton = button('dsh-terminal-icon-button', '停止', '停止当前终端命令');
+  const clearButton = button('dsh-terminal-icon-button', '清空', '清空终端显示');
+  const startButton = button('dsh-terminal-icon-button dsh-terminal-start', '启动', '启动交互式终端');
+  const stopButton = button('dsh-terminal-icon-button', '停止', '停止交互式终端及其进程树');
   const closeButton = button('dsh-terminal-icon-button dsh-terminal-close', '×', '隐藏集成终端');
-  actions.append(clearButton, stopButton, closeButton);
+  actions.append(clearButton, startButton, stopButton, closeButton);
   header.append(identity, stateBadge, actions);
 
-  const output = create('div', 'dsh-terminal-output');
-  output.tabIndex = 0;
-  output.setAttribute('role', 'log');
-  output.setAttribute('aria-label', '终端命令输出');
-  output.setAttribute('aria-live', 'polite');
-  output.setAttribute('aria-relevant', 'additions text');
-
-  const composer = create('form', 'dsh-terminal-composer');
-  const prompt = create('span', 'dsh-terminal-prompt', 'PS');
-  prompt.setAttribute('aria-hidden', 'true');
-  const inputLabel = create('label', 'dsh-terminal-input-label', 'PowerShell 命令');
-  const input = create('input', 'dsh-terminal-input');
-  input.type = 'text';
-  input.maxLength = 4096;
-  input.autocomplete = 'off';
-  input.spellcheck = false;
-  input.placeholder = '输入 PowerShell 命令，Enter 后确认运行';
-  inputLabel.append(input);
-  const runButton = button('dsh-terminal-run-button', '运行', '确认并运行终端命令');
-  runButton.type = 'submit';
-  composer.append(prompt, inputLabel, runButton);
-  panel.append(header, output, composer);
+  const viewport = create('div', 'dsh-terminal-viewport');
+  viewport.setAttribute('aria-label', 'PowerShell 交互区');
+  const footer = create('footer', 'dsh-terminal-footer');
+  footer.id = 'dsh-terminal-security-note';
+  const security = create('span', 'dsh-terminal-security', '启动后输入直接执行；软件 Key 不会进入终端');
+  const shortcut = create('span', 'dsh-terminal-shortcut', 'Ctrl+Alt+K 聚焦');
+  footer.append(security, shortcut);
+  panel.append(header, viewport, footer);
   document.body.append(panel);
+
+  const terminal = new window.Terminal({
+    allowTransparency: false,
+    convertEol: false,
+    cursorBlink: true,
+    cursorStyle: 'bar',
+    disableStdin: true,
+    fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
+    fontSize: 11,
+    lineHeight: 1.25,
+    minimumContrastRatio: 4.5,
+    screenReaderMode: true,
+    scrollback: 5000,
+    smoothScrollDuration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 80,
+    theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? darkTheme : lightTheme
+  });
+  const fitAddon = new window.FitAddon.FitAddon();
+  terminal.loadAddon(fitAddon);
+  terminal.open(viewport);
+  terminal.textarea?.setAttribute('aria-label', 'PowerShell 终端输入');
+  terminal.textarea?.setAttribute('aria-describedby', 'dsh-terminal-state-description dsh-terminal-security-note');
 
   let layout = { ...bootstrap };
   let terminalState = { status: 'idle', cwd: '' };
-  let renderedChars = 0;
-  let submitting = false;
-  const history = [];
-  let historyIndex = 0;
+  let startingSession = false;
   const pendingOutput = [];
+  let fitFrame = 0;
 
-  const trimOutput = () => {
-    while (output.childElementCount > MAX_RENDERED_NODES || renderedChars > MAX_RENDERED_CHARS) {
-      const first = output.firstElementChild;
-      if (!first) break;
-      renderedChars -= first.textContent.length;
-      first.remove();
-    }
-  };
-  const appendOutput = (textValue, stream = 'system') => {
-    const text = String(textValue || '');
-    if (!text) return;
-    const wasAtBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 36;
-    const line = create('span', 'dsh-terminal-output-chunk', text);
-    line.dataset.stream = stream;
-    output.append(line);
-    renderedChars += text.length;
-    trimOutput();
-    if (wasAtBottom) output.scrollTop = output.scrollHeight;
-  };
-  const clearOutput = () => {
-    output.replaceChildren();
-    renderedChars = 0;
-    appendOutput('DSH 集成终端 · Windows PowerShell · 命令在当前工作区运行\n', 'system');
-  };
+  const writeSystemLine = (message) => terminal.writeln(`\x1b[38;2;170;167;161m${message}\x1b[0m`);
   const flushPendingOutput = () => {
-    for (const event of pendingOutput.splice(0)) appendOutput(event?.text, event?.stream);
+    for (const event of pendingOutput.splice(0)) terminal.write(String(event?.text || ''));
+  };
+  const fitTerminal = () => {
+    cancelAnimationFrame(fitFrame);
+    fitFrame = requestAnimationFrame(() => {
+      if (!layout.terminalPanelOpen || viewport.clientWidth < 40 || viewport.clientHeight < 20) return;
+      try {
+        fitAddon.fit();
+        if (['starting', 'running'].includes(terminalState.status)) {
+          api.terminal.resize({ cols: terminal.cols, rows: terminal.rows });
+        }
+      } catch {
+        // A page transition can temporarily detach the terminal viewport.
+      }
+    });
   };
   const applyLayout = (next = {}) => {
     const requestedHeight = Math.min(
@@ -149,74 +150,63 @@
     resizer.setAttribute('aria-valuenow', String(effectiveHeight));
     panel.setAttribute('aria-hidden', String(!layout.terminalPanelOpen));
     panel.inert = !layout.terminalPanelOpen;
+    fitTerminal();
   };
   const renderState = (next = {}) => {
     terminalState = { ...terminalState, ...next };
-    const active = terminalState.status === 'running' || terminalState.status === 'stopping';
+    const active = ['starting', 'running', 'stopping'].includes(terminalState.status);
+    const writable = terminalState.status === 'running';
     stateBadge.textContent = stateLabel(terminalState);
     stateBadge.dataset.status = terminalState.status || 'idle';
     cwd.textContent = terminalState.cwd || '未绑定工作区';
     cwd.title = terminalState.cwd || '';
+    startButton.disabled = active || startingSession;
+    startButton.textContent = ['idle', 'unavailable'].includes(terminalState.status) ? '启动' : '重新启动';
+    startButton.setAttribute('aria-label', `${startButton.textContent}交互式终端`);
     stopButton.disabled = !active;
-    runButton.disabled = active || submitting || !input.value.trim();
-    input.setAttribute('aria-describedby', 'dsh-terminal-state-description');
+    terminal.options.disableStdin = !writable;
+    viewport.dataset.status = terminalState.status || 'idle';
+    security.textContent = writable
+      ? '交互输入直接执行；Git 一键审查暂停；软件 Key 已隔离'
+      : terminalState.recoverable
+        ? '终端输出已保留；重新启动前仍可查看和复制'
+        : '启动后输入直接执行；软件 Key 不会进入终端';
   };
-  const setComposerState = () => renderState(terminalState);
 
-  composer.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const command = input.value.trim();
-    if (!command || submitting || terminalState.status === 'running' || terminalState.status === 'stopping') return;
-    submitting = true;
-    setComposerState();
+  const startTerminal = async () => {
+    if (startingSession || ['starting', 'running', 'stopping'].includes(terminalState.status)) return;
+    startingSession = true;
+    renderState(terminalState);
     try {
-      const result = await api.terminal.run(command);
+      fitAddon.fit();
+      const result = await api.terminal.start({ cols: terminal.cols, rows: terminal.rows });
       if (result?.ok) {
-        appendOutput(`\nPS ${terminalState.cwd}> ${command}\n`, 'command');
-        flushPendingOutput();
-        if (history.at(-1) !== command) history.push(command);
-        if (history.length > 50) history.shift();
-        historyIndex = history.length;
-        input.value = '';
+        terminal.reset();
+        writeSystemLine(`DSH 交互式终端 · ${result.state?.cwd || terminalState.cwd}`);
         renderState(result.state || terminalState);
-      } else if (result?.canceled) {
         flushPendingOutput();
-        appendOutput('\n命令已取消。\n', 'system');
-      } else {
-        flushPendingOutput();
-        appendOutput(`\n${result?.message || '命令未执行。'}\n`, 'stderr');
+        terminal.focus();
+      } else if (!result?.canceled) {
+        writeSystemLine(result?.message || '交互式终端未启动。');
       }
     } catch {
-      appendOutput('\n终端请求失败；没有绕过桌面安全门禁。\n', 'stderr');
+      writeSystemLine('终端启动请求失败；没有绕过桌面安全门禁。');
     } finally {
+      startingSession = false;
       flushPendingOutput();
-      submitting = false;
-      setComposerState();
-      input.focus();
+      renderState(terminalState);
     }
+  };
+
+  terminal.onData((data) => {
+    if (terminalState.status !== 'running') return;
+    for (let offset = 0; offset < data.length; offset += 4096) api.terminal.write(data.slice(offset, offset + 4096));
   });
-  input.addEventListener('input', setComposerState);
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowUp' && history.length) {
-      event.preventDefault();
-      historyIndex = Math.max(0, historyIndex - 1);
-      input.value = history[historyIndex] || '';
-      setComposerState();
-    } else if (event.key === 'ArrowDown' && history.length) {
-      event.preventDefault();
-      historyIndex = Math.min(history.length, historyIndex + 1);
-      input.value = history[historyIndex] || '';
-      setComposerState();
-    } else if (event.ctrlKey && event.key.toLowerCase() === 'l') {
-      event.preventDefault();
-      clearOutput();
-    } else if (event.ctrlKey && event.key.toLowerCase() === 'c'
-      && (terminalState.status === 'running' || terminalState.status === 'stopping')) {
-      event.preventDefault();
-      void api.terminal.stop();
-    }
+  terminal.onResize(({ cols, rows }) => {
+    if (['starting', 'running'].includes(terminalState.status)) api.terminal.resize({ cols, rows });
   });
-  clearButton.addEventListener('click', clearOutput);
+  clearButton.addEventListener('click', () => terminal.clear());
+  startButton.addEventListener('click', () => void startTerminal());
   stopButton.addEventListener('click', () => void api.terminal.stop());
   closeButton.addEventListener('click', async () => applyLayout(await api.workbench.setTerminalPanelOpen(false)));
 
@@ -246,23 +236,34 @@
         : layout.terminalPanelHeight + (event.key === 'ArrowUp' ? 12 : -12);
     applyLayout(await api.workbench.setTerminalPanelHeight(height));
   });
-  window.addEventListener('resize', () => applyLayout(layout));
+
+  const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+  colorScheme.addEventListener?.('change', (event) => { terminal.options.theme = event.matches ? darkTheme : lightTheme; });
+  window.addEventListener('resize', fitTerminal);
+  new ResizeObserver(fitTerminal).observe(viewport);
 
   window.__DSH_TERMINAL__ = Object.freeze({
     applyLayout,
     focus: () => {
       if (!layout.terminalPanelOpen) return false;
-      input.focus();
+      terminal.focus();
       return true;
     }
   });
-  clearOutput();
+  writeSystemLine('DSH 交互式终端尚未启动。点击“启动”后进入当前工作区。');
   applyLayout(bootstrap);
-  api.terminal.getState().then(renderState);
+  api.terminal.getState().then((snapshot) => {
+    if (snapshot?.output) {
+      terminal.reset();
+      terminal.write(snapshot.output);
+    }
+    renderState(snapshot?.state || snapshot || terminalState);
+    fitTerminal();
+  });
   api.terminal.onState(renderState);
   api.terminal.onOutput((event) => {
-    if (submitting) pendingOutput.push(event);
-    else appendOutput(event?.text, event?.stream);
+    if (startingSession) pendingOutput.push(event);
+    else terminal.write(String(event?.text || ''));
   });
   return true;
 })();

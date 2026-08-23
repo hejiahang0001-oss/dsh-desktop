@@ -17,7 +17,7 @@ const {
   readHarnessAgentState
 } = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
-const { TerminalRunner, normalizeTerminalCommand } = require('./terminal-runner.cjs');
+const { TerminalRunner, resolveTerminalRuntime } = require('./terminal-runner.cjs');
 const {
   getWorkbenchPanelBootstrapScript,
   getWorkbenchPanelLayoutScript
@@ -113,6 +113,9 @@ const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css'
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchTerminalCssPath = path.join(rootDir, 'assets', 'workbench-terminal.css');
 const workbenchTerminalScriptPath = path.join(rootDir, 'assets', 'workbench-terminal.js');
+const xtermCssPath = path.join(rootDir, 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css');
+const xtermScriptPath = path.join(rootDir, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js');
+const xtermFitScriptPath = path.join(rootDir, 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
 const workbenchFilesScriptPath = path.join(rootDir, 'assets', 'workbench-files.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
@@ -120,6 +123,9 @@ let workbenchPanelCss = '';
 let workbenchPanelScript = '';
 let workbenchTerminalCss = '';
 let workbenchTerminalScript = '';
+let xtermCss = '';
+let xtermScript = '';
+let xtermFitScript = '';
 let workbenchFilesCss = '';
 let workbenchFilesScript = '';
 let harnessLocalizationScript = '';
@@ -269,13 +275,18 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
   if (!workbenchTerminalCss) workbenchTerminalCss = await fsp.readFile(workbenchTerminalCssPath, 'utf8');
   if (!workbenchTerminalScript) workbenchTerminalScript = await fsp.readFile(workbenchTerminalScriptPath, 'utf8');
+  if (!xtermCss) xtermCss = await fsp.readFile(xtermCssPath, 'utf8');
+  if (!xtermScript) xtermScript = await fsp.readFile(xtermScriptPath, 'utf8');
+  if (!xtermFitScript) xtermFitScript = await fsp.readFile(xtermFitScriptPath, 'utf8');
   if (!workbenchFilesCss) workbenchFilesCss = await fsp.readFile(workbenchFilesCssPath, 'utf8');
   if (!workbenchFilesScript) workbenchFilesScript = await fsp.readFile(workbenchFilesScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}`,
+    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}`,
     reviewScript: workbenchPanelScript,
     terminalScript: workbenchTerminalScript,
+    xtermScript,
+    xtermFitScript,
     filesScript: workbenchFilesScript,
     localizationScript: harnessLocalizationScript
   };
@@ -289,6 +300,8 @@ const installWorkbenchPanel = async () => {
     await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
     const localizationInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.localizationScript, true));
     const reviewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.reviewScript, true));
+    await mainWindow.webContents.executeJavaScript(assets.xtermScript, true);
+    await mainWindow.webContents.executeJavaScript(assets.xtermFitScript, true);
     const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
     return localizationInstalled && reviewInstalled && terminalInstalled && filesInstalled;
@@ -487,7 +500,7 @@ const bindTerminalRunner = (runner) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:output', event);
   });
   runner.on('state', (state) => {
-    const active = state.status === 'running' || state.status === 'stopping';
+    const active = ['starting', 'running', 'stopping'].includes(state.status);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:state', state);
     if (terminalWasActive && !active) terminalSettlePromise = recaptureUserChangeBaseline();
     terminalWasActive = active;
@@ -495,26 +508,20 @@ const bindTerminalRunner = (runner) => {
   });
 };
 
-const runTerminalCommand = async (value) => {
+const startTerminalSession = async (size = {}) => {
   if (!terminalRunner || !harnessUiReady()) {
-    return { ok: false, message: '集成终端尚未就绪。', state: terminalRunner?.getState() };
-  }
-  let command;
-  try {
-    command = normalizeTerminalCommand(value);
-  } catch (error) {
-    return { ok: false, message: error.message, state: terminalRunner.getState() };
+    return { ok: false, message: '交互式终端尚未就绪。', state: terminalRunner?.getState() };
   }
   if (terminalRunner.isActive()) {
-    return { ok: false, message: '已有终端命令正在运行。', state: terminalRunner.getState() };
+    return { ok: false, message: '交互式终端已经在运行。', state: terminalRunner.getState() };
   }
   const workspace = getWorkspaceState();
   const result = await dialog.showMessageBox(mainWindow, {
     type: 'question',
-    title: '确认运行终端命令',
-    message: '将在当前工作区运行以下 PowerShell 命令。',
-    detail: `工作区：${workspace.activePath}\n\n${command}\n\n软件内保存的 DeepSeek API Key 不会传入此命令。`,
-    buttons: ['运行', '取消'],
+    title: '启动交互式终端',
+    message: '在当前工作区启动持久 PowerShell 会话？',
+    detail: `工作区：${workspace.activePath}\n\n启动后，你在终端中的输入会直接执行，直到主动停止、切换工作区或退出应用。软件内保存的 DeepSeek API Key 不会传入终端；终端运行期间 Git 一键接受/拒绝会暂时禁用。`,
+    buttons: ['启动终端', '取消'],
     defaultId: 1,
     cancelId: 1,
     noLink: true
@@ -523,7 +530,7 @@ const runTerminalCommand = async (value) => {
     return { ok: false, canceled: true, state: terminalRunner.getState() };
   }
   try {
-    return { ok: true, state: terminalRunner.start(command) };
+    return { ok: true, state: terminalRunner.start(size) };
   } catch (error) {
     return { ok: false, message: error.message, state: terminalRunner.getState() };
   }
@@ -828,6 +835,9 @@ const reviewChangePath = async (reportedPath, action) => {
     if (agentDiagnostics.canStop || agentDiagnostics.status === 'waiting') {
       throw new Error('Agent 仍在运行或等待确认，请完成当前操作后再审查变更。');
     }
+    if (terminalRunner?.isActive()) {
+      throw new Error('交互式终端仍在运行。请先停止终端，让桌面重新保护用户修改后再接受或拒绝文件。');
+    }
     if (state.protected && action === 'reject') {
       const error = new Error('为避免覆盖你打开仓库前已有的内容，一键拒绝已禁用。你仍可先查看 Diff，再手动处理。');
       error.code = 'preexisting-unstaged-change';
@@ -869,6 +879,9 @@ const reviewChangeBatch = async (action) => {
     if (!changeReviewer) throw new Error('当前没有可用的 Git 审查器。');
     if (agentDiagnostics.canStop || agentDiagnostics.status === 'waiting') {
       throw new Error('Agent 仍在运行或等待确认，请完成当前操作后再审查变更。');
+    }
+    if (terminalRunner?.isActive()) {
+      throw new Error('交互式终端仍在运行。请先停止终端，让桌面重新保护用户修改后再批量审查。');
     }
     const list = await changeReviewer.listChanges({ limit: 100 });
     const candidates = list.items.filter((item) => item.status === 'pending' && !item.protected);
@@ -995,9 +1008,9 @@ const chooseWorkspace = async () => {
 function installApplicationMenu() {
   const workspace = getWorkspaceState();
   const harnessReady = harnessUiReady();
-  const reviewIdle = !agentDiagnostics.canStop && agentDiagnostics.status !== 'waiting';
   const terminalState = terminalRunner?.getState() || { status: 'idle' };
-  const terminalActive = terminalState.status === 'running' || terminalState.status === 'stopping';
+  const terminalActive = ['starting', 'running', 'stopping'].includes(terminalState.status);
+  const reviewIdle = !agentDiagnostics.canStop && agentDiagnostics.status !== 'waiting' && !terminalActive;
   const recentItems = workspace.recentPaths.length > 0
     ? workspace.recentPaths.map((recentPath) => ({
       label: `${path.basename(recentPath) || path.parse(recentPath).root} — ${path.dirname(recentPath)}`,
@@ -1276,7 +1289,7 @@ function installApplicationMenu() {
           click: () => { void applyWorkbenchPanelLayout({ focus: true, focusTarget: 'terminal' }); }
         },
         {
-          label: terminalActive ? '停止当前终端命令' : '终端：当前无运行命令',
+          label: terminalActive ? '停止交互式终端' : '终端：当前未启动',
           enabled: harnessReady && terminalActive,
           click: () => { void terminalRunner.stop(); }
         },
@@ -1420,14 +1433,22 @@ ipcMain.handle('files:search', (event, query) => (
 ));
 ipcMain.handle('terminal:get-state', (event) => (
   harnessIpcAllowed(event) && terminalRunner
-    ? terminalRunner.getState()
-    : { status: 'unavailable', cwd: '', runId: 0 }
+    ? terminalRunner.getSnapshot()
+    : { state: { status: 'unavailable', cwd: '', runId: 0, mode: 'pty' }, output: '' }
 ));
-ipcMain.handle('terminal:run', (event, command) => (
+ipcMain.handle('terminal:start', (event, size) => (
   harnessIpcAllowed(event)
-    ? runTerminalCommand(command)
-    : { ok: false, message: '终端请求来源未通过安全校验。' }
+    ? startTerminalSession(size)
+    : { ok: false, message: '终端启动请求来源未通过安全校验。' }
 ));
+ipcMain.on('terminal:write', (event, data) => {
+  if (!harnessIpcAllowed(event) || !terminalRunner) return;
+  try { terminalRunner.write(data); } catch { /* Drop invalid or oversized PTY input. */ }
+});
+ipcMain.on('terminal:resize', (event, size) => {
+  if (!harnessIpcAllowed(event) || !terminalRunner || !size) return;
+  terminalRunner.resize(size.cols, size.rows);
+});
 ipcMain.handle('terminal:stop', async (event) => {
   if (!harnessIpcAllowed(event) || !terminalRunner) return { status: 'unavailable' };
   return terminalRunner.stop();
@@ -1570,7 +1591,10 @@ app.whenReady().then(async () => {
   const workspace = await workspaceStore.init();
   workspaceFiles = new WorkspaceFiles();
   await workspaceFiles.activate(workspace.activePath);
-  terminalRunner = new TerminalRunner({ workspacePath: workspace.activePath });
+  terminalRunner = new TerminalRunner({
+    workspacePath: workspace.activePath,
+    ...resolveTerminalRuntime({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged })
+  });
   bindTerminalRunner(terminalRunner);
   changeReviewer = new GitChangeReviewer({
     trashItem: (target) => shell.trashItem(target)

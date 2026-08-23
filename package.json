@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -23,6 +23,7 @@
     "appId": "com.dsh.desktop",
     "productName": "DSH Desktop",
     "asar": true,
+    "npmRebuild": false,
     "compression": "store",
     "electronDist": "build/electron-v35.7.5-win32-x64.zip",
     "directories": {
@@ -40,6 +41,11 @@
       "assets/workbench-files.css",
       "assets/workbench-files.js",
       "assets/harness-localization.js",
+      "node_modules/@xterm/xterm/lib/xterm.js",
+      "node_modules/@xterm/xterm/css/xterm.css",
+      "node_modules/@xterm/xterm/LICENSE",
+      "node_modules/@xterm/addon-fit/lib/addon-fit.js",
+      "node_modules/@xterm/addon-fit/LICENSE",
       "electron/**/*",
       "package.json"
     ],
@@ -56,6 +62,22 @@
       {
         "from": "vendor/harness-hoisted-0.1.1-rc.2/node_modules",
         "to": "harness/node_modules"
+      },
+      {
+        "from": "electron/terminal-pty-host.cjs",
+        "to": "terminal/terminal-pty-host.cjs"
+      },
+      {
+        "from": "node_modules/node-pty",
+        "to": "terminal/node_modules/node-pty",
+        "filter": [
+          "lib/**/*",
+          "prebuilds/win32-x64/*.node",
+          "prebuilds/win32-x64/conpty/**/*",
+          "package.json",
+          "LICENSE",
+          "!**/*.pdb"
+        ]
       },
       {
         "from": "config/dsh-desktop.patch.yml",
@@ -91,5 +113,10 @@
       "language": "2052",
       "displayLanguageSelector": false
     }
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.2.0-beta.15"
   }
 }
