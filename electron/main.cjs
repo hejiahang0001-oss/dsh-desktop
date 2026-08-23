@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { GitChangeReviewer } = require('./change-review.cjs');
+const { GitCheckpointManager } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
 const {
@@ -35,6 +36,7 @@ let supervisor;
 let workspaceStore;
 let workbenchStore;
 let changeReviewer;
+let checkpointManager;
 let terminalRunner;
 let previewManager;
 let workspaceFiles;
@@ -104,6 +106,7 @@ const emptyChangeReviewDiagnostics = (reason = 'no-change') => Object.freeze({
   items: Object.freeze([])
 });
 let changeReviewDiagnostics = emptyChangeReviewDiagnostics();
+let checkpointDiagnostics = Object.freeze({ available: false, reason: 'not-initialized', status: 'empty', last: null });
 let desktopDiagnostics = Object.freeze({
   credential: Object.freeze({ status: 'missing', source: 'managed-file', reason: 'not-checked', message: '尚未检查软件模型配置。', policy: 'software-first', environmentIgnored: false }),
   sessions: Object.freeze({ available: true, count: 0, latestUpdatedAt: null, encodings: Object.freeze({ zstd: 0, jsonl: 0 }) })
@@ -124,6 +127,8 @@ const workbenchPreviewCssPath = path.join(rootDir, 'assets', 'workbench-preview.
 const workbenchPreviewScriptPath = path.join(rootDir, 'assets', 'workbench-preview.js');
 const workbenchCommandCssPath = path.join(rootDir, 'assets', 'workbench-command.css');
 const workbenchCommandScriptPath = path.join(rootDir, 'assets', 'workbench-command.js');
+const workbenchCheckpointCssPath = path.join(rootDir, 'assets', 'workbench-checkpoint.css');
+const workbenchCheckpointScriptPath = path.join(rootDir, 'assets', 'workbench-checkpoint.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
@@ -138,6 +143,8 @@ let workbenchPreviewCss = '';
 let workbenchPreviewScript = '';
 let workbenchCommandCss = '';
 let workbenchCommandScript = '';
+let workbenchCheckpointCss = '';
+let workbenchCheckpointScript = '';
 let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
@@ -255,6 +262,18 @@ const getDiagnosticsState = () => ({
   workspaceSync: { ...workspaceSyncDiagnostics }
 });
 
+const getCheckpointState = () => ({
+  ...checkpointDiagnostics,
+  last: checkpointDiagnostics.last ? { ...checkpointDiagnostics.last } : null
+});
+
+const checkpointTimeLabel = (value) => {
+  const date = new Date(value || '');
+  return Number.isNaN(date.getTime())
+    ? '--:--:--'
+    : date.toLocaleTimeString('zh-CN', { hour12: false });
+};
+
 const refreshDesktopDiagnostics = async ({ rebuildMenu = true } = {}) => {
   if (!dataRoot) return getDiagnosticsState();
   const harnessDataRoot = path.join(dataRoot, 'harness');
@@ -305,15 +324,18 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchPreviewScript) workbenchPreviewScript = await fsp.readFile(workbenchPreviewScriptPath, 'utf8');
   if (!workbenchCommandCss) workbenchCommandCss = await fsp.readFile(workbenchCommandCssPath, 'utf8');
   if (!workbenchCommandScript) workbenchCommandScript = await fsp.readFile(workbenchCommandScriptPath, 'utf8');
+  if (!workbenchCheckpointCss) workbenchCheckpointCss = await fsp.readFile(workbenchCheckpointCssPath, 'utf8');
+  if (!workbenchCheckpointScript) workbenchCheckpointScript = await fsp.readFile(workbenchCheckpointScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}`,
+    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}`,
     reviewScript: workbenchPanelScript,
     terminalScript: workbenchTerminalScript,
     xtermScript,
     xtermFitScript,
     filesScript: workbenchFilesScript,
     previewScript: workbenchPreviewScript,
+    checkpointScript: workbenchCheckpointScript,
     commandScript: workbenchCommandScript,
     localizationScript: harnessLocalizationScript
   };
@@ -332,8 +354,9 @@ const installWorkbenchPanel = async () => {
     const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
     const previewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.previewScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
+    const checkpointInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.checkpointScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
-    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled && commandInstalled;
+    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled && checkpointInstalled && commandInstalled;
   } catch {
     return false;
   }
@@ -451,6 +474,23 @@ const resetWorkbenchLayout = async () => {
     if (!applied) await installWorkbenchPanel();
   }
   return state;
+};
+
+const publishCheckpointState = (state) => {
+  checkpointDiagnostics = Object.freeze({
+    ...state,
+    last: state?.last ? Object.freeze({ ...state.last }) : null
+  });
+  installApplicationMenu();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('checkpoints:state', getCheckpointState());
+  return getCheckpointState();
+};
+
+const createCodeCheckpoint = async (source = 'manual') => {
+  if (!checkpointManager) return getCheckpointState();
+  const pending = checkpointManager.create({ source });
+  publishCheckpointState(checkpointManager.getState());
+  return publishCheckpointState(await pending);
 };
 
 const desktopIpcAllowed = (event) => Boolean(
@@ -1094,6 +1134,7 @@ const activateWorkspace = async (workspacePath) => {
     await workspaceFiles.activate(workspace.activePath);
     await previewManager.activate(workspace.activePath);
     await changeReviewer.activate(workspace.activePath);
+    checkpointDiagnostics = await checkpointManager.activate(workspace.activePath);
     changeReviewDiagnostics = emptyChangeReviewDiagnostics();
     terminalRunner?.setWorkspace(workspace.activePath);
     supervisor.setLaunchDir(workspace.activePath);
@@ -1382,6 +1423,18 @@ function installApplicationMenu() {
           enabled: harnessReady,
           click: () => { void mainWindow?.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.open?.())', true); }
         },
+        {
+          label: '立即创建代码检查点',
+          accelerator: 'CmdOrCtrl+Alt+B',
+          enabled: checkpointDiagnostics.available && checkpointDiagnostics.status !== 'creating',
+          click: () => { void createCodeCheckpoint('manual'); }
+        },
+        {
+          label: checkpointDiagnostics.status === 'creating'
+            ? '检查点：正在建立…'
+            : (checkpointDiagnostics.last ? `检查点：${checkpointTimeLabel(checkpointDiagnostics.last.createdAt)}` : '检查点：尚未建立'),
+          enabled: false
+        },
         { type: 'separator' },
         {
           label: '显示工作区文件',
@@ -1601,6 +1654,17 @@ ipcMain.handle('workbench:set-ui-zoom-factor', async (event, factor) => {
 ipcMain.handle('workbench:reset-layout', async (event) => {
   if (!desktopIpcAllowed(event)) return getWorkbenchState();
   return resetWorkbenchLayout();
+});
+ipcMain.handle('checkpoints:get-state', (event) => (
+  desktopIpcAllowed(event) ? getCheckpointState() : { available: false, reason: 'untrusted', status: 'empty', last: null }
+));
+ipcMain.handle('checkpoints:create-manual', async (event) => {
+  if (!harnessIpcAllowed(event)) return { available: false, reason: 'untrusted', status: 'empty', last: null };
+  return createCodeCheckpoint('manual');
+});
+ipcMain.handle('checkpoints:create-automatic', async (event) => {
+  if (!harnessIpcAllowed(event)) return { available: false, reason: 'untrusted', status: 'empty', last: null };
+  return createCodeCheckpoint('automatic');
 });
 const runWorkspaceFilesRequest = async (event, operation) => {
   if (!harnessIpcAllowed(event) || !workspaceFiles) {
@@ -1835,6 +1899,8 @@ app.whenReady().then(async () => {
     trashItem: (target) => shell.trashItem(target)
   });
   await changeReviewer.activate(workspace.activePath);
+  checkpointManager = new GitCheckpointManager();
+  checkpointDiagnostics = await checkpointManager.activate(workspace.activePath);
   supervisor = createSupervisor(dataRoot, workspace.activePath);
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   installApplicationMenu();

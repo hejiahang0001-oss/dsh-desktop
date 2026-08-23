@@ -48,6 +48,7 @@
     { id: 'terminal.focus', title: '聚焦集成终端', detail: '打开终端并聚焦输入', shortcut: 'Ctrl+Alt+K', run: () => openAndFocus('terminalPanelOpen', api.workbench.setTerminalPanelOpen, '__DSH_TERMINAL__') },
     { id: 'review.toggle', title: '显示或隐藏变更审查', detail: '切换右侧 Git Diff 面板', shortcut: 'Ctrl+Alt+D', run: () => togglePanel('reviewPanelOpen', api.workbench.setReviewPanelOpen) },
     { id: 'review.focus', title: '聚焦变更审查', detail: '打开 Git Diff 并聚焦文件列表', shortcut: 'Ctrl+Alt+J', run: () => openAndFocus('reviewPanelOpen', api.workbench.setReviewPanelOpen, '__DSH_WORKBENCH__') },
+    { id: 'checkpoint.create', title: '立即创建代码检查点', detail: '不改变工作树和 Git 索引，敏感路径不写入检查点', shortcut: 'Ctrl+Alt+B', run: async () => window.__DSH_CHECKPOINTS__?.showState(await api.checkpoints.create()) },
     { id: 'zoom.in', title: '界面放大', detail: '放大 Harness 与工作台界面', shortcut: 'Ctrl+=', run: () => adjustZoom(0.1) },
     { id: 'zoom.out', title: '界面缩小', detail: '缩小 Harness 与工作台界面', shortcut: 'Ctrl+-', run: () => adjustZoom(-0.1) },
     { id: 'zoom.reset', title: '界面大小重置', detail: '恢复到 100% 界面大小', shortcut: 'Ctrl+0', run: () => api.workbench.setUiZoomFactor(1) },

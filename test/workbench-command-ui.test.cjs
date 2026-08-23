@@ -21,6 +21,8 @@ test('global command palette exposes only fixed workbench actions and complete k
   assert.match(source, /setUiZoomFactor/);
   assert.match(source, /resetLayout/);
   assert.match(source, /界面大小重置/);
+  assert.match(source, /checkpoint\.create/);
+  assert.match(source, /api\.checkpoints\.create/);
   assert.doesNotMatch(source, /eval\(|innerHTML|ipcRenderer|shell\./);
 });
 
