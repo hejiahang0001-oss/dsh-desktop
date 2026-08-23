@@ -1,13 +1,14 @@
 # Validation evidence
 
-This page records the locally verified V0.4.6 engineering evidence without making the README front page carry the full verification ledger.
+This page records the locally verified V0.4.7 engineering evidence without making the README front page carry the full verification ledger.
 
 ## Automated and runtime checks
 
-- 87 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, file, media-preview, terminal, application-preview, workbench, UI, and localization tests pass locally.
+- 90 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, file, media-preview, terminal, application-preview, command-palette, release-version, workbench, UI, and localization tests pass locally.
 - Preview tests exercise managed HTML/assets, traversal and secret blocking, workspace-change cleanup, external loopback monitoring, file-type rejection, URL normalization, and iframe/control source boundaries.
 - The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random IPv4 loopback address.
-- The Windows uninstall record reports DSH Desktop 0.4.6; the installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
+- The Windows uninstall record reports DSH Desktop 0.4.7; the installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
+- In the unpacked desktop application, `Ctrl+Shift+P` opened the command palette; filtering for file search and pressing Enter focused the real left-panel search control, while Escape closed the palette.
 - A packaged JPEG-content file named `.png` rendered with the detected-format notice, and a valid one-page PDF rendered with accessible page text.
 - Normal 1208×794 and maximized 2560×1392 desktop windows displayed the file panel, application preview, and terminal without clipping.
 - `index.html` and its workspace-relative assets rendered inside the packaged application preview on a software-managed random loopback port.
@@ -16,17 +17,24 @@ This page records the locally verified V0.4.6 engineering evidence without makin
 
 ## Release integrity
 
-| Item | V0.4.6 value |
+| Item | V0.4.7 value |
 | --- | --- |
-| Installer | `DSH-Desktop-Setup-0.4.6.exe` |
-| Size | `162,563,961` bytes |
-| SHA-256 | `62EABBEB2A652B60B25B0F0DDA05AD460464C301D05483A6D34AEA4A18424EB5` |
+| Installer | `DSH-Desktop-Setup-0.4.7.exe` |
+| Size | `162,566,222` bytes |
+| SHA-256 | `2B9842ED34CF2525AF96EE50C52325C1C24D771D61428F44206ADF6690E6A99F` |
 | Files in unpacked build | `29,368` |
 | Files in installed application | `29,369` |
-| Packaged `app.asar` SHA-256 | `C14FF9CFD33D297BCE637D533C9F8B75C9CB62B32F2B37572200AEE3A44A68F5` |
+| Packaged `app.asar` SHA-256 | `3E34EA7ED4B317A4C91C9564E4C488BD4279366B42DE8340B8FA6511C2FA2018` |
 | PTY host SHA-256 | `E53CCA015B9DBBD8F8702725AE03AD292617196497E27C2EE131C683748C351E` |
 
-The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains `preview-manager.cjs`, `workbench-preview.js`, and `workbench-preview.css`. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
+The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the existing preview assets plus `workbench-command.js` and `workbench-command.css`. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
+
+## Global command-palette boundaries
+
+- The palette contains eleven fixed application actions and never evaluates the search text.
+- Commands reuse existing workbench state setters and focus hooks; no new renderer shell, file, IPC, or arbitrary JavaScript surface is exposed.
+- Keyboard navigation supports Up, Down, Enter, and Escape. Closing without an action restores the previous focus; a failed action also restores that focus.
+- The dialog exposes ARIA dialog/listbox/option semantics, active selection, visible focus, compact-window layout, forced colors, and reduced-motion handling.
 
 ## Application-preview architecture and safety
 
@@ -49,11 +57,12 @@ The installed and unpacked `app.asar` files have the same SHA-256. The installed
 
 ## Persistence and credential checks
 
-- V0.4.6 installed directly over V0.4.5; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.6`.
+- V0.4.7 installed directly over V0.4.6; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.7`.
 - Thirteen persisted sessions remained discoverable after the upgrade.
-- Credential, desktop-state, and workbench-state hashes remained unchanged across the overwrite; validation did not read, print, or copy credential plaintext.
-- The pre-upgrade snapshot is `backups/pre-v0.4.6-20260824-021839`; it contains 58,560 files and 786,634,659 bytes.
+- Credential, desktop-state, workbench-state, Harness settings, and the aggregate of all thirteen session hashes remained unchanged across the overwrite; validation did not read, print, or copy credential plaintext.
+- The pre-upgrade snapshot is `backups/pre-v0.4.7-20260824-025712`; it contains the previous installer, thirteen sessions, storages, settings, and desktop/workbench state in 21 files.
 - The snapshot intentionally contains no `.credentials.yaml` file.
+- A first lightweight snapshot attempt revealed that `harness/profiles` embeds another `node_modules` closure. That stopped partial snapshot was sent to the Windows Recycle Bin; future per-version snapshots exclude profiles while the complete V0.4.6 last-known-good snapshot remains retained.
 
 ## Existing terminal, file, and Git boundaries
 
@@ -64,4 +73,4 @@ The installed and unpacked `app.asar` files have the same SHA-256. The installed
 
 ## Evidence boundary
 
-These statements describe the locally verified V0.4.6 build. The earlier rc.8 Workspace Write crash was not re-tested with a paid file-writing model task, so this build does not claim rc.2 fixes it. Media and application preview do not relax the existing renderer, credential, navigation, or workspace boundaries. This evidence does not imply DeepSeek endorsement, production stability of Harness `0.1.1-rc.2`, or universal Windows reputation acceptance of the unsigned installer.
+These statements describe the locally verified V0.4.7 build. The earlier rc.8 Workspace Write crash was not re-tested with a paid file-writing model task, so this build does not claim rc.2 fixes it. The command palette, media preview, and application preview do not relax the existing renderer, credential, navigation, or workspace boundaries. This evidence does not imply DeepSeek endorsement, production stability of Harness `0.1.1-rc.2`, or universal Windows reputation acceptance of the unsigned installer.

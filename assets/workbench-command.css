@@ -1,0 +1,87 @@
+.dsh-command-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483600;
+  display: grid;
+  place-items: start center;
+  padding: 11vh 18px 18px;
+  color: var(--dsh-panel-text);
+  background: rgb(15 23 42 / 42%);
+  font: 13px/1.45 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  backdrop-filter: blur(3px);
+}
+
+.dsh-command-backdrop[hidden] { display: none; }
+
+.dsh-command-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(640px, calc(100vw - 36px));
+  max-height: min(560px, 72vh);
+  overflow: hidden;
+  border: 1px solid var(--dsh-panel-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dsh-panel-raised) 96%, transparent);
+  box-shadow: 0 24px 90px rgb(15 23 42 / 35%);
+}
+
+.dsh-command-search {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 54px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--dsh-panel-border);
+  color: var(--dsh-panel-text);
+  background: transparent;
+  font: 15px/1.4 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+.dsh-command-search:focus { outline: 2px solid var(--dsh-panel-focus); outline-offset: -2px; }
+.dsh-command-search::placeholder { color: var(--dsh-panel-muted); }
+.dsh-command-results { min-height: 0; overflow: auto; padding: 6px; }
+.dsh-command-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--dsh-panel-text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dsh-command-option[aria-selected="true"] { border-color: color-mix(in srgb, var(--dsh-panel-accent) 32%, var(--dsh-panel-border)); background: color-mix(in srgb, var(--dsh-panel-accent) 13%, var(--dsh-panel-raised)); }
+.dsh-command-copy { display: grid; min-width: 0; }
+.dsh-command-copy strong { overflow: hidden; font-size: 13px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-command-copy small { overflow: hidden; color: var(--dsh-panel-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-command-shortcut { padding: 2px 6px; border: 1px solid var(--dsh-panel-border); border-radius: 5px; color: var(--dsh-panel-muted); background: var(--dsh-panel-surface); font: 10px/1.4 "Cascadia Code", Consolas, monospace; }
+.dsh-command-empty { margin: 0; padding: 32px 18px; color: var(--dsh-panel-muted); text-align: center; }
+.dsh-command-empty[hidden] { display: none; }
+.dsh-command-footer { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-top: 1px solid var(--dsh-panel-border); color: var(--dsh-panel-muted); background: var(--dsh-panel-surface); font-size: 10px; }
+.dsh-command-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 700px) {
+  .dsh-command-backdrop { padding: 8px; }
+  .dsh-command-dialog { width: 100%; max-height: calc(100vh - 16px); border-radius: 9px; }
+  .dsh-command-footer { display: none; }
+}
+
+@media (forced-colors: active) {
+  .dsh-command-backdrop { background: Canvas; }
+  .dsh-command-dialog,
+  .dsh-command-search,
+  .dsh-command-footer,
+  .dsh-command-shortcut { border-color: CanvasText; }
+  .dsh-command-option[aria-selected="true"] { outline: 2px solid Highlight; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsh-command-backdrop { backdrop-filter: none; }
+}

@@ -122,6 +122,8 @@ const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css'
 const workbenchFilesScriptPath = path.join(rootDir, 'assets', 'workbench-files.js');
 const workbenchPreviewCssPath = path.join(rootDir, 'assets', 'workbench-preview.css');
 const workbenchPreviewScriptPath = path.join(rootDir, 'assets', 'workbench-preview.js');
+const workbenchCommandCssPath = path.join(rootDir, 'assets', 'workbench-command.css');
+const workbenchCommandScriptPath = path.join(rootDir, 'assets', 'workbench-command.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
@@ -134,6 +136,8 @@ let workbenchFilesCss = '';
 let workbenchFilesScript = '';
 let workbenchPreviewCss = '';
 let workbenchPreviewScript = '';
+let workbenchCommandCss = '';
+let workbenchCommandScript = '';
 let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
@@ -288,15 +292,18 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchFilesScript) workbenchFilesScript = await fsp.readFile(workbenchFilesScriptPath, 'utf8');
   if (!workbenchPreviewCss) workbenchPreviewCss = await fsp.readFile(workbenchPreviewCssPath, 'utf8');
   if (!workbenchPreviewScript) workbenchPreviewScript = await fsp.readFile(workbenchPreviewScriptPath, 'utf8');
+  if (!workbenchCommandCss) workbenchCommandCss = await fsp.readFile(workbenchCommandCssPath, 'utf8');
+  if (!workbenchCommandScript) workbenchCommandScript = await fsp.readFile(workbenchCommandScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}`,
+    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}`,
     reviewScript: workbenchPanelScript,
     terminalScript: workbenchTerminalScript,
     xtermScript,
     xtermFitScript,
     filesScript: workbenchFilesScript,
     previewScript: workbenchPreviewScript,
+    commandScript: workbenchCommandScript,
     localizationScript: harnessLocalizationScript
   };
 };
@@ -314,7 +321,8 @@ const installWorkbenchPanel = async () => {
     const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
     const previewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.previewScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
-    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled;
+    const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
+    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled && commandInstalled;
   } catch {
     return false;
   }
@@ -1330,6 +1338,13 @@ function installApplicationMenu() {
     {
       label: '视图',
       submenu: [
+        {
+          label: '打开命令面板…',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          enabled: harnessReady,
+          click: () => { void mainWindow?.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.open?.())', true); }
+        },
+        { type: 'separator' },
         {
           label: '显示工作区文件',
           type: 'checkbox',

@@ -23,7 +23,7 @@ test('interactive terminal UI uses xterm with explicit start, keyboard focus, re
 
 test('packaged desktop includes pinned xterm assets and an external Windows node-pty host', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.equal(manifest.version, '0.4.6');
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.equal(manifest.dependencies['@xterm/xterm'], '6.0.0');
   assert.equal(manifest.dependencies['@xterm/addon-fit'], '0.11.0');
   assert.equal(manifest.dependencies['node-pty'], '1.2.0-beta.15');

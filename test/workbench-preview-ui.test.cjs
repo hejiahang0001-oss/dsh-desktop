@@ -19,9 +19,9 @@ test('application preview UI uses a sandboxed iframe with explicit local-server 
   assert.doesNotMatch(source, /innerHTML|eval\(/);
 });
 
-test('packaged V0.4.6 includes application and dedicated file preview assets', () => {
+test('packaged desktop includes application and dedicated file preview assets', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.equal(manifest.version, '0.4.6');
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.ok(manifest.build.files.includes('assets/workbench-preview.css'));
   assert.ok(manifest.build.files.includes('assets/workbench-preview.js'));
   const main = read('electron/main.cjs');
