@@ -7,6 +7,7 @@ const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
 const LATEST_REF = 'refs/dsh/checkpoints/latest';
+const MAX_RESTORE_PATHS = 500;
 const RESTRICTED_COMPONENT_PATTERNS = Object.freeze([
   /^\.env(?:\.|$)/i,
   /^\.credentials(?:\.|$)/i,
@@ -55,6 +56,8 @@ const statusPaths = (porcelain) => {
   }
   return paths;
 };
+
+const splitNull = (value) => String(value || '').split('\0').filter(Boolean);
 
 const parseTrailer = (body, name) => {
   const match = new RegExp(`^${name}:\\s*(.+)$`, 'mi').exec(body || '');
@@ -155,7 +158,8 @@ class GitCheckpointManager {
   async create({ source = 'manual' } = {}) {
     if (!this.available) return this.getState({ created: false });
     if (this.pending) return this.pending;
-    this.pending = this.createInternal({ source: source === 'automatic' ? 'automatic' : 'manual' });
+    const normalizedSource = ['automatic', 'safety'].includes(source) ? source : 'manual';
+    this.pending = this.createInternal({ source: normalizedSource });
     try {
       return await this.pending;
     } finally {
@@ -225,11 +229,155 @@ class GitCheckpointManager {
       await this.fsPromises.rm(tempRoot, { recursive: true, force: true });
     }
   }
+
+  async inspectWorktree(snapshot) {
+    const tempRoot = await this.fsPromises.mkdtemp(path.join(os.tmpdir(), 'dsh-restore-preview-'));
+    const tempIndex = path.join(tempRoot, 'index');
+    const indexEnv = { ...sanitizedEnvironment(), GIT_INDEX_FILE: tempIndex };
+    try {
+      const head = await this.optionalGit(['rev-parse', '--verify', 'HEAD']);
+      if (head) await this.executeGit(['read-tree', head], { env: indexEnv });
+      else await this.executeGit(['read-tree', '--empty'], { env: indexEnv });
+      await this.executeGit(['add', '-A', '--', '.', ...SENSITIVE_PATHSPECS], { env: indexEnv });
+      const currentTree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
+      const [changedOutput, untrackedOutput, porcelain] = await Promise.all([
+        this.executeGit(['diff', '--name-only', '-z', snapshot.tree, currentTree, '--', '.', ...SENSITIVE_PATHSPECS]),
+        this.executeGit(['ls-files', '--others', '--exclude-standard', '-z', '--']),
+        this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+      ]);
+      const changed = splitNull(changedOutput);
+      const changedSet = new Set(changed);
+      return Object.freeze({
+        changed,
+        untrackedChanged: splitNull(untrackedOutput)
+          .filter((entry) => !isRestrictedGitPath(entry) && changedSet.has(entry)),
+        sensitiveExcludedCount: new Set(statusPaths(porcelain).filter(isRestrictedGitPath)).size
+      });
+    } finally {
+      await this.fsPromises.rm(tempRoot, { recursive: true, force: true });
+    }
+  }
+
+  async previewRestore(target = this.last) {
+    if (!this.available || !target?.commit || !target?.tree || !target?.indexTree) {
+      return Object.freeze({ available: false, reason: this.reason || 'no-checkpoint' });
+    }
+    try {
+      const [worktree, currentIndexTree] = await Promise.all([
+        this.inspectWorktree(target),
+        this.executeGit(['write-tree'])
+      ]);
+      const indexChanges = splitNull(await this.executeGit([
+        'diff', '--name-only', '-z', currentIndexTree.trim(), target.indexTree, '--', '.', ...SENSITIVE_PATHSPECS
+      ]));
+      const indexWillChange = indexChanges.length > 0;
+      return Object.freeze({
+        available: worktree.changed.length <= MAX_RESTORE_PATHS,
+        reason: worktree.changed.length > MAX_RESTORE_PATHS ? 'too-many-paths' : 'ready',
+        targetId: target.id,
+        targetCreatedAt: target.createdAt,
+        affectedCount: worktree.changed.length,
+        untrackedTrashCount: worktree.untrackedChanged.length,
+        sensitiveExcludedCount: worktree.sensitiveExcludedCount,
+        indexWillChange,
+        unchanged: worktree.changed.length === 0 && !indexWillChange
+      });
+    } catch {
+      return Object.freeze({ available: false, reason: 'restore-preview-failed' });
+    }
+  }
+
+  async applySnapshot(snapshot, { trashItem }) {
+    if (!/^[0-9a-f]{40,64}$/i.test(snapshot?.commit || '')
+      || !/^[0-9a-f]{40,64}$/i.test(snapshot?.tree || '')
+      || !/^[0-9a-f]{40,64}$/i.test(snapshot?.indexTree || '')) {
+      throw new Error('Invalid checkpoint objects.');
+    }
+    await this.executeGit(['cat-file', '-e', `${snapshot.commit}^{commit}`]);
+    await this.executeGit(['cat-file', '-e', `${snapshot.tree}^{tree}`]);
+    await this.executeGit(['cat-file', '-e', `${snapshot.indexTree}^{tree}`]);
+    const currentIndexTree = (await this.executeGit(['write-tree'])).trim();
+    const [currentTreePaths, targetTreePaths] = await Promise.all([
+      this.executeGit(['ls-tree', '-r', '--name-only', '-z', currentIndexTree]),
+      this.executeGit(['ls-tree', '-r', '--name-only', '-z', snapshot.indexTree])
+    ]);
+    const currentSensitive = splitNull(currentTreePaths).filter(isRestrictedGitPath);
+    const targetSensitive = splitNull(targetTreePaths).filter(isRestrictedGitPath);
+    const sensitivePaths = [...new Set([...currentSensitive, ...targetSensitive])];
+    if (sensitivePaths.length > MAX_RESTORE_PATHS) throw new Error('Too many sensitive index paths.');
+
+    const worktree = await this.inspectWorktree(snapshot);
+    if (worktree.changed.length > MAX_RESTORE_PATHS) throw new Error('Too many restore paths.');
+    if (worktree.untrackedChanged.length > 0 && typeof trashItem !== 'function') throw new Error('Trash integration is unavailable.');
+    for (const relativePath of worktree.untrackedChanged) {
+      const absolutePath = path.resolve(this.repoRoot, relativePath);
+      if (!isInside(this.repoRoot, absolutePath) || absolutePath === this.repoRoot) throw new Error('Unsafe restore path.');
+      await trashItem(absolutePath);
+    }
+    await this.executeGit(['restore', `--source=${snapshot.commit}`, '--worktree', '--', '.', ...SENSITIVE_PATHSPECS]);
+    if (sensitivePaths.length === 0) {
+      await this.executeGit(['read-tree', snapshot.indexTree]);
+      return;
+    }
+
+    const tempRoot = await this.fsPromises.mkdtemp(path.join(os.tmpdir(), 'dsh-restore-index-'));
+    const tempIndex = path.join(tempRoot, 'index');
+    const indexEnv = { ...sanitizedEnvironment(), GIT_INDEX_FILE: tempIndex };
+    try {
+      await this.executeGit(['read-tree', snapshot.indexTree], { env: indexEnv });
+      if (currentSensitive.length > 0) {
+        await this.executeGit(['restore', `--source=${currentIndexTree}`, '--staged', '--', ...currentSensitive], { env: indexEnv });
+      }
+      const currentSensitiveSet = new Set(currentSensitive);
+      const targetOnly = targetSensitive.filter((entry) => !currentSensitiveSet.has(entry));
+      if (targetOnly.length > 0) {
+        await this.executeGit(['rm', '--cached', '--ignore-unmatch', '--', ...targetOnly], { env: indexEnv });
+      }
+      const mergedIndexTree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
+      await this.executeGit(['read-tree', mergedIndexTree]);
+    } finally {
+      await this.fsPromises.rm(tempRoot, { recursive: true, force: true });
+    }
+  }
+
+  async restoreLatest({ trashItem } = {}) {
+    const target = this.last ? { ...this.last } : null;
+    const preview = await this.previewRestore(target);
+    if (!preview.available) return this.getState({ status: 'error', restored: false, restoreReason: preview.reason });
+    if (preview.unchanged) return this.getState({ status: 'ready', restored: false, unchanged: true, preview });
+
+    const safetyResult = await this.create({ source: 'safety' });
+    const safety = safetyResult.last ? { ...safetyResult.last } : null;
+    if (!safety || safety.commit === target.commit) {
+      return this.getState({ status: 'error', restored: false, restoreReason: 'safety-checkpoint-failed' });
+    }
+    try {
+      await this.applySnapshot(target, { trashItem });
+      this.last = Object.freeze(safety);
+      return this.getState({
+        status: 'ready',
+        restored: true,
+        restoredTo: { id: target.id, createdAt: target.createdAt, commit: target.commit },
+        safety: { id: safety.id, createdAt: safety.createdAt, commit: safety.commit },
+        preview
+      });
+    } catch {
+      try {
+        await this.applySnapshot(safety, { trashItem });
+        this.last = Object.freeze(safety);
+        return this.getState({ status: 'error', restored: false, rolledBack: true, restoreReason: 'restore-failed' });
+      } catch {
+        this.last = Object.freeze(safety);
+        return this.getState({ status: 'error', restored: false, rolledBack: false, restoreReason: 'restore-and-rollback-failed' });
+      }
+    }
+  }
 }
 
 module.exports = {
   GitCheckpointManager,
   LATEST_REF,
+  MAX_RESTORE_PATHS,
   SENSITIVE_PATHSPECS,
   isRestrictedGitPath,
   statusPaths

@@ -51,7 +51,13 @@
     toastTimer = window.setTimeout(() => { toast.hidden = true; }, 3200);
   };
   const showState = (state) => {
-    if (state?.created) {
+    if (state?.restored) {
+      const date = new Date(state.restoredTo?.createdAt || '');
+      const time = Number.isNaN(date.getTime()) ? '最近检查点' : date.toLocaleTimeString('zh-CN', { hour12: false });
+      show(`已恢复到代码检查点 · ${time}；恢复前安全点已保留`, 'success');
+    } else if (state?.restoreReason) {
+      show(state.rolledBack ? '恢复未完成，已自动回到恢复前状态。' : '无法安全恢复代码检查点。', 'error');
+    } else if (state?.created) {
       const date = new Date(state.last?.createdAt || '');
       const time = Number.isNaN(date.getTime()) ? '刚刚' : date.toLocaleTimeString('zh-CN', { hour12: false });
       const excluded = state.last?.sensitiveExcludedCount
@@ -115,11 +121,13 @@
     agentWasBusy = busy;
   });
   api.checkpoints.onState((state) => {
+    if (state?.restored) armed = true;
     if (state?.status !== 'creating') showState(state);
   });
 
   window.__DSH_CHECKPOINTS__ = Object.freeze({
     create: () => ensureCheckpoint(),
+    restoreLatest: () => api.checkpoints.restoreLatest().then(showState),
     focus: () => { show('下一次 Agent 回合会先自动建立代码检查点。'); return true; },
     showState,
     rearm: () => { armed = true; return true; }

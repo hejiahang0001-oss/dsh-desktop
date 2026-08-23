@@ -22,7 +22,8 @@ const createRepository = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-checkpoint-repo-'));
   git(root, ['init', '--quiet']);
   fs.writeFileSync(path.join(root, 'tracked.txt'), 'base\n');
-  git(root, ['add', 'tracked.txt']);
+  fs.writeFileSync(path.join(root, '.npmrc'), 'registry=https://registry.example.invalid/base\n');
+  git(root, ['add', 'tracked.txt', '.npmrc']);
   git(root, ['commit', '--quiet', '-m', 'initial']);
   return root;
 };
@@ -36,9 +37,10 @@ test('automatic checkpoint captures code without changing the worktree or real i
   const statusBefore = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
   const indexBefore = fs.readFileSync(path.join(root, '.git', 'index'));
 
+  let randomCounter = 1;
   const manager = new GitCheckpointManager({
     now: () => new Date('2026-08-24T04:00:00.000Z'),
-    random: () => Buffer.from('01020304', 'hex')
+    random: () => Buffer.from([0, 0, 0, randomCounter++])
   });
   assert.equal((await manager.activate(root)).available, true);
   const result = await manager.create({ source: 'automatic' });
@@ -55,6 +57,74 @@ test('automatic checkpoint captures code without changing the worktree or real i
   const unchanged = await manager.create({ source: 'automatic' });
   assert.equal(unchanged.created, false);
   assert.equal(unchanged.unchanged, true);
+  const unchangedPreview = await manager.previewRestore();
+  assert.equal(unchangedPreview.unchanged, true);
+  assert.equal(unchangedPreview.affectedCount, 0);
+  assert.equal(unchangedPreview.untrackedTrashCount, 0);
+
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'after agent\n');
+  fs.writeFileSync(path.join(root, 'new-file.txt'), 'changed after checkpoint\n');
+  fs.writeFileSync(path.join(root, 'later.txt'), 'remove through trash\n');
+  fs.writeFileSync(path.join(root, '.env'), 'DEEPSEEK_API_KEY=preserve-this-value\n');
+  fs.writeFileSync(path.join(root, '.npmrc'), 'registry=https://registry.example.invalid/preserve\n');
+  git(root, ['add', 'tracked.txt', '.npmrc']);
+  const headBeforeRestore = git(root, ['rev-parse', 'HEAD']).trim();
+  const preview = await manager.previewRestore();
+  assert.equal(preview.available, true);
+  assert.equal(preview.indexWillChange, true);
+  assert.equal(preview.sensitiveExcludedCount, 2);
+  const trashRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-checkpoint-trash-'));
+  context.after(() => fs.rmSync(trashRoot, { recursive: true, force: true }));
+  const trashed = [];
+  const restored = await manager.restoreLatest({
+    trashItem: async (target) => {
+      const destination = path.join(trashRoot, `${trashed.length}-${path.basename(target)}`);
+      await fs.promises.rename(target, destination);
+      trashed.push(destination);
+    }
+  });
+  assert.equal(restored.restored, true);
+  assert.equal(restored.last.source, 'safety');
+  assert.equal(git(root, ['rev-parse', 'HEAD']).trim(), headBeforeRestore);
+  assert.equal(fs.readFileSync(path.join(root, 'tracked.txt'), 'utf8').replaceAll('\r\n', '\n'), 'before agent\n');
+  assert.equal(fs.readFileSync(path.join(root, 'new-file.txt'), 'utf8').replaceAll('\r\n', '\n'), 'new code\n');
+  assert.equal(fs.existsSync(path.join(root, 'later.txt')), false);
+  assert.equal(fs.readFileSync(path.join(root, '.env'), 'utf8'), 'DEEPSEEK_API_KEY=preserve-this-value\n');
+  assert.equal(fs.readFileSync(path.join(root, '.npmrc'), 'utf8'), 'registry=https://registry.example.invalid/preserve\n');
+  assert.equal(git(root, ['show', ':tracked.txt']).replaceAll('\r\n', '\n'), 'base\n');
+  assert.equal(git(root, ['show', ':.npmrc']).replaceAll('\r\n', '\n'), 'registry=https://registry.example.invalid/preserve\n');
+  assert.match(git(root, ['show', `${restored.safety.commit}:tracked.txt`]), /after agent/);
+  assert.ok(trashed.some((entry) => entry.endsWith('later.txt')));
+});
+
+test('restore failure rolls back to the safety point and oversized recovery fails closed', async (context) => {
+  const root = createRepository();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'checkpoint state\n');
+  const manager = new GitCheckpointManager({
+    now: () => new Date('2026-08-24T04:30:00.000Z'),
+    random: () => Buffer.from([0, 0, 0, 7])
+  });
+  await manager.activate(root);
+  await manager.create({ source: 'automatic' });
+
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'restore me after failure\n');
+  fs.writeFileSync(path.join(root, 'later.txt'), 'safety content\n');
+  const rolledBack = await manager.restoreLatest({
+    trashItem: async () => { throw new Error('simulated recycle failure'); }
+  });
+  assert.equal(rolledBack.restored, false);
+  assert.equal(rolledBack.rolledBack, true);
+  assert.equal(fs.readFileSync(path.join(root, 'tracked.txt'), 'utf8').replaceAll('\r\n', '\n'), 'restore me after failure\n');
+  assert.equal(fs.readFileSync(path.join(root, 'later.txt'), 'utf8').replaceAll('\r\n', '\n'), 'safety content\n');
+
+  for (let index = 0; index < 501; index += 1) {
+    fs.writeFileSync(path.join(root, `overflow-${String(index).padStart(3, '0')}.txt`), 'bounded\n');
+  }
+  const oversized = await manager.previewRestore();
+  assert.equal(oversized.available, false);
+  assert.equal(oversized.reason, 'too-many-paths');
+  assert.equal(oversized.affectedCount, 501);
 });
 
 test('checkpoint scope refuses a nested workspace and credential-like components are detected', async (context) => {

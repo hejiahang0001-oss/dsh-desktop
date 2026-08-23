@@ -28,8 +28,13 @@ test('checkpoint renderer bridge and assets expose fixed manual and automatic op
   assert.ok(manifest.build.files.includes('assets/workbench-checkpoint.css'));
   assert.match(preload, /create-manual/);
   assert.match(preload, /create-automatic/);
+  assert.match(preload, /restore-latest/);
   assert.match(main, /GitCheckpointManager/);
   assert.match(main, /立即创建代码检查点/);
+  assert.match(main, /恢复到最近代码检查点/);
+  assert.match(main, /shell\.trashItem/);
+  assert.match(main, /defaultId:\s*1/);
+  assert.match(main, /checkpointRestorePromise/);
   assert.match(css, /dsh-terminal-effective-height/);
   assert.match(css, /forced-colors: active/);
 });

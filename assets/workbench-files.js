@@ -604,6 +604,7 @@
       return true;
     },
     reveal,
+    refresh: refreshFiles,
     closePreview
   });
   applyLayout(bootstrap);
