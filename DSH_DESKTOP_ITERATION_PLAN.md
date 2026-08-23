@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每日一个可运行 Daily Build；验证通过后直接覆盖电脑中已安装的旧版，每周验收能力里程碑，每两周形成稳定版。  
-> 执行状态：2026-08-24 已完成并发布 V0.5.1 最近代码检查点恢复；98 项回归、真实桌面默认取消、覆盖安装、数据保留、安装版 Harness、远端摘要和 CI 均通过；下一切片进入检查点历史与选择恢复。
+> 执行状态：2026-08-24 已完成并发布 V0.5.1 最近代码检查点恢复；98 项回归、真实桌面默认取消、覆盖安装、数据保留、安装版 Harness、远端摘要和 CI 均通过；V0.5.2 先消除 GitHub Actions Node 20 弃用提示，再进入检查点历史与选择恢复。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
