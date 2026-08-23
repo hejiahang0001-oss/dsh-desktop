@@ -163,7 +163,7 @@ html[data-dsh-terminal-open="true"] #dsh-workbench-files { bottom: var(--dsh-ter
   inset: 34px calc(var(--dsh-review-width) + 24px) 34px calc(var(--dsh-files-width) + 24px);
   z-index: 2147483002;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-width: 0;
   overflow: hidden;
   color: var(--dsh-panel-text);
@@ -198,8 +198,22 @@ html[data-dsh-terminal-open="true"] #dsh-file-preview { bottom: calc(var(--dsh-t
 .dsh-file-preview-button { min-height: 30px; padding: 4px 9px; border-color: var(--dsh-panel-border); border-radius: 6px; background: var(--dsh-panel-raised); cursor: pointer; }
 .dsh-file-preview-button:hover { background: var(--dsh-panel-subtle); }
 .dsh-file-preview-close { width: 30px; padding: 0; color: var(--dsh-panel-muted); font-size: 18px; }
+.dsh-file-preview-toolbar { display: flex; gap: 6px; align-items: center; min-height: 36px; padding: 4px 10px; border-bottom: 1px solid var(--dsh-panel-border); background: var(--dsh-panel-raised); }
+.dsh-file-preview-toolbar[hidden] { display: none; }
+.dsh-file-preview-toolbar-spacer { flex: 1; }
+.dsh-file-preview-page { display: flex; gap: 4px; align-items: center; color: var(--dsh-panel-muted); font-size: 11px; }
+.dsh-file-preview-page[hidden] { display: none; }
+.dsh-file-preview-page input { box-sizing: border-box; width: 58px; min-height: 30px; padding: 3px 6px; border: 1px solid var(--dsh-panel-border); border-radius: 6px; color: var(--dsh-panel-text); background: var(--dsh-panel-surface); font: inherit; text-align: center; }
+.dsh-file-preview-zoom { min-width: 62px; color: var(--dsh-panel-muted); font-size: 10px; text-align: center; }
 .dsh-file-preview-body { min-height: 0; overflow: auto; background: var(--dsh-panel-surface); }
 .dsh-file-preview-code { box-sizing: border-box; min-width: 100%; width: max-content; margin: 0; padding: 18px 20px 36px; color: var(--dsh-panel-text); background: transparent; font: 12px/1.6 "Cascadia Code", "SFMono-Regular", Consolas, monospace; tab-size: 2; white-space: pre; }
+.dsh-file-preview-media { box-sizing: border-box; width: 100%; height: 100%; min-height: 0; overflow: auto; background: repeating-conic-gradient(color-mix(in srgb, var(--dsh-panel-border) 35%, transparent) 0 25%, transparent 0 50%) 50% / 20px 20px; }
+.dsh-file-preview-media[hidden],
+.dsh-file-preview-image[hidden],
+.dsh-file-preview-pdf[hidden] { display: none; }
+.dsh-file-preview-image { display: block; margin: auto; background: transparent; object-fit: contain; }
+.dsh-file-preview-image[data-fit="true"] { width: 100%; height: 100%; max-width: 100%; max-height: 100%; }
+.dsh-file-preview-pdf { display: block; width: 100%; height: 100%; min-height: 420px; border: 0; background: #fff; }
 .dsh-file-preview-notice { margin: 0; padding: 6px 12px; border-top: 1px solid var(--dsh-panel-border); color: var(--dsh-panel-muted); background: var(--dsh-panel-surface); font-size: 10px; }
 
 #dsh-workbench-files button:focus-visible,
@@ -223,6 +237,9 @@ html[data-dsh-terminal-open="true"] #dsh-file-preview { bottom: calc(var(--dsh-t
   }
   #dsh-workbench-files { box-shadow: 18px 0 38px rgb(28 25 23 / 20%); }
   #dsh-file-preview { left: 14px; right: 14px; }
+  .dsh-file-preview-header { grid-template-columns: minmax(0, 1fr) auto; }
+  .dsh-file-preview-meta { display: none; }
+  .dsh-file-preview-toolbar { flex-wrap: wrap; }
 }
 
 @media (forced-colors: active) {

@@ -61,6 +61,36 @@ test('workspace file reader returns bounded UTF text and blocks secrets and bina
   assert.equal(isRestrictedWorkspaceFile('nested/private.pem'), true);
 });
 
+test('workspace media preview validates supported image and PDF content within separate size limits', async (context) => {
+  const root = createWorkspace(context);
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('preview')
+  ]);
+  fs.writeFileSync(path.join(root, 'preview.png'), png);
+  fs.writeFileSync(path.join(root, 'manual.pdf'), '%PDF-1.4\n%%EOF\n');
+  fs.writeFileSync(path.join(root, 'mislabeled.png'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]));
+  fs.writeFileSync(path.join(root, 'broken.jpg'), 'not-a-jpeg');
+  fs.writeFileSync(path.join(root, 'archive.zip'), 'unsupported');
+  const files = new WorkspaceFiles();
+  await files.activate(root);
+
+  const image = await files.readPreviewFile('preview.png');
+  assert.equal(image.available, true);
+  assert.equal(image.kind, 'image');
+  assert.equal(image.mimeType, 'image/png');
+  assert.equal(Buffer.from(image.base64, 'base64').equals(png), true);
+  const pdf = await files.readPreviewFile('manual.pdf');
+  assert.equal(pdf.available, true);
+  assert.equal(pdf.kind, 'pdf');
+  const mislabeled = await files.readPreviewFile('mislabeled.png');
+  assert.equal(mislabeled.available, true);
+  assert.equal(mislabeled.mimeType, 'image/jpeg');
+  assert.equal(mislabeled.extensionMismatch, true);
+  assert.equal((await files.readPreviewFile('broken.jpg')).reason, 'invalid-media');
+  assert.equal((await files.readPreviewFile('archive.zip')).reason, 'unsupported');
+});
+
 test('workspace file reader never follows a directory link outside the workspace', async (context) => {
   const root = createWorkspace(context);
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-workspace-outside-'));

@@ -5,6 +5,8 @@ const { TextDecoder } = require('node:util');
 const MAX_RELATIVE_PATH_CHARS = 2048;
 const MAX_DIRECTORY_ENTRIES = 500;
 const MAX_FILE_BYTES = 512 * 1024;
+const MAX_IMAGE_PREVIEW_BYTES = 24 * 1024 * 1024;
+const MAX_PDF_PREVIEW_BYTES = 40 * 1024 * 1024;
 const MAX_SEARCH_QUERY_CHARS = 128;
 const MAX_SEARCH_RESULTS = 80;
 const MAX_SEARCH_DIRECTORIES = 2000;
@@ -26,6 +28,16 @@ const BINARY_EXTENSIONS = new Set([
   '.pptx', '.pyc', '.rar', '.so', '.tar', '.ttf', '.wav', '.webm', '.webp', '.woff', '.woff2',
   '.xls', '.xlsx', '.zip'
 ]);
+const MEDIA_PREVIEW_TYPES = Object.freeze({
+  '.gif': Object.freeze({ kind: 'image', mimeType: 'image/gif', signature: (buffer) => ['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii')) }),
+  '.jpeg': Object.freeze({ kind: 'image', mimeType: 'image/jpeg', signature: (buffer) => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff }),
+  '.jpg': Object.freeze({ kind: 'image', mimeType: 'image/jpeg', signature: (buffer) => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff }),
+  '.pdf': Object.freeze({ kind: 'pdf', mimeType: 'application/pdf', signature: (buffer) => buffer.subarray(0, 5).toString('ascii') === '%PDF-' }),
+  '.png': Object.freeze({ kind: 'image', mimeType: 'image/png', signature: (buffer) => buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) }),
+  '.webp': Object.freeze({ kind: 'image', mimeType: 'image/webp', signature: (buffer) => buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP' })
+});
+const detectMediaPreviewType = (buffer) => Object.values(MEDIA_PREVIEW_TYPES)
+  .find((candidate, index, all) => all.findIndex((item) => item.mimeType === candidate.mimeType) === index && candidate.signature(buffer));
 
 class WorkspaceFilesError extends Error {
   constructor(code, message) {
@@ -267,6 +279,54 @@ class WorkspaceFiles {
     });
   }
 
+  async readPreviewFile(relativePath) {
+    const resolved = this._resolve(relativePath);
+    if (isRestrictedWorkspaceFile(resolved.relativePath)) {
+      return Object.freeze({ available: false, reason: 'restricted', path: resolved.relativePath, message: '疑似凭据或私钥文件默认不在桌面面板中显示。' });
+    }
+    const declaredType = MEDIA_PREVIEW_TYPES[path.extname(resolved.absolutePath).toLowerCase()];
+    if (!declaredType) {
+      return Object.freeze({ available: false, reason: 'unsupported', path: resolved.relativePath, message: '专用预览支持 PNG、JPEG、WebP、GIF 和 PDF。' });
+    }
+    try {
+      await this._assertNoLinkTraversal(resolved);
+    } catch (error) {
+      if (error instanceof WorkspaceFilesError && error.code === 'link') {
+        return Object.freeze({ available: false, reason: 'link', path: resolved.relativePath, message: error.message });
+      }
+      throw error;
+    }
+    const state = await fsp.lstat(resolved.absolutePath);
+    if (state.isSymbolicLink() || !state.isFile()) {
+      return Object.freeze({ available: false, reason: 'not-file', path: resolved.relativePath, message: '所选路径不是可预览的普通文件。' });
+    }
+    const maxBytes = declaredType.kind === 'pdf' ? MAX_PDF_PREVIEW_BYTES : MAX_IMAGE_PREVIEW_BYTES;
+    if (state.size > maxBytes) {
+      return Object.freeze({
+        available: false,
+        reason: 'too-large',
+        path: resolved.relativePath,
+        size: state.size,
+        maxBytes,
+        message: `${declaredType.kind === 'pdf' ? 'PDF' : '图片'}超过 ${Math.round(maxBytes / (1024 * 1024))} MB 的专用预览上限。`
+      });
+    }
+    const buffer = await fsp.readFile(resolved.absolutePath);
+    const detectedType = detectMediaPreviewType(buffer);
+    if (!detectedType || detectedType.kind !== declaredType.kind) {
+      return Object.freeze({ available: false, reason: 'invalid-media', path: resolved.relativePath, size: buffer.length, message: '文件内容与扩展名不一致，已阻止加载。' });
+    }
+    return Object.freeze({
+      available: true,
+      path: resolved.relativePath,
+      size: buffer.length,
+      kind: detectedType.kind,
+      mimeType: detectedType.mimeType,
+      extensionMismatch: detectedType.mimeType !== declaredType.mimeType,
+      base64: buffer.toString('base64')
+    });
+  }
+
   async search(query, {
     maxResults = MAX_SEARCH_RESULTS,
     maxDirectories = MAX_SEARCH_DIRECTORIES,
@@ -354,6 +414,8 @@ class WorkspaceFiles {
 module.exports = {
   MAX_DIRECTORY_ENTRIES,
   MAX_FILE_BYTES,
+  MAX_IMAGE_PREVIEW_BYTES,
+  MAX_PDF_PREVIEW_BYTES,
   MAX_SEARCH_RESULTS,
   WorkspaceFiles,
   WorkspaceFilesError,

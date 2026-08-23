@@ -24,6 +24,17 @@
     if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
+  const mediaKindForPath = (value) => {
+    if (/\.(?:png|jpe?g|webp|gif)$/i.test(value)) return 'image';
+    if (/\.pdf$/i.test(value)) return 'pdf';
+    return '';
+  };
+  const blobFromBase64 = (base64, mimeType) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: mimeType });
+  };
 
   const panel = create('aside');
   panel.id = 'dsh-workbench-files';
@@ -100,13 +111,53 @@
   previewClose.setAttribute('aria-label', '关闭文件预览');
   previewActions.append(appPreviewButton, previewRefresh, previewClose);
   previewHeader.append(previewIdentity, previewMeta, previewActions);
+  const mediaToolbar = create('div', 'dsh-file-preview-toolbar');
+  mediaToolbar.hidden = true;
+  mediaToolbar.setAttribute('role', 'toolbar');
+  mediaToolbar.setAttribute('aria-label', '图片和 PDF 预览控制');
+  const previousPage = create('button', 'dsh-file-preview-button', '上一页');
+  previousPage.type = 'button';
+  const pageLabel = create('label', 'dsh-file-preview-page');
+  const pageText = create('span', '', '第');
+  const pageInput = create('input');
+  pageInput.type = 'number';
+  pageInput.min = '1';
+  pageInput.value = '1';
+  pageInput.setAttribute('aria-label', 'PDF 页码');
+  pageLabel.append(pageText, pageInput, create('span', '', '页'));
+  const nextPage = create('button', 'dsh-file-preview-button', '下一页');
+  nextPage.type = 'button';
+  const toolbarSpacer = create('span', 'dsh-file-preview-toolbar-spacer');
+  const zoomOut = create('button', 'dsh-file-preview-button', '−');
+  zoomOut.type = 'button';
+  zoomOut.title = '缩小';
+  zoomOut.setAttribute('aria-label', '缩小预览');
+  const zoomLabel = create('output', 'dsh-file-preview-zoom', '适合窗口');
+  zoomLabel.setAttribute('aria-live', 'polite');
+  const zoomIn = create('button', 'dsh-file-preview-button', '+');
+  zoomIn.type = 'button';
+  zoomIn.title = '放大';
+  zoomIn.setAttribute('aria-label', '放大预览');
+  const fitButton = create('button', 'dsh-file-preview-button', '适合窗口');
+  fitButton.type = 'button';
+  mediaToolbar.append(previousPage, pageLabel, nextPage, toolbarSpacer, zoomOut, zoomLabel, zoomIn, fitButton);
   const previewBody = create('div', 'dsh-file-preview-body');
   previewBody.tabIndex = 0;
   previewBody.setAttribute('aria-label', '只读文件内容');
   const previewCode = create('pre', 'dsh-file-preview-code');
-  previewBody.append(previewCode);
+  const mediaStage = create('div', 'dsh-file-preview-media');
+  mediaStage.hidden = true;
+  const previewImage = create('img', 'dsh-file-preview-image');
+  previewImage.alt = '';
+  previewImage.hidden = true;
+  const previewPdf = create('embed', 'dsh-file-preview-pdf');
+  previewPdf.title = 'PDF 只读预览';
+  previewPdf.type = 'application/pdf';
+  previewPdf.hidden = true;
+  mediaStage.append(previewImage, previewPdf);
+  previewBody.append(previewCode, mediaStage);
   const previewNotice = create('p', 'dsh-file-preview-notice', '只读预览，不会修改磁盘文件。');
-  preview.append(previewHeader, previewBody, previewNotice);
+  preview.append(previewHeader, mediaToolbar, previewBody, previewNotice);
   document.body.append(panel, preview);
 
   let layout = { ...bootstrap };
@@ -119,6 +170,11 @@
   let searchRequest = 0;
   let searchTimer;
   let previousFocus = null;
+  let mediaObjectUrl = '';
+  let currentMediaKind = '';
+  let imageScale = 0;
+  let pdfPage = 1;
+  let pdfZoom = 0;
 
   const setStatus = (message) => { status.textContent = message; };
   const applyLayout = (next = {}) => {
@@ -131,14 +187,60 @@
     panel.inert = !layout.filePanelOpen;
   };
 
+  const clearMediaPreview = () => {
+    previewImage.removeAttribute('src');
+    previewPdf.removeAttribute('src');
+    previewImage.hidden = true;
+    previewPdf.hidden = true;
+    mediaStage.hidden = true;
+    mediaToolbar.hidden = true;
+    if (mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl);
+    mediaObjectUrl = '';
+    currentMediaKind = '';
+    imageScale = 0;
+    pdfPage = 1;
+    pdfZoom = 0;
+  };
+
   const closePreview = ({ restoreFocus = true } = {}) => {
     if (preview.hidden) return;
     previewRequest += 1;
+    clearMediaPreview();
     preview.hidden = true;
     preview.inert = true;
     delete document.documentElement.dataset.dshFilePreviewOpen;
     if (restoreFocus && previousFocus?.isConnected) previousFocus.focus();
     previousFocus = null;
+  };
+
+  const updatePdfSource = () => {
+    if (currentMediaKind !== 'pdf' || !mediaObjectUrl) return;
+    const zoom = pdfZoom > 0 ? String(pdfZoom) : 'page-fit';
+    previewPdf.src = `${mediaObjectUrl}#page=${pdfPage}&zoom=${zoom}&toolbar=0&navpanes=0`;
+    pageInput.value = String(pdfPage);
+    zoomLabel.textContent = pdfZoom > 0 ? `${pdfZoom}%` : '适合窗口';
+  };
+
+  const applyImageScale = () => {
+    if (currentMediaKind !== 'image') return;
+    const fitted = imageScale === 0;
+    previewImage.dataset.fit = String(fitted);
+    if (fitted) {
+      previewImage.style.removeProperty('width');
+      previewImage.style.removeProperty('height');
+      zoomLabel.textContent = '适合窗口';
+    } else {
+      previewImage.style.width = `${Math.max(1, Math.round(previewImage.naturalWidth * imageScale / 100))}px`;
+      previewImage.style.height = `${Math.max(1, Math.round(previewImage.naturalHeight * imageScale / 100))}px`;
+      zoomLabel.textContent = `${imageScale}%`;
+    }
+  };
+
+  const setMediaControls = (kind) => {
+    const pdf = kind === 'pdf';
+    previousPage.hidden = !pdf;
+    pageLabel.hidden = !pdf;
+    nextPage.hidden = !pdf;
   };
 
   const loadDirectory = async (pathValue = '', { refresh = false } = {}) => {
@@ -167,10 +269,13 @@
     previewTitle.textContent = pathValue.split('/').pop() || '文件预览';
     previewMeta.textContent = '正在读取…';
     previewCode.textContent = '正在读取只读内容…';
+    previewCode.hidden = false;
+    clearMediaPreview();
     appPreviewButton.hidden = !/\.html?$/i.test(pathValue);
     appPreviewButton.disabled = true;
     const request = ++previewRequest;
-    const result = await api.files.read(pathValue);
+    const requestedMediaKind = mediaKindForPath(pathValue);
+    const result = requestedMediaKind ? await api.files.preview(pathValue) : await api.files.read(pathValue);
     if (request !== previewRequest) return;
     if (!result?.available) {
       previewMeta.textContent = '不可预览';
@@ -178,9 +283,49 @@
       appPreviewButton.hidden = true;
       return;
     }
+    if (requestedMediaKind) {
+      currentMediaKind = result.kind;
+      mediaObjectUrl = URL.createObjectURL(blobFromBase64(result.base64, result.mimeType));
+      previewCode.hidden = true;
+      mediaStage.hidden = false;
+      mediaToolbar.hidden = false;
+      setMediaControls(result.kind);
+      previewNotice.textContent = result.kind === 'pdf'
+        ? 'PDF 在本机内存中只读打开；页码可直接输入，关闭后立即释放。'
+        : '图片在本机内存中只读打开；不会上传或修改原文件。';
+      if (result.kind === 'image') {
+        previewImage.hidden = false;
+        previewImage.alt = `${pathValue} 图片预览`;
+        previewImage.addEventListener('load', () => {
+          if (request !== previewRequest) return;
+          previewMeta.textContent = [
+            `${previewImage.naturalWidth} × ${previewImage.naturalHeight}`,
+            result.mimeType,
+            result.extensionMismatch ? '已按真实图片格式识别' : '',
+            formatSize(result.size)
+          ].filter(Boolean).join(' · ');
+          applyImageScale();
+        }, { once: true });
+        previewImage.addEventListener('error', () => {
+          if (request !== previewRequest) return;
+          clearMediaPreview();
+          previewCode.hidden = false;
+          previewCode.textContent = '图片解码失败，文件可能已损坏或编码不受当前系统支持。';
+          previewMeta.textContent = '加载失败';
+        }, { once: true });
+        previewImage.src = mediaObjectUrl;
+      } else {
+        previewPdf.hidden = false;
+        previewMeta.textContent = ['PDF', formatSize(result.size)].join(' · ');
+        updatePdfSource();
+      }
+      previewBody.scrollTop = 0;
+      return;
+    }
     previewMeta.textContent = [result.language, result.encoding, `${result.lineCount} 行`, formatSize(result.size)].filter(Boolean).join(' · ');
     previewCode.textContent = result.content || '（空文件）';
     appPreviewButton.disabled = false;
+    previewNotice.textContent = '只读预览，不会修改磁盘文件。';
     previewBody.scrollTop = 0;
   };
 
@@ -376,6 +521,45 @@
   });
   appPreviewButton.addEventListener('click', () => {
     if (selectedPath && !appPreviewButton.disabled) void window.__DSH_PREVIEW__?.openFile?.(selectedPath);
+  });
+  previousPage.addEventListener('click', () => {
+    pdfPage = Math.max(1, pdfPage - 1);
+    updatePdfSource();
+  });
+  nextPage.addEventListener('click', () => {
+    pdfPage += 1;
+    updatePdfSource();
+  });
+  pageInput.addEventListener('change', () => {
+    pdfPage = Math.max(1, Math.round(Number(pageInput.value) || 1));
+    updatePdfSource();
+  });
+  zoomOut.addEventListener('click', () => {
+    if (currentMediaKind === 'image') {
+      imageScale = Math.max(25, (imageScale || 100) - 25);
+      applyImageScale();
+    } else if (currentMediaKind === 'pdf') {
+      pdfZoom = Math.max(50, (pdfZoom || 100) - 25);
+      updatePdfSource();
+    }
+  });
+  zoomIn.addEventListener('click', () => {
+    if (currentMediaKind === 'image') {
+      imageScale = Math.min(400, (imageScale || 100) + 25);
+      applyImageScale();
+    } else if (currentMediaKind === 'pdf') {
+      pdfZoom = Math.min(300, (pdfZoom || 100) + 25);
+      updatePdfSource();
+    }
+  });
+  fitButton.addEventListener('click', () => {
+    if (currentMediaKind === 'image') {
+      imageScale = 0;
+      applyImageScale();
+    } else if (currentMediaKind === 'pdf') {
+      pdfZoom = 0;
+      updatePdfSource();
+    }
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !preview.hidden) {

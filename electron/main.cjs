@@ -1534,6 +1534,9 @@ ipcMain.handle('files:list', (event, directoryPath) => (
 ipcMain.handle('files:read', (event, filePath) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.readFile(filePath))
 ));
+ipcMain.handle('files:preview', (event, filePath) => (
+  runWorkspaceFilesRequest(event, () => workspaceFiles.readPreviewFile(filePath))
+));
 ipcMain.handle('files:search', (event, query) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.search(query))
 ));
@@ -1624,6 +1627,7 @@ const createWindow = async () => {
   });
   mainWindow.webContents.on('will-frame-navigate', (details) => {
     if (details.isMainFrame) return;
+    if (details.url.startsWith('blob:')) return;
     const currentPreviewUrl = previewManager?.getState()?.url || '';
     const currentPreviewOrigin = currentPreviewUrl ? new URL(currentPreviewUrl).origin : '';
     if (!isSafePreviewNavigation(details.url, {

@@ -12,10 +12,23 @@ test('workspace file UI stays read-only and uses the bounded preload surface', (
   assert.match(filesScript, /api\.files\.list/);
   assert.match(filesScript, /api\.files\.read/);
   assert.match(filesScript, /api\.files\.search/);
+  assert.match(filesScript, /api\.files\.preview/);
   assert.match(filesScript, /textContent/);
   assert.match(filesScript, /name: entry\.path/);
   assert.match(filesScript, /window\.__DSH_FILES__/);
   assert.doesNotMatch(filesScript, /innerHTML|eval\(|writeFile|unlink|rename/);
+});
+
+test('workspace file UI has dedicated local image and PDF controls with explicit failure handling', () => {
+  assert.match(filesScript, /PNG、JPEG、WebP、GIF 和 PDF|mediaKindForPath/);
+  assert.match(filesScript, /适合窗口/);
+  assert.match(filesScript, /PDF 页码/);
+  assert.match(filesScript, /create\('embed'/);
+  assert.match(filesScript, /图片解码失败/);
+  assert.match(filesScript, /URL\.revokeObjectURL/);
+  assert.match(filesCss, /dsh-file-preview-media/);
+  assert.match(filesCss, /dsh-file-preview-pdf/);
+  assert.match(filesCss, /dsh-file-preview-page\[hidden\]/);
 });
 
 test('workspace file UI exposes accessible layout and Diff reveal hooks', () => {
