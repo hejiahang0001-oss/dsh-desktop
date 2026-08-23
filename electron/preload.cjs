@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     setFilePanelWidth: (width) => ipcRenderer.invoke('workbench:set-file-panel-width', width),
     setReviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-review-panel-open', open),
     setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width),
+    setPreviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-preview-panel-open', open),
     setTerminalPanelOpen: (open) => ipcRenderer.invoke('workbench:set-terminal-panel-open', open),
     setTerminalPanelHeight: (height) => ipcRenderer.invoke('workbench:set-terminal-panel-height', height)
   }),
@@ -38,6 +39,18 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     list: (directoryPath = '') => ipcRenderer.invoke('files:list', directoryPath),
     read: (filePath) => ipcRenderer.invoke('files:read', filePath),
     search: (query) => ipcRenderer.invoke('files:search', query)
+  }),
+  preview: Object.freeze({
+    getState: () => ipcRenderer.invoke('preview:get-state'),
+    openFile: (filePath) => ipcRenderer.invoke('preview:open-file', filePath),
+    connect: (url) => ipcRenderer.invoke('preview:connect', url),
+    stop: () => ipcRenderer.invoke('preview:stop'),
+    openExternal: () => ipcRenderer.invoke('preview:open-external'),
+    onState: (listener) => {
+      const handler = (_event, state) => listener(state);
+      ipcRenderer.on('preview:state', handler);
+      return () => ipcRenderer.removeListener('preview:state', handler);
+    }
   }),
   terminal: Object.freeze({
     getState: () => ipcRenderer.invoke('terminal:get-state'),

@@ -88,13 +88,17 @@
   previewIdentity.append(previewTitle, previewPath);
   const previewMeta = create('p', 'dsh-file-preview-meta', '只读');
   const previewActions = create('div', 'dsh-file-preview-actions');
+  const appPreviewButton = create('button', 'dsh-file-preview-button', '应用预览');
+  appPreviewButton.type = 'button';
+  appPreviewButton.hidden = true;
+  appPreviewButton.title = '在隔离的本机应用预览中运行此 HTML';
   const previewRefresh = create('button', 'dsh-file-preview-button', '重新读取');
   previewRefresh.type = 'button';
   const previewClose = create('button', 'dsh-file-preview-button dsh-file-preview-close', '×');
   previewClose.type = 'button';
   previewClose.title = '关闭文件预览';
   previewClose.setAttribute('aria-label', '关闭文件预览');
-  previewActions.append(previewRefresh, previewClose);
+  previewActions.append(appPreviewButton, previewRefresh, previewClose);
   previewHeader.append(previewIdentity, previewMeta, previewActions);
   const previewBody = create('div', 'dsh-file-preview-body');
   previewBody.tabIndex = 0;
@@ -163,16 +167,20 @@
     previewTitle.textContent = pathValue.split('/').pop() || '文件预览';
     previewMeta.textContent = '正在读取…';
     previewCode.textContent = '正在读取只读内容…';
+    appPreviewButton.hidden = !/\.html?$/i.test(pathValue);
+    appPreviewButton.disabled = true;
     const request = ++previewRequest;
     const result = await api.files.read(pathValue);
     if (request !== previewRequest) return;
     if (!result?.available) {
       previewMeta.textContent = '不可预览';
       previewCode.textContent = result?.message || '该文件当前无法安全预览。';
+      appPreviewButton.hidden = true;
       return;
     }
     previewMeta.textContent = [result.language, result.encoding, `${result.lineCount} 行`, formatSize(result.size)].filter(Boolean).join(' · ');
     previewCode.textContent = result.content || '（空文件）';
+    appPreviewButton.disabled = false;
     previewBody.scrollTop = 0;
   };
 
@@ -366,6 +374,9 @@
   previewRefresh.addEventListener('click', () => {
     if (selectedPath) void openPreview(selectedPath, previousFocus);
   });
+  appPreviewButton.addEventListener('click', () => {
+    if (selectedPath && !appPreviewButton.disabled) void window.__DSH_PREVIEW__?.openFile?.(selectedPath);
+  });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !preview.hidden) {
       event.preventDefault();
@@ -408,7 +419,8 @@
       searchInput.select();
       return true;
     },
-    reveal
+    reveal,
+    closePreview
   });
   applyLayout(bootstrap);
   void api.workspace.getState().then((state) => {

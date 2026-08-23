@@ -17,6 +17,7 @@ const {
   readHarnessAgentState
 } = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
+const { PreviewManager, isSafePreviewNavigation } = require('./preview-manager.cjs');
 const { TerminalRunner, resolveTerminalRuntime } = require('./terminal-runner.cjs');
 const {
   getWorkbenchPanelBootstrapScript,
@@ -35,6 +36,7 @@ let workspaceStore;
 let workbenchStore;
 let changeReviewer;
 let terminalRunner;
+let previewManager;
 let workspaceFiles;
 let dataRoot;
 let harnessOrigin = null;
@@ -118,6 +120,8 @@ const xtermScriptPath = path.join(rootDir, 'node_modules', '@xterm', 'xterm', 'l
 const xtermFitScriptPath = path.join(rootDir, 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
 const workbenchFilesScriptPath = path.join(rootDir, 'assets', 'workbench-files.js');
+const workbenchPreviewCssPath = path.join(rootDir, 'assets', 'workbench-preview.css');
+const workbenchPreviewScriptPath = path.join(rootDir, 'assets', 'workbench-preview.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
@@ -128,6 +132,8 @@ let xtermScript = '';
 let xtermFitScript = '';
 let workbenchFilesCss = '';
 let workbenchFilesScript = '';
+let workbenchPreviewCss = '';
+let workbenchPreviewScript = '';
 let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
@@ -280,14 +286,17 @@ const loadWorkbenchPanelAssets = async () => {
   if (!xtermFitScript) xtermFitScript = await fsp.readFile(xtermFitScriptPath, 'utf8');
   if (!workbenchFilesCss) workbenchFilesCss = await fsp.readFile(workbenchFilesCssPath, 'utf8');
   if (!workbenchFilesScript) workbenchFilesScript = await fsp.readFile(workbenchFilesScriptPath, 'utf8');
+  if (!workbenchPreviewCss) workbenchPreviewCss = await fsp.readFile(workbenchPreviewCssPath, 'utf8');
+  if (!workbenchPreviewScript) workbenchPreviewScript = await fsp.readFile(workbenchPreviewScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}`,
+    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}`,
     reviewScript: workbenchPanelScript,
     terminalScript: workbenchTerminalScript,
     xtermScript,
     xtermFitScript,
     filesScript: workbenchFilesScript,
+    previewScript: workbenchPreviewScript,
     localizationScript: harnessLocalizationScript
   };
 };
@@ -303,8 +312,9 @@ const installWorkbenchPanel = async () => {
     await mainWindow.webContents.executeJavaScript(assets.xtermScript, true);
     await mainWindow.webContents.executeJavaScript(assets.xtermFitScript, true);
     const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
+    const previewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.previewScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
-    return localizationInstalled && reviewInstalled && terminalInstalled && filesInstalled;
+    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled;
   } catch {
     return false;
   }
@@ -319,6 +329,7 @@ const applyWorkbenchPanelLayout = async ({ focus = false, focusTarget = 'review'
   if (applied && focus) {
     const globalName = {
       files: '__DSH_FILES__',
+      preview: '__DSH_PREVIEW__',
       terminal: '__DSH_TERMINAL__',
       review: '__DSH_WORKBENCH__'
     }[focusTarget] || '__DSH_WORKBENCH__';
@@ -359,6 +370,21 @@ const setFilePanelOpen = async (open, { focus = false } = {}) => {
 const setFilePanelWidth = async (width) => {
   const state = await workbenchStore.setFilePanelWidth(width);
   if (harnessUiReady()) await applyWorkbenchPanelLayout();
+  return state;
+};
+
+const setPreviewPanelOpen = async (open, { focus = false, stopOnClose = true } = {}) => {
+  const nextOpen = Boolean(open);
+  if (!nextOpen && stopOnClose) await previewManager?.stop();
+  const state = await workbenchStore.setPreviewPanelOpen(nextOpen);
+  installApplicationMenu();
+  if (harnessUiReady()) {
+    const applied = await applyWorkbenchPanelLayout({
+      focus: focus && state.previewPanelOpen,
+      focusTarget: 'preview'
+    });
+    if (!applied) await installWorkbenchPanel();
+  }
   return state;
 };
 
@@ -506,6 +532,44 @@ const bindTerminalRunner = (runner) => {
     terminalWasActive = active;
     installApplicationMenu();
   });
+};
+
+const bindPreviewManager = (manager) => {
+  manager.on('state', (state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('preview:state', state);
+    installApplicationMenu();
+  });
+};
+
+const openWorkspacePreview = async (filePath) => {
+  if (!previewManager || !harnessUiReady()) return { ok: false, message: '应用预览尚未就绪。' };
+  try {
+    const state = await previewManager.openFile(filePath);
+    await setPreviewPanelOpen(true, { focus: true, stopOnClose: false });
+    return { ok: true, state };
+  } catch (error) {
+    return { ok: false, message: error.message, state: previewManager.getState() };
+  }
+};
+
+const connectLocalPreview = async (url) => {
+  if (!previewManager || !harnessUiReady()) return { ok: false, message: '应用预览尚未就绪。' };
+  try {
+    const state = await previewManager.connect(url, { reservedOrigins: [harnessOrigin] });
+    await setPreviewPanelOpen(true, { focus: true, stopOnClose: false });
+    return { ok: state.status === 'ready', message: state.error || '', state };
+  } catch (error) {
+    return { ok: false, message: error.message, state: previewManager.getState() };
+  }
+};
+
+const openPreviewExternally = async () => {
+  const state = previewManager?.getState();
+  if (!state?.url || !isSafePreviewNavigation(state.url, { reservedOrigins: [harnessOrigin] })) {
+    return { ok: false, message: '当前没有可在浏览器中打开的本机预览。' };
+  }
+  await shell.openExternal(state.url);
+  return { ok: true };
 };
 
 const startTerminalSession = async (size = {}) => {
@@ -978,9 +1042,11 @@ const showWorkspaceError = async (error) => {
 const activateWorkspace = async (workspacePath) => {
   try {
     if (terminalRunner?.isActive()) await terminalRunner.stop();
+    await previewManager?.stop();
     await terminalSettlePromise;
     const workspace = await workspaceStore.activate(workspacePath);
     await workspaceFiles.activate(workspace.activePath);
+    await previewManager.activate(workspace.activePath);
     await changeReviewer.activate(workspace.activePath);
     changeReviewDiagnostics = emptyChangeReviewDiagnostics();
     terminalRunner?.setWorkspace(workspace.activePath);
@@ -1010,6 +1076,16 @@ function installApplicationMenu() {
   const harnessReady = harnessUiReady();
   const terminalState = terminalRunner?.getState() || { status: 'idle' };
   const terminalActive = ['starting', 'running', 'stopping'].includes(terminalState.status);
+  const previewState = previewManager?.getState() || { status: 'idle', mode: 'none', port: null };
+  const previewActive = ['starting', 'ready', 'offline'].includes(previewState.status);
+  const previewStatus = {
+    idle: '应用预览：当前未启动',
+    starting: '应用预览：正在连接',
+    ready: previewState.owned ? `应用预览：本机端口 ${previewState.port}` : '应用预览：本机服务已连接',
+    offline: '应用预览：本机服务离线',
+    failed: '应用预览：启动失败',
+    stopped: '应用预览：已停止'
+  }[previewState.status] || '应用预览：状态未知';
   const reviewIdle = !agentDiagnostics.canStop && agentDiagnostics.status !== 'waiting' && !terminalActive;
   const recentItems = workspace.recentPaths.length > 0
     ? workspace.recentPaths.map((recentPath) => ({
@@ -1275,6 +1351,32 @@ function installApplicationMenu() {
         },
         { type: 'separator' },
         {
+          label: '显示应用预览',
+          type: 'checkbox',
+          accelerator: 'CmdOrCtrl+Alt+P',
+          checked: getWorkbenchState().previewPanelOpen,
+          enabled: harnessReady,
+          click: (item) => { void setPreviewPanelOpen(item.checked, { focus: item.checked }); }
+        },
+        {
+          label: '聚焦应用预览',
+          accelerator: 'CmdOrCtrl+Alt+L',
+          enabled: harnessReady && getWorkbenchState().previewPanelOpen,
+          click: () => { void applyWorkbenchPanelLayout({ focus: true, focusTarget: 'preview' }); }
+        },
+        { label: previewStatus, enabled: false },
+        {
+          label: '在默认浏览器中打开预览',
+          enabled: harnessReady && previewState.status === 'ready',
+          click: () => { void openPreviewExternally(); }
+        },
+        {
+          label: '停止应用预览',
+          enabled: harnessReady && previewActive,
+          click: () => { void previewManager.stop(); }
+        },
+        { type: 'separator' },
+        {
           label: '显示集成终端',
           type: 'checkbox',
           accelerator: 'CmdOrCtrl+Alt+T',
@@ -1401,6 +1503,10 @@ ipcMain.handle('workbench:set-review-panel-width', async (event, width) => {
   if (!harnessIpcAllowed(event) || !Number.isFinite(width)) return getWorkbenchState();
   return setReviewPanelWidth(width);
 });
+ipcMain.handle('workbench:set-preview-panel-open', async (event, open) => {
+  if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
+  return setPreviewPanelOpen(open);
+});
 ipcMain.handle('workbench:set-terminal-panel-open', async (event, open) => {
   if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
   return setTerminalPanelOpen(open);
@@ -1430,6 +1536,30 @@ ipcMain.handle('files:read', (event, filePath) => (
 ));
 ipcMain.handle('files:search', (event, query) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.search(query))
+));
+ipcMain.handle('preview:get-state', (event) => (
+  harnessIpcAllowed(event) && previewManager
+    ? previewManager.getState()
+    : { status: 'unavailable', mode: 'none', url: '', owned: false }
+));
+ipcMain.handle('preview:open-file', (event, filePath) => (
+  harnessIpcAllowed(event)
+    ? openWorkspacePreview(filePath)
+    : { ok: false, message: '应用预览请求来源未通过安全校验。' }
+));
+ipcMain.handle('preview:connect', (event, url) => (
+  harnessIpcAllowed(event)
+    ? connectLocalPreview(url)
+    : { ok: false, message: '应用预览请求来源未通过安全校验。' }
+));
+ipcMain.handle('preview:stop', async (event) => {
+  if (!harnessIpcAllowed(event) || !previewManager) return { status: 'unavailable' };
+  return previewManager.stop();
+});
+ipcMain.handle('preview:open-external', (event) => (
+  harnessIpcAllowed(event)
+    ? openPreviewExternally()
+    : { ok: false, message: '应用预览请求来源未通过安全校验。' }
 ));
 ipcMain.handle('terminal:get-state', (event) => (
   harnessIpcAllowed(event) && terminalRunner
@@ -1491,6 +1621,15 @@ const createWindow = async () => {
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!currentUrlAllowed(url)) event.preventDefault();
+  });
+  mainWindow.webContents.on('will-frame-navigate', (details) => {
+    if (details.isMainFrame) return;
+    const currentPreviewUrl = previewManager?.getState()?.url || '';
+    const currentPreviewOrigin = currentPreviewUrl ? new URL(currentPreviewUrl).origin : '';
+    if (!isSafePreviewNavigation(details.url, {
+      reservedOrigins: [harnessOrigin],
+      allowedOrigins: [currentPreviewOrigin].filter(Boolean)
+    })) details.preventDefault();
   });
   mainWindow.webContents.on('will-redirect', (event, url) => {
     if (!currentUrlAllowed(url)) event.preventDefault();
@@ -1591,6 +1730,9 @@ app.whenReady().then(async () => {
   const workspace = await workspaceStore.init();
   workspaceFiles = new WorkspaceFiles();
   await workspaceFiles.activate(workspace.activePath);
+  previewManager = new PreviewManager();
+  await previewManager.activate(workspace.activePath);
+  bindPreviewManager(previewManager);
   terminalRunner = new TerminalRunner({
     workspacePath: workspace.activePath,
     ...resolveTerminalRuntime({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged })
@@ -1611,10 +1753,11 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', (event) => {
   stopAgentPolling();
-  if (allowQuit || (!supervisor?.isActive() && !terminalRunner?.isActive())) return;
+  if (allowQuit || (!supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
   event.preventDefault();
   const stops = [];
   if (terminalRunner?.isActive()) stops.push(terminalRunner.stop());
+  if (previewManager?.isActive()) stops.push(previewManager.stop());
   if (supervisor?.isActive()) stops.push(supervisor.stop());
   void Promise.allSettled(stops).then(() => terminalSettlePromise).finally(() => {
     allowQuit = true;

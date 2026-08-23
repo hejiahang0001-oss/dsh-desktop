@@ -13,9 +13,9 @@ Show HN: DSH Desktop – A Windows desktop host for DeepSeek Harness
 ```text
 I built DSH Desktop, an unofficial Windows desktop host around DeepSeek Harness.
 
-It keeps Harness as the actual agent and Web UI, then adds native repository selection, persistent session entry points, Agent/tool status, official Plan entry, a resizable Git Diff panel, a lazy read-only workspace file browser, and one persistent interactive PowerShell PTY bound to the same workspace. Diff can reveal the exact file in the tree; text preview, filename search, terminal input/output, recovery, and process actions all have explicit bounds. The installer bundles pinned Node.js, Harness, xterm, and PTY runtimes, so users do not need Node or pnpm preinstalled.
+It keeps Harness as the actual agent and Web UI, then adds native repository selection, persistent session entry points, Agent/tool status, official Plan entry, a resizable Git Diff panel, a lazy read-only workspace file browser, one persistent interactive PowerShell PTY, and an integrated application preview bound to the same workspace. Diff can reveal the exact file in the tree; text preview, localhost application preview, filename search, terminal input/output, recovery, and process actions all have explicit bounds. The installer bundles pinned Node.js, Harness, xterm, and PTY runtimes, so users do not need Node or pnpm preinstalled.
 
-V0.4.4 follows official DeepSeek Harness 0.1.1-rc.2, retains consistent Chinese process language, and upgrades the terminal to a persistent PTY with shell state, ANSI rendering, reload recovery, process-tree stop, and software-Key isolation. It remains an unsigned developer-preview build. Community plugins stay opt-in rather than receiving silent filesystem, shell, network, or credential access. I would especially value feedback on Windows compatibility, terminal interaction, file-tree navigation, Diff readability, and application-preview expectations.
+V0.4.5 follows official DeepSeek Harness 0.1.1-rc.2 and adds application preview for workspace HTML or an existing loopback development server. Software-managed random ports are released on Stop, panel close, workspace change, or exit; external localhost services are monitored but never killed. It remains an unsigned developer-preview build. Community plugins stay opt-in rather than receiving silent filesystem, shell, network, or credential access. I would especially value feedback on Windows compatibility, HTML framework compatibility, preview loading, terminal interaction, file-tree navigation, and Diff readability.
 ```
 
 ## 中文标题
@@ -29,11 +29,11 @@ V0.4.4 follows official DeepSeek Harness 0.1.1-rc.2, retains consistent Chinese 
 ```text
 DSH Desktop 是一个围绕官方 DeepSeek Harness 构建的非官方 Windows 桌面宿主。它不重新实现 Agent，而是补齐本地仓库选择、会话入口、Agent/工具状态、Plan 入口、Git Diff 审查和工作区文件查看。
 
-V0.4.4 继续使用官方 DeepSeek Harness 0.1.1-rc.2，保留中文过程一致性，并把底部终端升级为同工作区持久交互式 PowerShell PTY。它支持连续命令、交互提示、Shell 状态、ANSI 颜色、尺寸同步、页面重载恢复和完整进程树停止。
+V0.4.5 继续使用官方 DeepSeek Harness 0.1.1-rc.2，并增加同工作区应用预览。HTML 可从只读文件预览直接打开，也可连接已经运行的 `127.0.0.1`、`localhost` 或 `::1` 开发服务器。
 
-左侧懒加载文件树、受限文件名搜索、只读文本预览和右侧 Diff 定位继续保留。凭据、私钥、链接、二进制、大文件和不支持编码不会在文件面板中读取；软件 Key 不进入 PTY 宿主或 PowerShell 环境，终端运行期间 Git 接受/拒绝会暂时禁用。
+软件自己启动的随机回环端口会在停止、关闭面板、切换仓库或退出时释放；外部本机服务只监控、不结束。左侧懒加载文件树、受限文件名搜索、只读文本预览、右侧 Diff 定位和底部持久 PTY 继续保留。凭据、链接、越界路径和过大文件不会被应用预览读取；软件 Key 不进入 PTY 宿主或 PowerShell 环境。
 
-当前仍是未签名的 developer preview；文件查看不是编辑器，终端目前只有一个 PTY，尚无标签页和分屏。欢迎反馈 Windows 兼容性、文件导航、Diff 可读性、终端交互和应用预览需求。
+当前仍是未签名的 developer preview；图片/PDF 专用预览、设备尺寸预设和远程 URL 尚未提供。欢迎反馈 Windows 兼容性、HTML 框架兼容性、预览加载、文件导航、Diff 可读性和终端交互。
 ```
 
 ## Demo sequence
@@ -46,6 +46,7 @@ Keep the screen recording between 20 and 35 seconds:
 4. Approve execution in the official Harness confirmation card.
 5. Keep the right review panel visible and show one file's real Diff.
 6. Click **View file** and show the left tree expand to the exact read-only file preview.
-7. Close the preview with `Esc`, then batch accept the safe changes and show the staged state.
-8. Open the bottom terminal with `Ctrl+Alt+T`, start the PTY after the native warning, run two harmless commands in the same shell, and stop it from the toolbar. Never enter a secret-bearing command.
-9. End on the GitHub release download page.
+7. Select an HTML file, click **Application preview**, and show the integrated rendered page plus its software-managed loopback-port status.
+8. Stop the preview and show the explicit stopped state, then batch accept the safe changes and show the staged state.
+9. Open the bottom terminal with `Ctrl+Alt+T`, start the PTY after the native warning, run two harmless commands in the same shell, and stop it from the toolbar. Never enter a secret-bearing command.
+10. End on the GitHub release download page.

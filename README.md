@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.4.exe"><strong>Download for Windows</strong></a>
+  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.5.exe"><strong>Download for Windows</strong></a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#中文说明">中文说明</a>
   · <a href="DSH_DESKTOP_ITERATION_PLAN.md">Roadmap</a>
@@ -36,6 +36,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Persistent Git review panel** — keep a bounded real Diff beside Harness, resize or hide the panel, and accept or reject one file or a safe batch while protecting pre-existing edits.
 - **Workspace file browser** — lazily browse the active Harness workspace, search bounded filenames, open safe text files in a read-only Quick Look surface, and reveal the selected Diff file in the tree.
 - **Interactive workspace terminal** — start an explicitly confirmed persistent Windows PowerShell PTY in the active Harness workspace, retain shell state and ANSI output across page reloads, resize it with the panel, stop the full process tree, and keep the software-managed DeepSeek Key out of the terminal environment.
+- **Integrated application preview** — open workspace HTML through a software-managed random loopback port or connect to an existing localhost development server, with explicit ready/offline/stopped states and owned-port cleanup.
 - **Packaged runtime** — the installer includes pinned Node.js and Harness runtimes; users do not need to install Node.js first.
 - **Constrained desktop shell** — loopback-only service, random port, renderer sandbox, context isolation, no Node integration, and restricted navigation.
 
@@ -45,7 +46,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 
 ## Quick start
 
-1. Download [`DSH-Desktop-Setup-0.4.4.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.4.exe).
+1. Download [`DSH-Desktop-Setup-0.4.5.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.4.5.exe).
 2. Install and launch DSH Desktop. The current installer is not code-signed, so Windows SmartScreen may show a warning.
 3. Open **Project → Open code repository…** or press `Ctrl+O`.
 4. Open **Model** to configure your DeepSeek API key, then start a Harness session.
@@ -54,25 +55,26 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current release
 
-**V0.4.4** keeps official DeepSeek Harness `0.1.1-rc.2` and upgrades the bottom workbench panel from a single-command runner to an explicitly started persistent PowerShell PTY while retaining the V0.4.3 Chinese process-language layer:
+**V0.4.5** keeps official DeepSeek Harness `0.1.1-rc.2` and adds an integrated application-preview surface beside the existing file, Diff, and persistent PTY workbench:
 
 ```text
 Open repository → run or approve the agent in Harness
 → inspect bounded real Git Diff in the persistent right panel
 → reveal the changed file in the lazy left tree and inspect safe text
-→ start a confirmed interactive PowerShell PTY in the same workspace
-→ keep shell state, prompts, colors, resizing, and recent output through Harness reloads
+→ open workspace HTML on a software-managed random loopback port
+→ or connect to an existing 127.0.0.1 / localhost development server
+→ reload, open in the browser, stop, and visibly distinguish owned from external ports
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.4.4 release notes](docs/RELEASE_NOTES_v0.4.4.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.4.5 release notes](docs/RELEASE_NOTES_v0.4.5.md).
 
 ## Security and current limits
 
 - The Windows installer is not code-signed yet.
 - Harness credentials are currently stored by Harness `0.1.1-rc.2` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
 - A Workspace Write crash with `0xC0000005` was previously observed on rc.8 in restricted mode. DSH Desktop reports tool failures and never switches to Full Access automatically; the exact rc.2 write path remains a separate compatibility gate.
-- V0.4.4 provides a read-only text viewer, not a code editor or application preview. Credential-like files, links, binary files, unsupported encodings, and files above 512 KiB are not opened in the panel.
+- V0.4.5 application preview supports workspace HTML and existing loopback development servers. Image/PDF preview, device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, files outside the workspace, and managed files above 32 MiB are blocked.
 - The terminal now provides one persistent PowerShell PTY session with ANSI rendering and renderer-reload recovery. Terminal tabs, split panes, automatic checkpoints, and session rewind are not included yet. Git accept/reject actions stay disabled while the PTY is active and are re-enabled only after the user-change protection baseline is refreshed.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Architecture and product boundaries are documented in [the iteration plan](DSH_DESKTOP_ITERATION_PLAN.md).
@@ -105,7 +107,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.4.4 继续固定官方 Harness `0.1.1-rc.2`，保留 V0.4.3 的中文过程一致性，并把底部终端升级为真正的持久交互式 PTY：
+V0.4.5 继续固定官方 Harness `0.1.1-rc.2`，保留现有中文过程、Git 审查、文件树和持久 PTY，并增加集成应用预览：
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
@@ -114,6 +116,9 @@ V0.4.4 继续固定官方 Harness `0.1.1-rc.2`，保留 V0.4.3 的中文过程�
 - 在常驻右侧面板查看真实 Git Diff，逐文件或批量接受并加入 Git 暂存区，或安全拒绝修改；
 - 在与 Harness 相同的工作区中按需展开左侧文件树、搜索相对路径，并用只读浮层查看安全文本；
 - 从右侧 Diff 点击“查看文件”，自动清空搜索、展开父目录、选中文件并打开只读预览；
+- 从 HTML 的只读 Quick Look 直接进入应用预览，由软件在当前工作区启动随机 `127.0.0.1` 端口并加载相对资源；
+- 连接已经运行的 `127.0.0.1`、`localhost` 或 `::1` 开发服务器，显示可用、离线、失败和停止状态；外部端口只监控、不代替用户结束进程；
+- 关闭预览、切换仓库或退出软件时释放软件自己启动的端口；支持重新加载、浏览器打开、`Ctrl+Alt+P` 开关与 `Ctrl+Alt+L` 聚焦；
 - 调整、关闭和恢复审查面板，布局宽度在页面重载和应用重启后保留；
 - 经一次原生风险确认后，在与 Harness 相同的工作目录中启动持久 PowerShell PTY，连续命令、交互提示、Shell 状态、ANSI 颜色和窗口尺寸均保留；
 - Harness 页面重载后恢复最近 200,000 字符终端输出；终端停止时结束完整进程树并重新建立 Git 用户修改保护基线；

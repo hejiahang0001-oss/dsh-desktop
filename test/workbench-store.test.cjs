@@ -25,6 +25,7 @@ test('workbench layout defaults and clamps persisted panel sizes', () => {
   assert.deepEqual(normalizeWorkbenchState(), {
     filePanelOpen: true,
     filePanelWidth: DEFAULT_FILE_WIDTH,
+    previewPanelOpen: false,
     reviewPanelOpen: true,
     reviewPanelWidth: DEFAULT_REVIEW_WIDTH,
     terminalPanelOpen: true,
@@ -33,6 +34,7 @@ test('workbench layout defaults and clamps persisted panel sizes', () => {
   assert.equal(normalizeWorkbenchState({ filePanelWidth: 1 }).filePanelWidth, MIN_FILE_WIDTH);
   assert.equal(normalizeWorkbenchState({ filePanelWidth: 9000 }).filePanelWidth, MAX_FILE_WIDTH);
   assert.equal(normalizeWorkbenchState({ filePanelOpen: false }).filePanelOpen, false);
+  assert.equal(normalizeWorkbenchState({ previewPanelOpen: true }).previewPanelOpen, true);
   assert.equal(normalizeWorkbenchState({ reviewPanelWidth: 1 }).reviewPanelWidth, MIN_REVIEW_WIDTH);
   assert.equal(normalizeWorkbenchState({ reviewPanelWidth: 9000 }).reviewPanelWidth, MAX_REVIEW_WIDTH);
   assert.equal(normalizeWorkbenchState({ reviewPanelOpen: false }).reviewPanelOpen, false);
@@ -49,6 +51,7 @@ test('workbench store persists visibility and width without touching workspace s
   await store.init();
   await store.setFilePanelOpen(false);
   await store.setFilePanelWidth(312);
+  await store.setPreviewPanelOpen(true);
   await store.setReviewPanelOpen(false);
   await store.setReviewPanelWidth(410);
   await store.setTerminalPanelOpen(false);
@@ -58,6 +61,7 @@ test('workbench store persists visibility and width without touching workspace s
   assert.deepEqual(await restored.init(), {
     filePanelOpen: false,
     filePanelWidth: 312,
+    previewPanelOpen: true,
     reviewPanelOpen: false,
     reviewPanelWidth: 410,
     terminalPanelOpen: false,
@@ -65,9 +69,10 @@ test('workbench store persists visibility and width without touching workspace s
   });
   const persisted = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   assert.deepEqual(persisted, {
-    version: 3,
+    version: 4,
     filePanelOpen: false,
     filePanelWidth: 312,
+    previewPanelOpen: true,
     reviewPanelOpen: false,
     reviewPanelWidth: 410,
     terminalPanelOpen: false,
@@ -84,6 +89,7 @@ test('workbench panel scripts serialize only normalized layout values', () => {
   assert.match(layout, new RegExp(`"reviewPanelWidth":${MIN_REVIEW_WIDTH}`));
   assert.match(layout, /__DSH_TERMINAL__/);
   assert.match(layout, /__DSH_FILES__/);
+  assert.match(layout, /__DSH_PREVIEW__/);
   assert.match(layout, new RegExp(`"terminalPanelHeight":${DEFAULT_TERMINAL_HEIGHT}`));
   assert.doesNotMatch(layout, /eval\(|innerHTML/);
 });

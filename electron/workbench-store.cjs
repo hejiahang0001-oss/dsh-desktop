@@ -24,6 +24,7 @@ const normalizeWorkbenchState = (value = {}) => {
   return Object.freeze({
     filePanelOpen: typeof value.filePanelOpen === 'boolean' ? value.filePanelOpen : true,
     filePanelWidth: Math.min(MAX_FILE_WIDTH, Math.max(MIN_FILE_WIDTH, fileWidth)),
+    previewPanelOpen: typeof value.previewPanelOpen === 'boolean' ? value.previewPanelOpen : false,
     reviewPanelOpen: typeof value.reviewPanelOpen === 'boolean' ? value.reviewPanelOpen : true,
     reviewPanelWidth: Math.min(MAX_REVIEW_WIDTH, Math.max(MIN_REVIEW_WIDTH, width)),
     terminalPanelOpen: typeof value.terminalPanelOpen === 'boolean' ? value.terminalPanelOpen : true,
@@ -39,7 +40,7 @@ class WorkbenchStore {
 
   async _persist() {
     await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fsp.writeFile(this.filePath, `${JSON.stringify({ version: 3, ...this.state }, null, 2)}\n`, 'utf8');
+    await fsp.writeFile(this.filePath, `${JSON.stringify({ version: 4, ...this.state }, null, 2)}\n`, 'utf8');
   }
 
   async init() {
@@ -56,6 +57,12 @@ class WorkbenchStore {
 
   async setReviewPanelOpen(reviewPanelOpen) {
     this.state = normalizeWorkbenchState({ ...this.state, reviewPanelOpen });
+    await this._persist();
+    return this.getState();
+  }
+
+  async setPreviewPanelOpen(previewPanelOpen) {
+    this.state = normalizeWorkbenchState({ ...this.state, previewPanelOpen });
     await this._persist();
     return this.getState();
   }
