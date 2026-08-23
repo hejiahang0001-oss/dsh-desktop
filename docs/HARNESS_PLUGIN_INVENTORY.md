@@ -19,10 +19,10 @@ These numbers describe different layers. An installed package can provide a serv
 - Every one of the 234 package manifests in the upstream source repository. The monorepo also contains alternative applications, SDK/ACP packages, examples, experimental packages, test support, and provider variants that are not part of the default Web production closure.
 - Optional official alternatives such as ACP/SDK runtimes, E2B integrations, Claude Code or Codex subagent bridges, and experimental team packages unless the official Web profile later composes them.
 - Community plugins from GitHub topics, catalogs, discussions, or third-party repositories.
-- A desktop plugin marketplace or one-click installer. Upstream `dsh plugin` delegates package installation to pnpm; DSH Desktop does not currently ship pnpm to end users or grant third-party plugin code automatic execution rights.
+- A desktop plugin marketplace or one-click installer in the current V0.4.3 release. Upstream `dsh plugin` delegates package installation to pnpm; V0.6 will bundle a pinned pnpm runtime behind the native plugin manager, while continuing to deny third-party plugin code automatic execution rights.
 
 ## Product rule
 
 Upstream default-Web plugins follow the pinned Harness release automatically after compatibility tests. Optional official and community plugins remain opt-in until DSH Desktop can show source, version, permissions, enabled state, update status, and rollback. This avoids silently granting filesystem, shell, network, credential, or subprocess access merely because a repository uses the word “plugin”.
 
-The planned native plugin manager remains in the V0.6 extension milestone.
+The native plugin manager is committed to the V0.6 extension milestone. It will install into an isolated user-data profile, expose only controlled install/update/remove/enable/disable/rollback actions, retain a lockfile and last-known-good snapshot, and require explicit confirmation of third-party source and permissions. End users will not need to install or operate Node.js/pnpm themselves.
