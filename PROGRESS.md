@@ -2,7 +2,7 @@
 
 > 日期：2026-08-24
 > 当前构建：V0.4.8 Daily Build
-> 状态：布局重置、80%–140% 界面缩放和紧凑高度适配已完成，已直接覆盖 V0.4.7，并通过 1024×720 实机、安装一致性、Harness 启动和数据保留验证；GitHub 发布进行中
+> 状态：布局重置、80%–140% 界面缩放和紧凑高度适配已完成，已直接覆盖 V0.4.7，并通过 1024×720 实机、安装一致性、Harness 启动、数据保留和 GitHub 发布验证
 
 ## V0.4.8 本轮完成
 
@@ -25,7 +25,7 @@
 | 安装包 SHA-256 | `975137816DAE921ED17FE996A4EF32BF2DEC787C9B7466DA8CECB121B1D76764` |
 | 安装一致性 | 安装版与解包版 `app.asar` SHA-256 均为 `C4FFF9BF5634F71A7B061D679A5DDCE91E77F92B4D82327E7D9ED5CB75C7ED28` |
 | 覆盖前快照 | `backups/pre-v0.4.8-20260824-032305`；21 个文件；13 个会话；0 个凭据副本 |
-| 发布完整性 | 待 GitHub Release 后验证 |
+| 发布完整性 | [v0.4.8](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.4.8)；远端大小/摘要一致；latest 直链 HTTP 200；[CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32661461695) |
 
 ### V0.4.8 后计划调整
 

@@ -30,7 +30,7 @@ This page records the locally verified V0.4.8 engineering evidence without makin
 
 The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the existing preview and command assets plus the version 5 workbench store and compact-height rules. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
 
-GitHub release integrity is recorded after upload rather than inferred from the local installer.
+The published GitHub asset reports the same `162,567,003` byte size and SHA-256 digest as the local installer. The versioned release and `latest` download both resolve to V0.4.8, and the main-branch CI run completed successfully.
 
 ## Layout recovery and compact-window boundaries
 
