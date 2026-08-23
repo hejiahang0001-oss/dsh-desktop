@@ -33,7 +33,9 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width),
     setPreviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-preview-panel-open', open),
     setTerminalPanelOpen: (open) => ipcRenderer.invoke('workbench:set-terminal-panel-open', open),
-    setTerminalPanelHeight: (height) => ipcRenderer.invoke('workbench:set-terminal-panel-height', height)
+    setTerminalPanelHeight: (height) => ipcRenderer.invoke('workbench:set-terminal-panel-height', height),
+    setUiZoomFactor: (factor) => ipcRenderer.invoke('workbench:set-ui-zoom-factor', factor),
+    resetLayout: () => ipcRenderer.invoke('workbench:reset-layout')
   }),
   files: Object.freeze({
     list: (directoryPath = '') => ipcRenderer.invoke('files:list', directoryPath),

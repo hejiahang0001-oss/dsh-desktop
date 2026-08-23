@@ -211,6 +211,12 @@ html[data-dsh-review-open="true"] #dsh-workbench-review {
   #dsh-workbench-review { box-shadow: -18px 0 38px rgb(28 25 23 / 20%); }
 }
 
+@media (max-height: 760px) {
+  .dsh-review-header { min-height: 48px; padding: 6px 8px; }
+  .dsh-review-content { grid-template-rows: minmax(96px, 30%) minmax(0, 1fr); }
+  .dsh-review-footer { gap: 6px; padding: 7px 8px 8px; }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --dsh-panel-surface: #151514;

@@ -32,6 +32,10 @@
     if (!state?.[key]) await setter(true);
     return window[globalName]?.focus?.() !== false;
   };
+  const adjustZoom = async (delta) => {
+    const state = await api.workbench.getState();
+    return api.workbench.setUiZoomFactor((state?.uiZoomFactor || 1) + delta);
+  };
 
   const commands = Object.freeze([
     { id: 'chat.focus', title: '聚焦对话输入', detail: '继续向当前 Harness 会话提问', shortcut: 'Ctrl+Alt+M', run: focusChat },
@@ -44,6 +48,10 @@
     { id: 'terminal.focus', title: '聚焦集成终端', detail: '打开终端并聚焦输入', shortcut: 'Ctrl+Alt+K', run: () => openAndFocus('terminalPanelOpen', api.workbench.setTerminalPanelOpen, '__DSH_TERMINAL__') },
     { id: 'review.toggle', title: '显示或隐藏变更审查', detail: '切换右侧 Git Diff 面板', shortcut: 'Ctrl+Alt+D', run: () => togglePanel('reviewPanelOpen', api.workbench.setReviewPanelOpen) },
     { id: 'review.focus', title: '聚焦变更审查', detail: '打开 Git Diff 并聚焦文件列表', shortcut: 'Ctrl+Alt+J', run: () => openAndFocus('reviewPanelOpen', api.workbench.setReviewPanelOpen, '__DSH_WORKBENCH__') },
+    { id: 'zoom.in', title: '界面放大', detail: '放大 Harness 与工作台界面', shortcut: 'Ctrl+=', run: () => adjustZoom(0.1) },
+    { id: 'zoom.out', title: '界面缩小', detail: '缩小 Harness 与工作台界面', shortcut: 'Ctrl+-', run: () => adjustZoom(-0.1) },
+    { id: 'zoom.reset', title: '界面大小重置', detail: '恢复到 100% 界面大小', shortcut: 'Ctrl+0', run: () => api.workbench.setUiZoomFactor(1) },
+    { id: 'layout.reset', title: '重置整个工作台布局', detail: '恢复默认面板、尺寸与 100% 界面大小', shortcut: 'Ctrl+Alt+0', run: () => api.workbench.resetLayout() },
     { id: 'page.reload', title: '重新加载 Harness 页面', detail: '保留桌面进程与工作台状态并重载页面', shortcut: 'Ctrl+R', run: () => window.location.reload() }
   ]);
 

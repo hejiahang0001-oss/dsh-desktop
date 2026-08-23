@@ -1,14 +1,15 @@
 # Validation evidence
 
-This page records the locally verified V0.4.7 engineering evidence without making the README front page carry the full verification ledger.
+This page records the locally verified V0.4.8 engineering evidence without making the README front page carry the full verification ledger.
 
 ## Automated and runtime checks
 
-- 90 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, file, media-preview, terminal, application-preview, command-palette, release-version, workbench, UI, and localization tests pass locally.
+- 93 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, file, media-preview, terminal, application-preview, command-palette, release-version, workbench, compact-layout, UI, and localization tests pass locally.
 - Preview tests exercise managed HTML/assets, traversal and secret blocking, workspace-change cleanup, external loopback monitoring, file-type rejection, URL normalization, and iframe/control source boundaries.
 - The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random IPv4 loopback address.
-- The Windows uninstall record reports DSH Desktop 0.4.7; the installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
+- The Windows uninstall record reports DSH Desktop 0.4.8; the installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
 - In the unpacked desktop application, `Ctrl+Shift+P` opened the command palette; filtering for file search and pressing Enter focused the real left-panel search control, while Escape closed the palette.
+- At a real 1024×720 desktop window, 100% scaling showed complete Files, Terminal, and Git Review panels; 140% scaling activated the narrow overlay layout and compact terminal without clipping panel actions. Layout reset restored 100% and default dimensions, and Tab focus was visibly outlined in the review list.
 - A packaged JPEG-content file named `.png` rendered with the detected-format notice, and a valid one-page PDF rendered with accessible page text.
 - Normal 1208×794 and maximized 2560×1392 desktop windows displayed the file panel, application preview, and terminal without clipping.
 - `index.html` and its workspace-relative assets rendered inside the packaged application preview on a software-managed random loopback port.
@@ -17,19 +18,27 @@ This page records the locally verified V0.4.7 engineering evidence without makin
 
 ## Release integrity
 
-| Item | V0.4.7 value |
+| Item | V0.4.8 value |
 | --- | --- |
-| Installer | `DSH-Desktop-Setup-0.4.7.exe` |
-| Size | `162,566,222` bytes |
-| SHA-256 | `2B9842ED34CF2525AF96EE50C52325C1C24D771D61428F44206ADF6690E6A99F` |
+| Installer | `DSH-Desktop-Setup-0.4.8.exe` |
+| Size | `162,567,003` bytes |
+| SHA-256 | `975137816DAE921ED17FE996A4EF32BF2DEC787C9B7466DA8CECB121B1D76764` |
 | Files in unpacked build | `29,368` |
 | Files in installed application | `29,369` |
-| Packaged `app.asar` SHA-256 | `3E34EA7ED4B317A4C91C9564E4C488BD4279366B42DE8340B8FA6511C2FA2018` |
+| Packaged `app.asar` SHA-256 | `C4FFF9BF5634F71A7B061D679A5DDCE91E77F92B4D82327E7D9ED5CB75C7ED28` |
 | PTY host SHA-256 | `E53CCA015B9DBBD8F8702725AE03AD292617196497E27C2EE131C683748C351E` |
 
-The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the existing preview assets plus `workbench-command.js` and `workbench-command.css`. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
+The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the existing preview and command assets plus the version 5 workbench store and compact-height rules. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
 
-The published GitHub asset reports the same `162,566,222` byte size and SHA-256 digest as the local installer. The versioned release and `latest` download both resolve to V0.4.7, and the main-branch CI run completed successfully.
+GitHub release integrity is recorded after upload rather than inferred from the local installer.
+
+## Layout recovery and compact-window boundaries
+
+- Interface zoom is clamped to 80%–140%, rounded to ten-percent steps, applied through the BrowserWindow web contents, and persisted in workbench schema v5.
+- `Ctrl+0` resets only interface scaling; `Ctrl+Alt+0` resets panel visibility, dimensions, and scale together. Both are also available from the View menu and fixed command allowlist.
+- A layout reset cleanly stops an owned application preview before hiding it. It does not stop the terminal process tree, modify repository files, or touch the Git index.
+- At 760 CSS pixels or less in height, the effective terminal height is limited to 210 pixels without overwriting the user's saved height for larger windows.
+- Zooming to 140% reduces the CSS viewport enough to activate existing narrow-window overlay breakpoints. Validation therefore covers both physical window size and maximum supported scale.
 
 ## Global command-palette boundaries
 
@@ -59,10 +68,10 @@ The published GitHub asset reports the same `162,566,222` byte size and SHA-256 
 
 ## Persistence and credential checks
 
-- V0.4.7 installed directly over V0.4.6; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.7`.
+- V0.4.8 installed directly over V0.4.7; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.4.8`.
 - Thirteen persisted sessions remained discoverable after the upgrade.
-- Credential, desktop-state, workbench-state, Harness settings, and the aggregate of all thirteen session hashes remained unchanged across the overwrite; validation did not read, print, or copy credential plaintext.
-- The pre-upgrade snapshot is `backups/pre-v0.4.7-20260824-025712`; it contains the previous installer, thirteen sessions, storages, settings, and desktop/workbench state in 21 files.
+- Credential, desktop-state, v5 workbench-state, Harness settings, and the aggregate of all thirteen session hashes remained unchanged across the overwrite; validation did not read, print, or copy credential plaintext.
+- The pre-upgrade snapshot is `backups/pre-v0.4.8-20260824-032305`; it contains the previous installer, thirteen sessions, storages, settings, and desktop/workbench state in 21 files.
 - The snapshot intentionally contains no `.credentials.yaml` file.
 - A first lightweight snapshot attempt revealed that `harness/profiles` embeds another `node_modules` closure. That stopped partial snapshot was sent to the Windows Recycle Bin; future per-version snapshots exclude profiles while the complete V0.4.6 last-known-good snapshot remains retained.
 
@@ -75,4 +84,4 @@ The published GitHub asset reports the same `162,566,222` byte size and SHA-256 
 
 ## Evidence boundary
 
-These statements describe the locally verified V0.4.7 build. The earlier rc.8 Workspace Write crash was not re-tested with a paid file-writing model task, so this build does not claim rc.2 fixes it. The command palette, media preview, and application preview do not relax the existing renderer, credential, navigation, or workspace boundaries. This evidence does not imply DeepSeek endorsement, production stability of Harness `0.1.1-rc.2`, or universal Windows reputation acceptance of the unsigned installer.
+These statements describe the locally verified V0.4.8 build. The earlier rc.8 Workspace Write crash was not re-tested with a paid file-writing model task, so this build does not claim rc.2 fixes it. Layout scaling, the command palette, media preview, and application preview do not relax the existing renderer, credential, navigation, or workspace boundaries. This evidence does not imply DeepSeek endorsement, production stability of Harness `0.1.1-rc.2`, or universal Windows reputation acceptance of the unsigned installer.

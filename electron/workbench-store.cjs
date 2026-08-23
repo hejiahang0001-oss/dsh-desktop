@@ -10,6 +10,14 @@ const DEFAULT_FILE_WIDTH = 260;
 const MIN_TERMINAL_HEIGHT = 160;
 const MAX_TERMINAL_HEIGHT = 420;
 const DEFAULT_TERMINAL_HEIGHT = 240;
+const MIN_UI_ZOOM_FACTOR = 0.8;
+const MAX_UI_ZOOM_FACTOR = 1.4;
+const DEFAULT_UI_ZOOM_FACTOR = 1;
+
+const normalizeUiZoomFactor = (value) => {
+  const factor = Number.isFinite(value) ? value : DEFAULT_UI_ZOOM_FACTOR;
+  return Math.round(Math.min(MAX_UI_ZOOM_FACTOR, Math.max(MIN_UI_ZOOM_FACTOR, factor)) * 10) / 10;
+};
 
 const normalizeWorkbenchState = (value = {}) => {
   const width = Number.isFinite(value.reviewPanelWidth)
@@ -28,7 +36,8 @@ const normalizeWorkbenchState = (value = {}) => {
     reviewPanelOpen: typeof value.reviewPanelOpen === 'boolean' ? value.reviewPanelOpen : true,
     reviewPanelWidth: Math.min(MAX_REVIEW_WIDTH, Math.max(MIN_REVIEW_WIDTH, width)),
     terminalPanelOpen: typeof value.terminalPanelOpen === 'boolean' ? value.terminalPanelOpen : true,
-    terminalPanelHeight: Math.min(MAX_TERMINAL_HEIGHT, Math.max(MIN_TERMINAL_HEIGHT, height))
+    terminalPanelHeight: Math.min(MAX_TERMINAL_HEIGHT, Math.max(MIN_TERMINAL_HEIGHT, height)),
+    uiZoomFactor: normalizeUiZoomFactor(value.uiZoomFactor)
   });
 };
 
@@ -40,7 +49,7 @@ class WorkbenchStore {
 
   async _persist() {
     await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fsp.writeFile(this.filePath, `${JSON.stringify({ version: 4, ...this.state }, null, 2)}\n`, 'utf8');
+    await fsp.writeFile(this.filePath, `${JSON.stringify({ version: 5, ...this.state }, null, 2)}\n`, 'utf8');
   }
 
   async init() {
@@ -97,6 +106,18 @@ class WorkbenchStore {
     return this.getState();
   }
 
+  async setUiZoomFactor(uiZoomFactor) {
+    this.state = normalizeWorkbenchState({ ...this.state, uiZoomFactor });
+    await this._persist();
+    return this.getState();
+  }
+
+  async resetLayout() {
+    this.state = normalizeWorkbenchState();
+    await this._persist();
+    return this.getState();
+  }
+
   getState() {
     return { ...this.state };
   }
@@ -105,13 +126,17 @@ class WorkbenchStore {
 module.exports = {
   DEFAULT_FILE_WIDTH,
   DEFAULT_TERMINAL_HEIGHT,
+  DEFAULT_UI_ZOOM_FACTOR,
   DEFAULT_REVIEW_WIDTH,
   MAX_FILE_WIDTH,
   MAX_TERMINAL_HEIGHT,
+  MAX_UI_ZOOM_FACTOR,
   MAX_REVIEW_WIDTH,
   MIN_FILE_WIDTH,
   MIN_TERMINAL_HEIGHT,
+  MIN_UI_ZOOM_FACTOR,
   MIN_REVIEW_WIDTH,
   WorkbenchStore,
-  normalizeWorkbenchState
+  normalizeWorkbenchState,
+  normalizeUiZoomFactor
 };

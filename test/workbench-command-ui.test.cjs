@@ -18,6 +18,9 @@ test('global command palette exposes only fixed workbench actions and complete k
   assert.match(source, /__DSH_PREVIEW__/);
   assert.match(source, /__DSH_TERMINAL__/);
   assert.match(source, /__DSH_WORKBENCH__/);
+  assert.match(source, /setUiZoomFactor/);
+  assert.match(source, /resetLayout/);
+  assert.match(source, /界面大小重置/);
   assert.doesNotMatch(source, /eval\(|innerHTML|ipcRenderer|shell\./);
 });
 

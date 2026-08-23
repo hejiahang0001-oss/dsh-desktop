@@ -141,6 +141,17 @@ let workbenchCommandScript = '';
 let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
+const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
+
+const parseWindowSize = (value) => {
+  const match = /^(\d{3,4})x(\d{3,4})$/i.exec(value || '');
+  if (!match) return null;
+  const width = Math.min(3840, Math.max(820, Number(match[1])));
+  const height = Math.min(2160, Math.max(600, Number(match[2])));
+  return { width, height };
+};
+
+const initialWindowSize = parseWindowSize(windowSizeSmokeTarget?.slice('--smoke-window-size='.length));
 
 const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.join(dataRoot, 'launch-root')) => {
   const instance = new HarnessSupervisor({
@@ -412,6 +423,33 @@ const setTerminalPanelOpen = async (open, { focus = false } = {}) => {
 const setTerminalPanelHeight = async (height) => {
   const state = await workbenchStore.setTerminalPanelHeight(height);
   if (harnessUiReady()) await applyWorkbenchPanelLayout();
+  return state;
+};
+
+const applyUiZoomFactor = (factor = getWorkbenchState().uiZoomFactor) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  mainWindow.webContents.setZoomFactor(factor);
+  return true;
+};
+
+const setUiZoomFactor = async (factor) => {
+  const state = await workbenchStore.setUiZoomFactor(factor);
+  applyUiZoomFactor(state.uiZoomFactor);
+  installApplicationMenu();
+  return state;
+};
+
+const adjustUiZoomFactor = (delta) => setUiZoomFactor(getWorkbenchState().uiZoomFactor + delta);
+
+const resetWorkbenchLayout = async () => {
+  if (getWorkbenchState().previewPanelOpen) await previewManager?.stop();
+  const state = await workbenchStore.resetLayout();
+  applyUiZoomFactor(state.uiZoomFactor);
+  installApplicationMenu();
+  if (harnessUiReady()) {
+    const applied = await applyWorkbenchPanelLayout();
+    if (!applied) await installWorkbenchPanel();
+  }
   return state;
 };
 
@@ -1436,6 +1474,32 @@ function installApplicationMenu() {
           click: () => { void setReviewPanelWidth(340); }
         },
         { type: 'separator' },
+        {
+          label: '界面放大',
+          accelerator: 'CmdOrCtrl+=',
+          enabled: Boolean(mainWindow) && getWorkbenchState().uiZoomFactor < 1.4,
+          click: () => { void adjustUiZoomFactor(0.1); }
+        },
+        {
+          label: '界面缩小',
+          accelerator: 'CmdOrCtrl+-',
+          enabled: Boolean(mainWindow) && getWorkbenchState().uiZoomFactor > 0.8,
+          click: () => { void adjustUiZoomFactor(-0.1); }
+        },
+        {
+          label: '界面大小重置',
+          accelerator: 'CmdOrCtrl+0',
+          enabled: Boolean(mainWindow),
+          click: () => { void setUiZoomFactor(1); }
+        },
+        { label: `界面大小：${Math.round(getWorkbenchState().uiZoomFactor * 100)}%`, enabled: false },
+        {
+          label: '重置整个工作台布局',
+          accelerator: 'CmdOrCtrl+Alt+0',
+          enabled: Boolean(mainWindow),
+          click: () => { void resetWorkbenchLayout(); }
+        },
+        { type: 'separator' },
         { role: 'reload', label: '重新加载页面' },
         { role: 'togglefullscreen', label: '切换全屏' }
       ]
@@ -1530,6 +1594,14 @@ ipcMain.handle('workbench:set-terminal-panel-height', async (event, height) => {
   if (!harnessIpcAllowed(event) || !Number.isFinite(height)) return getWorkbenchState();
   return setTerminalPanelHeight(height);
 });
+ipcMain.handle('workbench:set-ui-zoom-factor', async (event, factor) => {
+  if (!desktopIpcAllowed(event) || !Number.isFinite(factor)) return getWorkbenchState();
+  return setUiZoomFactor(factor);
+});
+ipcMain.handle('workbench:reset-layout', async (event) => {
+  if (!desktopIpcAllowed(event)) return getWorkbenchState();
+  return resetWorkbenchLayout();
+});
 const runWorkspaceFilesRequest = async (event, operation) => {
   if (!harnessIpcAllowed(event) || !workspaceFiles) {
     return { available: false, reason: 'untrusted-or-unavailable', message: '文件面板请求来源未通过安全校验。' };
@@ -1614,8 +1686,8 @@ ipcMain.handle('harness:open-log', async () => {
 
 const createWindow = async () => {
   mainWindow = new BrowserWindow({
-    width: 1220,
-    height: 800,
+    width: initialWindowSize?.width || 1220,
+    height: initialWindowSize?.height || 800,
     minWidth: 820,
     minHeight: 600,
     show: false,
@@ -1631,6 +1703,8 @@ const createWindow = async () => {
       webSecurity: true
     }
   });
+
+  applyUiZoomFactor();
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('page-title-updated', (event) => {
