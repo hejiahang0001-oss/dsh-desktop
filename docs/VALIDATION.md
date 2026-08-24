@@ -27,7 +27,7 @@ The final installer exits with code 0 and the Windows uninstall record reports `
 
 The rollback snapshot is `backups/pre-v0.5.7-20260825-002436`. It contains 33 files and fourteen session files, contains zero credential copies, and was created only after confirming zero source reparse points.
 
-V0.5.4 remains the published Stable and GitHub `Latest release`. V0.5.7 is published only as a Pre-release after its branch and main Windows CI checks pass; its final remote asset digest and direct-download status are verified after upload.
+V0.5.4 remains the published Stable and GitHub `Latest release`. The published [v0.5.7 release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.7) is not a draft and is a Pre-release. GitHub reports all three assets as uploaded with their exact local sizes and SHA-256 digests, the installer direct download returns HTTP 200, and [main-branch Windows CI run 32754200198](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32754200198) passed.
 
 ## V0.5.6 Electron supported-line evidence
 

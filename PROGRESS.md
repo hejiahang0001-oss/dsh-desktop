@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.7 Latest（本机验证完成，等待 GitHub Pre-release 发布）
-> 状态：V0.5.7 已完成权限中心、代理原生确认、统一敏感路径策略和全部本地发布门禁；V0.5.4 继续保持 Stable
+> 当前构建：V0.5.7 Latest（本机已覆盖，GitHub Pre-release 已发布）
+> 状态：V0.5.7 已完成权限中心、代理原生确认、统一敏感路径策略、全部本地发布门禁和远端资产验证；V0.5.4 继续保持 Stable
 
 ## V0.5.7 本轮进展
 
@@ -26,7 +26,7 @@
 | 安装包 | `DSH-Desktop-Setup-0.5.7.exe`；183,272,852 字节；SHA-256 `CEE81340F8CFEFA22A32487454D2DE57FC1A061B976DFB648C119DB4AF537A17` |
 | 安装一致性 | `app.asar` SHA-256 `BC3745B0554C1E6E90BA1A5F499DE8B90E8E1A4D0C7C74E3107375F90ED31E62`；安装目录只多正常卸载程序；0 reparse point、0 terminal PDB |
 | 覆盖前快照 | `backups/pre-v0.5.7-20260825-002436`；33 个文件、14 份会话、0 个凭据副本 |
-| 发布边界 | V0.5.4 Stable 不变；V0.5.7 只发布为 GitHub Pre-release |
+| 发布完整性 | [v0.5.7](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.7) 为非 Draft 的 Pre-release；3 个远端资产大小/摘要一致，安装包直链 HTTP 200；[主分支 Windows CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32754200198)；V0.5.4 仍是 GitHub 正式 `Latest release` |
 
 ## V0.5.6 本轮完成
 
