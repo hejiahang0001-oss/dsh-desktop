@@ -9,6 +9,7 @@ const {
   ProxySettingsError,
   ProxySettingsStore,
   buildHarnessProxyEnvironment,
+  confirmProxySettingsChange,
   normalizeProxySettings,
   normalizeProxyUrl,
   parseResolvedProxy,
@@ -64,6 +65,44 @@ test('proxy settings persist without accepting a corrupted or credential-bearing
   assert.deepEqual(await new ProxySettingsStore({ filePath }).init(), { mode: 'custom', proxyUrl: 'https://proxy.example.com:8443' });
   await assert.rejects(() => store.set({ mode: 'custom', proxyUrl: 'http://user:secret@proxy.example.com' }), ProxySettingsError);
   assert.doesNotMatch(fs.readFileSync(filePath, 'utf8'), /user|secret/);
+});
+
+test('proxy changes require a native default-cancel confirmation while unchanged settings do not', async () => {
+  const calls = [];
+  const dialog = {
+    showMessageBox: async (...args) => {
+      calls.push(args);
+      return { response: 1 };
+    }
+  };
+  const parentWindow = { id: 'trusted-parent' };
+  const canceled = await confirmProxySettingsChange({
+    dialog,
+    parentWindow,
+    previous: { mode: 'direct' },
+    proposed: { mode: 'custom', proxyUrl: 'http://127.0.0.1:7890' }
+  });
+  assert.deepEqual(canceled, {
+    changed: true,
+    confirmed: false,
+    settings: { mode: 'custom', proxyUrl: 'http://127.0.0.1:7890' }
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], parentWindow);
+  assert.equal(calls[0][1].defaultId, 1);
+  assert.equal(calls[0][1].cancelId, 1);
+  assert.match(calls[0][1].detail, /直连/);
+  assert.match(calls[0][1].detail, /127\.0\.0\.1:7890/);
+
+  const unchanged = await confirmProxySettingsChange({
+    dialog,
+    parentWindow,
+    previous: { mode: 'custom', proxyUrl: 'http://127.0.0.1:7890/' },
+    proposed: { mode: 'custom', proxyUrl: 'http://127.0.0.1:7890' }
+  });
+  assert.equal(unchanged.changed, false);
+  assert.equal(unchanged.confirmed, true);
+  assert.equal(calls.length, 1);
 });
 
 test('the Node 24 runtime sends fetch through the software-selected HTTP proxy', async (context) => {

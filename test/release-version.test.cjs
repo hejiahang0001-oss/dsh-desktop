@@ -15,12 +15,11 @@ test('release-facing files follow the package version', () => {
   assert.match(read('PROGRESS.md'), new RegExp(`V${version.replaceAll('.', '\\.')}`));
 });
 
-test('V0.5.6 pins the reviewed Electron 43 runtime and reports it in packaged smoke', () => {
+test('the current release pins the reviewed Electron 43 runtime and reports it in packaged smoke', () => {
   const manifest = JSON.parse(read('package.json'));
   const fetchScript = read('scripts/fetch-electron-runtime.ps1');
   const main = read('electron/main.cjs');
 
-  assert.equal(manifest.version, '0.5.6');
   assert.equal(manifest.devDependencies.electron, '43.4.1');
   assert.equal(manifest.build.electronDist, 'build/electron-v43.4.1-win32-x64.zip');
   assert.match(fetchScript, /Version = 'v43\.4\.1'/);

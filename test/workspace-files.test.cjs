@@ -46,6 +46,10 @@ test('workspace directory listing is lazy, sorted, and omits generated roots', a
 test('workspace file reader returns bounded UTF text and blocks secrets and binary data', async (context) => {
   const root = createWorkspace(context);
   fs.writeFileSync(path.join(root, '.env'), 'DEEPSEEK_API_KEY=secret\n', 'utf8');
+  fs.mkdirSync(path.join(root, 'secrets'));
+  fs.writeFileSync(path.join(root, 'secrets', 'token.txt'), 'nested-secret\n', 'utf8');
+  fs.mkdirSync(path.join(root, 'CrEdEnTiAlS'));
+  fs.writeFileSync(path.join(root, 'CrEdEnTiAlS', 'api.txt'), 'mixed-case-secret\n', 'utf8');
   fs.writeFileSync(path.join(root, 'image.bin'), Buffer.from([0, 1, 2, 3]));
   fs.writeFileSync(path.join(root, 'large.txt'), 'x'.repeat(40));
   const files = new WorkspaceFiles();
@@ -56,9 +60,13 @@ test('workspace file reader returns bounded UTF text and blocks secrets and bina
   assert.equal(text.language, 'JavaScript');
   assert.match(text.content, /ready = true/);
   assert.equal((await files.readFile('.env')).reason, 'restricted');
+  assert.equal((await files.readFile('secrets/token.txt')).reason, 'restricted');
+  assert.equal((await files.readFile('CrEdEnTiAlS/api.txt')).reason, 'restricted');
+  assert.equal((await files.listDirectory('secrets')).reason, 'restricted');
   assert.equal((await files.readFile('image.bin')).reason, 'binary');
   assert.equal((await files.readFile('large.txt', { maxBytes: 20 })).reason, 'too-large');
   assert.equal(isRestrictedWorkspaceFile('nested/private.pem'), true);
+  assert.equal(isRestrictedWorkspaceFile('secrets/token.txt'), true);
 });
 
 test('workspace media preview validates supported image and PDF content within separate size limits', async (context) => {

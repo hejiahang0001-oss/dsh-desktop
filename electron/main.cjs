@@ -6,6 +6,7 @@ const { GitChangeReviewer } = require('./change-review.cjs');
 const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
 const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
+const { buildPermissionCenterDialog } = require('./permission-center.cjs');
 const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
@@ -29,6 +30,7 @@ const { PreviewManager, isSafePreviewNavigation } = require('./preview-manager.c
 const {
   ProxySettingsStore,
   buildHarnessProxyEnvironment,
+  confirmProxySettingsChange,
   normalizeProxySettings,
   parseResolvedProxy,
   sessionProxyConfig
@@ -457,7 +459,19 @@ const saveNetworkSettings = async (settings) => {
     return { ok: false, reason: 'agent-busy', message: '请先结束当前生成或待确认操作，再修改代理。', state: getNetworkState() };
   }
   try {
-    const state = await applyProxySettings(settings, { persist: true });
+    const decision = await confirmProxySettingsChange({
+      dialog,
+      parentWindow: mainWindow,
+      previous: proxyStore.getState(),
+      proposed: settings
+    });
+    if (!decision.changed) {
+      return { ok: true, restarting: false, unchanged: true, state: getNetworkState() };
+    }
+    if (!decision.confirmed) {
+      return { ok: false, canceled: true, reason: 'canceled', message: '已取消，代理设置未修改。', state: getNetworkState() };
+    }
+    const state = await applyProxySettings(decision.settings, { persist: true });
     setTimeout(() => { void startHarnessForWindow({ restart: true }); }, 250).unref?.();
     return { ok: true, restarting: true, state };
   } catch (error) {
@@ -1577,6 +1591,17 @@ const showPowerShellCompatibility = async () => {
   if (canOpenPermission && result.response === 0) await runHarnessUiAction('open-permission-mode');
 };
 
+const showPermissionCenter = async () => {
+  await refreshAgentDiagnostics({ rebuildMenu: false });
+  const model = buildPermissionCenterDialog({
+    agent: agentDiagnostics,
+    terminalActive: Boolean(terminalRunner?.isActive())
+  });
+  const result = await dialog.showMessageBox(mainWindow, model.options);
+  const action = model.actions[result.response] || null;
+  if (action) await runHarnessUiAction(action);
+};
+
 const credentialLabel = () => {
   const labels = {
     configured: '软件 Key：已配置',
@@ -1829,6 +1854,10 @@ function installApplicationMenu() {
         { label: permissionModeLabel(), enabled: false },
         { label: powerShellCompatibilityLabel(), enabled: false },
         { type: 'separator' },
+        {
+          label: '权限中心…',
+          click: () => { void showPermissionCenter(); }
+        },
         {
           label: '定位当前/最近工具',
           enabled: harnessReady && agentDiagnostics.canFocusTool,

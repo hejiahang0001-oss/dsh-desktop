@@ -4,6 +4,7 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
+const { SENSITIVE_PATHSPECS, isRestrictedPath } = require('./sensitive-path-policy.cjs');
 
 const execFileAsync = promisify(execFile);
 const LATEST_REF = 'refs/dsh/checkpoints/latest';
@@ -13,30 +14,6 @@ const HISTORY_SCAN_LIMIT = 25;
 const MAX_RESTORE_PATHS = 500;
 const CHECKPOINT_ID_PATTERN = /^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$/i;
 const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const RESTRICTED_COMPONENT_PATTERNS = Object.freeze([
-  /^\.env(?:\.|$)/i,
-  /^\.credentials(?:\.|$)/i,
-  /^(?:credentials|secrets?)(?:\.|$)/i,
-  /^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$)/i,
-  /^(?:\.npmrc|\.pypirc|\.netrc)$/i,
-  /\.(?:pem|key|pfx|p12)$/i
-]);
-const SENSITIVE_PATHSPECS = Object.freeze([
-  ':(exclude,top).env', ':(exclude,glob)**/.env',
-  ':(exclude,top).env.*', ':(exclude,glob)**/.env.*',
-  ':(exclude,top).credentials*', ':(exclude,glob)**/.credentials*',
-  ':(exclude,top)credentials*', ':(exclude,glob)**/credentials*',
-  ':(exclude,top)secret*', ':(exclude,glob)**/secret*',
-  ':(exclude,top)id_rsa*', ':(exclude,glob)**/id_rsa*',
-  ':(exclude,top)id_dsa*', ':(exclude,glob)**/id_dsa*',
-  ':(exclude,top)id_ecdsa*', ':(exclude,glob)**/id_ecdsa*',
-  ':(exclude,top)id_ed25519*', ':(exclude,glob)**/id_ed25519*',
-  ':(exclude,glob)**/*.pem', ':(exclude,glob)**/*.key',
-  ':(exclude,glob)**/*.pfx', ':(exclude,glob)**/*.p12',
-  ':(exclude,top).npmrc', ':(exclude,glob)**/.npmrc',
-  ':(exclude,top).pypirc', ':(exclude,glob)**/.pypirc',
-  ':(exclude,top).netrc', ':(exclude,glob)**/.netrc'
-]);
 
 const sanitizedEnvironment = () => Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !/^DEEPSEEK(?:_|$)/i.test(name))
@@ -47,11 +24,7 @@ const isInside = (parent, candidate) => {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 };
 
-const isRestrictedGitPath = (value) => String(value || '')
-  .replaceAll('\\', '/')
-  .split('/')
-  .filter(Boolean)
-  .some((component) => RESTRICTED_COMPONENT_PATTERNS.some((pattern) => pattern.test(component)));
+const isRestrictedGitPath = (value) => isRestrictedPath(value);
 
 const statusPaths = (porcelain) => {
   const records = String(porcelain || '').split('\0').filter(Boolean);
