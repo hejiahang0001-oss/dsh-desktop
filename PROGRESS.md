@@ -1,7 +1,7 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-24
-> 当前构建：V0.5.6 Latest（本机已覆盖，公开 Pre-release 发布中）
+> 当前构建：V0.5.6 Latest（本机已覆盖，GitHub Pre-release 已发布）
 > 状态：V0.5.6 已把 Electron 升级到官方受支持线并完成真实 PDF、终端/IPC、Harness、覆盖安装和数据保留验证；V0.5.4 继续保持 Stable
 
 ## V0.5.6 本轮完成
@@ -28,7 +28,7 @@
 | 安装包 | `DSH-Desktop-Setup-0.5.6.exe`；183,271,349 字节；SHA-256 `9DD8855634955F12996F2DF6A57CF42F2A3D9B32AF3782A2536299D0C1F7C893` |
 | 安装一致性 | 解包版 `app.asar` SHA-256 `374C7050C8CBB1B085E66C36636D22AA73B66FC048A68C0BE68EE610CDE21DEC`；29,370 个包内文件，安装目录只额外包含卸载程序，0 reparse point、0 terminal PDB |
 | 覆盖前快照 | `backups/pre-v0.5.6-20260824-224757`；含 V0.5.5 安装器和 14 份会话数据；0 个凭据副本 |
-| 发布边界 | 发布阻断项已从 2 项降至 0；V0.5.6 可恢复产品 Latest Pre-release，V0.5.4 继续为正式 Stable |
+| 发布完整性 | [v0.5.6](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.6) 为非 Draft 的 Pre-release；远端安装包大小/摘要一致，下载直链 HTTP 200；[主分支 Windows CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32744187437)；V0.5.4 仍是 GitHub 正式 `Latest release` |
 
 ### V0.5.6 后计划调整
 

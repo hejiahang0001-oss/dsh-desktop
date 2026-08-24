@@ -36,4 +36,4 @@ V0.5.6 is the validated product Latest build that moves the desktop runtime back
 ## Release boundary
 
 - The original two public-release blocking security findings are now both fixed. Remaining Important findings stay scheduled for V0.5.7 and V0.5.8.
-- V0.5.4 remains GitHub Stable and the GitHub `Latest release`. V0.5.6 is eligible for the product Latest Pre-release channel after its Windows CI completes.
+- V0.5.4 remains GitHub Stable and the GitHub `Latest release`. V0.5.6 is published as a non-draft product Latest Pre-release after passing branch and main-branch Windows CI.
