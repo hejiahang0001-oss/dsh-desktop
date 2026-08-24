@@ -58,7 +58,7 @@ html[data-dsh-terminal-open="true"] #dsh-checkpoint-toast { bottom: calc(var(--d
 .dsh-checkpoint-history-close { flex: none; }
 .dsh-checkpoint-history-status { margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--dsh-panel-border); color: var(--dsh-panel-muted); background: var(--dsh-panel-surface); font-size: 10px; }
 .dsh-checkpoint-history-list { min-height: 96px; overflow: auto; padding: 6px; }
-.dsh-checkpoint-history-option { display: grid; gap: 3px; width: 100%; min-height: 52px; padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--dsh-panel-text); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.dsh-checkpoint-history-option { display: grid; gap: 3px; width: 100%; min-height: 64px; padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--dsh-panel-text); background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .dsh-checkpoint-history-option[aria-selected="true"] { border-color: color-mix(in srgb, var(--dsh-panel-accent) 32%, var(--dsh-panel-border)); background: color-mix(in srgb, var(--dsh-panel-accent) 13%, var(--dsh-panel-raised)); }
 .dsh-checkpoint-history-option[aria-disabled="true"] { color: var(--dsh-panel-muted); cursor: not-allowed; }
 .dsh-checkpoint-history-option small { overflow: hidden; color: var(--dsh-panel-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -67,9 +67,12 @@ html[data-dsh-terminal-open="true"] #dsh-checkpoint-toast { bottom: calc(var(--d
 .dsh-checkpoint-history-badges { display: flex; flex: none; gap: 5px; }
 .dsh-checkpoint-history-badge { padding: 1px 6px; border: 1px solid var(--dsh-panel-border); border-radius: 999px; color: var(--dsh-panel-muted); background: var(--dsh-panel-surface); font-size: 9px; }
 .dsh-checkpoint-history-badge.is-latest { border-color: color-mix(in srgb, var(--dsh-panel-accent) 38%, var(--dsh-panel-border)); color: var(--dsh-panel-text); }
+.dsh-checkpoint-history-badge.is-conversation { border-color: color-mix(in srgb, var(--dsh-panel-success) 42%, var(--dsh-panel-border)); color: var(--dsh-panel-text); }
+.dsh-checkpoint-history-option small.dsh-checkpoint-history-conversation { color: color-mix(in srgb, var(--dsh-panel-text) 72%, var(--dsh-panel-muted)); }
 .dsh-checkpoint-history-footer { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 9px 10px; border-top: 1px solid var(--dsh-panel-border); background: var(--dsh-panel-surface); }
 .dsh-checkpoint-history-hint { color: var(--dsh-panel-muted); font-size: 10px; }
-.dsh-checkpoint-history-actions { display: flex; gap: 7px; }
+.dsh-checkpoint-history-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.dsh-checkpoint-history-button { white-space: nowrap; }
 .dsh-checkpoint-history-primary { border-color: color-mix(in srgb, var(--dsh-panel-accent) 52%, var(--dsh-panel-border)); background: color-mix(in srgb, var(--dsh-panel-accent) 18%, var(--dsh-panel-raised)); }
 .dsh-checkpoint-history-button:disabled,
 .dsh-checkpoint-history-close:disabled { opacity: .55; cursor: default; }

@@ -6,8 +6,13 @@ const { GitChangeReviewer } = require('./change-review.cjs');
 const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
 const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
+const {
+  captureHarnessCheckpointLink,
+  forkHarnessCheckpointSession
+} = require('./harness-checkpoint-link.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
 const {
+  readHarnessSessionSelection,
   selectHarnessSession,
   synchronizeHarnessWorkspace,
   waitForHarnessSessionSelection
@@ -117,7 +122,9 @@ const emptyChangeReviewDiagnostics = (reason = 'no-change') => Object.freeze({
 });
 let changeReviewDiagnostics = emptyChangeReviewDiagnostics();
 let checkpointDiagnostics = Object.freeze({ available: false, reason: 'not-initialized', status: 'empty', last: null });
+let checkpointCreatePromise = null;
 let checkpointRestorePromise = null;
+let checkpointForkPromise = null;
 let desktopDiagnostics = Object.freeze({
   credential: Object.freeze({ status: 'missing', source: 'managed-file', reason: 'not-checked', message: '尚未检查软件模型配置。', policy: 'software-first', environmentIgnored: false }),
   sessions: Object.freeze({ available: true, count: 0, latestUpdatedAt: null, encodings: Object.freeze({ zstd: 0, jsonl: 0 }) })
@@ -286,10 +293,29 @@ const getDiagnosticsState = () => ({
   workspaceSync: { ...workspaceSyncDiagnostics }
 });
 
-const getCheckpointState = () => ({
-  ...checkpointDiagnostics,
-  last: checkpointDiagnostics.last ? { ...checkpointDiagnostics.last } : null
-});
+const publicCheckpointRecord = (record) => {
+  if (!record) return null;
+  const { commit, tree, indexTree, sessionId, sessionAtSeq, ...safe } = record;
+  return {
+    ...safe,
+    conversationLinked: Boolean(sessionId),
+    conversationForkAvailable: Boolean(sessionId && Number.isInteger(sessionAtSeq))
+  };
+};
+
+const getCheckpointState = () => {
+  const { last, restoredTo, safety, preview, ...state } = checkpointDiagnostics;
+  if (preview) {
+    const { targetCommit, currentIndexTree, ...safePreview } = preview;
+    state.preview = { ...safePreview };
+  }
+  return {
+    ...state,
+    last: publicCheckpointRecord(last),
+    ...(restoredTo ? { restoredTo: publicCheckpointRecord(restoredTo) } : {}),
+    ...(safety ? { safety: publicCheckpointRecord(safety) } : {})
+  };
+};
 
 const checkpointTimeLabel = (value) => {
   const date = new Date(value || '');
@@ -648,14 +674,52 @@ const publishCheckpointState = (state) => {
 
 const createCodeCheckpoint = async (source = 'manual') => {
   if (!checkpointManager) return getCheckpointState();
-  if (checkpointRestorePromise) return getCheckpointState();
-  const pending = checkpointManager.create({ source });
-  publishCheckpointState(checkpointManager.getState());
-  return publishCheckpointState(await pending);
+  if (checkpointRestorePromise || checkpointForkPromise) return getCheckpointState();
+  if (checkpointCreatePromise) return checkpointCreatePromise;
+  checkpointCreatePromise = (async () => {
+    publishCheckpointState({ ...checkpointManager.getState(), status: 'creating' });
+    let sessionLink = null;
+    try {
+      if (harnessUiReady()) {
+        sessionLink = await captureHarnessCheckpointLink({
+          origin: harnessOrigin,
+          webContents: mainWindow.webContents,
+          workspacePath: getWorkspaceState().activePath
+        });
+      }
+    } catch {
+      // Conversation linkage is fail-soft; it must never prevent the code checkpoint or prompt.
+    }
+    const pending = checkpointManager.create({ source, sessionLink });
+    publishCheckpointState(checkpointManager.getState());
+    return publishCheckpointState(await pending);
+  })().finally(() => { checkpointCreatePromise = null; });
+  return checkpointCreatePromise;
+};
+
+const checkpointMatchesCurrentSession = async () => {
+  const last = checkpointManager?.last;
+  if (!last?.sessionId || !harnessUiReady()) return Object.freeze({ matches: false, linked: Boolean(last?.sessionId) });
+  try {
+    const currentSessionId = await readHarnessSessionSelection(mainWindow.webContents);
+    return Object.freeze({ matches: currentSessionId === last.sessionId, linked: true });
+  } catch {
+    return Object.freeze({ matches: false, linked: true });
+  }
 };
 
 const performRestoreCheckpoint = async (checkpointId = '') => {
-  if (checkpointManager?.pending || checkpointDiagnostics.status === 'creating') {
+  if (checkpointForkPromise || checkpointDiagnostics.status === 'forking') {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '会话分支正在建立',
+      message: '请等待当前会话分支建立完成后再恢复代码。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return getCheckpointState();
+  }
+  if (checkpointCreatePromise || checkpointManager?.pending || checkpointDiagnostics.status === 'creating') {
     await dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '代码检查点正在建立',
@@ -776,6 +840,117 @@ const restoreCodeCheckpoint = (checkpointId = '') => {
 };
 
 const restoreLatestCheckpoint = () => restoreCodeCheckpoint();
+
+const performForkCheckpointSession = async (checkpointId) => {
+  if (checkpointCreatePromise || checkpointManager?.pending || checkpointDiagnostics.status === 'creating') {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '代码检查点正在建立',
+      message: '请等待当前检查点建立完成后再创建会话分支。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return getCheckpointState();
+  }
+  const terminalActive = ['starting', 'running', 'stopping'].includes(terminalRunner?.getState()?.status);
+  const agentBusy = agentDiagnostics.canStop
+    || agentDiagnostics.status === 'running'
+    || agentDiagnostics.status === 'waiting'
+    || agentDiagnostics.pendingCount > 0;
+  if (terminalActive || agentBusy || checkpointRestorePromise) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: '暂时无法建立会话分支',
+      message: terminalActive ? '请先停止集成终端。' : '请先等待或停止当前 Agent 回合。',
+      detail: '会话分支只允许在工作区静止、检查点未恢复时执行。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return getCheckpointState();
+  }
+  const anchor = await checkpointManager?.resolveConversationAnchor(checkpointId);
+  if (!anchor) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '此检查点不能建立会话分支',
+      message: '所选检查点没有关联到可分支的完整 Harness 回合。',
+      detail: '旧版检查点和会话尚未完成首个回合时建立的检查点仍可只恢复代码。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return getCheckpointState();
+  }
+  const answer = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '从检查点回合建立会话分支',
+    message: '将创建一个新的 Harness 会话分支，并保留原会话。',
+    detail: [
+      `检查点时间：${checkpointTimeLabel(anchor.createdAt)}`,
+      '新会话包含关联回合及此前对话，建立后会自动切换过去。',
+      '',
+      '当前代码、Git 索引和原会话不会改变；如需恢复代码，请使用“只恢复代码”。'
+    ].join('\n'),
+    buttons: ['建立会话分支', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  });
+  if (answer.response !== 0) return getCheckpointState();
+
+  publishCheckpointState({ ...checkpointManager.getState(), status: 'forking' });
+  let forked = null;
+  try {
+    forked = await forkHarnessCheckpointSession({
+      origin: harnessOrigin,
+      workspacePath: getWorkspaceState().activePath,
+      sessionId: anchor.sessionId,
+      atSeq: anchor.atSeq
+    });
+    const selection = await selectHarnessSession(mainWindow.webContents, forked.sessionId);
+    workspaceSyncDiagnostics = Object.freeze({
+      ...workspaceSyncDiagnostics,
+      status: 'synced',
+      sessionId: forked.sessionId,
+      sessionCreated: true,
+      error: null
+    });
+    if (selection.changed) {
+      await mainWindow.loadURL(harnessOrigin);
+      await waitForHarnessSessionSelection(mainWindow.webContents, forked.sessionId);
+    }
+    const state = publishCheckpointState({ ...checkpointManager.getState(), forked: true });
+    void refreshDesktopDiagnostics();
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '会话分支已建立',
+      message: '已切换到新的 Harness 会话分支。',
+      detail: '原会话、当前代码和 Git 索引均保持不变。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return state;
+  } catch (error) {
+    const state = publishCheckpointState({ ...checkpointManager.getState(), forked: false, forkReason: error?.code || 'fork-failed' });
+    await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: '无法建立会话分支',
+      message: 'Harness 没有完成所选检查点的会话分支。',
+      detail: forked
+        ? '新会话可能已经建立但未能自动切换，请在 Harness 会话列表中检查最近会话。'
+        : '源会话、关联回合或工作区已变化；当前代码和 Git 索引未修改。',
+      buttons: ['确定'],
+      defaultId: 0
+    });
+    return state;
+  }
+};
+
+const forkCheckpointSession = (checkpointId) => {
+  if (checkpointForkPromise) return checkpointForkPromise;
+  checkpointForkPromise = performForkCheckpointSession(checkpointId)
+    .finally(() => { checkpointForkPromise = null; });
+  return checkpointForkPromise;
+};
 
 const desktopIpcAllowed = (event) => Boolean(
   mainWindow
@@ -1458,7 +1633,7 @@ function installApplicationMenu() {
     stopped: '应用预览：已停止'
   }[previewState.status] || '应用预览：状态未知';
   const reviewIdle = !agentDiagnostics.canStop && agentDiagnostics.status !== 'waiting' && !terminalActive;
-  const checkpointIdle = reviewIdle && !['creating', 'restoring'].includes(checkpointDiagnostics.status);
+  const checkpointIdle = reviewIdle && !['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status);
   const recentItems = workspace.recentPaths.length > 0
     ? workspace.recentPaths.map((recentPath) => ({
       label: `${path.basename(recentPath) || path.parse(recentPath).root} — ${path.dirname(recentPath)}`,
@@ -1747,8 +1922,8 @@ function installApplicationMenu() {
           click: () => { void restoreLatestCheckpoint(); }
         },
         {
-          label: ['creating', 'restoring'].includes(checkpointDiagnostics.status)
-            ? `检查点：正在${checkpointDiagnostics.status === 'creating' ? '建立' : '恢复'}…`
+          label: ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)
+            ? `检查点：正在${checkpointDiagnostics.status === 'creating' ? '建立' : (checkpointDiagnostics.status === 'restoring' ? '恢复' : '建立会话分支')}…`
             : (checkpointDiagnostics.last ? `检查点：${checkpointTimeLabel(checkpointDiagnostics.last.createdAt)}` : '检查点：尚未建立'),
           enabled: false
         },
@@ -1998,8 +2173,12 @@ ipcMain.handle('checkpoints:create-automatic', async (event) => {
   if (!harnessIpcAllowed(event)) return { available: false, reason: 'untrusted', status: 'empty', last: null };
   return createCodeCheckpoint('automatic');
 });
+ipcMain.handle('checkpoints:matches-current-session', async (event) => {
+  if (!harnessIpcAllowed(event)) return { matches: false, linked: false };
+  return checkpointMatchesCurrentSession();
+});
 ipcMain.handle('checkpoints:list-history', async (event) => {
-  if (!harnessIpcAllowed(event) || checkpointRestorePromise) {
+  if (!harnessIpcAllowed(event) || checkpointRestorePromise || checkpointForkPromise) {
     return { available: false, reason: 'untrusted-or-busy', items: [] };
   }
   return checkpointManager.listHistory();
@@ -2009,6 +2188,12 @@ ipcMain.handle('checkpoints:restore', async (event, id) => {
     return { available: false, reason: 'untrusted', status: 'empty', last: null };
   }
   return restoreCodeCheckpoint(id);
+});
+ipcMain.handle('checkpoints:fork-session', async (event, id) => {
+  if (!harnessIpcAllowed(event) || !isCheckpointId(id)) {
+    return { available: false, reason: 'untrusted', status: 'empty', last: null };
+  }
+  return forkCheckpointSession(id);
 });
 ipcMain.handle('checkpoints:restore-latest', async (event) => {
   if (!harnessIpcAllowed(event)) return { available: false, reason: 'untrusted', status: 'empty', last: null };

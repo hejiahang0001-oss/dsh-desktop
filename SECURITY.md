@@ -30,6 +30,7 @@ Include:
 - The pinned Harness `0.1.1-rc.2` stores its software-managed credential in `.credentials.yaml` under the Windows user data directory. It relies on user-directory ACLs; Windows Credential Manager/DPAPI integration is not complete.
 - Software-selected proxies apply only to Harness external traffic. Proxy URLs with credentials are rejected; inherited proxy variables are removed from Harness, and loopback services plus the integrated terminal stay outside that route.
 - The trusted Harness main frame may write sanitized text to the clipboard for copy actions. Clipboard reads, subframes, unrelated origins, and every other Web permission remain denied.
+- Conversation-linked checkpoints keep session ids and completed-turn sequence values in private Git metadata. The renderer receives only bounded capability booleans, and official session forks are accepted only after source, workspace, lineage, and non-subagent verification.
 - Full Access bypasses the Harness command sandbox. DSH Desktop never switches permission modes automatically.
 
 We will acknowledge a complete private report, assess scope, prepare a fix when applicable, and coordinate disclosure after an update is available.

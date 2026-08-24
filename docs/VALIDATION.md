@@ -1,6 +1,35 @@
 # Validation evidence
 
-This page records the locally verified V0.5.3 engineering evidence without making the README front page carry the full verification ledger. The V0.5.2 checkpoint evidence remains below because V0.5.3 preserves that recovery surface.
+This page records the locally verified V0.5.4 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.4 preserves those surfaces.
+
+## V0.5.4 conversation-linked checkpoint evidence
+
+- All 114 local tests pass with the bundled Node.js 24 runtime. New coverage includes completed-turn capture, same-workspace and ordinary-session enforcement, official session fork lineage, private checkpoint trailers, bounded renderer summaries, dual-action history controls, send-time session revalidation, and suppression of page-autofocus checkpoints.
+- The unpacked desktop selected an existing persisted ordinary session with one completed turn, created a manual code checkpoint, and showed the `会话回合` capability alongside explicit **建立会话分支…** and **只恢复代码…** actions.
+- The branch action used the checkpoint's private completed-turn boundary. Read-only official API verification found exactly one child for the source, the exact `parentSessionId`, the same repository path, non-subagent origin, and an idle child.
+- HEAD, the real Git index tree, the worktree diff digest, and the cached diff digest were byte-identical before and after session branching. The source session remained present; the action created only a new Harness child.
+- Session ids and turn sequence values did not appear in the renderer history objects. Old checkpoints and checkpoints created before a completed turn remained code-only and disabled the branch action.
+- At 1024×720 the Files, Git Review, Terminal, checkpoint list, conversation badge, and both footer actions remained visible without clipping. The normal 1208×794 window passed the same interaction.
+- A real startup revealed that Harness autofocus could invoke the old focus-based trigger before stable session selection. The final renderer begins unarmed, ignores focus-only events, and arms on pointer intent, input, Agent completion, restore, or the verified send guard. Final installed startup left all eight checkpoint refs and their aggregate digest unchanged.
+- The unpacked and installed V0.5.4 desktop and Harness smoke checks pass: `zh-CN`, safe storage available, random loopback HTTP 200, title `DeepSeek Harness`, and successful Workspace synchronization.
+
+## V0.5.4 release integrity
+
+| Item | V0.5.4 value |
+| --- | --- |
+| Installer | `DSH-Desktop-Setup-0.5.4.exe` |
+| Size | `162,583,718` bytes |
+| SHA-256 | `C07CF56B0D809F5D84655AD8513D02FCB77684A98D31420FB99036BD2CFD41F3` |
+| Blockmap SHA-256 | `CB32B22F4C0EB6C9F39FAA8C0F7320BC47D68854C91C6DFB7893A71BE2A64131` |
+| Files in unpacked build | `29,368` |
+| Files in installed application | `29,369` |
+| Packaged `app.asar` SHA-256 | `812D385BF6F27348A1C21BD75C2002C81BE39906F65D3E4A370C0ADBE5461003` |
+| Reparse points | `0` |
+| Terminal PDB files | `0` |
+
+The final installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.5.4`. The installed and unpacked `app.asar` hashes match. Fourteen persisted sessions, the credential reference, desktop/workbench/network state, Preferences, Harness settings, and all eight checkpoint item refs retained identical pre/post-overwrite hashes.
+
+The rollback snapshot is `backups/pre-v0.5.4-20260824-135649`. It contains the V0.5.3 installer, fourteen sessions, storages, settings, desktop/workbench/network state, and Preferences in 23 files. It intentionally contains zero credential files.
 
 ## Automated and runtime checks
 

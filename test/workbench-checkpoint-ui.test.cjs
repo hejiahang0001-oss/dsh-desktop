@@ -6,13 +6,17 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('automatic checkpoint UI arms on composer input and waits before a verified send action', () => {
+test('automatic checkpoint UI ignores page autofocus, arms on user composer intent, and waits before a verified send action', () => {
   const source = read('assets/workbench-checkpoint.js');
-  assert.match(source, /focusin/);
+  assert.match(source, /let armed = false/);
+  assert.match(source, /pointerdown/);
+  assert.doesNotMatch(source, /addEventListener\('focusin'/);
   assert.match(source, /createAutomatic/);
   assert.match(source, /isSendButton/);
   assert.match(source, /stopImmediatePropagation/);
-  assert.match(source, /await ensureCheckpoint/);
+  assert.match(source, /await prepareSendCheckpoint/);
+  assert.match(source, /matchesCurrentSession/);
+  assert.match(source, /prepareSendCheckpoint/);
   assert.match(source, /agentWasBusy/);
   assert.match(source, /aria-live/);
   assert.match(source, /toLocaleTimeString\('zh-CN'/);
@@ -28,7 +32,9 @@ test('checkpoint renderer bridge and assets expose fixed manual and automatic op
   assert.ok(manifest.build.files.includes('assets/workbench-checkpoint.css'));
   assert.match(preload, /create-manual/);
   assert.match(preload, /create-automatic/);
+  assert.match(preload, /matches-current-session/);
   assert.match(preload, /list-history/);
+  assert.match(preload, /fork-session/);
   assert.match(preload, /checkpoints:restore/);
   assert.match(preload, /restore-latest/);
   assert.match(main, /GitCheckpointManager/);
@@ -39,6 +45,11 @@ test('checkpoint renderer bridge and assets expose fixed manual and automatic op
   assert.match(main, /shell\.trashItem/);
   assert.match(main, /defaultId:\s*1/);
   assert.match(main, /checkpointRestorePromise/);
+  assert.match(main, /captureHarnessCheckpointLink/);
+  assert.match(main, /forkHarnessCheckpointSession/);
+  assert.match(main, /session\.fork|forkCheckpointSession/);
+  assert.match(main, /current code|当前代码、Git 索引和原会话不会改变/);
+  assert.match(main, /const \{ commit, tree, indexTree, sessionId, sessionAtSeq,/);
   assert.match(css, /dsh-terminal-effective-height/);
   assert.match(css, /forced-colors: active/);
 });
@@ -53,8 +64,14 @@ test('checkpoint history is bounded, selectable, and keyboard accessible without
   assert.match(source, /ArrowDown/);
   assert.match(source, /event\.key === 'Escape'/);
   assert.match(source, /historyPreviousFocus/);
+  assert.match(source, /建立会话分支/);
+  assert.match(source, /只恢复代码/);
+  assert.match(source, /conversationForkAvailable/);
+  assert.match(source, /api\.checkpoints\.forkSession/);
   assert.doesNotMatch(source, /innerHTML|eval\(|child_process|shell\./);
   assert.match(css, /dsh-checkpoint-history-dialog/);
   assert.match(css, /max-height: 680px/);
   assert.match(css, /focus-visible/);
+  assert.match(css, /is-conversation/);
+  assert.match(css, /flex-wrap:\s*wrap/);
 });

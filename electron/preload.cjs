@@ -46,7 +46,9 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     getState: () => ipcRenderer.invoke('checkpoints:get-state'),
     create: () => ipcRenderer.invoke('checkpoints:create-manual'),
     createAutomatic: () => ipcRenderer.invoke('checkpoints:create-automatic'),
+    matchesCurrentSession: () => ipcRenderer.invoke('checkpoints:matches-current-session'),
     listHistory: () => ipcRenderer.invoke('checkpoints:list-history'),
+    forkSession: (id) => ipcRenderer.invoke('checkpoints:fork-session', id),
     restore: (id) => ipcRenderer.invoke('checkpoints:restore', id),
     restoreLatest: () => ipcRenderer.invoke('checkpoints:restore-latest'),
     onState: (listener) => {

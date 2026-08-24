@@ -49,7 +49,7 @@
     { id: 'review.toggle', title: '显示或隐藏变更审查', detail: '切换右侧 Git Diff 面板', shortcut: 'Ctrl+Alt+D', run: () => togglePanel('reviewPanelOpen', api.workbench.setReviewPanelOpen) },
     { id: 'review.focus', title: '聚焦变更审查', detail: '打开 Git Diff 并聚焦文件列表', shortcut: 'Ctrl+Alt+J', run: () => openAndFocus('reviewPanelOpen', api.workbench.setReviewPanelOpen, '__DSH_WORKBENCH__') },
     { id: 'checkpoint.create', title: '立即创建代码检查点', detail: '不改变工作树和 Git 索引，敏感路径不写入检查点', shortcut: 'Ctrl+Alt+B', run: async () => window.__DSH_CHECKPOINTS__?.showState(await api.checkpoints.create()) },
-    { id: 'checkpoint.history', title: '浏览代码检查点', detail: '查看最近 12 个本地安全点并选择恢复目标', shortcut: 'Ctrl+Alt+H', run: () => window.__DSH_CHECKPOINTS__?.openHistory?.() },
+    { id: 'checkpoint.history', title: '浏览代码检查点', detail: '查看最近 12 个本地安全点，只恢复代码或从关联回合建立会话分支', shortcut: 'Ctrl+Alt+H', run: () => window.__DSH_CHECKPOINTS__?.openHistory?.() },
     { id: 'checkpoint.restore', title: '恢复到最近代码检查点', detail: '先建立恢复前安全点，再经原生确认恢复代码和索引', shortcut: 'Ctrl+Alt+R', run: () => api.checkpoints.restoreLatest() },
     { id: 'settings.network', title: '网络与代理设置', detail: '选择直连、Windows 系统代理或自定义 HTTP(S) 代理', shortcut: 'Ctrl+,', run: () => window.__DSH_NETWORK__?.open?.() },
     { id: 'zoom.in', title: '界面放大', detail: '放大 Harness 与工作台界面', shortcut: 'Ctrl+=', run: () => adjustZoom(0.1) },

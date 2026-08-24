@@ -12,6 +12,7 @@ const HISTORY_LIMIT = 12;
 const HISTORY_SCAN_LIMIT = 25;
 const MAX_RESTORE_PATHS = 500;
 const CHECKPOINT_ID_PATTERN = /^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$/i;
+const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RESTRICTED_COMPONENT_PATTERNS = Object.freeze([
   /^\.env(?:\.|$)/i,
   /^\.credentials(?:\.|$)/i,
@@ -74,6 +75,20 @@ const checkpointId = (now, random = randomBytes) => (
 
 const isCheckpointId = (value) => CHECKPOINT_ID_PATTERN.test(String(value || ''));
 
+const normalizeSessionLink = (value) => {
+  if (!value || !SESSION_ID_PATTERN.test(String(value.sessionId || ''))) return null;
+  const atSeq = value.atSeq === null || value.atSeq === undefined ? null : Number(value.atSeq);
+  if (atSeq !== null && (!Number.isInteger(atSeq) || atSeq < 0)) return null;
+  return Object.freeze({ sessionId: String(value.sessionId), atSeq });
+};
+
+const sameSessionLink = (checkpoint, link) => (
+  !link || (
+    String(checkpoint?.sessionId || '') === String(link.sessionId || '')
+    && (checkpoint?.sessionAtSeq ?? null) === (link.atSeq ?? null)
+  )
+);
+
 class GitCheckpointManager {
   constructor({ run = execFileAsync, fsPromises = fsp, now = () => new Date(), random = randomBytes } = {}) {
     this.run = run;
@@ -113,11 +128,20 @@ class GitCheckpointManager {
     const body = bodyParts.join('\0');
     const id = parseTrailer(body, 'DSH-Checkpoint-ID');
     const indexTree = parseTrailer(body, 'DSH-Index-Tree');
+    const sessionId = parseTrailer(body, 'DSH-Session-ID');
+    const sessionAtSeqText = parseTrailer(body, 'DSH-Session-At-Seq');
     if (reportedCommit.trim() !== commit || !isCheckpointId(id) || (expectedId && id !== expectedId)) {
       throw new Error('Checkpoint metadata did not match its private ref.');
     }
     if (!/^[0-9a-f]{40,64}$/i.test(tree.trim()) || !/^[0-9a-f]{40,64}$/i.test(indexTree)) {
       throw new Error('Checkpoint tree metadata is invalid.');
+    }
+    if ((sessionId && !SESSION_ID_PATTERN.test(sessionId)) || (sessionAtSeqText && !sessionId)) {
+      throw new Error('Checkpoint session metadata is invalid.');
+    }
+    const sessionAtSeq = sessionAtSeqText === '' ? null : Number(sessionAtSeqText);
+    if (sessionAtSeq !== null && (!Number.isInteger(sessionAtSeq) || sessionAtSeq < 0)) {
+      throw new Error('Checkpoint session boundary is invalid.');
     }
     const source = parseTrailer(body, 'DSH-Checkpoint-Source');
     return Object.freeze({
@@ -127,7 +151,9 @@ class GitCheckpointManager {
       indexTree,
       source: ['automatic', 'manual', 'safety'].includes(source) ? source : 'unknown',
       createdAt: createdAt.trim(),
-      sensitiveExcludedCount: Number(parseTrailer(body, 'DSH-Sensitive-Excluded')) || 0
+      sensitiveExcludedCount: Number(parseTrailer(body, 'DSH-Sensitive-Excluded')) || 0,
+      sessionId: sessionId || '',
+      sessionAtSeq
     });
   }
 
@@ -188,11 +214,11 @@ class GitCheckpointManager {
     });
   }
 
-  async create({ source = 'manual' } = {}) {
+  async create({ source = 'manual', sessionLink = null } = {}) {
     if (!this.available) return this.getState({ created: false });
     if (this.pending) return this.pending;
     const normalizedSource = ['automatic', 'safety'].includes(source) ? source : 'manual';
-    this.pending = this.createInternal({ source: normalizedSource });
+    this.pending = this.createInternal({ source: normalizedSource, sessionLink: normalizeSessionLink(sessionLink) });
     try {
       return await this.pending;
     } finally {
@@ -200,7 +226,7 @@ class GitCheckpointManager {
     }
   }
 
-  async createInternal({ source }) {
+  async createInternal({ source, sessionLink }) {
     const tempRoot = await this.fsPromises.mkdtemp(path.join(os.tmpdir(), 'dsh-checkpoint-'));
     const tempIndex = path.join(tempRoot, 'index');
     const baseEnv = {
@@ -223,25 +249,32 @@ class GitCheckpointManager {
       const tree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
       const effectiveIndexTree = indexTree || (head ? (await this.executeGit(['rev-parse', `${head}^{tree}`], { env: baseEnv })).trim() : tree);
       const latest = await this.readLatest();
-      if (latest?.tree === tree && latest?.indexTree === effectiveIndexTree) {
+      if (latest?.tree === tree && latest?.indexTree === effectiveIndexTree && sameSessionLink(latest, sessionLink)) {
         this.last = latest;
         return this.getState({ status: 'ready', created: false, unchanged: true });
       }
 
       const createdAt = this.now();
       const id = checkpointId(createdAt, this.random);
+      const commitEnv = {
+        ...baseEnv,
+        GIT_AUTHOR_DATE: createdAt.toISOString(),
+        GIT_COMMITTER_DATE: createdAt.toISOString()
+      };
       const message = [
         'DSH Desktop code checkpoint',
         '',
         `DSH-Checkpoint-ID: ${id}`,
         `DSH-Checkpoint-Source: ${source}`,
         `DSH-Index-Tree: ${effectiveIndexTree}`,
-        `DSH-Sensitive-Excluded: ${sensitiveExcludedCount}`
+        `DSH-Sensitive-Excluded: ${sensitiveExcludedCount}`,
+        ...(sessionLink ? [`DSH-Session-ID: ${sessionLink.sessionId}`] : []),
+        ...(Number.isInteger(sessionLink?.atSeq) ? [`DSH-Session-At-Seq: ${sessionLink.atSeq}`] : [])
       ].join('\n');
       const commitArgs = ['commit-tree', tree];
       if (head) commitArgs.push('-p', head);
       commitArgs.push('-m', message);
-      const commit = (await this.executeGit(commitArgs, { env: baseEnv })).trim();
+      const commit = (await this.executeGit(commitArgs, { env: commitEnv })).trim();
       const itemRef = `${ITEM_REF_PREFIX}${id}`;
       await this.executeGit(['update-ref', itemRef, commit], { env: baseEnv });
       await this.executeGit(['update-ref', LATEST_REF, commit], { env: baseEnv });
@@ -252,7 +285,9 @@ class GitCheckpointManager {
         indexTree: effectiveIndexTree,
         source,
         createdAt: createdAt.toISOString(),
-        sensitiveExcludedCount
+        sensitiveExcludedCount,
+        sessionId: sessionLink?.sessionId || '',
+        sessionAtSeq: sessionLink?.atSeq ?? null
       });
       return this.getState({ status: 'ready', created: true, unchanged: false });
     } catch (error) {
@@ -361,7 +396,9 @@ class GitCheckpointManager {
             untrackedTrashCount: comparison.untrackedChanged.length,
             sensitiveExcludedCount: comparison.sensitiveExcludedCount,
             indexWillChange: comparison.indexWillChange,
-            unchanged: comparison.unchanged
+            unchanged: comparison.unchanged,
+            conversationLinked: Boolean(snapshot.sessionId),
+            conversationForkAvailable: Boolean(snapshot.sessionId && Number.isInteger(snapshot.sessionAtSeq))
           }));
         } catch {
           items.push(Object.freeze({
@@ -375,7 +412,9 @@ class GitCheckpointManager {
             untrackedTrashCount: 0,
             sensitiveExcludedCount: current.sensitiveExcludedCount,
             indexWillChange: false,
-            unchanged: false
+            unchanged: false,
+            conversationLinked: Boolean(snapshot.sessionId),
+            conversationForkAvailable: false
           }));
         }
       }
@@ -419,6 +458,18 @@ class GitCheckpointManager {
     return target
       ? this.previewRestore(target)
       : Object.freeze({ available: false, reason: 'checkpoint-changed' });
+  }
+
+  async resolveConversationAnchor(id) {
+    const target = await this.resolveCheckpoint(id);
+    if (!target?.sessionId || !Number.isInteger(target.sessionAtSeq)) return null;
+    return Object.freeze({
+      id: target.id,
+      commit: target.commit,
+      createdAt: target.createdAt,
+      sessionId: target.sessionId,
+      atSeq: target.sessionAtSeq
+    });
   }
 
   async applySnapshot(snapshot, { trashItem }) {

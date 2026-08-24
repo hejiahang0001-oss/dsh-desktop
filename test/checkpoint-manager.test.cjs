@@ -180,3 +180,48 @@ test('checkpoint scope refuses a nested workspace and credential-like components
   assert.equal(isCheckpointId('../refs/heads/main'), false);
   assert.deepEqual(statusPaths(' M src/a.js\0?? secrets.local\0'), ['src/a.js', 'secrets.local']);
 });
+
+test('checkpoint history exposes bounded conversation capability while keeping session anchors internal', async (context) => {
+  const root = createRepository();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'linked checkpoint\n');
+  let randomCounter = 20;
+  const manager = new GitCheckpointManager({
+    now: () => new Date('2026-08-24T08:00:00.000Z'),
+    random: () => Buffer.from([0, 0, 0, randomCounter++])
+  });
+  await manager.activate(root);
+  const sourceSessionId = 'session-11111111-1111-4111-8111-111111111111';
+  const linked = await manager.create({
+    source: 'automatic',
+    sessionLink: { sessionId: sourceSessionId, atSeq: 14 }
+  });
+  assert.equal(linked.created, true);
+  const body = git(root, ['show', '-s', '--format=%B', linked.last.commit]);
+  assert.match(body, new RegExp(`DSH-Session-ID: ${sourceSessionId}`));
+  assert.match(body, /DSH-Session-At-Seq: 14/);
+
+  const history = await manager.listHistory();
+  assert.equal(history.items[0].conversationLinked, true);
+  assert.equal(history.items[0].conversationForkAvailable, true);
+  assert.equal(Object.hasOwn(history.items[0], 'sessionId'), false);
+  assert.equal(Object.hasOwn(history.items[0], 'sessionAtSeq'), false);
+  const anchor = await manager.resolveConversationAnchor(history.items[0].id);
+  assert.equal(anchor.id, linked.last.id);
+  assert.equal(anchor.commit, linked.last.commit);
+  assert.equal(new Date(anchor.createdAt).getTime(), new Date(linked.last.createdAt).getTime());
+  assert.equal(anchor.sessionId, sourceSessionId);
+  assert.equal(anchor.atSeq, 14);
+
+  const unchanged = await manager.create({
+    source: 'automatic',
+    sessionLink: { sessionId: sourceSessionId, atSeq: 14 }
+  });
+  assert.equal(unchanged.unchanged, true);
+  const nextTurn = await manager.create({
+    source: 'automatic',
+    sessionLink: { sessionId: sourceSessionId, atSeq: 19 }
+  });
+  assert.equal(nextTurn.created, true);
+  assert.notEqual(nextTurn.last.commit, linked.last.commit);
+});

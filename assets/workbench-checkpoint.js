@@ -55,7 +55,7 @@
   const historyHeading = create('div', 'dsh-checkpoint-history-heading');
   const historyTitle = create('h2', '', '代码检查点');
   historyTitle.id = 'dsh-checkpoint-history-title';
-  const historyDescription = create('p', '', '选择一个本地安全点；恢复前仍会显示 Windows 原生确认。');
+  const historyDescription = create('p', '', '选择本地安全点后，可只恢复代码，或从已关联的完整回合建立新会话分支。');
   historyDescription.id = 'dsh-checkpoint-history-description';
   historyHeading.append(historyTitle, historyDescription);
   const historyClose = create('button', 'dsh-checkpoint-history-close', '关闭');
@@ -69,21 +69,24 @@
   historyList.setAttribute('role', 'listbox');
   historyList.setAttribute('aria-label', '最近代码检查点');
   const historyFooter = create('footer', 'dsh-checkpoint-history-footer');
-  const historyHint = create('span', 'dsh-checkpoint-history-hint', '↑↓ 选择 · Enter 检查并恢复 · Esc 关闭');
+  const historyHint = create('span', 'dsh-checkpoint-history-hint', '↑↓ 选择 · Enter 只恢复代码 · Esc 关闭');
   const historyActions = create('div', 'dsh-checkpoint-history-actions');
   const historyCancel = create('button', 'dsh-checkpoint-history-button', '取消');
   historyCancel.type = 'button';
-  const historyRestore = create('button', 'dsh-checkpoint-history-button dsh-checkpoint-history-primary', '检查并恢复…');
+  const historyFork = create('button', 'dsh-checkpoint-history-button', '建立会话分支…');
+  historyFork.type = 'button';
+  historyFork.disabled = true;
+  const historyRestore = create('button', 'dsh-checkpoint-history-button dsh-checkpoint-history-primary', '只恢复代码…');
   historyRestore.type = 'button';
   historyRestore.disabled = true;
-  historyActions.append(historyCancel, historyRestore);
+  historyActions.append(historyCancel, historyFork, historyRestore);
   historyFooter.append(historyHint, historyActions);
   historyDialog.append(historyHeader, historyStatus, historyList, historyFooter);
   historyBackdrop.append(historyDialog);
   document.body.append(historyBackdrop);
 
   let toastTimer = null;
-  let armed = true;
+  let armed = false;
   let creating = null;
   let replaying = false;
   let agentWasBusy = false;
@@ -101,7 +104,9 @@
     toastTimer = window.setTimeout(() => { toast.hidden = true; }, 3200);
   };
   const showState = (state) => {
-    if (state?.restored) {
+    if (state?.forked) {
+      show('已建立并切换到新的 Harness 会话分支；当前代码未改变', 'success');
+    } else if (state?.restored) {
       const date = new Date(state.restoredTo?.createdAt || '');
       const time = Number.isNaN(date.getTime()) ? '最近检查点' : date.toLocaleTimeString('zh-CN', { hour12: false });
       show(`已恢复到代码检查点 · ${time}；恢复前安全点已保留`, 'success');
@@ -146,6 +151,11 @@
     if (item.sensitiveExcludedCount) parts.push(`${item.sensitiveExcludedCount} 个敏感路径保持不变`);
     return parts.join(' · ');
   };
+  const conversationLabel = (item) => {
+    if (item.conversationForkAvailable) return '已关联 Harness 完整回合；可建立新会话分支';
+    if (item.conversationLinked) return '已关联 Harness 会话，但建立时尚无已完成回合';
+    return '未关联 Harness 回合；仅可恢复代码';
+  };
   const historyOptions = () => [...historyList.querySelectorAll('[role="option"]')];
   const selectHistory = (index, { focus = false } = {}) => {
     if (historyItems.length === 0) return false;
@@ -153,6 +163,7 @@
     historyOptions().forEach((option, optionIndex) => option.setAttribute('aria-selected', String(optionIndex === historyIndex)));
     const selected = historyItems[historyIndex];
     historyRestore.disabled = historyBusy || !selected?.available;
+    historyFork.disabled = historyBusy || !selected?.conversationForkAvailable;
     const option = historyOptions()[historyIndex];
     if (option) {
       option.scrollIntoView({ block: 'nearest' });
@@ -169,12 +180,14 @@
         : '当前无法读取代码检查点历史。';
       historyIndex = -1;
       historyRestore.disabled = true;
+      historyFork.disabled = true;
       return;
     }
     if (historyItems.length === 0) {
       historyStatus.textContent = '当前仓库还没有可用的代码检查点。';
       historyIndex = -1;
       historyRestore.disabled = true;
+      historyFork.disabled = true;
       return;
     }
     historyStatus.textContent = [
@@ -194,8 +207,13 @@
       const badges = create('span', 'dsh-checkpoint-history-badges');
       badges.append(create('span', 'dsh-checkpoint-history-badge', sourceLabel(item.source)));
       if (item.isLatest) badges.append(create('span', 'dsh-checkpoint-history-badge is-latest', '最近'));
+      if (item.conversationForkAvailable) badges.append(create('span', 'dsh-checkpoint-history-badge is-conversation', '会话回合'));
       row.append(title, badges);
-      option.append(row, create('small', '', impactLabel(item)));
+      option.append(
+        row,
+        create('small', '', impactLabel(item)),
+        create('small', 'dsh-checkpoint-history-conversation', conversationLabel(item))
+      );
       option.addEventListener('pointermove', () => selectHistory(index));
       option.addEventListener('focus', () => selectHistory(index));
       option.addEventListener('click', () => selectHistory(index));
@@ -221,6 +239,7 @@
     historyItems = [];
     historyIndex = -1;
     historyRestore.disabled = true;
+    historyFork.disabled = true;
     try {
       const result = await api.checkpoints.listHistory();
       if (sequence !== historyLoadSequence || historyBackdrop.hidden) return;
@@ -249,6 +268,7 @@
     if (historyBusy || !selected?.available) return false;
     historyBusy = true;
     historyRestore.disabled = true;
+    historyFork.disabled = true;
     historyCancel.disabled = true;
     historyClose.disabled = true;
     historyStatus.textContent = '正在打开恢复确认…';
@@ -271,6 +291,32 @@
       historyBusy = false;
       historyCancel.disabled = false;
       historyClose.disabled = false;
+      historyFork.disabled = !historyItems[historyIndex]?.conversationForkAvailable;
+      historyRestore.disabled = !historyItems[historyIndex]?.available;
+    }
+  };
+  const forkSelected = async () => {
+    const selected = historyItems[historyIndex];
+    if (historyBusy || !selected?.conversationForkAvailable) return false;
+    historyBusy = true;
+    historyRestore.disabled = true;
+    historyFork.disabled = true;
+    historyCancel.disabled = true;
+    historyClose.disabled = true;
+    historyStatus.textContent = '正在打开会话分支确认…';
+    try {
+      const state = await api.checkpoints.forkSession(selected.id);
+      showState(state);
+      if (!state?.forked) historyStatus.textContent = '会话分支未建立，可继续选择其他检查点。';
+      return Boolean(state?.forked);
+    } catch {
+      historyStatus.textContent = '无法打开会话分支确认，请稍后重试。';
+      return false;
+    } finally {
+      historyBusy = false;
+      historyCancel.disabled = false;
+      historyClose.disabled = false;
+      historyFork.disabled = !historyItems[historyIndex]?.conversationForkAvailable;
       historyRestore.disabled = !historyItems[historyIndex]?.available;
     }
   };
@@ -284,24 +330,37 @@
       .finally(() => { creating = null; });
     return creating;
   };
+  const prepareSendCheckpoint = async () => {
+    if (armed || creating) return ensureCheckpoint();
+    try {
+      const context = await api.checkpoints.matchesCurrentSession();
+      if (context?.matches) return null;
+    } catch { /* A failed context check falls back to a fresh code checkpoint. */ }
+    armed = true;
+    return ensureCheckpoint();
+  };
   const resumeButton = async (button) => {
-    await ensureCheckpoint();
+    await prepareSendCheckpoint();
     if (!button?.isConnected) return;
     replaying = true;
     button.click();
     queueMicrotask(() => { replaying = false; });
   };
 
-  document.addEventListener('focusin', (event) => {
-    if (isComposer(event.target)) void ensureCheckpoint();
+  document.addEventListener('pointerdown', (event) => {
+    if (!isComposer(event.target)) return;
+    if (!creating) armed = true;
+    void ensureCheckpoint();
   }, true);
   document.addEventListener('input', (event) => {
-    if (isComposer(event.target)) void ensureCheckpoint();
+    if (!isComposer(event.target)) return;
+    if (!creating) armed = true;
+    void ensureCheckpoint();
   }, true);
   document.addEventListener('click', (event) => {
     if (replaying) return;
     const button = event.target instanceof Element ? event.target.closest('button') : null;
-    if (!isSendButton(button) || (!armed && !creating)) return;
+    if (!isSendButton(button)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     void resumeButton(button);
@@ -309,7 +368,7 @@
   document.addEventListener('keydown', (event) => {
     if (replaying || event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing || !isComposer(event.target)) return;
     const button = findSendButton(event.target);
-    if (!button || (!armed && !creating)) return;
+    if (!button) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     void resumeButton(button);
@@ -328,6 +387,7 @@
 
   historyClose.addEventListener('click', () => closeHistory());
   historyCancel.addEventListener('click', () => closeHistory());
+  historyFork.addEventListener('click', () => { void forkSelected(); });
   historyRestore.addEventListener('click', () => { void restoreSelected(); });
   historyBackdrop.addEventListener('pointerdown', (event) => {
     if (event.target === historyBackdrop) closeHistory();
@@ -343,7 +403,7 @@
       event.preventDefault();
       void restoreSelected();
     } else if (event.key === 'Tab') {
-      const focusable = [historyClose, ...historyOptions(), historyCancel, historyRestore]
+      const focusable = [historyClose, ...historyOptions(), historyCancel, historyFork, historyRestore]
         .filter((node) => !node.disabled && node.getClientRects().length);
       const current = focusable.indexOf(document.activeElement);
       if (focusable.length && ((event.shiftKey && current <= 0) || (!event.shiftKey && current === focusable.length - 1))) {
