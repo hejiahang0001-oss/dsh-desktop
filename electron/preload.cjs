@@ -37,8 +37,6 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     setReviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-review-panel-open', open),
     setReviewPanelWidth: (width) => ipcRenderer.invoke('workbench:set-review-panel-width', width),
     setPreviewPanelOpen: (open) => ipcRenderer.invoke('workbench:set-preview-panel-open', open),
-    setTerminalPanelOpen: (open) => ipcRenderer.invoke('workbench:set-terminal-panel-open', open),
-    setTerminalPanelHeight: (height) => ipcRenderer.invoke('workbench:set-terminal-panel-height', height),
     setUiZoomFactor: (factor) => ipcRenderer.invoke('workbench:set-ui-zoom-factor', factor),
     resetLayout: () => ipcRenderer.invoke('workbench:reset-layout')
   }),
@@ -76,21 +74,7 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     }
   }),
   terminal: Object.freeze({
-    getState: () => ipcRenderer.invoke('terminal:get-state'),
-    start: (size) => ipcRenderer.invoke('terminal:start', size),
-    write: (data) => ipcRenderer.send('terminal:write', data),
-    resize: (size) => ipcRenderer.send('terminal:resize', size),
-    stop: () => ipcRenderer.invoke('terminal:stop'),
-    onState: (listener) => {
-      const handler = (_event, state) => listener(state);
-      ipcRenderer.on('terminal:state', handler);
-      return () => ipcRenderer.removeListener('terminal:state', handler);
-    },
-    onOutput: (listener) => {
-      const handler = (_event, output) => listener(output);
-      ipcRenderer.on('terminal:output', handler);
-      return () => ipcRenderer.removeListener('terminal:output', handler);
-    }
+    openWindow: () => ipcRenderer.invoke('terminal:open-window')
   }),
   harness: Object.freeze({
     getState: () => ipcRenderer.invoke('harness:get-state'),

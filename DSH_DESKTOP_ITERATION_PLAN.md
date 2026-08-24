@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-24 V0.5.4 已完成真实会话分支、最终覆盖、数据保留和 GitHub 发布完整性验证，并固定为当前 Stable；下一版 V0.5.5 进入 Latest 通道和权限中心。
+> 执行状态：2026-08-24 V0.5.5 已完成终端/IPC 安全隔离、最终覆盖和数据保留验证；V0.5.4 继续固定为 Stable。由于 Electron 35 仍超出官方支持窗口，V0.5.5 只作为本机 Latest 候选，不创建公开 Release；下一版 V0.5.6 优先升级 Electron 运行时。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -33,7 +33,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 ### 1.4 发布通道
 
-- **Latest**：按本计划继续迭代的最新可运行版本。每版完成验证后发布为 GitHub Pre-release，并直接覆盖安装到用户当前电脑；它可以持续前进，但不自动改变 Stable。
+- **Latest**：按本计划继续迭代的最新可运行版本。每版完成验证后直接覆盖安装到用户当前电脑；通过全部发布安全门禁后再发布为 GitHub Pre-release。它可以持续前进，但不自动改变 Stable。
 - **Stable**：面向普通用户的稳定基线。当前固定为 V0.5.4；只有用户明确下达“更新 Stable”命令，且指定 Latest 版本通过稳定版验收后，才取消其预发布状态并晋升 Stable。
 - **回退**：Latest 出现回归时，保留 Stable 安装包、标签和数据兼容路径；不得为追求版本号删除或覆盖 Stable 发布物。
 - GitHub 内置的 `Latest release` 标签继续指向 Stable；产品文档中的 Latest 指开发最新通道，对应 GitHub Pre-release，避免普通用户误装测试版本。
@@ -303,9 +303,10 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 1. V0.5.3（已完成）：软件内提供直连、Windows 系统代理和自定义 HTTP(S) 代理；保存前可测试 DeepSeek 连通性；修复 Harness 主页面复制按钮，同时继续拒绝剪贴板读取、子框架和其他网页权限。
 2. V0.5.4（已完成）：关联 Harness 会话/完整回合与代码检查点；“只恢复代码”和“从该回合建立新会话分支”为两个明确动作，官方 fork 已验证不改写原会话、代码、HEAD 或 Git 索引。
-3. V0.5.5：把 Ask、允许、拒绝和越界确认规则集中为可查看、可解释、可撤销的权限界面，继续复用 Harness 权限语义；同时形成独立品牌和无损迁移方案，但不在用户确认名称前改动 V0.5.4 Stable。
-4. V0.5.6：展示项目规则、Harness 记忆与本轮上下文来源，支持关闭或编辑用户可控来源，不制造隐形提示。
-5. V0.5.7：对 V0.5 恢复链和跨环境网络链做稳定化验收，使用接近 12 个真实检查点的仓库复测性能、损坏 ref、失败回滚、代理异常和安装覆盖；同步验证插件 Profile 一致性检查、固定 pnpm store 和故障插件恢复方案，再决定是否进入 V0.6 并行与扩展能力。
+3. V0.5.5（已完成，本机 Latest 候选）：把持久 PTY 移入只加载本地资源的独立窗口；Harness 页面只保留固定打开动作；所有桌面 IPC 统一进行精确 sender、主框架和 URL 校验。V0.5.4 Stable 未改变，公开发布因 Electron 支持门禁暂缓。
+4. V0.5.6：把 Electron `35.7.5` 升级到官方受支持稳定线，逐项回归窗口、Preload、预览、PTY、权限、打包、安装覆盖和数据保留；通过后恢复 GitHub Latest Pre-release 发布。
+5. V0.5.7：把 Ask、允许、拒绝和越界确认规则集中为权限中心，增加代理变更的原生默认取消确认，并统一文件/Checkpoint 敏感路径策略；继续复用 Harness 权限语义。
+6. V0.5.8：展示项目规则、Harness 记忆与本轮上下文来源，支持关闭或编辑用户可控来源；补齐 quality/security/package-smoke 三层 CI、Electron Fuses/ASAR 完整性与签名准备，并复测接近 12 个真实检查点、插件 Profile、固定 pnpm store 和故障插件恢复。
 
 用户能够：
 

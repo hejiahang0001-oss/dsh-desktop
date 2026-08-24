@@ -22,8 +22,6 @@
 #dsh-checkpoint-toast[data-tone="success"] { border-color: color-mix(in srgb, var(--dsh-panel-success) 55%, var(--dsh-panel-border)); }
 #dsh-checkpoint-toast[data-tone="warning"] { border-color: color-mix(in srgb, var(--dsh-panel-warning) 55%, var(--dsh-panel-border)); }
 #dsh-checkpoint-toast[data-tone="error"] { border-color: color-mix(in srgb, var(--dsh-panel-danger) 55%, var(--dsh-panel-border)); }
-html[data-dsh-terminal-open="true"] #dsh-checkpoint-toast { bottom: calc(var(--dsh-terminal-effective-height) + 12px); }
-
 .dsh-checkpoint-history-backdrop {
   position: fixed;
   inset: 0;

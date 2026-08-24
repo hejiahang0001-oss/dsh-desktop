@@ -19,16 +19,20 @@ test('desktop exposes bounded persisted interface zoom and complete layout reset
   assert.doesNotMatch(preload, /sendSync|ipcRenderer\.on\('workbench/);
 });
 
-test('compact desktop smoke size and 720px terminal budget are explicit', () => {
+test('compact desktop smoke size and isolated terminal window budget are explicit', () => {
   const main = read('electron/main.cjs');
-  const terminal = read('assets/workbench-terminal.css');
+  const terminal = read('assets/terminal-window.css');
+  const terminalHtml = read('terminal.html');
   const files = read('assets/workbench-files.css');
   const preview = read('assets/workbench-preview.css');
   assert.match(main, /--smoke-window-size=/);
   assert.match(main, /Math\.max\(820/);
   assert.match(main, /Math\.max\(600/);
-  assert.match(terminal, /max-height: 760px/);
-  assert.match(terminal, /210px/);
-  assert.match(files, /dsh-terminal-effective-height/);
-  assert.match(preview, /dsh-terminal-effective-height/);
+  assert.match(main, /minWidth: 720/);
+  assert.match(main, /minHeight: 420/);
+  assert.match(terminalHtml, /aria-label="PowerShell 交互区"/);
+  assert.match(terminal, /forced-colors: active/);
+  assert.match(terminal, /prefers-reduced-motion: reduce/);
+  assert.doesNotMatch(files, /dsh-terminal-effective-height/);
+  assert.doesNotMatch(preview, /dsh-terminal-effective-height/);
 });

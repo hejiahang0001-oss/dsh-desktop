@@ -1,6 +1,33 @@
 # Validation evidence
 
-This page records the locally verified V0.5.4 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.4 preserves those surfaces.
+This page records the locally verified V0.5.5 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.5 preserves those surfaces.
+
+## V0.5.5 terminal and IPC isolation evidence
+
+- All 118 local tests pass with the bundled Node.js 24 runtime. New coverage rejects child frames, different WebContents, URL-policy mismatches, and terminal commands from any frame other than the active local terminal owner.
+- The DeepSeek Harness Preload exposes only `terminal.openWindow`. The packaged local terminal Preload exposes the exact bounded set `getState`, `onOutput`, `onState`, `resize`, `start`, `stop`, and `write`.
+- A packaged Electron IPC smoke loaded the remote desktop Preload in the status page and the terminal Preload in the exact local `file://` page. It confirmed the one-versus-seven capability matrix, captured a 1449×875 rendered terminal image, and exited with code 0.
+- The dedicated terminal window denies new windows, WebViews, redirects, and navigation away from the exact packaged page. Closing the window or losing its Renderer clears ownership and stops an active PTY.
+- Previously unguarded workspace, diagnostics, and Harness handlers now require the expected main WebContents, exact main frame, and allowed URL. Preview iframes and other Renderer frames fail closed.
+- The unpacked and installed V0.5.5 desktop, Harness, and IPC security smoke checks all exit with code 0. The real Harness returned loopback HTTP 200, title `DeepSeek Harness`, and successful Workspace synchronization.
+
+## V0.5.5 installer and overwrite evidence
+
+| Item | V0.5.5 value |
+| --- | --- |
+| Installer | `DSH-Desktop-Setup-0.5.5.exe` |
+| Size | `162,583,825` bytes |
+| SHA-256 | `A22184C1A0435EAD94502B4991F38B895299D4781C57F4C44F34360296F668AA` |
+| Files in installed application | `29,369` |
+| Packaged `app.asar` SHA-256 | `71BE2CE32EE1029E4AFF6FC1148F8D3D66BC647890DDDE085A047A26E818A90D` |
+| Reparse points | `0` |
+| Terminal PDB files | `0` |
+
+The final installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.5.5`. The installed and unpacked `app.asar` hashes match. Fourteen persisted session files retained the same aggregate path/content digest; the credential reference and desktop/workbench/network state, Preferences, and Harness settings retained identical pre/post-overwrite hashes.
+
+The rollback snapshot is `backups/pre-v0.5.5-20260824-200843`. It contains the V0.5.4 installer, fourteen session files, storages, settings, desktop/workbench/network state, Preferences, and local selection storage in 31 files. It intentionally contains zero credential files.
+
+V0.5.4 remains the published Stable and GitHub `Latest release`. V0.5.5 is installed locally as the product Latest candidate but is not published as a GitHub Release/Pre-release because Electron 35 remains outside the official supported-major window. Public Latest publication resumes only after the V0.5.6 runtime upgrade passes the same packaged and overwrite gates.
 
 ## V0.5.4 conversation-linked checkpoint evidence
 

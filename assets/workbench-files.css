@@ -42,8 +42,6 @@ html[data-dsh-files-open="true"] #dsh-workbench-files {
   transition-delay: 0s;
 }
 
-html[data-dsh-terminal-open="true"] #dsh-workbench-files { bottom: var(--dsh-terminal-effective-height); }
-
 .dsh-files-resizer {
   position: absolute;
   inset: 0 -4px 0 auto;
@@ -177,8 +175,6 @@ html[data-dsh-terminal-open="true"] #dsh-workbench-files { bottom: var(--dsh-ter
 #dsh-file-preview[hidden] { display: none; }
 html[data-dsh-review-open="false"] #dsh-file-preview { right: 24px; }
 html[data-dsh-files-open="false"] #dsh-file-preview { left: 24px; }
-html[data-dsh-terminal-open="true"] #dsh-file-preview { bottom: calc(var(--dsh-terminal-effective-height) + 24px); }
-
 .dsh-file-preview-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
