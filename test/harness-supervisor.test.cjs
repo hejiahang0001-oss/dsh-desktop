@@ -17,10 +17,16 @@ const {
 test('software-managed credential policy removes inherited DeepSeek keys case-insensitively', () => {
   const baseEnv = {
     PATH: 'runtime-path',
-    deepseek_api_key: 'legacy-secret'
+    deepseek_api_key: 'legacy-secret',
+    http_proxy: 'http://inherited-proxy:8080',
+    NO_PROXY: '*'
   };
   const overrides = {
     DEEPSEEK_API_KEY: 'override-secret',
+    HTTP_PROXY: 'http://software-proxy:7890',
+    HTTPS_PROXY: 'http://software-proxy:7890',
+    NO_PROXY: '127.0.0.1,localhost,::1',
+    NODE_USE_ENV_PROXY: '1',
     DSH_TEST_FLAG: 'kept'
   };
   const environment = buildHarnessEnvironment({
@@ -31,6 +37,11 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
 
   assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DEEPSEEK_API_KEY'), false);
   assert.equal(environment.DSH_TEST_FLAG, 'kept');
+  assert.equal(environment.HTTP_PROXY, 'http://software-proxy:7890');
+  assert.equal(environment.HTTPS_PROXY, 'http://software-proxy:7890');
+  assert.equal(environment.NO_PROXY, '127.0.0.1,localhost,::1');
+  assert.equal(environment.NODE_USE_ENV_PROXY, '1');
+  assert.equal(Object.hasOwn(environment, 'http_proxy'), false);
   assert.equal(environment.DSH_HOME, 'C:\\DSH_HOME');
   assert.equal(environment.NO_COLOR, '1');
   assert.equal(baseEnv.deepseek_api_key, 'legacy-secret');

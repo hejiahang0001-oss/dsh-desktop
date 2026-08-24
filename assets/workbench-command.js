@@ -51,6 +51,7 @@
     { id: 'checkpoint.create', title: '立即创建代码检查点', detail: '不改变工作树和 Git 索引，敏感路径不写入检查点', shortcut: 'Ctrl+Alt+B', run: async () => window.__DSH_CHECKPOINTS__?.showState(await api.checkpoints.create()) },
     { id: 'checkpoint.history', title: '浏览代码检查点', detail: '查看最近 12 个本地安全点并选择恢复目标', shortcut: 'Ctrl+Alt+H', run: () => window.__DSH_CHECKPOINTS__?.openHistory?.() },
     { id: 'checkpoint.restore', title: '恢复到最近代码检查点', detail: '先建立恢复前安全点，再经原生确认恢复代码和索引', shortcut: 'Ctrl+Alt+R', run: () => api.checkpoints.restoreLatest() },
+    { id: 'settings.network', title: '网络与代理设置', detail: '选择直连、Windows 系统代理或自定义 HTTP(S) 代理', shortcut: 'Ctrl+,', run: () => window.__DSH_NETWORK__?.open?.() },
     { id: 'zoom.in', title: '界面放大', detail: '放大 Harness 与工作台界面', shortcut: 'Ctrl+=', run: () => adjustZoom(0.1) },
     { id: 'zoom.out', title: '界面缩小', detail: '缩小 Harness 与工作台界面', shortcut: 'Ctrl+-', run: () => adjustZoom(-0.1) },
     { id: 'zoom.reset', title: '界面大小重置', detail: '恢复到 100% 界面大小', shortcut: 'Ctrl+0', run: () => api.workbench.setUiZoomFactor(1) },

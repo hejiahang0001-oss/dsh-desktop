@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { GitChangeReviewer } = require('./change-review.cjs');
+const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
 const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
@@ -19,6 +20,13 @@ const {
 } = require('./harness-ui-actions.cjs');
 const { scanSessionCatalog } = require('./session-catalog.cjs');
 const { PreviewManager, isSafePreviewNavigation } = require('./preview-manager.cjs');
+const {
+  ProxySettingsStore,
+  buildHarnessProxyEnvironment,
+  normalizeProxySettings,
+  parseResolvedProxy,
+  sessionProxyConfig
+} = require('./network-proxy.cjs');
 const { TerminalRunner, resolveTerminalRuntime } = require('./terminal-runner.cjs');
 const {
   getWorkbenchPanelBootstrapScript,
@@ -35,6 +43,7 @@ let mainWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
+let proxyStore;
 let changeReviewer;
 let checkpointManager;
 let terminalRunner;
@@ -42,6 +51,7 @@ let previewManager;
 let workspaceFiles;
 let dataRoot;
 let harnessOrigin = null;
+let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
 let loadFailureHandled = false;
 let agentPollTimer;
@@ -112,6 +122,14 @@ let desktopDiagnostics = Object.freeze({
   credential: Object.freeze({ status: 'missing', source: 'managed-file', reason: 'not-checked', message: '尚未检查软件模型配置。', policy: 'software-first', environmentIgnored: false }),
   sessions: Object.freeze({ available: true, count: 0, latestUpdatedAt: null, encodings: Object.freeze({ zstd: 0, jsonl: 0 }) })
 });
+let networkDiagnostics = Object.freeze({
+  mode: 'direct',
+  proxyUrl: '',
+  effectiveProxy: '',
+  status: 'direct',
+  reason: 'not-checked',
+  message: '当前为直连模式。'
+});
 
 const rootDir = path.resolve(__dirname, '..');
 const statusPage = path.join(rootDir, 'harness-status.html');
@@ -130,6 +148,8 @@ const workbenchCommandCssPath = path.join(rootDir, 'assets', 'workbench-command.
 const workbenchCommandScriptPath = path.join(rootDir, 'assets', 'workbench-command.js');
 const workbenchCheckpointCssPath = path.join(rootDir, 'assets', 'workbench-checkpoint.css');
 const workbenchCheckpointScriptPath = path.join(rootDir, 'assets', 'workbench-checkpoint.js');
+const workbenchNetworkCssPath = path.join(rootDir, 'assets', 'workbench-network.css');
+const workbenchNetworkScriptPath = path.join(rootDir, 'assets', 'workbench-network.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
@@ -146,6 +166,8 @@ let workbenchCommandCss = '';
 let workbenchCommandScript = '';
 let workbenchCheckpointCss = '';
 let workbenchCheckpointScript = '';
+let workbenchNetworkCss = '';
+let workbenchNetworkScript = '';
 let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
@@ -168,7 +190,8 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
     isPackaged: app.isPackaged,
     homeDir: path.join(dataRoot, 'harness'),
     launchDir,
-    logFile: path.join(dataRoot, 'logs', 'harness.log')
+    logFile: path.join(dataRoot, 'logs', 'harness.log'),
+    env: harnessProxyEnvironment
   });
   instance.on('state', (state) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('harness:state', state);
@@ -311,6 +334,138 @@ const harnessUiReady = () => {
 
 const getWorkbenchState = () => workbenchStore?.getState() || normalizeWorkbenchState();
 
+const getNetworkState = () => ({ ...networkDiagnostics });
+
+const applySessionProxy = async (targetSession, settings) => {
+  const normalized = normalizeProxySettings(settings);
+  await targetSession.setProxy(sessionProxyConfig(normalized));
+  await targetSession.forceReloadProxyConfig();
+  if (normalized.mode === 'direct') return { settings: normalized, effectiveProxy: '' };
+  if (normalized.mode === 'custom') return { settings: normalized, effectiveProxy: normalized.proxyUrl };
+  const resolved = await targetSession.resolveProxy('https://api.deepseek.com');
+  const effectiveProxy = parseResolvedProxy(resolved);
+  await targetSession.setProxy(effectiveProxy
+    ? sessionProxyConfig({ mode: 'custom', proxyUrl: effectiveProxy })
+    : { mode: 'direct' });
+  await targetSession.forceReloadProxyConfig();
+  return { settings: normalized, effectiveProxy };
+};
+
+const setNetworkDiagnostics = ({ settings, effectiveProxy = '', status = 'ready', reason = 'configured', message = '' }) => {
+  const direct = !effectiveProxy;
+  networkDiagnostics = Object.freeze({
+    mode: settings.mode,
+    proxyUrl: settings.proxyUrl,
+    effectiveProxy,
+    status: status === 'ready' ? (direct ? 'direct' : 'proxied') : status,
+    reason: direct && settings.mode === 'system' ? 'system-direct' : reason,
+    message: message || (direct
+      ? (settings.mode === 'system' ? 'Windows 系统代理当前解析为直连。' : '当前为直连模式。')
+      : (settings.mode === 'system' ? '已使用 Windows 系统 HTTP(S) 代理。' : '已使用软件自定义 HTTP(S) 代理。'))
+  });
+  installApplicationMenu();
+  return getNetworkState();
+};
+
+const applyProxySettings = async (settings, { persist = false } = {}) => {
+  const previous = proxyStore?.getState() || normalizeProxySettings();
+  let applied;
+  try {
+    applied = await applySessionProxy(session.defaultSession, settings);
+    if (persist) await proxyStore.set(applied.settings);
+  } catch (error) {
+    if (persist) {
+      try { await applySessionProxy(session.defaultSession, previous); } catch { /* Keep the error from the requested setting. */ }
+    }
+    throw error;
+  }
+  harnessProxyEnvironment = buildHarnessProxyEnvironment(applied.effectiveProxy);
+  supervisor?.setEnvironment(harnessProxyEnvironment);
+  return setNetworkDiagnostics({ settings: applied.settings, effectiveProxy: applied.effectiveProxy });
+};
+
+const initializeProxySettings = async () => {
+  const settings = proxyStore.getState();
+  try {
+    return await applyProxySettings(settings);
+  } catch (error) {
+    await session.defaultSession.setProxy({ mode: 'direct' });
+    harnessProxyEnvironment = Object.freeze({});
+    return setNetworkDiagnostics({
+      settings,
+      status: 'error',
+      reason: error.code || 'unavailable',
+      message: error.message || '代理设置不可用，Harness 已保持直连。'
+    });
+  }
+};
+
+const networkModeLabel = () => {
+  if (networkDiagnostics.status === 'error') return '网络：代理配置不可用';
+  if (networkDiagnostics.mode === 'system') {
+    return networkDiagnostics.effectiveProxy ? '网络：Windows 系统代理' : '网络：Windows 系统直连';
+  }
+  if (networkDiagnostics.mode === 'custom') return '网络：自定义代理';
+  return '网络：直连';
+};
+
+const openNetworkSettings = async () => {
+  if (!harnessUiReady()) return false;
+  return Boolean(await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_NETWORK__?.open?.())', true));
+};
+
+const networkChangeBlocked = () => agentDiagnostics.canStop || agentDiagnostics.status === 'waiting';
+
+const saveNetworkSettings = async (settings) => {
+  if (networkChangeBlocked()) {
+    return { ok: false, reason: 'agent-busy', message: '请先结束当前生成或待确认操作，再修改代理。', state: getNetworkState() };
+  }
+  try {
+    const state = await applyProxySettings(settings, { persist: true });
+    setTimeout(() => { void startHarnessForWindow({ restart: true }); }, 250).unref?.();
+    return { ok: true, restarting: true, state };
+  } catch (error) {
+    return { ok: false, reason: error.code || 'save-failed', message: error.message || '代理设置保存失败。', state: getNetworkState() };
+  }
+};
+
+const testNetworkSettings = async (settings) => {
+  let testSession;
+  const startedAt = Date.now();
+  try {
+    const normalized = normalizeProxySettings(settings);
+    testSession = session.fromPartition('dsh-proxy-test', { cache: false });
+    const applied = await applySessionProxy(testSession, normalized);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    let response;
+    try {
+      response = await testSession.fetch('https://api.deepseek.com', { method: 'HEAD', signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    void response.body?.cancel?.();
+    return {
+      ok: true,
+      status: response.status,
+      latencyMs: Date.now() - startedAt,
+      effectiveProxy: applied.effectiveProxy,
+      message: `已连接 DeepSeek API（HTTP ${response.status}）。`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error.code || (error.name === 'AbortError' ? 'timeout' : 'connection-failed'),
+      latencyMs: Date.now() - startedAt,
+      message: error.name === 'AbortError' ? '连接测试超时，请检查代理地址和网络策略。' : (error.message || '无法连接 DeepSeek API。')
+    };
+  } finally {
+    if (testSession) {
+      try { await testSession.setProxy({ mode: 'direct' }); } catch { /* The in-memory test session is disposable. */ }
+    }
+  }
+};
+
 const loadWorkbenchPanelAssets = async () => {
   if (!workbenchPanelCss) workbenchPanelCss = await fsp.readFile(workbenchPanelCssPath, 'utf8');
   if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
@@ -327,9 +482,11 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchCommandScript) workbenchCommandScript = await fsp.readFile(workbenchCommandScriptPath, 'utf8');
   if (!workbenchCheckpointCss) workbenchCheckpointCss = await fsp.readFile(workbenchCheckpointCssPath, 'utf8');
   if (!workbenchCheckpointScript) workbenchCheckpointScript = await fsp.readFile(workbenchCheckpointScriptPath, 'utf8');
+  if (!workbenchNetworkCss) workbenchNetworkCss = await fsp.readFile(workbenchNetworkCssPath, 'utf8');
+  if (!workbenchNetworkScript) workbenchNetworkScript = await fsp.readFile(workbenchNetworkScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}`,
+    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}`,
     reviewScript: workbenchPanelScript,
     terminalScript: workbenchTerminalScript,
     xtermScript,
@@ -337,6 +494,7 @@ const loadWorkbenchPanelAssets = async () => {
     filesScript: workbenchFilesScript,
     previewScript: workbenchPreviewScript,
     checkpointScript: workbenchCheckpointScript,
+    networkScript: workbenchNetworkScript,
     commandScript: workbenchCommandScript,
     localizationScript: harnessLocalizationScript
   };
@@ -356,8 +514,9 @@ const installWorkbenchPanel = async () => {
     const previewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.previewScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
     const checkpointInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.checkpointScript, true));
+    const networkInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.networkScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
-    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled && checkpointInstalled && commandInstalled;
+    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled && checkpointInstalled && networkInstalled && commandInstalled;
   } catch {
     return false;
   }
@@ -1348,6 +1507,18 @@ function installApplicationMenu() {
       ]
     },
     {
+      label: '编辑',
+      submenu: [
+        { role: 'undo', label: '撤销' },
+        { role: 'redo', label: '重做' },
+        { type: 'separator' },
+        { role: 'cut', label: '剪切' },
+        { role: 'copy', label: '复制' },
+        { role: 'paste', label: '粘贴' },
+        { role: 'selectAll', label: '全选' }
+      ]
+    },
+    {
       label: '会话',
       submenu: [
         {
@@ -1537,6 +1708,14 @@ function installApplicationMenu() {
         {
           label: '检查模型配置…',
           click: () => { void showCredentialDiagnostics(); }
+        },
+        { type: 'separator' },
+        { label: networkModeLabel(), enabled: false },
+        {
+          label: '网络与代理设置…',
+          accelerator: 'CmdOrCtrl+,',
+          enabled: harnessReady,
+          click: () => { void openNetworkSettings(); }
         }
       ]
     },
@@ -1717,6 +1896,21 @@ ipcMain.handle('app:get-info', () => ({
   platform: process.platform,
   packaged: app.isPackaged
 }));
+ipcMain.handle('network:get-state', (event) => (
+  desktopIpcAllowed(event)
+    ? getNetworkState()
+    : { mode: 'direct', proxyUrl: '', effectiveProxy: '', status: 'unavailable', reason: 'untrusted', message: '代理状态请求来源未通过安全校验。' }
+));
+ipcMain.handle('network:test', (event, settings) => (
+  harnessIpcAllowed(event)
+    ? testNetworkSettings(settings)
+    : { ok: false, reason: 'untrusted', message: '代理测试请求来源未通过安全校验。' }
+));
+ipcMain.handle('network:save', (event, settings) => (
+  harnessIpcAllowed(event)
+    ? saveNetworkSettings(settings)
+    : { ok: false, reason: 'untrusted', message: '代理设置请求来源未通过安全校验。' }
+));
 ipcMain.handle('workspace:get-state', () => getWorkspaceState());
 ipcMain.handle('workspace:choose', () => chooseWorkspace());
 ipcMain.handle('diagnostics:get-state', () => getDiagnosticsState());
@@ -2014,7 +2208,26 @@ const runHarnessSmoke = async (target) => {
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
+    isTrustedClipboardWrite({
+      webContents,
+      mainWebContents: mainWindow?.webContents,
+      permission,
+      requestingUrl: details?.requestingUrl || requestingOrigin,
+      harnessOrigin,
+      isMainFrame: details?.isMainFrame
+    })
+  ));
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    callback(isTrustedClipboardWrite({
+      webContents,
+      mainWebContents: mainWindow?.webContents,
+      permission,
+      requestingUrl: details?.requestingUrl,
+      harnessOrigin,
+      isMainFrame: details?.isMainFrame
+    }));
+  });
 
   if (desktopSmokeTarget) {
     await runDesktopSmoke(desktopSmokeTarget.slice('--smoke-test-file='.length));
@@ -2037,7 +2250,11 @@ app.whenReady().then(async () => {
   workbenchStore = new WorkbenchStore({
     filePath: path.join(dataRoot, 'workbench-state.json')
   });
+  proxyStore = new ProxySettingsStore({
+    filePath: path.join(dataRoot, 'network-state.json')
+  });
   await workbenchStore.init();
+  await proxyStore.init();
   const workspace = await workspaceStore.init();
   workspaceFiles = new WorkspaceFiles();
   await workspaceFiles.activate(workspace.activePath);
@@ -2055,6 +2272,7 @@ app.whenReady().then(async () => {
   await changeReviewer.activate(workspace.activePath);
   checkpointManager = new GitCheckpointManager();
   checkpointDiagnostics = await checkpointManager.activate(workspace.activePath);
+  await initializeProxySettings();
   supervisor = createSupervisor(dataRoot, workspace.activePath);
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   installApplicationMenu();

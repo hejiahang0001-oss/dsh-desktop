@@ -4,6 +4,11 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   app: Object.freeze({
     getInfo: () => ipcRenderer.invoke('app:get-info')
   }),
+  network: Object.freeze({
+    getState: () => ipcRenderer.invoke('network:get-state'),
+    test: (settings) => ipcRenderer.invoke('network:test', settings),
+    save: (settings) => ipcRenderer.invoke('network:save', settings)
+  }),
   workspace: Object.freeze({
     getState: () => ipcRenderer.invoke('workspace:get-state'),
     choose: () => ipcRenderer.invoke('workspace:choose')

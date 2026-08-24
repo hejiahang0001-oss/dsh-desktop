@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.5.2.exe"><strong>Download for Windows</strong></a>
+  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.5.3.exe"><strong>Download for Windows</strong></a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#中文说明">中文说明</a>
   · <a href="DSH_DESKTOP_ITERATION_PLAN.md">Roadmap</a>
@@ -43,6 +43,8 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Automatic code checkpoints** — snapshot the current repository through a temporary Git index before an Agent turn, deduplicate unchanged state, exclude credential-like paths, and leave the branch, working tree, and real index untouched.
 - **Confirmed checkpoint recovery** — preview a bounded restore, create a safety point, preserve sensitive files and their staged state, recycle newly created files, and recover without moving the branch or HEAD.
 - **Bounded checkpoint history** — inspect the latest twelve verified local safety points, compare their real impact, and choose an older target without exposing commit or ref input.
+- **In-app network settings** — choose direct access, the current Windows system proxy, or a credential-free custom HTTP(S) proxy; test DeepSeek connectivity before saving and keep loopback services and the integrated terminal outside that route.
+- **Reliable copy actions** — Harness can write sanitized text to the clipboard from its trusted main page, while clipboard reads, subframes, and unrelated permission requests remain denied.
 - **Packaged runtime** — the installer includes pinned Node.js and Harness runtimes; users do not need to install Node.js first.
 - **Constrained desktop shell** — loopback-only service, random port, renderer sandbox, context isolation, no Node integration, and restricted navigation.
 
@@ -52,7 +54,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 
 ## Quick start
 
-1. Download [`DSH-Desktop-Setup-0.5.2.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.5.2.exe).
+1. Download [`DSH-Desktop-Setup-0.5.3.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.5.3.exe).
 2. Install and launch DSH Desktop. The current installer is not code-signed, so Windows SmartScreen may show a warning.
 3. Open **Project → Open code repository…** or press `Ctrl+O`.
 4. Open **Model** to configure your DeepSeek API key, then start a Harness session.
@@ -61,7 +63,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current release
 
-**V0.5.2** keeps official DeepSeek Harness `0.1.1-rc.2` and adds bounded history and selected recovery to automatic local code checkpoints in the existing file, preview, Diff, and persistent PTY workbench:
+**V0.5.3** keeps official DeepSeek Harness `0.1.1-rc.2`, retains bounded checkpoint history/recovery, and fixes two portability gaps found on another Windows environment: proxy setup is now available inside the desktop UI and Harness copy buttons can use the sanitized clipboard-write permission they require.
 
 ```text
 Open repository → run or approve the agent in Harness
@@ -75,11 +77,12 @@ Open repository → run or approve the agent in Harness
 → automatically record the pre-turn working tree and index state in private Git refs
 → press Ctrl+Alt+R, inspect the native restore summary, and recover after a safety checkpoint
 → or press Ctrl+Alt+H to compare the latest twelve verified local points and select an older target
+→ press Ctrl+, to choose direct, Windows system, or custom HTTP(S) proxy and test connectivity
 → reload, open in the browser, stop, and visibly distinguish owned from external ports
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.5.2 release notes](docs/RELEASE_NOTES_v0.5.2.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.5.3 release notes](docs/RELEASE_NOTES_v0.5.3.md).
 
 ## Security and current limits
 
@@ -87,7 +90,7 @@ The pinned runtime includes the complete official dependency closure required by
 - Harness credentials are currently stored by Harness `0.1.1-rc.2` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
 - A Workspace Write crash with `0xC0000005` was previously observed on rc.8 in restricted mode. DSH Desktop reports tool failures and never switches to Full Access automatically; the exact rc.2 write path remains a separate compatibility gate.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
-- The terminal provides one persistent PowerShell PTY session with ANSI rendering and renderer-reload recovery. Terminal tabs and split panes are not included yet. V0.5.2 lists at most twelve local code checkpoints and restores a selected target after native confirmation; Harness conversation rewind and remote checkpoint sync are not included. Git accept/reject and checkpoint recovery stay disabled while the PTY or Agent is active.
+- The terminal provides one persistent PowerShell PTY session with ANSI rendering and renderer-reload recovery. Terminal tabs and split panes are not included yet. V0.5.3 lists at most twelve local code checkpoints and restores a selected target after native confirmation; Harness conversation rewind and remote checkpoint sync are not included. Git accept/reject and checkpoint recovery stay disabled while the PTY or Agent is active. Custom proxy authentication and SOCKS are not included in this release.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Architecture and product boundaries are documented in [the iteration plan](DSH_DESKTOP_ITERATION_PLAN.md).
 
@@ -119,7 +122,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.2 继续固定官方 Harness `0.1.1-rc.2`，保留现有中文过程、Git 审查、文件树、持久 PTY、应用预览、图片/PDF Quick Look、命令面板和可恢复布局，并为自动代码检查点增加有界历史与选择恢复：
+V0.5.3 继续固定官方 Harness `0.1.1-rc.2`，保留现有中文过程、Git 审查、文件树、持久 PTY、应用预览、图片/PDF Quick Look、命令面板、可恢复布局和代码检查点，并优先修复跨电脑使用时发现的代理入口与复制按钮问题：
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
@@ -140,6 +143,9 @@ V0.5.2 继续固定官方 Harness `0.1.1-rc.2`，保留现有中文过程、Git 
 - `Ctrl+Alt+R`、视图菜单或命令面板可恢复最近代码检查点；原生提示先列出影响路径、将进回收站的新文件和保留的敏感路径，且默认选择取消；
 - `Ctrl+Alt+H` 打开最近 12 个本地检查点，显示来源、时间、当前影响、索引与回收站摘要；选择旧点后仍须经过原生默认取消确认；
 - 历史界面只接收严格检查点 ID 和有界摘要，不接收 commit/tree/ref、文件路径或任意 Git 参数；伪造或损坏的私有 ref 被忽略；
+- `Ctrl+,`、模型菜单或命令面板可打开“网络与代理”，选择直连、Windows 系统代理或无账号密码的自定义 HTTP(S) 代理，并在保存前测试 DeepSeek API 连通性；
+- 软件代理只传给 Harness 外部请求；`127.0.0.1`、`localhost`、`::1` 与集成终端不受影响，软件设置会隔离继承的代理环境变量；
+- Harness 主页面可执行经过清洗的剪贴板写入，因此对话复制按钮恢复可用；读取剪贴板、子框架及其他网页权限仍保持拒绝；
 - 恢复前自动建立 safety checkpoint，分支和 HEAD 不移动；失败时自动回到恢复前状态，成功后立即再次恢复可撤销本次恢复；
 - 从 HTML 的只读 Quick Look 直接进入应用预览，由软件在当前工作区启动随机 `127.0.0.1` 端口并加载相对资源；
 - 连接已经运行的 `127.0.0.1`、`localhost` 或 `::1` 开发服务器，显示可用、离线、失败和停止状态；外部端口只监控、不代替用户结束进程；

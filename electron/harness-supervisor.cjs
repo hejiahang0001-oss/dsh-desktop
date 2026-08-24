@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
+const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
 const HARNESS_VERSION = '0.1.1-rc.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
@@ -34,9 +35,15 @@ const isSafeHarnessUrl = (value) => {
 const firstExistingFile = (candidates) => candidates.find((candidate) => candidate && fs.existsSync(candidate));
 
 const buildHarnessEnvironment = ({ baseEnv = process.env, overrides = {}, homeDir, workspaceDir }) => {
-  const environment = { ...baseEnv, ...overrides };
+  const environment = { ...baseEnv };
   for (const name of Object.keys(environment)) {
-    if (SOFTWARE_MANAGED_CREDENTIALS.has(name.toUpperCase())) delete environment[name];
+    const normalizedName = name.toUpperCase();
+    if (SOFTWARE_MANAGED_CREDENTIALS.has(normalizedName) || SOFTWARE_MANAGED_NETWORK.has(normalizedName)) {
+      delete environment[name];
+    }
+  }
+  for (const [name, value] of Object.entries(overrides)) {
+    if (!SOFTWARE_MANAGED_CREDENTIALS.has(name.toUpperCase())) environment[name] = value;
   }
   environment.DSH_HOME = homeDir;
   if (workspaceDir) environment.DSH_CWD = workspaceDir;
@@ -163,6 +170,13 @@ class HarnessSupervisor extends EventEmitter {
       throw new Error('Harness 工作目录必须是绝对路径。');
     }
     this.options.launchDir = launchDir;
+  }
+
+  setEnvironment(environment = {}) {
+    if (!environment || typeof environment !== 'object' || Array.isArray(environment)) {
+      throw new Error('Harness 环境配置无效。');
+    }
+    this.options.env = { ...environment };
   }
 
   _setState(next) {
