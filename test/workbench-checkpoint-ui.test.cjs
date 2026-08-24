@@ -50,7 +50,7 @@ test('checkpoint renderer bridge and assets expose fixed manual and automatic op
   assert.match(main, /session\.fork|forkCheckpointSession/);
   assert.match(main, /current code|当前代码、Git 索引和原会话不会改变/);
   assert.match(main, /const \{ commit, tree, indexTree, sessionId, sessionAtSeq,/);
-  assert.match(css, /dsh-terminal-effective-height/);
+  assert.doesNotMatch(css, /dsh-terminal-effective-height/);
   assert.match(css, /forced-colors: active/);
 });
 

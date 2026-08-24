@@ -11,6 +11,7 @@ const {
   forkHarnessCheckpointSession
 } = require('./harness-checkpoint-link.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
+const { captureFrameOwner, isFrameOwner, isTrustedMainFrameEvent } = require('./ipc-policy.cjs');
 const {
   readHarnessSessionSelection,
   selectHarnessSession,
@@ -45,6 +46,7 @@ app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setName('DSH Desktop');
 
 let mainWindow;
+let terminalWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -52,6 +54,7 @@ let proxyStore;
 let changeReviewer;
 let checkpointManager;
 let terminalRunner;
+let terminalOwner = null;
 let previewManager;
 let workspaceFiles;
 let dataRoot;
@@ -140,13 +143,9 @@ let networkDiagnostics = Object.freeze({
 
 const rootDir = path.resolve(__dirname, '..');
 const statusPage = path.join(rootDir, 'harness-status.html');
+const terminalPage = path.join(rootDir, 'terminal.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
-const workbenchTerminalCssPath = path.join(rootDir, 'assets', 'workbench-terminal.css');
-const workbenchTerminalScriptPath = path.join(rootDir, 'assets', 'workbench-terminal.js');
-const xtermCssPath = path.join(rootDir, 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css');
-const xtermScriptPath = path.join(rootDir, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js');
-const xtermFitScriptPath = path.join(rootDir, 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
 const workbenchFilesScriptPath = path.join(rootDir, 'assets', 'workbench-files.js');
 const workbenchPreviewCssPath = path.join(rootDir, 'assets', 'workbench-preview.css');
@@ -160,11 +159,6 @@ const workbenchNetworkScriptPath = path.join(rootDir, 'assets', 'workbench-netwo
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
-let workbenchTerminalCss = '';
-let workbenchTerminalScript = '';
-let xtermCss = '';
-let xtermScript = '';
-let xtermFitScript = '';
 let workbenchFilesCss = '';
 let workbenchFilesScript = '';
 let workbenchPreviewCss = '';
@@ -178,6 +172,7 @@ let workbenchNetworkScript = '';
 let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
+const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 
 const parseWindowSize = (value) => {
@@ -209,12 +204,26 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
 const currentUrlAllowed = (value) => {
   try {
     const url = new URL(value);
-    if (url.protocol === 'file:') return decodeURIComponent(url.pathname).replace(/\\/g, '/').endsWith('/harness-status.html');
+    if (url.protocol === 'file:') return localFileUrlMatches(value, statusPage);
     return Boolean(harnessOrigin && url.origin === harnessOrigin);
   } catch {
     return false;
   }
 };
+
+const localFileUrlMatches = (value, target) => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'file:' || url.search || url.hash) return false;
+    const candidate = decodeURIComponent(url.pathname).replace(/\\/g, '/').toLocaleLowerCase();
+    const expected = `/${path.resolve(target).replace(/\\/g, '/').toLocaleLowerCase()}`;
+    return candidate === expected;
+  } catch {
+    return false;
+  }
+};
+
+const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
 
 const showStatusPage = async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -495,11 +504,6 @@ const testNetworkSettings = async (settings) => {
 const loadWorkbenchPanelAssets = async () => {
   if (!workbenchPanelCss) workbenchPanelCss = await fsp.readFile(workbenchPanelCssPath, 'utf8');
   if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
-  if (!workbenchTerminalCss) workbenchTerminalCss = await fsp.readFile(workbenchTerminalCssPath, 'utf8');
-  if (!workbenchTerminalScript) workbenchTerminalScript = await fsp.readFile(workbenchTerminalScriptPath, 'utf8');
-  if (!xtermCss) xtermCss = await fsp.readFile(xtermCssPath, 'utf8');
-  if (!xtermScript) xtermScript = await fsp.readFile(xtermScriptPath, 'utf8');
-  if (!xtermFitScript) xtermFitScript = await fsp.readFile(xtermFitScriptPath, 'utf8');
   if (!workbenchFilesCss) workbenchFilesCss = await fsp.readFile(workbenchFilesCssPath, 'utf8');
   if (!workbenchFilesScript) workbenchFilesScript = await fsp.readFile(workbenchFilesScriptPath, 'utf8');
   if (!workbenchPreviewCss) workbenchPreviewCss = await fsp.readFile(workbenchPreviewCssPath, 'utf8');
@@ -512,11 +516,8 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchNetworkScript) workbenchNetworkScript = await fsp.readFile(workbenchNetworkScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${xtermCss}\n${workbenchTerminalCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}`,
+    css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}`,
     reviewScript: workbenchPanelScript,
-    terminalScript: workbenchTerminalScript,
-    xtermScript,
-    xtermFitScript,
     filesScript: workbenchFilesScript,
     previewScript: workbenchPreviewScript,
     checkpointScript: workbenchCheckpointScript,
@@ -534,15 +535,12 @@ const installWorkbenchPanel = async () => {
     await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
     const localizationInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.localizationScript, true));
     const reviewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.reviewScript, true));
-    await mainWindow.webContents.executeJavaScript(assets.xtermScript, true);
-    await mainWindow.webContents.executeJavaScript(assets.xtermFitScript, true);
-    const terminalInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.terminalScript, true));
     const previewInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.previewScript, true));
     const filesInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.filesScript, true));
     const checkpointInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.checkpointScript, true));
     const networkInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.networkScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
-    return localizationInstalled && reviewInstalled && terminalInstalled && previewInstalled && filesInstalled && checkpointInstalled && networkInstalled && commandInstalled;
+    return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled && networkInstalled && commandInstalled;
   } catch {
     return false;
   }
@@ -558,7 +556,6 @@ const applyWorkbenchPanelLayout = async ({ focus = false, focusTarget = 'review'
     const globalName = {
       files: '__DSH_FILES__',
       preview: '__DSH_PREVIEW__',
-      terminal: '__DSH_TERMINAL__',
       review: '__DSH_WORKBENCH__'
     }[focusTarget] || '__DSH_WORKBENCH__';
     await mainWindow.webContents.executeJavaScript(`Boolean(window.${globalName}?.focus?.())`, true);
@@ -613,25 +610,6 @@ const setPreviewPanelOpen = async (open, { focus = false, stopOnClose = true } =
     });
     if (!applied) await installWorkbenchPanel();
   }
-  return state;
-};
-
-const setTerminalPanelOpen = async (open, { focus = false } = {}) => {
-  const state = await workbenchStore.setTerminalPanelOpen(Boolean(open));
-  installApplicationMenu();
-  if (harnessUiReady()) {
-    const applied = await applyWorkbenchPanelLayout({
-      focus: focus && state.terminalPanelOpen,
-      focusTarget: 'terminal'
-    });
-    if (!applied) await installWorkbenchPanel();
-  }
-  return state;
-};
-
-const setTerminalPanelHeight = async (height) => {
-  const state = await workbenchStore.setTerminalPanelHeight(height);
-  if (harnessUiReady()) await applyWorkbenchPanelLayout();
   return state;
 };
 
@@ -952,14 +930,11 @@ const forkCheckpointSession = (checkpointId) => {
   return checkpointForkPromise;
 };
 
-const desktopIpcAllowed = (event) => Boolean(
-  mainWindow
-  && !mainWindow.isDestroyed()
-  && event?.sender === mainWindow.webContents
-  && currentUrlAllowed(event.senderFrame?.url || event.sender.getURL())
-);
+const desktopIpcAllowed = (event) => isTrustedMainFrameEvent(event, mainWindow?.webContents, currentUrlAllowed);
 
 const harnessIpcAllowed = (event) => desktopIpcAllowed(event) && harnessUiReady();
+const terminalIpcAllowed = (event) => isTrustedMainFrameEvent(event, terminalWindow?.webContents, terminalUrlAllowed);
+const terminalOwnedBy = (event) => terminalIpcAllowed(event) && isFrameOwner(event, terminalOwner);
 
 const sameStringArray = (left = [], right = []) => (
   left.length === right.length && left.every((value, index) => value === right[index])
@@ -1068,11 +1043,12 @@ const recaptureUserChangeBaseline = async () => {
 
 const bindTerminalRunner = (runner) => {
   runner.on('output', (event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:output', event);
+    if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.webContents.send('terminal:output', event);
   });
   runner.on('state', (state) => {
     const active = ['starting', 'running', 'stopping'].includes(state.status);
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:state', state);
+    if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.webContents.send('terminal:state', state);
+    if (!active) terminalOwner = null;
     if (terminalWasActive && !active) terminalSettlePromise = recaptureUserChangeBaseline();
     terminalWasActive = active;
     installApplicationMenu();
@@ -1118,14 +1094,14 @@ const openPreviewExternally = async () => {
 };
 
 const startTerminalSession = async (size = {}) => {
-  if (!terminalRunner || !harnessUiReady()) {
+  if (!terminalRunner) {
     return { ok: false, message: '交互式终端尚未就绪。', state: terminalRunner?.getState() };
   }
   if (terminalRunner.isActive()) {
     return { ok: false, message: '交互式终端已经在运行。', state: terminalRunner.getState() };
   }
   const workspace = getWorkspaceState();
-  const result = await dialog.showMessageBox(mainWindow, {
+  const options = {
     type: 'question',
     title: '启动交互式终端',
     message: '在当前工作区启动持久 PowerShell 会话？',
@@ -1134,7 +1110,11 @@ const startTerminalSession = async (size = {}) => {
     defaultId: 1,
     cancelId: 1,
     noLink: true
-  });
+  };
+  const parent = terminalWindow && !terminalWindow.isDestroyed() ? terminalWindow : mainWindow;
+  const result = parent
+    ? await dialog.showMessageBox(parent, options)
+    : await dialog.showMessageBox(options);
   if (result.response !== 0) {
     return { ok: false, canceled: true, state: terminalRunner.getState() };
   }
@@ -1143,6 +1123,62 @@ const startTerminalSession = async (size = {}) => {
   } catch (error) {
     return { ok: false, message: error.message, state: terminalRunner.getState() };
   }
+};
+
+const createTerminalWindow = async () => {
+  const created = new BrowserWindow({
+    width: 980,
+    height: 620,
+    minWidth: 720,
+    minHeight: 420,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#171716',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH 安全终端',
+    webPreferences: {
+      preload: path.join(__dirname, 'terminal-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  terminalWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!terminalUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.webContents.on('render-process-gone', () => {
+    terminalOwner = null;
+    if (terminalRunner?.isActive()) void terminalRunner.stop();
+  });
+  created.once('ready-to-show', () => {
+    if (!ipcSecuritySmokeTarget) created.show();
+  });
+  created.on('closed', () => {
+    if (terminalWindow === created) terminalWindow = undefined;
+    terminalOwner = null;
+    if (terminalRunner?.isActive()) void terminalRunner.stop();
+    installApplicationMenu();
+  });
+  await created.loadFile(terminalPage);
+  return created;
+};
+
+const openTerminalWindow = async () => {
+  if (terminalWindow && !terminalWindow.isDestroyed()) {
+    if (terminalWindow.isMinimized()) terminalWindow.restore();
+    terminalWindow.show();
+    terminalWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createTerminalWindow();
+  installApplicationMenu();
+  return { ok: true, reused: false };
 };
 
 const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
@@ -1975,28 +2011,25 @@ function installApplicationMenu() {
         },
         { type: 'separator' },
         {
-          label: '显示集成终端',
-          type: 'checkbox',
+          label: '打开安全终端窗口',
           accelerator: 'CmdOrCtrl+Alt+T',
-          checked: getWorkbenchState().terminalPanelOpen,
-          enabled: harnessReady,
-          click: (item) => { void setTerminalPanelOpen(item.checked, { focus: item.checked }); }
+          enabled: Boolean(mainWindow),
+          click: () => { void openTerminalWindow(); }
         },
         {
-          label: '聚焦集成终端',
+          label: '聚焦安全终端窗口',
           accelerator: 'CmdOrCtrl+Alt+K',
-          enabled: harnessReady && getWorkbenchState().terminalPanelOpen,
-          click: () => { void applyWorkbenchPanelLayout({ focus: true, focusTarget: 'terminal' }); }
+          enabled: Boolean(mainWindow),
+          click: () => { void openTerminalWindow(); }
         },
         {
           label: terminalActive ? '停止交互式终端' : '终端：当前未启动',
-          enabled: harnessReady && terminalActive,
+          enabled: terminalActive,
           click: () => { void terminalRunner.stop(); }
         },
         {
-          label: '重置终端高度',
-          enabled: harnessReady,
-          click: () => { void setTerminalPanelHeight(240); }
+          label: '终端与 Harness 页面已隔离',
+          enabled: false
         },
         { type: 'separator' },
         {
@@ -2065,12 +2098,11 @@ function installApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-ipcMain.handle('app:get-info', () => ({
-  name: app.getName(),
-  version: app.getVersion(),
-  platform: process.platform,
-  packaged: app.isPackaged
-}));
+ipcMain.handle('app:get-info', (event) => (
+  desktopIpcAllowed(event)
+    ? { name: app.getName(), version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }
+    : { name: '', version: '', platform: '', packaged: app.isPackaged }
+));
 ipcMain.handle('network:get-state', (event) => (
   desktopIpcAllowed(event)
     ? getNetworkState()
@@ -2086,10 +2118,18 @@ ipcMain.handle('network:save', (event, settings) => (
     ? saveNetworkSettings(settings)
     : { ok: false, reason: 'untrusted', message: '代理设置请求来源未通过安全校验。' }
 ));
-ipcMain.handle('workspace:get-state', () => getWorkspaceState());
-ipcMain.handle('workspace:choose', () => chooseWorkspace());
-ipcMain.handle('diagnostics:get-state', () => getDiagnosticsState());
-ipcMain.handle('diagnostics:refresh', () => refreshDesktopDiagnostics());
+ipcMain.handle('workspace:get-state', (event) => (
+  desktopIpcAllowed(event) ? getWorkspaceState() : { activePath: '', recentPaths: [], isFallback: true }
+));
+ipcMain.handle('workspace:choose', (event) => (
+  desktopIpcAllowed(event) ? chooseWorkspace() : { ok: false, canceled: true, workspace: { activePath: '', recentPaths: [] } }
+));
+ipcMain.handle('diagnostics:get-state', (event) => (
+  desktopIpcAllowed(event) ? getDiagnosticsState() : { status: 'unavailable', reason: 'untrusted' }
+));
+ipcMain.handle('diagnostics:refresh', (event) => (
+  desktopIpcAllowed(event) ? refreshDesktopDiagnostics() : { status: 'unavailable', reason: 'untrusted' }
+));
 ipcMain.handle('changes:get-diff', async (event, reportedPath) => {
   if (!harnessIpcAllowed(event) || !changeReviewer) {
     return { available: false, reason: 'untrusted-or-unavailable', content: '', truncated: false, binary: false };
@@ -2145,14 +2185,6 @@ ipcMain.handle('workbench:set-review-panel-width', async (event, width) => {
 ipcMain.handle('workbench:set-preview-panel-open', async (event, open) => {
   if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
   return setPreviewPanelOpen(open);
-});
-ipcMain.handle('workbench:set-terminal-panel-open', async (event, open) => {
-  if (!harnessIpcAllowed(event) || typeof open !== 'boolean') return getWorkbenchState();
-  return setTerminalPanelOpen(open);
-});
-ipcMain.handle('workbench:set-terminal-panel-height', async (event, height) => {
-  if (!harnessIpcAllowed(event) || !Number.isFinite(height)) return getWorkbenchState();
-  return setTerminalPanelHeight(height);
 });
 ipcMain.handle('workbench:set-ui-zoom-factor', async (event, factor) => {
   if (!desktopIpcAllowed(event) || !Number.isFinite(factor)) return getWorkbenchState();
@@ -2248,31 +2280,44 @@ ipcMain.handle('preview:open-external', (event) => (
     ? openPreviewExternally()
     : { ok: false, message: '应用预览请求来源未通过安全校验。' }
 ));
-ipcMain.handle('terminal:get-state', (event) => (
-  harnessIpcAllowed(event) && terminalRunner
-    ? terminalRunner.getSnapshot()
-    : { state: { status: 'unavailable', cwd: '', runId: 0, mode: 'pty' }, output: '' }
-));
-ipcMain.handle('terminal:start', (event, size) => (
+ipcMain.handle('terminal:open-window', (event) => (
   harnessIpcAllowed(event)
-    ? startTerminalSession(size)
-    : { ok: false, message: '终端启动请求来源未通过安全校验。' }
+    ? openTerminalWindow()
+    : { ok: false, message: '终端窗口请求来源未通过安全校验。' }
 ));
+ipcMain.handle('terminal:get-state', (event) => {
+  if (!terminalIpcAllowed(event) || !terminalRunner) {
+    return { state: { status: 'unavailable', cwd: '', runId: 0, mode: 'pty' }, output: '' };
+  }
+  if (terminalRunner.isActive()) terminalOwner = captureFrameOwner(event);
+  return terminalRunner.getSnapshot();
+});
+ipcMain.handle('terminal:start', async (event, size) => {
+  if (!terminalIpcAllowed(event)) return { ok: false, message: '终端启动请求来源未通过安全校验。' };
+  const result = await startTerminalSession(size);
+  if (result?.ok) terminalOwner = captureFrameOwner(event);
+  return result;
+});
 ipcMain.on('terminal:write', (event, data) => {
-  if (!harnessIpcAllowed(event) || !terminalRunner) return;
+  if (!terminalOwnedBy(event) || !terminalRunner) return;
   try { terminalRunner.write(data); } catch { /* Drop invalid or oversized PTY input. */ }
 });
 ipcMain.on('terminal:resize', (event, size) => {
-  if (!harnessIpcAllowed(event) || !terminalRunner || !size) return;
+  if (!terminalOwnedBy(event) || !terminalRunner || !size) return;
   terminalRunner.resize(size.cols, size.rows);
 });
 ipcMain.handle('terminal:stop', async (event) => {
-  if (!harnessIpcAllowed(event) || !terminalRunner) return { status: 'unavailable' };
+  if (!terminalOwnedBy(event) || !terminalRunner) return { status: 'unavailable' };
   return terminalRunner.stop();
 });
-ipcMain.handle('harness:get-state', () => supervisor?.getState() || { status: 'idle' });
-ipcMain.handle('harness:restart', () => startHarnessForWindow({ restart: true }));
-ipcMain.handle('harness:open-log', async () => {
+ipcMain.handle('harness:get-state', (event) => (
+  desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
+));
+ipcMain.handle('harness:restart', (event) => (
+  desktopIpcAllowed(event) ? startHarnessForWindow({ restart: true }) : { ok: false, reason: 'untrusted' }
+));
+ipcMain.handle('harness:open-log', async (event) => {
+  if (!desktopIpcAllowed(event)) return { ok: false, reason: 'untrusted' };
   const logFile = supervisor?.getState().logFile;
   if (!logFile) return { ok: false };
   await fsp.mkdir(path.dirname(logFile), { recursive: true });
@@ -2338,6 +2383,7 @@ const createWindow = async () => {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.on('closed', () => {
     stopAgentPolling();
+    if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
     mainWindow = undefined;
   });
 
@@ -2391,6 +2437,66 @@ const runHarnessSmoke = async (target) => {
   await fsp.writeFile(target, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 };
 
+const runIpcSecuritySmoke = async (target) => {
+  mainWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true
+    }
+  });
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  await mainWindow.loadFile(statusPage);
+  const remoteTerminalKeys = await mainWindow.webContents.executeJavaScript(
+    'Object.keys(window.desktopAPI?.terminal || {}).sort()',
+    true
+  );
+  await createTerminalWindow();
+  const localTerminalKeys = await terminalWindow.webContents.executeJavaScript(
+    'Object.keys(window.terminalAPI || {}).sort()',
+    true
+  );
+  const localState = await terminalWindow.webContents.executeJavaScript(
+    'window.terminalAPI.getState()',
+    true
+  );
+  await terminalWindow.webContents.executeJavaScript(
+    'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+    true
+  );
+  const screenshot = await terminalWindow.webContents.capturePage();
+  const screenshotPath = `${target}.png`;
+  const screenshotSize = screenshot.getSize();
+  const expectedLocalKeys = ['getState', 'onOutput', 'onState', 'resize', 'start', 'stop', 'write'];
+  const result = {
+    ok: remoteTerminalKeys.length === 1
+      && remoteTerminalKeys[0] === 'openWindow'
+      && JSON.stringify(localTerminalKeys) === JSON.stringify(expectedLocalKeys)
+      && localState?.state?.status === 'unavailable'
+      && screenshotSize.width > 0
+      && screenshotSize.height > 0,
+    remoteTerminalKeys,
+    localTerminalKeys,
+    localTerminalStatus: localState?.state?.status || 'missing',
+    screenshot: {
+      path: screenshotPath,
+      width: screenshotSize.width,
+      height: screenshotSize.height
+    }
+  };
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  await fsp.writeFile(target, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  if (!result.ok) process.exitCode = 1;
+  terminalWindow?.destroy();
+  mainWindow?.destroy();
+  terminalWindow = undefined;
+  mainWindow = undefined;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
@@ -2422,6 +2528,12 @@ app.whenReady().then(async () => {
   }
   if (harnessSmokeTarget) {
     await runHarnessSmoke(harnessSmokeTarget.slice('--harness-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (ipcSecuritySmokeTarget) {
+    await runIpcSecuritySmoke(ipcSecuritySmokeTarget.slice('--ipc-security-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;

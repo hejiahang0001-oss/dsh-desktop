@@ -8,7 +8,7 @@ const getWorkbenchPanelBootstrapScript = (state) => {
 const getWorkbenchPanelLayoutScript = (state) => {
   const safeState = normalizeWorkbenchState(state);
   return `(() => {
-    const panels = [window.__DSH_WORKBENCH__, window.__DSH_TERMINAL__, window.__DSH_FILES__, window.__DSH_PREVIEW__];
+    const panels = [window.__DSH_WORKBENCH__, window.__DSH_FILES__, window.__DSH_PREVIEW__];
     let applied = 0;
     for (const panel of panels) {
       if (!panel || typeof panel.applyLayout !== 'function') continue;

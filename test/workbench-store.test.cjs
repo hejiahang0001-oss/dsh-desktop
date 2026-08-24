@@ -110,7 +110,7 @@ test('workbench panel scripts serialize only normalized layout values', () => {
   assert.match(bootstrap, new RegExp(`"reviewPanelWidth":${MAX_REVIEW_WIDTH}`));
   assert.match(layout, /applyLayout/);
   assert.match(layout, new RegExp(`"reviewPanelWidth":${MIN_REVIEW_WIDTH}`));
-  assert.match(layout, /__DSH_TERMINAL__/);
+  assert.doesNotMatch(layout, /window\.__DSH_TERMINAL__/);
   assert.match(layout, /__DSH_FILES__/);
   assert.match(layout, /__DSH_PREVIEW__/);
   assert.match(layout, new RegExp(`"terminalPanelHeight":${DEFAULT_TERMINAL_HEIGHT}`));

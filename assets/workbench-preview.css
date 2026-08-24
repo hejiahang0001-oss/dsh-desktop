@@ -17,8 +17,6 @@
 #dsh-app-preview[hidden] { display: none; }
 html[data-dsh-review-open="false"] #dsh-app-preview { right: 18px; }
 html[data-dsh-files-open="false"] #dsh-app-preview { left: 18px; }
-html[data-dsh-terminal-open="true"] #dsh-app-preview { bottom: calc(var(--dsh-terminal-effective-height) + 18px); }
-
 .dsh-preview-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -144,7 +142,6 @@ html[data-dsh-terminal-open="true"] #dsh-app-preview { bottom: calc(var(--dsh-te
 
 @media (max-width: 900px) {
   #dsh-app-preview { inset: 14px 14px 14px; }
-  html[data-dsh-terminal-open="true"] #dsh-app-preview { bottom: calc(var(--dsh-terminal-effective-height) + 14px); }
   .dsh-preview-header { grid-template-columns: minmax(0, 1fr) auto; }
   .dsh-preview-badge { grid-column: 2; grid-row: 1; }
   .dsh-preview-header-actions { grid-column: 1 / -1; justify-content: flex-end; }
