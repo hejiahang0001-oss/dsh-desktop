@@ -41,6 +41,8 @@ This page records the locally verified V0.5.3 engineering evidence without makin
 
 The installed and unpacked `app.asar` files have the same SHA-256. The archive contains the new network UI, proxy policy, clipboard policy, preload bridge, and command-palette entry. The final installed and unpacked closure remains link-free.
 
+The published GitHub installer reports the same `162,581,004` byte size and SHA-256 digest as the local final build. The V0.5.3 release is neither a draft nor a prerelease, the `latest` installer URL returns HTTP 200 with the same content length, and the post-release main-branch Windows CI run completed successfully with 106 passes and the two bundled-PTY-only checks skipped by design. The local bundled-runtime run passed all 108 tests. CI also verifies the follow-up serialization of real-index reads after a transient Windows Git index-lock race; the follow-up hardening is scheduled for the next packaged build and does not change the published V0.5.3 proxy or clipboard scope.
+
 ## Network and clipboard boundaries
 
 - `network-state.json` is non-secret user data outside the installation directory. Proxy credentials are never accepted or stored in this release.

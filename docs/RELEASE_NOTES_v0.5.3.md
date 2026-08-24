@@ -36,6 +36,7 @@ V0.5.3 fixes proxy configuration and copy reliability reported from a second Win
 - The installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
 - Installer size: `162,581,004` bytes.
 - Installer SHA-256: `CFBCF77CD0AC028704FD42BEA3992C49067D31149D3B2C51B8998E00A01FD2A3`.
+- The published GitHub asset has the same size and digest, and the `latest` installer URL returns HTTP 200.
 
 ## Download
 
