@@ -162,6 +162,14 @@
 | 覆盖前快照 | `backups/pre-v0.5.7-20260825-002436`；33 个文件、14 份会话、0 个凭据副本 |
 | 发布完整性 | [v0.5.7](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.7) 为非 Draft 的 Pre-release；3 个远端资产大小/摘要一致，安装包直链 HTTP 200；[主分支 Windows CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32754200198)；V0.5.4 仍是 GitHub 正式 `Latest release` |
 
+### V0.5.7 后计划调整
+
+1. 敏感路径误伤问题说明后续界面必须继续只展示有界元数据；V0.5.8 因此优先增加上下文来源可见性，但不读取或泄露规则正文、隐藏提示和凭据。
+2. 覆盖安装会正常轮换 LevelDB 瞬态日志，不能再用整个用户目录哈希判断数据是否保留；V0.5.9 因此改为语义数据快照，并统一桌面状态的原子写入、备份和恢复门禁。
+3. 插件链路先建立可观察性再开放写操作；V0.5.10 只读核对 Profile、固定扩展层、pnpm 依赖闭包和共享回退链接。
+4. V0.5.11 仅允许启停 Profile 明确声明且已安装的外部扩展，并增加原生确认、运行忙碌门禁、失败回退和中断恢复；固定基础层保持不可变。
+5. Stable 继续固定 V0.5.4；上述版本只推进产品 Latest/Pre-release，除非维护者明确下达 Stable 晋升命令。
+
 ## V0.5.6 本轮完成
 
 1. Electron 从 `35.7.5` 固定升级到 `43.4.1`；Electron 官方 Windows x64 压缩包在打包前校验 SHA-256 `C2EF9A5F65472C34D14BD3E67B7D14E66B0C01F124ABA45263D6A4232160E13A`。
