@@ -65,7 +65,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.8 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, and adds a local read-only context-source view for source layers and user-controlled project-rule candidates. The candidate installer is `DSH-Desktop-Setup-0.5.8.exe`; it becomes a GitHub Pre-release only after packaged, overwrite, data-preservation, and real Windows UI gates pass. The front-page download remains Stable.
+**[Latest V0.5.8](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.8)** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, and adds a local read-only context-source view for source layers and user-controlled project-rule candidates. Its Pre-release installer is [`DSH-Desktop-Setup-0.5.8.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v0.5.8/DSH-Desktop-Setup-0.5.8.exe). It passed packaged, overwrite, semantic-data, real Windows UI, and remote-asset gates. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -135,7 +135,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.8 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，新增本地只读“上下文来源”窗口，展示来源层、项目规则候选链和持久会话边界，但不读取规则内容、不暴露隐藏提示或凭据；内容去重与总预算纳入范围仍由 Harness 判定。候选安装包为 `DSH-Desktop-Setup-0.5.8.exe`；通过打包、覆盖安装、数据保留和真实 Windows 界面门禁后才发布为 Pre-release。V0.5.4 继续保持 Stable：
+[V0.5.8 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.8)继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，新增本地只读“上下文来源”窗口，展示来源层、项目规则候选链和持久会话边界，但不读取规则内容、不暴露隐藏提示或凭据；内容去重与总预算纳入范围仍由 Harness 判定。安装包为 [`DSH-Desktop-Setup-0.5.8.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v0.5.8/DSH-Desktop-Setup-0.5.8.exe)，已通过打包、覆盖安装、语义数据保留、真实 Windows 界面和远端资产门禁，并仅作为 Pre-release 发布。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

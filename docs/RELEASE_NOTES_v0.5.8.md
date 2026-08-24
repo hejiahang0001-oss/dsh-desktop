@@ -17,9 +17,11 @@ V0.5.8 is the context-transparency release. It keeps Stable at V0.5.4, DeepSeek 
 
 ## Validation status
 
-- All new context-catalog and local-window tests pass, including source order, workspace reset, exact trusted-frame IPC, packaged assets, and the absence of arbitrary paths or file-reading APIs.
-- Add a packaged Windows smoke that renders the final local window, checks its exact three-method bridge, confirms two real rule candidates without leaking their prose, and captures a screenshot for visual review.
-- Full installer, overwrite, data-preservation, installed smoke, and published-asset evidence is recorded after the release candidate completes those gates.
+- All 128 source tests pass, including source order, workspace reset, exact trusted-frame IPC, packaged assets, and the absence of arbitrary paths or file-reading APIs. Production dependency audit reports no known vulnerabilities and main-branch Windows CI passes.
+- Unpacked and installed desktop, real Harness, IPC-security, PDF, and context-source smokes all exit with code 0. The final context window renders at 1359×965, exposes exactly three narrow methods, reports two real candidates, and does not expose their marker prose.
+- The final installer is `183,277,540` bytes with SHA-256 `7EFD2B18B5ABD10EAE24923303FA05EDB35C0993815EB7AE5F3E75704DDB47DC`; the packaged and installed `app.asar` SHA-256 is `8666CBEF8312262934A43E1AE545DD715EEDFD9244E7DCE27B4484CE2360E7CE`.
+- The installer overwrites V0.5.7 with exit code 0 and registers V0.5.8. Fourteen sessions and all 29 selected semantic user-data files retain identical hashes; the rollback snapshot is `backups/pre-v0.5.8-20260825-015249` and contains no credential-file copy.
+- The GitHub release is a non-draft Pre-release. All three remote asset sizes and SHA-256 digests match, the installer direct download returns HTTP 200, and V0.5.4 remains GitHub's formal `Latest release`.
 
 ## Release boundary
 
