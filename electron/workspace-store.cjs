@@ -1,5 +1,6 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { AtomicJsonFile } = require('./atomic-json-store.cjs');
 
 const pathKey = (value) => process.platform === 'win32' ? value.toLocaleLowerCase('en-US') : value;
 
@@ -9,6 +10,8 @@ class WorkspaceStore {
     this.fallbackDir = fallbackDir;
     this.maxRecent = maxRecent;
     this.state = null;
+    this.storage = new AtomicJsonFile({ filePath });
+    this.recoverySource = 'uninitialized';
   }
 
   async _canonicalize(candidate) {
@@ -36,23 +39,19 @@ class WorkspaceStore {
   }
 
   async _persist() {
-    await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fsp.writeFile(this.filePath, `${JSON.stringify({
+    await this.storage.write({
       version: 1,
       activePath: this.state.isFallback ? null : this.state.activePath,
       recentPaths: this.state.recentPaths
-    }, null, 2)}\n`, 'utf8');
+    });
   }
 
   async init() {
     await fsp.mkdir(this.fallbackDir, { recursive: true });
     const fallbackPath = await this._canonicalize(this.fallbackDir);
-    let stored = {};
-    try {
-      stored = JSON.parse(await fsp.readFile(this.filePath, 'utf8'));
-    } catch {
-      stored = {};
-    }
+    const loaded = await this.storage.read({ fallback: {} });
+    const stored = loaded.value;
+    this.recoverySource = loaded.source;
 
     const activePath = await this._canonicalizeIfAvailable(stored.activePath) || fallbackPath;
     const candidates = Array.isArray(stored.recentPaths) ? stored.recentPaths : [];

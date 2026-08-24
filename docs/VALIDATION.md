@@ -1,6 +1,12 @@
 # Validation evidence
 
-This page records the locally verified V0.5.8 engineering evidence without making the README front page carry the full verification ledger. Earlier permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.8 preserves those surfaces.
+This page records the locally verified V0.5.9 engineering evidence without making the README front page carry the full verification ledger. Earlier context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.9 preserves those surfaces.
+
+## V0.5.9 durable-state evidence
+
+Workspace, workbench, and network JSON now share one serialized atomic writer. Each update uses a unique same-directory temporary file, flushes and parses it before replacement, preserves only a valid previous primary as a flushed and re-read `.bak`, and cleans temporary files on both success and simulated replacement failure. Startup can recover from the valid backup without promoting a corrupt primary. Concurrent calls are committed in call order.
+
+The semantic overwrite snapshot hashes only fixed desktop state, Harness session/catalog files, and LevelDB data files. It follows no links and excludes credential-like paths plus transient `LOG`, `LOG.old`, and `LOCK`; tests prove that credential or log rotation does not change the snapshot while a session edit does. Windows CI now has independent quality, pinned-pnpm production-audit, and package/semantic-data contract jobs. Actual Electron packaging and installed smokes remain local release gates because generated runtimes are intentionally excluded from Git.
 
 ## V0.5.8 context-transparency evidence
 

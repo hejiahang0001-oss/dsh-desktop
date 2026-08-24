@@ -1,5 +1,4 @@
-const fsp = require('node:fs/promises');
-const path = require('node:path');
+const { AtomicJsonFile } = require('./atomic-json-store.cjs');
 
 const PROXY_MODES = new Set(['direct', 'system', 'custom']);
 const LOOPBACK_BYPASS = '127.0.0.1,localhost,::1';
@@ -120,15 +119,14 @@ class ProxySettingsStore {
   constructor({ filePath }) {
     this.filePath = filePath;
     this.state = normalizeProxySettings();
+    this.storage = new AtomicJsonFile({ filePath });
+    this.recoverySource = 'uninitialized';
   }
 
   async init() {
-    let stored = {};
-    try {
-      stored = JSON.parse(await fsp.readFile(this.filePath, 'utf8'));
-    } catch {
-      stored = {};
-    }
+    const loaded = await this.storage.read({ fallback: {} });
+    const stored = loaded.value;
+    this.recoverySource = loaded.source;
     try {
       this.state = normalizeProxySettings(stored);
     } catch {
@@ -145,8 +143,7 @@ class ProxySettingsStore {
   }
 
   async _persist() {
-    await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fsp.writeFile(this.filePath, `${JSON.stringify({ version: 1, ...this.state }, null, 2)}\n`, 'utf8');
+    await this.storage.write({ version: 1, ...this.state });
   }
 
   getState() {

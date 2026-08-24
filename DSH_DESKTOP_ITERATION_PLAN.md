@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-25 V0.5.8 已完成本地只读上下文来源窗口、Harness 规则候选链、持久会话与外部记忆边界、正式打包、覆盖安装、数据保留和真实界面门禁，并发布为产品 Latest Pre-release；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-25 V0.5.9 已进入发布门禁：原子状态写入、已验证 last-known-good 恢复、语义数据快照和三层 CI 已实现；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -307,7 +307,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 4. V0.5.6（已完成，产品 Latest）：把 Electron `35.7.5` 固定升级到官方受支持的 `43.4.1`，逐项回归窗口、Preload、PDF/图片预览、PTY、权限、打包、安装覆盖和数据保留；增加可识别空白误报的真实 PDF 渲染门禁，恢复 GitHub Latest Pre-release 发布流程。
 5. V0.5.7（本地门禁完成）：把 Harness 权限状态、待确认入口和桌面固定边界集中到原生权限中心；增加代理变更的原生默认取消确认；文件/Checkpoint 复用大小写不敏感、逐路径组件匹配的敏感策略，并消除 `secret*` 误伤普通文件的问题。
 6. V0.5.8（已完成，产品 Latest）：展示 Code preset、桌面语言策略、项目规则候选链、Harness 持久会话和外部记忆边界；主进程只读取有界元数据，只能按内部标识定位已发现的用户规则，不暴露隐藏系统提示、正文或凭据。
-7. V0.5.9：统一桌面持久状态的临时文件、刷新、原子替换和已验证备份；补齐 quality/security/package-smoke 三层 CI，并把覆盖安装的数据验证从瞬态日志哈希调整为语义数据门禁。
+7. V0.5.9（发布门禁中）：统一桌面持久状态的临时文件、刷新、原子替换和已验证备份；补齐 quality/security/package-smoke 三层 CI，并把覆盖安装的数据验证从瞬态日志哈希调整为语义数据门禁。
 8. V0.5.10：增加插件 Profile 与依赖健康视图，核对固定 pnpm store、上游 Profile 和插件依赖闭包的一致性。
 9. V0.5.11：增加安全启停插件、故障插件恢复和失败关闭路径，并建立安装包瘦身与增量更新的可验证基线。
 
