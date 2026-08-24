@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH 扩展健康</title>
+  <link rel="stylesheet" href="assets/plugin-health.css">
+  <script defer src="assets/plugin-health.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="identity">
+      <div class="title-row"><h1>扩展健康</h1><span class="mode">只读诊断</span></div>
+      <p id="profiles-root" class="root-path">正在核对 Harness Profile 与扩展依赖…</p>
+    </div>
+    <button id="refresh" type="button">刷新</button>
+    <button id="close" type="button">关闭</button>
+  </header>
+  <main>
+    <section aria-labelledby="runtime-title">
+      <div class="section-heading"><div><h2 id="runtime-title">固定运行时闭包</h2><p>检查软件随附 Harness 包闭包与共享回退链接，不把所有上游插件误报为已启用。</p></div></div>
+      <article id="runtime" class="runtime-card" aria-live="polite"></article>
+      <div id="issues" class="issue-list"></div>
+    </section>
+    <section aria-labelledby="profiles-title">
+      <div class="section-heading"><div><h2 id="profiles-title">本机 Profile</h2><p id="profiles-summary">正在检查已初始化的 Profile…</p></div></div>
+      <div id="profiles" class="profile-list"></div>
+    </section>
+  </main>
+  <footer><span id="status" role="status">本窗口不会读取插件配置、补丁正文、凭据或会话内容。</span><span>安装、启用和停用仍由 Harness Profile 管理。</span></footer>
+</body>
+</html>

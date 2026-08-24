@@ -1,6 +1,15 @@
 # Validation evidence
 
-This page records the locally verified V0.5.9 engineering evidence without making the README front page carry the full verification ledger. Earlier context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.9 preserves those surfaces.
+This page records the locally verified V0.5.10 engineering evidence without making the README front page carry the full verification ledger. Earlier durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.10 preserves those surfaces.
+
+## V0.5.10 extension-health evidence
+
+- The local-only extension-health window exposes exactly `getState`, `refresh`, and opaque-id `reveal` capabilities. Its exact packaged page is sandboxed, context-isolated, Node-free, navigation-blocked, and protected by expected-WebContents/main-frame IPC checks.
+- The catalog mirrors fixed Harness `0.1.1-rc.2` resolution: bundle layers use installation-first/two-anchor resolution; Profile dependencies use the Profile package anchor and its pnpm-managed module tree plus Harness's maintained parent fallback.
+- A bounded BFS follows only valid dependency and peer-dependency package names from the fixed DSH package. Every shared fallback entry must be a link whose real target equals the exact package target in the current installation.
+- The current installed V0.5.9 runtime reports 432 expected packages, 432 healthy fallback links, zero missing links, and zero misdirected links. The Web Profile resolves `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app` from the packaged runtime and declares no external dependency.
+- Profile manifests are limited to 1 MiB; profile and package counts are bounded. Links resolving outside the packaged runtime or the Profile's own module tree are reported as blocked.
+- The renderer never receives dependency specifications, arbitrary paths, plugin settings, `cordis.patch.yml` content, credentials, or session content. The smoke fixture contains private markers in both manifest and patch files and verifies that neither appears in rendered text.
 
 ## V0.5.9 durable-state evidence
 

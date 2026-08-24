@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -42,6 +42,9 @@
       "context-sources.html",
       "assets/context-sources.css",
       "assets/context-sources.js",
+      "plugin-health.html",
+      "assets/plugin-health.css",
+      "assets/plugin-health.js",
       "assets/workbench-files.css",
       "assets/workbench-files.js",
       "assets/workbench-preview.css",

@@ -8,11 +8,12 @@ const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.c
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { buildPermissionCenterDialog } = require('./permission-center.cjs');
 const { ContextSourceCatalog } = require('./context-sources.cjs');
+const { PluginHealthCatalog } = require('./plugin-health.cjs');
 const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
 } = require('./harness-checkpoint-link.cjs');
-const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
+const { HarnessSupervisor, isSafeHarnessUrl, probeHarness, resolveHarnessRuntimePaths } = require('./harness-supervisor.cjs');
 const { captureFrameOwner, isFrameOwner, isTrustedMainFrameEvent } = require('./ipc-policy.cjs');
 const {
   readHarnessSessionSelection,
@@ -51,6 +52,7 @@ app.setName('DSH Desktop');
 let mainWindow;
 let terminalWindow;
 let contextSourcesWindow;
+let pluginHealthWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -62,6 +64,7 @@ let terminalOwner = null;
 let previewManager;
 let workspaceFiles;
 let contextSourceCatalog;
+let pluginHealthCatalog;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -150,6 +153,7 @@ const rootDir = path.resolve(__dirname, '..');
 const statusPage = path.join(rootDir, 'harness-status.html');
 const terminalPage = path.join(rootDir, 'terminal.html');
 const contextSourcesPage = path.join(rootDir, 'context-sources.html');
+const pluginHealthPage = path.join(rootDir, 'plugin-health.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
@@ -181,6 +185,7 @@ const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
 const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
+const pluginHealthSmokeTarget = process.argv.find((argument) => argument.startsWith('--plugin-health-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 
 const parseWindowSize = (value) => {
@@ -233,6 +238,7 @@ const localFileUrlMatches = (value, target) => {
 
 const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
 const contextSourcesUrlAllowed = (value) => localFileUrlMatches(value, contextSourcesPage);
+const pluginHealthUrlAllowed = (value) => localFileUrlMatches(value, pluginHealthPage);
 
 const showStatusPage = async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -961,6 +967,11 @@ const contextSourcesIpcAllowed = (event) => isTrustedMainFrameEvent(
   contextSourcesWindow?.webContents,
   contextSourcesUrlAllowed
 );
+const pluginHealthIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  pluginHealthWindow?.webContents,
+  pluginHealthUrlAllowed
+);
 
 const sameStringArray = (left = [], right = []) => (
   left.length === right.length && left.every((value, index) => value === right[index])
@@ -1261,6 +1272,63 @@ const openContextSourcesWindow = async () => {
     return { ok: true, reused: true };
   }
   await createContextSourcesWindow();
+  return { ok: true, reused: false };
+};
+
+const unavailablePluginHealth = (message = '扩展健康尚未初始化。') => ({
+  available: false,
+  profilesRoot: '$DSH_HOME/profiles',
+  runtime: { status: 'unavailable', version: '', expected: 0, healthy: 0, missing: 0, misdirected: 0, issues: [] },
+  profiles: [],
+  message
+});
+
+const getPluginHealthState = () => pluginHealthCatalog?.scan()
+  || Promise.resolve(unavailablePluginHealth());
+
+const createPluginHealthWindow = async () => {
+  const created = new BrowserWindow({
+    width: 960,
+    height: 720,
+    minWidth: 700,
+    minHeight: 520,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#171716',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH 扩展健康',
+    webPreferences: {
+      preload: path.join(__dirname, 'plugin-health-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  pluginHealthWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!pluginHealthUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => created.show());
+  created.on('closed', () => {
+    if (pluginHealthWindow === created) pluginHealthWindow = undefined;
+  });
+  await created.loadFile(pluginHealthPage);
+  return created;
+};
+
+const openPluginHealthWindow = async () => {
+  if (pluginHealthWindow && !pluginHealthWindow.isDestroyed()) {
+    if (pluginHealthWindow.isMinimized()) pluginHealthWindow.restore();
+    pluginHealthWindow.show();
+    pluginHealthWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createPluginHealthWindow();
   return { ok: true, reused: false };
 };
 
@@ -1933,6 +2001,10 @@ function installApplicationMenu() {
           click: () => { void openContextSourcesWindow(); }
         },
         {
+          label: '扩展健康…',
+          click: () => { void openPluginHealthWindow(); }
+        },
+        {
           label: '定位当前/最近工具',
           enabled: harnessReady && agentDiagnostics.canFocusTool,
           click: () => { void runHarnessUiAction('focus-latest-tool'); }
@@ -2433,6 +2505,25 @@ ipcMain.handle('context-sources:reveal', async (event, id) => {
   shell.showItemInFolder(target);
   return { ok: true };
 });
+ipcMain.handle('plugin-health:get-state', (event) => (
+  pluginHealthIpcAllowed(event)
+    ? getPluginHealthState()
+    : unavailablePluginHealth('请求来源未通过安全校验。')
+));
+ipcMain.handle('plugin-health:refresh', (event) => (
+  pluginHealthIpcAllowed(event)
+    ? getPluginHealthState()
+    : unavailablePluginHealth('请求来源未通过安全校验。')
+));
+ipcMain.handle('plugin-health:reveal', async (event, id) => {
+  if (!pluginHealthIpcAllowed(event) || !pluginHealthCatalog) {
+    return { ok: false, message: '扩展健康请求未通过安全校验。' };
+  }
+  const target = await pluginHealthCatalog.resolveProfilePath(id);
+  if (!target) return { ok: false, message: 'Profile 已变化，请刷新后重试。' };
+  shell.showItemInFolder(target);
+  return { ok: true };
+});
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -2829,6 +2920,87 @@ const runContextSourcesSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const writeSmokePackage = async (directory, manifest) => {
+  await fsp.mkdir(directory, { recursive: true });
+  await fsp.writeFile(path.join(directory, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+};
+
+const linkSmokePackage = async (modulesRoot, packageName, target) => {
+  const link = path.join(modulesRoot, ...packageName.split('/'));
+  await fsp.mkdir(path.dirname(link), { recursive: true });
+  try {
+    const [info, actual, expected] = await Promise.all([fsp.lstat(link), fsp.realpath(link), fsp.realpath(target)]);
+    if (info.isSymbolicLink() && actual === expected) return;
+    throw new Error(`smoke link already exists with an unexpected target: ${packageName}`);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  await fsp.symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+};
+
+const runPluginHealthSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), 'plugin-health-smoke-data');
+  const installRoot = path.join(smokeRoot, 'runtime', 'node_modules');
+  const dshPackageDir = path.join(installRoot, '@deepseek-ai', 'dsh');
+  const basePackageDir = path.join(installRoot, '@deepseek-ai', 'dsh-base');
+  const harnessHome = path.join(smokeRoot, 'harness');
+  const fallbackRoot = path.join(harnessHome, 'profiles', 'node_modules');
+  const profileDir = path.join(harnessHome, 'profiles', 'web');
+  let result;
+  try {
+    await writeSmokePackage(dshPackageDir, { name: '@deepseek-ai/dsh', version: '0.1.1-rc.2', dependencies: { '@deepseek-ai/dsh-base': '0.1.1-rc.2' } });
+    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.1-rc.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh', dshPackageDir);
+    await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh-base', basePackageDir);
+    await writeSmokePackage(profileDir, { name: 'dsh-profile-web', dependencies: {}, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } }, hiddenMarker: 'hidden-plugin-config-marker' });
+    await fsp.writeFile(path.join(profileDir, 'pnpm-workspace.yaml'), 'packages:\n  - .\n', 'utf8');
+    await fsp.writeFile(path.join(profileDir, 'cordis.patch.yml'), 'hidden-patch-prose-marker', 'utf8');
+    pluginHealthCatalog = new PluginHealthCatalog({ harnessHome, dshPackageDir });
+    await createPluginHealthWindow();
+    await pluginHealthWindow.webContents.executeJavaScript(
+      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
+    const rendered = await pluginHealthWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.pluginHealthAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      profileRows: document.querySelectorAll('.profile-card').length,
+      text: document.body.innerText
+    })`, true);
+    const screenshot = await pluginHealthWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'refresh', 'reveal'])
+        && rendered.title === '扩展健康'
+        && rendered.profileRows === 1
+        && rendered.text.includes('@deepseek-ai/dsh-base')
+        && rendered.text.includes('共享回退由 Harness 启动时维护')
+        && !rendered.text.includes('hidden-plugin-config-marker')
+        && !rendered.text.includes('hidden-patch-prose-marker')
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      title: rendered.title,
+      profileRows: rendered.profileRows,
+      configHidden: !rendered.text.includes('hidden-plugin-config-marker') && !rendered.text.includes('hidden-patch-prose-marker'),
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error.message };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    pluginHealthWindow?.destroy();
+    pluginHealthWindow = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
@@ -2882,6 +3054,12 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  if (pluginHealthSmokeTarget) {
+    await runPluginHealthSmoke(pluginHealthSmokeTarget.slice('--plugin-health-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
 
   dataRoot = app.getPath('userData');
   workspaceStore = new WorkspaceStore({
@@ -2902,6 +3080,15 @@ app.whenReady().then(async () => {
   contextSourceCatalog = new ContextSourceCatalog({
     workspacePath: workspace.activePath,
     harnessHome: path.join(dataRoot, 'harness')
+  });
+  const harnessRuntime = resolveHarnessRuntimePaths({
+    rootDir,
+    resourcesPath: process.resourcesPath,
+    isPackaged: app.isPackaged
+  });
+  pluginHealthCatalog = new PluginHealthCatalog({
+    harnessHome: path.join(dataRoot, 'harness'),
+    dshPackageDir: path.resolve(path.dirname(harnessRuntime.dshBinPath), '..')
   });
   previewManager = new PreviewManager();
   await previewManager.activate(workspace.activePath);
