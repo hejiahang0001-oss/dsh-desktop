@@ -9,6 +9,7 @@ const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { buildPermissionCenterDialog } = require('./permission-center.cjs');
 const { ContextSourceCatalog } = require('./context-sources.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
+const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
@@ -65,6 +66,9 @@ let previewManager;
 let workspaceFiles;
 let contextSourceCatalog;
 let pluginHealthCatalog;
+let profileBundleManager;
+let pluginRecoveryOutcomes = Object.freeze([]);
+let pluginTogglePromise = null;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -1283,8 +1287,10 @@ const unavailablePluginHealth = (message = '扩展健康尚未初始化。') => 
   message
 });
 
-const getPluginHealthState = () => pluginHealthCatalog?.scan()
-  || Promise.resolve(unavailablePluginHealth());
+const getPluginHealthState = async () => {
+  const state = pluginHealthCatalog ? await pluginHealthCatalog.scan() : unavailablePluginHealth();
+  return { ...state, recovery: pluginRecoveryOutcomes.map((item) => ({ ...item })) };
+};
 
 const createPluginHealthWindow = async () => {
   const created = new BrowserWindow({
@@ -1330,6 +1336,91 @@ const openPluginHealthWindow = async () => {
   }
   await createPluginHealthWindow();
   return { ok: true, reused: false };
+};
+
+const pluginMutationBusy = () => (
+  Boolean(terminalRunner?.isActive())
+  || agentDiagnostics.canStop
+  || agentDiagnostics.status === 'waiting'
+  || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)
+);
+
+const performPluginToggle = async ({ profileId, packageName, enable }) => {
+  if (!profileBundleManager || !pluginHealthCatalog) {
+    return { ok: false, message: '扩展管理尚未初始化。', state: await getPluginHealthState() };
+  }
+  if (pluginMutationBusy()) {
+    return { ok: false, message: '请先结束当前 Agent、待确认操作、终端或检查点任务。', state: await getPluginHealthState() };
+  }
+  const before = await getPluginHealthState();
+  const profile = before.profiles.find((item) => item.id === profileId);
+  const dependency = profile?.dependencies.find((item) => item.name === packageName);
+  if (before.runtime.status !== 'healthy' || profile?.status !== 'healthy' || !dependency?.toggleable || dependency.enabled === enable) {
+    return { ok: false, message: '扩展状态已变化或健康门禁未通过，请刷新后重试。', state: before };
+  }
+  const action = enable ? '启用' : '关闭';
+  const confirmation = await dialog.showMessageBox(pluginHealthWindow || mainWindow, {
+    type: 'warning',
+    title: `${action} Profile 外部扩展`,
+    message: `确认${action} ${packageName}？`,
+    detail: enable
+      ? `只会把已安装且声明 dsh.bundle 的扩展重新加入 ${profile.name} 的加载顺序，然后重启 Harness。不会运行 pnpm 或安装新包。`
+      : `只会从 ${profile.name} 的加载顺序移除该扩展，然后重启 Harness。包和依赖仍保留在 Profile 中，可随时重新启用。`,
+    buttons: ['取消', `${action}并重启 Harness`],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，Profile 未修改。', state: before };
+  if (pluginMutationBusy()) {
+    return { ok: false, message: '确认期间 Agent、终端或检查点状态已变化，Profile 未修改。', state: await getPluginHealthState() };
+  }
+  const confirmed = await getPluginHealthState();
+  const confirmedProfile = confirmed.profiles.find((item) => item.id === profileId);
+  const confirmedDependency = confirmedProfile?.dependencies.find((item) => item.name === packageName);
+  if (confirmed.runtime.status !== 'healthy' || confirmedProfile?.status !== 'healthy' || !confirmedDependency?.toggleable || confirmedDependency.enabled === enable) {
+    return { ok: false, message: '确认期间扩展状态或健康结果已变化，Profile 未修改。', state: confirmed };
+  }
+  const profileDir = await pluginHealthCatalog.resolveProfilePath(profileId);
+  if (!profileDir) return { ok: false, message: 'Profile 已变化，请刷新后重试。', state: confirmed };
+
+  let transaction;
+  let restartAttempted = false;
+  try {
+    transaction = await profileBundleManager.apply({ profileDir, packageName, enable });
+    if (!transaction.changed) return { ok: true, unchanged: true, message: '扩展已经处于目标状态。', state: await getPluginHealthState() };
+    if (pluginMutationBusy()) throw new Error('写入期间 Agent、终端或检查点状态发生变化。');
+    restartAttempted = true;
+    const restarted = await startHarnessForWindow({ restart: true });
+    if (!restarted.ok) throw new Error(restarted.error || 'Harness 重启失败。');
+    const verifiedState = await getPluginHealthState();
+    const verifiedProfile = verifiedState.profiles.find((item) => item.id === profileId);
+    const verifiedDependency = verifiedProfile?.dependencies.find((item) => item.name === packageName);
+    if (verifiedState.runtime.status !== 'healthy' || verifiedProfile?.status !== 'healthy' || verifiedDependency?.enabled !== enable) {
+      throw new Error('重启后的扩展健康状态与请求不一致。');
+    }
+    await profileBundleManager.commit(transaction.id);
+    pluginRecoveryOutcomes = Object.freeze([]);
+    return { ok: true, message: `${packageName} 已${action}，Harness 已完成健康重启。`, state: verifiedState };
+  } catch (error) {
+    let rollbackOk = false;
+    let restartOk = false;
+    if (transaction?.changed) {
+      try {
+        await profileBundleManager.rollback(transaction.id);
+        rollbackOk = true;
+        restartOk = restartAttempted ? Boolean((await startHarnessForWindow({ restart: true })).ok) : true;
+      } catch {
+        // The verified manifest backup and pending journal remain available for startup recovery.
+      }
+    }
+    const suffix = rollbackOk
+      ? (!restartAttempted
+          ? '已自动恢复变更前状态，运行中的 Harness 未加载此次变更。'
+          : (restartOk ? '已自动恢复变更前状态并重新启动 Harness。' : 'Profile 已恢复，但 Harness 未能重新启动。'))
+      : '未确认写入完成；下次启动会按事务日志尝试恢复。';
+    return { ok: false, message: `${error.message || '扩展变更失败。'} ${suffix}`, state: await getPluginHealthState() };
+  }
 };
 
 const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
@@ -2524,6 +2615,18 @@ ipcMain.handle('plugin-health:reveal', async (event, id) => {
   shell.showItemInFolder(target);
   return { ok: true };
 });
+ipcMain.handle('plugin-health:toggle', (event, profileId, packageName, enable) => {
+  if (!pluginHealthIpcAllowed(event)) {
+    return { ok: false, message: '扩展变更请求未通过安全校验。' };
+  }
+  if (typeof profileId !== 'string' || typeof packageName !== 'string' || typeof enable !== 'boolean') {
+    return { ok: false, message: '扩展变更参数无效。' };
+  }
+  if (pluginTogglePromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
+  pluginTogglePromise = performPluginToggle({ profileId, packageName, enable })
+    .finally(() => { pluginTogglePromise = null; });
+  return pluginTogglePromise;
+});
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -2947,13 +3050,15 @@ const runPluginHealthSmoke = async (target) => {
   const harnessHome = path.join(smokeRoot, 'harness');
   const fallbackRoot = path.join(harnessHome, 'profiles', 'node_modules');
   const profileDir = path.join(harnessHome, 'profiles', 'web');
+  const externalPackageDir = path.join(profileDir, 'node_modules', 'community-bundle');
   let result;
   try {
     await writeSmokePackage(dshPackageDir, { name: '@deepseek-ai/dsh', version: '0.1.1-rc.2', dependencies: { '@deepseek-ai/dsh-base': '0.1.1-rc.2' } });
     await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.1-rc.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } });
     await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh', dshPackageDir);
     await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh-base', basePackageDir);
-    await writeSmokePackage(profileDir, { name: 'dsh-profile-web', dependencies: {}, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } }, hiddenMarker: 'hidden-plugin-config-marker' });
+    await writeSmokePackage(profileDir, { name: 'dsh-profile-web', dependencies: { 'community-bundle': '1.0.0' }, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'community-bundle'] } }, hiddenMarker: 'hidden-plugin-config-marker' });
     await fsp.writeFile(path.join(profileDir, 'pnpm-workspace.yaml'), 'packages:\n  - .\n', 'utf8');
     await fsp.writeFile(path.join(profileDir, 'cordis.patch.yml'), 'hidden-patch-prose-marker', 'utf8');
     pluginHealthCatalog = new PluginHealthCatalog({ harnessHome, dshPackageDir });
@@ -2966,16 +3071,19 @@ const runPluginHealthSmoke = async (target) => {
       apiKeys: Object.keys(window.pluginHealthAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
       profileRows: document.querySelectorAll('.profile-card').length,
+      toggleButtons: document.querySelectorAll('.toggle-button').length,
       text: document.body.innerText
     })`, true);
     const screenshot = await pluginHealthWindow.webContents.capturePage();
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'refresh', 'reveal'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'refresh', 'reveal', 'toggle'])
         && rendered.title === '扩展健康'
         && rendered.profileRows === 1
+        && rendered.toggleButtons === 1
         && rendered.text.includes('@deepseek-ai/dsh-base')
+        && rendered.text.includes('community-bundle')
         && rendered.text.includes('共享回退由 Harness 启动时维护')
         && !rendered.text.includes('hidden-plugin-config-marker')
         && !rendered.text.includes('hidden-patch-prose-marker')
@@ -2985,6 +3093,7 @@ const runPluginHealthSmoke = async (target) => {
       apiKeys: rendered.apiKeys,
       title: rendered.title,
       profileRows: rendered.profileRows,
+      toggleButtons: rendered.toggleButtons,
       configHidden: !rendered.text.includes('hidden-plugin-config-marker') && !rendered.text.includes('hidden-patch-prose-marker'),
       screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
     };
@@ -3090,6 +3199,10 @@ app.whenReady().then(async () => {
     harnessHome: path.join(dataRoot, 'harness'),
     dshPackageDir: path.resolve(path.dirname(harnessRuntime.dshBinPath), '..')
   });
+  profileBundleManager = new ProfileBundleManager({
+    profilesRoot: path.join(dataRoot, 'harness', 'profiles')
+  });
+  pluginRecoveryOutcomes = await profileBundleManager.recoverPending();
   previewManager = new PreviewManager();
   await previewManager.activate(workspace.activePath);
   bindPreviewManager(previewManager);

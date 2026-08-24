@@ -18,7 +18,7 @@
     node.textContent = label(value);
     return node;
   };
-  const packageRow = (item, kind) => {
+  const packageRow = (item, kind, profile) => {
     const row = document.createElement('li');
     const body = document.createElement('div');
     const name = document.createElement('strong');
@@ -27,7 +27,28 @@
     const source = { runtime: '软件随附', profile: 'Profile 安装', none: '未解析', outside: '边界外' }[item.source] || '未知来源';
     detail.textContent = `${kind} · ${source}${item.version ? ` · ${item.version}` : ''}`;
     body.append(name, detail);
-    row.append(body, makeBadge(item.status));
+    const actions = document.createElement('div');
+    actions.className = 'package-actions';
+    actions.append(makeBadge(item.status));
+    if (kind === 'pnpm 管理' && item.toggleable) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'toggle-button';
+      toggle.textContent = item.enabled ? '关闭' : '启用';
+      toggle.addEventListener('click', async () => {
+        toggle.disabled = true;
+        status.textContent = `正在${item.enabled ? '关闭' : '启用'} ${item.name}…`;
+        try {
+          const result = await api.toggle(profile.id, item.name, !item.enabled);
+          if (result?.state) render(result.state);
+          status.textContent = result?.message || (result?.ok ? '扩展状态已更新。' : '扩展状态未更改。');
+        } catch {
+          status.textContent = '扩展变更失败；Profile 保持或恢复为原状态。';
+        } finally { toggle.disabled = false; }
+      });
+      actions.append(toggle);
+    }
+    row.append(body, actions);
     return row;
   };
 
@@ -87,7 +108,7 @@
         const ul = document.createElement('ul');
         if (list.length === 0) {
           const li = document.createElement('li'); li.className = 'empty-package'; li.textContent = titleText === '外部依赖' ? '未声明外部插件' : '未声明扩展层'; ul.append(li);
-        } else for (const item of list) ul.append(packageRow(item, kind));
+        } else for (const item of list) ul.append(packageRow(item, kind, profile));
         column.append(titleNode, ul); columns.append(column);
       }
       card.append(columns);
@@ -97,7 +118,13 @@
     if (profileList.length === 0) {
       const node = document.createElement('p'); node.className = 'empty-state'; node.textContent = '首次启动 Web 或 Headless Profile 后，这里会显示实际启用的扩展层。'; profiles.append(node);
     }
-    status.textContent = state.available === false ? (state.message || '扩展健康暂时不可用。') : (state.message || '扩展健康检查完成。');
+    const recovery = state.recovery || [];
+    const recoveryMessage = recovery.find((item) => item.status === 'rolled-back')
+      ? '已恢复一次中断的扩展变更；Profile 已回到变更前状态。'
+      : recovery.find((item) => ['failed', 'conflict'].includes(item.status))
+        ? '检测到无法自动处理的扩展变更，请先检查 Profile 备份。'
+        : '';
+    status.textContent = recoveryMessage || (state.available === false ? (state.message || '扩展健康暂时不可用。') : (state.message || '扩展健康检查完成。'));
   };
 
   const refresh = async () => {

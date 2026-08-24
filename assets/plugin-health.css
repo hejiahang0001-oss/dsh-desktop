@@ -42,6 +42,8 @@ main { display: grid; gap: 22px; width: min(100%, 1080px); margin: 0 auto; paddi
 .package-columns ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .package-columns li { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-width: 0; padding: 7px 8px; border-radius: 6px; background: #292927; }
 .package-columns li > div { min-width: 0; }
+.package-actions { display: flex; flex: none; gap: 5px; align-items: center; }
+.toggle-button { min-height: 24px; padding: 2px 7px; font-size: 9px; }
 .package-columns strong, .package-columns span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .package-columns strong { font: 600 10px/1.35 "Cascadia Code", Consolas, monospace; }
 .package-columns span { margin-top: 2px; color: #aaa7a1; font-size: 9px; }
