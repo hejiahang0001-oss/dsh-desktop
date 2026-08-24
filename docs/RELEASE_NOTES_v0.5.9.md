@@ -22,8 +22,10 @@ V0.5.9 is the durable-state and CI-gate release. It keeps Stable at V0.5.4, Deep
 
 ## Validation status
 
-- Atomic write, backup recovery, failed replacement, concurrent serialization, semantic snapshot, store regression, and CI contract tests pass locally.
-- Full package, overwrite, installed smoke, and remote asset evidence is recorded after the candidate completes release gates.
+- All 134 local tests pass; the pull request and main-branch quality, production-security, and package/semantic-data CI jobs pass.
+- The installed and unpacked applications pass desktop, Harness, IPC, PDF, and context-source smokes. Their packaged `app.asar` SHA-256 values match.
+- The overwrite preserves the exact aggregate digest of 25 semantic user-data files, including 14 sessions, while excluding transient and restricted files.
+- The published [v0.5.9 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.9) is not a draft. All three remote asset sizes and SHA-256 digests match the local release artifacts, and each direct download returns HTTP 200.
 
 ## Release boundary
 

@@ -1,8 +1,33 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.9 Latest 候选（源码门禁进行中）
-> 状态：V0.5.9 已完成原子状态写入、已验证备份恢复、语义数据快照与三层 CI，正在执行全量和发布门禁；V0.5.4 继续保持 Stable
+> 当前构建：V0.5.10 Latest 候选（扩展健康门禁进行中）
+> 状态：V0.5.9 已发布为 Pre-release；V0.5.10 已完成只读 Profile/扩展依赖健康视图，正在执行打包与覆盖门禁；V0.5.4 继续保持 Stable
+
+## V0.5.10 本轮进展
+
+1. 工具菜单新增本地“扩展健康”窗口，分别展示固定 Harness 运行时闭包、共享回退链接、本机 Profile、按顺序加载的扩展层和 Profile 声明的外部依赖。
+2. 解析顺序对齐固定 Harness `0.1.1-rc.2`：扩展层先从软件安装解析、再从 Profile 解析；Profile 外部依赖由其 pnpm `node_modules` 与 Harness 维护的父级回退解析。
+3. 对固定 `@deepseek-ai/dsh` 的 dependencies 与 peerDependencies 做有界 BFS，逐包核对 `$DSH_HOME/profiles/node_modules` 联接是否指向当前安装的精确目标。
+4. Renderer 只接收包名、版本、来源和健康状态，不接收依赖规格、插件配置、补丁正文、凭据、会话内容或任意路径；Profile 定位使用主进程发放的短标识。
+5. 新增包名校验、Profile/包数量上限、1 MiB 清单上限、realpath 范围校验、精确页面 IPC 和打包截图 smoke。
+6. 对本机已安装 V0.5.9 的真实数据核对结果为固定闭包 432/432 联接正常；Web Profile 两个扩展层均从软件随附运行时解析，无外部依赖。
+
+### V0.5.10 当前验证
+
+| 验证项 | 当前结果 |
+|---|---|
+| 定向自动化 | 7/7 通过；覆盖闭包、链接、Profile、越界链接、包名、元数据边界与窗口契约 |
+| 全量自动化 | 138/138 通过；生产依赖审计与打包门禁待最终候选执行 |
+| 真实固定闭包 | 已安装 Harness `0.1.1-rc.2`：432 个预期包、432 个正确联接、0 缺失、0 指向异常 |
+| 打包/覆盖/发布 | 待候选安装包完成后记录 |
+
+### V0.5.10 后计划调整
+
+1. V0.5.11 只对 Profile 明确声明的外部扩展提供安全启停，不允许关闭软件固定基础层；变更前备份、变更后健康检查，失败自动回退。
+2. 插件安装/更新继续交给上游 `dsh plugin` 与 pnpm，不在桌面 Renderer 暴露任意包名、版本或命令输入。
+3. 安装包瘦身先记录 `app.asar`、Harness 运行时、Electron 和终端四类占用基线，不在同版删除未经闭包验证的依赖。
+4. Stable 仍固定 V0.5.4，只有用户明确命令才晋升。
 
 ## V0.5.9 本轮进展
 
@@ -13,13 +38,17 @@
 5. 新增语义用户数据快照，只哈希固定状态、Harness 会话/目录和 LevelDB 数据文件；凭据、密钥、链接、LOG/LOCK 等瞬态文件不进入快照。
 6. Windows CI 拆为 quality、production security、package and semantic-data contracts 三层；实际 Electron 打包和覆盖安装仍使用本地固定运行时门禁。
 
-### V0.5.9 当前验证
+### V0.5.9 最终验证
 
 | 验证项 | 当前结果 |
 |---|---|
 | 定向自动化 | 18/18 通过；覆盖原子替换、备份恢复、失败清理、并发顺序、语义快照、三个 Store 与 CI 契约 |
-| 全量/CI | 待版本文档同步后执行 |
-| 打包/覆盖/发布 | 待候选安装包完成后记录 |
+| 全量/CI | 134/134 通过；PR 与主分支 quality/security/package-smoke 三项 Windows CI 全部通过 |
+| 安装包 | `DSH-Desktop-Setup-0.5.9.exe`；183,278,120 字节；SHA-256 `CE7E91D4398C0D27117148F5DA705CBDFAEF04EE67404B65B8DEECF4AEE4B3ED` |
+| 安装一致性 | `app.asar` SHA-256 `2D1C549070147878C54383989D5CACD1CD47AD8A85DE347933F6A3EC8BF7E36B`；解包 29,370 个文件，安装目录只多正常卸载器；0 reparse point、0 独立终端 PDB |
+| 覆盖数据门禁 | 覆盖前后 25 个语义数据文件、14 份会话，聚合 SHA-256 均为 `97E5BD26637BCF08424D8ED01B222A3B4E1778BD75E21A75E392BDA609CF5CCE`；0 瞬态/受限文件 |
+| 覆盖前快照 | `backups/pre-v0.5.9-20260825-023053`；32 个文件、0 个凭据副本 |
+| 发布完整性 | [v0.5.9](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.9) 为非 Draft 的 Pre-release；三个远端附件大小/摘要一致并返回 HTTP 200；V0.5.4 仍是 GitHub 正式 `Latest release` |
 
 ### V0.5.9 后计划调整
 

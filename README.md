@@ -45,6 +45,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Bounded checkpoint history** — inspect the latest twelve verified local safety points, compare their real impact, and choose an older target without exposing commit or ref input.
 - **Checkpoint-linked conversation branches** — associate new checkpoints with the selected completed Harness turn, then either restore code only or create and switch to an official child session while preserving the source conversation.
 - **Visible context sources** — inspect the Code preset, desktop language policy, project-rule candidate chain, and durable-session boundary in a local read-only window without exposing hidden prompts, credentials, or rule contents; Harness remains authoritative for content deduplication and prompt-budget inclusion.
+- **Extension health visibility** — inspect the fixed Harness dependency closure, shared fallback links, initialized Profiles, ordered bundle layers, and Profile-declared pnpm dependencies without exposing plugin configuration, patches, credentials, or arbitrary paths.
 - **In-app network settings** — choose direct access, the current Windows system proxy, or a credential-free custom HTTP(S) proxy; test DeepSeek connectivity before saving and keep loopback services and the integrated terminal outside that route.
 - **Reliable copy actions** — Harness can write sanitized text to the clipboard from its trusted main page, while clipboard reads, subframes, and unrelated permission requests remain denied.
 - **Packaged runtime** — the installer includes pinned Node.js and Harness runtimes; users do not need to install Node.js first.
@@ -65,7 +66,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.9 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, adds atomic desktop-state writes with verified last-known-good recovery, introduces a credential-safe semantic overwrite snapshot, and separates quality, production-security, and package-data CI gates. The candidate installer is `DSH-Desktop-Setup-0.5.9.exe`; it becomes a GitHub Pre-release only after package, overwrite, installed-smoke, and remote-asset gates pass. The front-page download remains Stable.
+**V0.5.10 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, adds a read-only extension-health window, and separates the packaged runtime closure, actual Profile bundle layers, and Profile-declared pnpm dependencies. The candidate installer is `DSH-Desktop-Setup-0.5.10.exe`; it becomes a GitHub Pre-release only after package, overwrite, installed-smoke, and remote-asset gates pass. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -90,12 +91,13 @@ Open repository → run or approve the agent in Harness
 → or press Ctrl+Alt+H to compare the latest twelve verified local points
 → restore only code, or create an official Harness child session from a linked completed turn
 → open Tools → Context sources to inspect the effective rule and session layers
+→ open Tools → Extension health to verify the fixed closure and actual Profile bundles
 → press Ctrl+, to choose direct, Windows system, or custom HTTP(S) proxy and test connectivity
 → reload, open in the browser, stop, and visibly distinguish owned from external ports
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.5.9 release notes](docs/RELEASE_NOTES_v0.5.9.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.5.10 release notes](docs/RELEASE_NOTES_v0.5.10.md).
 
 ## Security and current limits
 
@@ -135,7 +137,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.9 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，把工作区、布局和代理设置统一为带已验证备份的原子写入，增加不复制凭据、忽略瞬态日志的覆盖安装语义快照，并把 CI 拆分为质量、生产依赖安全和打包/数据契约三层。候选安装包为 `DSH-Desktop-Setup-0.5.9.exe`；通过打包、覆盖安装、安装版 smoke 和远端资产门禁后才发布为 Pre-release。V0.5.4 继续保持 Stable：
+V0.5.10 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，新增只读“扩展健康”窗口，明确区分软件随附依赖闭包、Profile 实际扩展层和 Profile 通过 pnpm 声明的外部依赖。候选安装包为 `DSH-Desktop-Setup-0.5.10.exe`；通过打包、覆盖安装、安装版 smoke 和远端资产门禁后才发布为 Pre-release。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
