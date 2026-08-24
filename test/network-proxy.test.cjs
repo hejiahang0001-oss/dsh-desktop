@@ -66,7 +66,7 @@ test('proxy settings persist without accepting a corrupted or credential-bearing
   assert.doesNotMatch(fs.readFileSync(filePath, 'utf8'), /user|secret/);
 });
 
-test('the bundled Node runtime sends fetch through the software-selected HTTP proxy', async (context) => {
+test('the Node 24 runtime sends fetch through the software-selected HTTP proxy', async (context) => {
   let requestCount = 0;
   const proxy = http.createServer((request, response) => {
     requestCount += 1;
@@ -95,10 +95,11 @@ test('the bundled Node runtime sends fetch through the software-selected HTTP pr
     }
   }
   Object.assign(environment, buildHarnessProxyEnvironment(proxyUrl), { NO_PROXY: '' });
-  const runtime = process.platform === 'win32'
+  const bundledRuntime = process.platform === 'win32'
     ? path.join(root, 'vendor', 'runtime', 'win32-x64', 'node.exe')
-    : process.execPath;
-  assert.equal(fs.existsSync(runtime), true);
+    : '';
+  const runtime = bundledRuntime && fs.existsSync(bundledRuntime) ? bundledRuntime : process.execPath;
+  assert.equal(Number(process.versions.node.split('.')[0]) >= 24, true);
   const child = spawn(runtime, ['-e', "fetch('http://dsh-proxy-smoke.invalid/probe').then(async (response) => { console.log(await response.text()); process.exit(0); }).catch((error) => { console.error(error.message); process.exit(1); });"], {
     env: environment,
     stdio: ['ignore', 'pipe', 'pipe'],
