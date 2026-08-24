@@ -1,6 +1,12 @@
 # Validation evidence
 
-This page records the locally verified V0.5.7 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.7 preserves those surfaces.
+This page records the locally verified V0.5.8 engineering evidence without making the README front page carry the full verification ledger. Earlier permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.8 preserves those surfaces.
+
+## V0.5.8 context-transparency evidence
+
+The context-source catalog mirrors the pinned Harness instruction discovery order from the Harness home through the active workspace and reports only bounded metadata for `AGENTS.md`, `CLAUDE.md`, and their local overlays. It marks candidates above Harness's 1 MiB per-source limit as ignored, while explicitly leaving content deduplication, total-budget omission, and truncation to Harness because those cannot be determined without reading rule prose. The isolated renderer receives no paths, file contents, write methods, hidden prompts, credentials, model input, or conversation text. Revealing a user-controlled rule requires a short-lived identifier resolved again by the main process; changing workspaces clears that map and closes the view. The UI also states the tested product boundary: durable Harness sessions are present, while external long-term memory remains MCP/plugin-managed rather than a separate database bundled by DSH Desktop.
+
+Targeted source-order, reset, local-window, packaged-asset, and narrow-IPC tests pass. Installer, overwrite, semantic-data, packaged-smoke, and real Windows UI evidence will be added only after the final V0.5.8 candidate completes those gates.
 
 ## V0.5.7 permission-boundary evidence
 

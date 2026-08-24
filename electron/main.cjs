@@ -7,6 +7,7 @@ const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
 const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { buildPermissionCenterDialog } = require('./permission-center.cjs');
+const { ContextSourceCatalog } = require('./context-sources.cjs');
 const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
@@ -49,6 +50,7 @@ app.setName('DSH Desktop');
 
 let mainWindow;
 let terminalWindow;
+let contextSourcesWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -59,6 +61,7 @@ let terminalRunner;
 let terminalOwner = null;
 let previewManager;
 let workspaceFiles;
+let contextSourceCatalog;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -146,6 +149,7 @@ let networkDiagnostics = Object.freeze({
 const rootDir = path.resolve(__dirname, '..');
 const statusPage = path.join(rootDir, 'harness-status.html');
 const terminalPage = path.join(rootDir, 'terminal.html');
+const contextSourcesPage = path.join(rootDir, 'context-sources.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
@@ -176,6 +180,7 @@ const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
+const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 
 const parseWindowSize = (value) => {
@@ -227,6 +232,7 @@ const localFileUrlMatches = (value, target) => {
 };
 
 const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
+const contextSourcesUrlAllowed = (value) => localFileUrlMatches(value, contextSourcesPage);
 
 const showStatusPage = async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -950,6 +956,11 @@ const desktopIpcAllowed = (event) => isTrustedMainFrameEvent(event, mainWindow?.
 const harnessIpcAllowed = (event) => desktopIpcAllowed(event) && harnessUiReady();
 const terminalIpcAllowed = (event) => isTrustedMainFrameEvent(event, terminalWindow?.webContents, terminalUrlAllowed);
 const terminalOwnedBy = (event) => terminalIpcAllowed(event) && isFrameOwner(event, terminalOwner);
+const contextSourcesIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  contextSourcesWindow?.webContents,
+  contextSourcesUrlAllowed
+);
 
 const sameStringArray = (left = [], right = []) => (
   left.length === right.length && left.every((value, index) => value === right[index])
@@ -1193,6 +1204,63 @@ const openTerminalWindow = async () => {
   }
   await createTerminalWindow();
   installApplicationMenu();
+  return { ok: true, reused: false };
+};
+
+const getContextSourcesState = () => contextSourceCatalog?.scan({
+  sessionActive: workspaceSyncDiagnostics.status === 'synced' && Boolean(workspaceSyncDiagnostics.sessionId)
+}) || Promise.resolve({
+  available: false,
+  workspacePath: '',
+  projectRoot: '',
+  sources: [],
+  layers: [],
+  memory: { status: 'unavailable', title: '长期记忆', detail: '上下文来源尚未初始化。' }
+});
+
+const createContextSourcesWindow = async () => {
+  const created = new BrowserWindow({
+    width: 920,
+    height: 680,
+    minWidth: 680,
+    minHeight: 480,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#171716',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH 上下文来源',
+    webPreferences: {
+      preload: path.join(__dirname, 'context-sources-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  contextSourcesWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!contextSourcesUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => created.show());
+  created.on('closed', () => {
+    if (contextSourcesWindow === created) contextSourcesWindow = undefined;
+  });
+  await created.loadFile(contextSourcesPage);
+  return created;
+};
+
+const openContextSourcesWindow = async () => {
+  if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) {
+    if (contextSourcesWindow.isMinimized()) contextSourcesWindow.restore();
+    contextSourcesWindow.show();
+    contextSourcesWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createContextSourcesWindow();
   return { ok: true, reused: false };
 };
 
@@ -1652,6 +1720,8 @@ const activateWorkspace = async (workspacePath) => {
     await previewManager?.stop();
     await terminalSettlePromise;
     const workspace = await workspaceStore.activate(workspacePath);
+    if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) contextSourcesWindow.close();
+    contextSourceCatalog?.setWorkspace(workspace.activePath);
     await workspaceFiles.activate(workspace.activePath);
     await previewManager.activate(workspace.activePath);
     await changeReviewer.activate(workspace.activePath);
@@ -1857,6 +1927,10 @@ function installApplicationMenu() {
         {
           label: '权限中心…',
           click: () => { void showPermissionCenter(); }
+        },
+        {
+          label: '上下文来源…',
+          click: () => { void openContextSourcesWindow(); }
         },
         {
           label: '定位当前/最近工具',
@@ -2340,6 +2414,25 @@ ipcMain.handle('terminal:stop', async (event) => {
   if (!terminalOwnedBy(event) || !terminalRunner) return { status: 'unavailable' };
   return terminalRunner.stop();
 });
+ipcMain.handle('context-sources:get-state', (event) => (
+  contextSourcesIpcAllowed(event)
+    ? getContextSourcesState()
+    : { available: false, workspacePath: '', projectRoot: '', sources: [], layers: [], memory: { status: 'unavailable', title: '长期记忆', detail: '请求来源未通过安全校验。' } }
+));
+ipcMain.handle('context-sources:refresh', (event) => (
+  contextSourcesIpcAllowed(event)
+    ? getContextSourcesState()
+    : { available: false, workspacePath: '', projectRoot: '', sources: [], layers: [], memory: { status: 'unavailable', title: '长期记忆', detail: '请求来源未通过安全校验。' } }
+));
+ipcMain.handle('context-sources:reveal', async (event, id) => {
+  if (!contextSourcesIpcAllowed(event) || !contextSourceCatalog) {
+    return { ok: false, message: '上下文来源请求未通过安全校验。' };
+  }
+  const target = await contextSourceCatalog.resolveSourcePath(id);
+  if (!target) return { ok: false, message: '规则文件已变化，请刷新后重试。' };
+  shell.showItemInFolder(target);
+  return { ok: true };
+});
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -2680,6 +2773,62 @@ const runIpcSecuritySmoke = async (target) => {
   mainWindow = undefined;
 };
 
+const runContextSourcesSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), 'context-sources-smoke-data');
+  const workspacePath = path.join(smokeRoot, 'workspace');
+  const harnessHome = path.join(smokeRoot, 'harness');
+  let result;
+  try {
+    await fsp.mkdir(path.join(workspacePath, '.git'), { recursive: true });
+    await fsp.mkdir(harnessHome, { recursive: true });
+    await fsp.writeFile(path.join(workspacePath, 'AGENTS.md'), 'hidden-rule-prose-marker', 'utf8');
+    await fsp.writeFile(path.join(harnessHome, 'AGENTS.md'), 'hidden-global-prose-marker', 'utf8');
+    contextSourceCatalog = new ContextSourceCatalog({ workspacePath, harnessHome });
+    await createContextSourcesWindow();
+    await contextSourcesWindow.webContents.executeJavaScript(
+      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
+    const rendered = await contextSourcesWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.contextSourcesAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      sourceRows: document.querySelectorAll('.source-row').length,
+      text: document.body.innerText
+    })`, true);
+    const screenshot = await contextSourcesWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'refresh', 'reveal'])
+        && rendered.title === '上下文来源'
+        && rendered.sourceRows === 2
+        && rendered.text.includes('AGENTS.md')
+        && rendered.text.includes('内容去重、总预算省略和截断由 Harness 决定')
+        && !rendered.text.includes('hidden-rule-prose-marker')
+        && !rendered.text.includes('hidden-global-prose-marker')
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      title: rendered.title,
+      sourceRows: rendered.sourceRows,
+      proseHidden: !rendered.text.includes('hidden-rule-prose-marker') && !rendered.text.includes('hidden-global-prose-marker'),
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error.message };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    contextSourcesWindow?.destroy();
+    contextSourcesWindow = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
@@ -2727,6 +2876,12 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  if (contextSourcesSmokeTarget) {
+    await runContextSourcesSmoke(contextSourcesSmokeTarget.slice('--context-sources-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
 
   dataRoot = app.getPath('userData');
   workspaceStore = new WorkspaceStore({
@@ -2744,6 +2899,10 @@ app.whenReady().then(async () => {
   const workspace = await workspaceStore.init();
   workspaceFiles = new WorkspaceFiles();
   await workspaceFiles.activate(workspace.activePath);
+  contextSourceCatalog = new ContextSourceCatalog({
+    workspacePath: workspace.activePath,
+    harnessHome: path.join(dataRoot, 'harness')
+  });
   previewManager = new PreviewManager();
   await previewManager.activate(workspace.activePath);
   bindPreviewManager(previewManager);
