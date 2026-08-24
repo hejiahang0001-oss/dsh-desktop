@@ -1,6 +1,15 @@
 # Validation evidence
 
-This page records the locally verified V0.5.10 engineering evidence without making the README front page carry the full verification ledger. Earlier durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.10 preserves those surfaces.
+This page records the locally verified V0.5.11 engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.11 preserves those surfaces.
+
+## V0.5.11 safe-toggle and recovery evidence
+
+- The renderer receives a toggle only for an installed Profile dependency that resolves within the fixed runtime/Profile boundary and declares `dsh.bundle`. Installation-owned base/Web layers have no toggle; the current real Web Profile declares no external dependency and therefore exposes no mutable extension action.
+- A native confirmation defaults to Cancel. The main process rechecks runtime/Profile health, opaque Profile identity, package membership, bundle declaration, current state, and Agent/terminal/checkpoint idleness immediately before writing.
+- The transaction changes only the ordered `dsh.profile.bundles` list. It does not spawn pnpm, execute package scripts, install/remove/update a dependency, or accept a command/specification from the renderer.
+- Unit recovery rehearsals verify commit cleanup, exact rollback after a simulated runtime failure, startup recovery after an interrupted manifest replacement, conflict-safe behavior, fixed-bundle refusal, traversal rejection, and Profile-root containment.
+- A non-secret journal stores only transaction id, package name, action, timestamps, and previous/next hashes. The atomic manifest writer flushes and re-reads both the candidate and last-known-good backup.
+- The package-size baseline is link-free and bounded to 50,000 files. It separates `app.asar`, Harness, external Node, isolated terminal, and the Electron shell; V0.5.11 records the final real values without deleting dependencies.
 
 ## V0.5.10 extension-health evidence
 

@@ -18,8 +18,10 @@ V0.5.10 adds a local, read-only extension-health surface. It keeps Stable at V0.
 - Community plugins and every package in the upstream monorepo are not automatically bundled or enabled.
 - Stable remains V0.5.4. V0.5.10 advances only the product Latest/Pre-release channel after package, overwrite, installed-smoke, and remote-asset gates pass.
 
-## Candidate validation
+## Final validation
 
-- Source automation and production dependency audit pass.
+- All 138 local tests pass; the production dependency audit reports no known vulnerability, and the pull request/main quality, security, and package-data CI jobs pass.
 - The local installed Harness `0.1.1-rc.2` closure currently resolves 432 expected packages with 432 correct shared fallback links; the Web Profile resolves both fixed bundle layers and declares no external plugin dependency.
-- Final installer hashes, overwrite snapshot, installed smoke evidence, and GitHub asset verification are recorded after the release gates complete.
+- Unpacked and installed desktop, Harness, IPC, PDF, context-source, and extension-health smokes pass. The installed archive exactly matches the unpacked `app.asar`, and the installed tree adds only the normal uninstaller.
+- Twenty-five semantic user-data files, including fourteen sessions, retain the exact aggregate digest across the overwrite. The rollback snapshot contains 33 files, zero credential copies, and zero reparse points.
+- The published [v0.5.10 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.10) is not a draft. All three remote asset sizes/digests match the local artifacts and return HTTP 200; V0.5.4 remains GitHub's formal Latest release.

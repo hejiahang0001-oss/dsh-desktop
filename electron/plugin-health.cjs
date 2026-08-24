@@ -209,15 +209,26 @@ class PluginHealthCatalog {
     }
 
     const bundles = [];
+    const dependencyNames = uniquePackageNames(Object.keys(manifest.dependencies || {}));
+    const dependencySet = new Set(dependencyNames);
     for (const name of uniquePackageNames(rawBundles)) {
       const resolved = await this._resolveForProfile(name, profileDir, { bundle: true });
-      bundles.push(immutable({ name, ...resolved, status: resolved.status === 'ready' && !resolved.declaresBundle ? 'not-bundle' : resolved.status }));
+      bundles.push(immutable({
+        name,
+        ...resolved,
+        status: resolved.status === 'ready' && !resolved.declaresBundle ? 'not-bundle' : resolved.status,
+        profileManaged: dependencySet.has(name)
+      }));
     }
-    const dependencyNames = uniquePackageNames(Object.keys(manifest.dependencies || {}));
     const dependencies = [];
     for (const name of dependencyNames) {
       const resolved = await this._resolveForProfile(name, profileDir);
-      dependencies.push(immutable({ name, ...resolved }));
+      dependencies.push(immutable({
+        name,
+        ...resolved,
+        enabled: rawBundles.includes(name),
+        toggleable: resolved.status === 'ready' && resolved.declaresBundle
+      }));
     }
     const workspaceReady = Boolean(await lstatOrNull(path.join(profileDir, 'pnpm-workspace.yaml')));
     const degraded = !workspaceReady
