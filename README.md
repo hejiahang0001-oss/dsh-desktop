@@ -66,6 +66,12 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 **V0.5.4** keeps official DeepSeek Harness `0.1.1-rc.2` and links newly created code checkpoints to the selected completed Harness turn. The checkpoint history now keeps code-only recovery and official conversation branching as two explicit actions; creating a branch preserves the source session and does not change current code or the Git index.
 
+### Release channels
+
+- **Stable:** V0.5.4 remains the production baseline and GitHub `Latest release`. Stable changes only after the maintainer explicitly approves a tested Latest build for promotion.
+- **Latest:** each planned iteration is published as a GitHub Pre-release after validation and overwrites the maintainer's installed build. Latest can advance without replacing Stable.
+- If a Latest build regresses, users can reinstall Stable without removing application data.
+
 ```text
 Open repository → run or approve the agent in Harness
 → inspect bounded real Git Diff in the persistent right panel
@@ -125,6 +131,8 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
 V0.5.4 继续固定官方 Harness `0.1.1-rc.2`，保留现有中文过程、Git 审查、文件树、持久 PTY、应用预览、图片/PDF Quick Look、命令面板、可恢复布局、软件代理与可靠复制，并把新代码检查点关联到当前 Harness 已完成回合：
+
+发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后以 GitHub Pre-release 发布并直接覆盖维护者电脑中的旧版。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；

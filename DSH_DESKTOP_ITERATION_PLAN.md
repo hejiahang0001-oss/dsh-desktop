@@ -4,8 +4,8 @@
 > 产品对标：**Claude Code**  
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
-> 默认节奏：每日一个可运行 Daily Build；验证通过后直接覆盖电脑中已安装的旧版，每周验收能力里程碑，每两周形成稳定版。  
-> 执行状态：2026-08-24 V0.5.4 已完成真实会话分支、最终覆盖、数据保留和 GitHub 发布完整性验证；下一版进入 V0.5.5 权限中心。
+> 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
+> 执行状态：2026-08-24 V0.5.4 已完成真实会话分支、最终覆盖、数据保留和 GitHub 发布完整性验证，并固定为当前 Stable；下一版 V0.5.5 进入 Latest 通道和权限中心。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -31,6 +31,13 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 任何 1.0 之前的新增功能必须直接服务这条主流程。
 
+### 1.4 发布通道
+
+- **Latest**：按本计划继续迭代的最新可运行版本。每版完成验证后发布为 GitHub Pre-release，并直接覆盖安装到用户当前电脑；它可以持续前进，但不自动改变 Stable。
+- **Stable**：面向普通用户的稳定基线。当前固定为 V0.5.4；只有用户明确下达“更新 Stable”命令，且指定 Latest 版本通过稳定版验收后，才取消其预发布状态并晋升 Stable。
+- **回退**：Latest 出现回归时，保留 Stable 安装包、标签和数据兼容路径；不得为追求版本号删除或覆盖 Stable 发布物。
+- GitHub 内置的 `Latest release` 标签继续指向 Stable；产品文档中的 Latest 指开发最新通道，对应 GitHub Pre-release，避免普通用户误装测试版本。
+
 ## 2. 产品与技术边界
 
 | 层级 | 负责范围 | 不负责 |
@@ -47,7 +54,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 4. Renderer 保持 sandbox、`contextIsolation` 和无 Node integration。
 5. 复用 Harness 会话、工具、权限和扩展体系，不建立平行实现。
 6. 桌面增强优先通过 Harness Plugin、Client Slot 和窄原生接口实现。
-7. 每个 Daily Build 在测试和 packaged smoke 通过后，先快照已安装程序与用户数据，再直接覆盖旧版；启动验证失败则恢复 last-known-good。
+7. 每个 Latest Build 在测试和 packaged smoke 通过后，先快照已安装程序与用户数据，再直接覆盖旧版；启动验证失败则恢复 last-known-good。
 8. DSH Desktop 以软件模型页托管的 Key 为最高优先级；Windows 环境变量不传入 Harness 子进程，普通备份不复制凭据文件。
 
 ## 3. 对标 Claude Code 的产品能力
