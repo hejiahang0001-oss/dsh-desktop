@@ -25,3 +25,13 @@ V0.5.11 adds bounded enable/disable controls for Profile-declared external exten
 
 - Installing, removing, and updating external plugins remains an upstream `dsh plugin`/pnpm responsibility.
 - Stable remains V0.5.4. V0.5.11 advances only the product Latest/Pre-release channel after all package, overwrite, recovery, installed-smoke, and remote-asset gates pass.
+
+## Final validation
+
+- All 146 local tests pass; the production dependency audit reports no known vulnerability, and the implementation, smoke-wait fix, and main-branch Windows CI jobs pass.
+- The first packaged extension-health smoke correctly blocked release because it captured the page while the 432-package scan was still loading. The bounded readiness wait was fixed in PR #14, then the application was rebuilt from main and all six unpacked/installed smokes passed.
+- The packaged fixture renders exactly one external-extension toggle, four preload methods, no fixed-layer toggle, and no private manifest or patch markers. The current real Web Profile has no external dependency and therefore exposes no mutable extension action.
+- The installer is 183,287,290 bytes with SHA-256 `0248B40A294A55ABD831F2DEC8E18BC0BBB78868E25BA51CB2935FC7810DAA3B`; installed and unpacked `app.asar` SHA-256 is `AAB77D8D41638CD5A11BBE437A29048F36A000C8CE388D7322CDE4028CE79A59`.
+- Twenty-five semantic user-data files, including fourteen sessions, retain the exact aggregate digest across the overwrite. The rollback snapshot contains 33 files, zero credential copies, and zero reparse points.
+- The final unpacked baseline is 653.44 MiB: Electron shell 362.66 MiB, Harness 193.99 MiB, external Node 88.72 MiB, `app.asar` 6.49 MiB, and terminal runtime 1.59 MiB.
+- The published [v0.5.11 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.11) is not a draft. All three remote asset sizes/digests match and return HTTP 200; V0.5.4 remains GitHub's formal Latest release.

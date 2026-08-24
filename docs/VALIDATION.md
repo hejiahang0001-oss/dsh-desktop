@@ -10,6 +10,9 @@ This page records the locally verified V0.5.11 engineering evidence without maki
 - Unit recovery rehearsals verify commit cleanup, exact rollback after a simulated runtime failure, startup recovery after an interrupted manifest replacement, conflict-safe behavior, fixed-bundle refusal, traversal rejection, and Profile-root containment.
 - A non-secret journal stores only transaction id, package name, action, timestamps, and previous/next hashes. The atomic manifest writer flushes and re-reads both the candidate and last-known-good backup.
 - The package-size baseline is link-free and bounded to 50,000 files. It separates `app.asar`, Harness, external Node, isolated terminal, and the Electron shell; V0.5.11 records the final real values without deleting dependencies.
+- Final V0.5.11 evidence: 146/146 tests, no known production vulnerability, six unpacked and six installed smokes, 29,370 unpacked files, 29,371 installed files, matching `app.asar`, zero installed reparse points, and zero terminal PDB files.
+- The overwrite preserved the exact `046A2EB027B3C6179CB80D84D481464B9416E5113DD656315C35CB7120B59CE4` aggregate digest across 25 semantic files and 14 sessions. The credential-free rollback snapshot is `backups/pre-v0.5.11-20260825-035234`.
+- The final installer SHA-256 is `0248B40A294A55ABD831F2DEC8E18BC0BBB78868E25BA51CB2935FC7810DAA3B`; blockmap SHA-256 is `68974C77896D69A93D88BE12728D23A289299DDA4895939B0993CE24A750B541`; packaged/installed `app.asar` SHA-256 is `AAB77D8D41638CD5A11BBE437A29048F36A000C8CE388D7322CDE4028CE79A59`.
 
 ## V0.5.10 extension-health evidence
 
