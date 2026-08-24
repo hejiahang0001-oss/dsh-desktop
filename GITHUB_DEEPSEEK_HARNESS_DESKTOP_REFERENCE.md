@@ -27,18 +27,27 @@
 
 ## 3. 主参考项目
 
-### 3.1 dataelement/dsh-desktop：最接近 MVP 的薄桌面壳
+### 3.1 dataelement/dsh-desktop：通用产品化客户端与插件治理样板
 
 - 仓库：[dataelement/dsh-desktop](https://github.com/dataelement/dsh-desktop)
-- 关系证据：README 明确说明它打包本地 DeepSeek Harness Web 体验，并固定 `@deepseek-ai/dsh@0.1.0-rc.6`。
-- 产品路线：自动启动本地 Harness、分配随机 loopback 端口、等待就绪、加载完整官方界面；工作区仍由 Harness 管理。
-- 桌面职责：子进程生命周期、日志、用户数据目录、Windows/macOS 打包。
+- 2026-08-24 复核：主分支固定 `@deepseek-ai/dsh@0.1.1-rc.1`，内置 Node、pnpm、市场安装器、Profile 修复、插件故障识别、自动更新、Preset 导入导出、局域网手机控制和可选 Cloudflare Tunnel。
+- 产品路线：面向普通 Harness 用户提供 Windows/macOS 通用客户端；自动启动本地 Harness、分配随机 loopback 端口并加载完整界面，模型、插件、会话和工作区仍以 Harness 为真源。
+- 工程路线：通过 `patch-package` 深度定制多个 Harness UI 包，并以 TypeScript、Electron Vite、Vitest 和跨平台 Release Workflow 建立产品化发布链。
+- 边界判断：它在插件生态、多模型配置、自动更新、跨平台和社区运营上领先；没有发现与本项目常驻 Git Diff、持久 PTY、代码 Checkpoint/恢复和回合关联会话分支同等的桌面实现。
 
 应借鉴：
 
-- 第一版不要重写 Harness UI 和核心能力。
-- 安装目录与用户数据目录分离，升级不能删除 profile、插件和会话。
-- 用随机 `127.0.0.1` 端口和 readiness check，而不是写死服务端口。
+- 插件市场之前先固定 pnpm store，核对 Profile manifest/lock/patch 一致性，并能识别、卸载和恢复故障插件。
+- Stable/Latest 更新必须先提示，只有用户接受后才下载，并允许跳过指定版本。
+- 安装目录与用户数据目录分离；更新、插件变更和 Profile 修复不得删除会话或凭据。
+- 发布流水线应覆盖 Windows 打包、真实 packaged smoke、更新元数据和 Release 上传。
+
+不直接采用：
+
+- 不复制其通用多模型客户端定位；本项目继续对标 Claude Code 的本地编程闭环。
+- 不在 1.0 前加入手机控制或 Cloudflare Tunnel，避免提前扩大网络暴露面。
+- 不长期依赖大面积 `patch-package` 修改 Harness Web UI；优先使用官方 Patch、Plugin、Client Slot 和窄宿主接口。
+- 两个项目公开名和安装产品名均为 `DSH Desktop`。V0.5.4 Stable 保持不变，但后续 Latest 在扩大公开推广前必须完成独立品牌、`productName`、`appId`、安装目录和用户数据迁移设计。
 
 ### 3.2 salathleizhang/deepseek-harness-desktop：进程监督与发布门禁样板
 
