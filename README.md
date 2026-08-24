@@ -66,7 +66,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.11 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, adds confirmed enable/disable controls only for already-installed Profile external bundle dependencies, and uses an atomic manifest backup plus transaction journal for restart failure or interrupted-write recovery. The candidate installer is `DSH-Desktop-Setup-0.5.11.exe`; it becomes a GitHub Pre-release only after package, overwrite, recovery, installed-smoke, and remote-asset gates pass. The front-page download remains Stable.
+**V0.5.11 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, adds confirmed enable/disable controls only for already-installed Profile external bundle dependencies, and uses an atomic manifest backup plus transaction journal for restart failure or interrupted-write recovery. `DSH-Desktop-Setup-0.5.11.exe` is published as a GitHub Pre-release after package, overwrite, recovery, installed-smoke, and remote-asset gates passed. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -137,7 +137,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.11 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，只对已经安装、由 Profile 明确声明且确实提供 `dsh.bundle` 的外部扩展增加确认式启停；清单变更使用原子备份和事务日志，重启或健康核对失败自动回退。候选安装包为 `DSH-Desktop-Setup-0.5.11.exe`；通过打包、覆盖安装、恢复演练、安装版 smoke 和远端资产门禁后才发布为 Pre-release。V0.5.4 继续保持 Stable：
+V0.5.11 产品 Latest 继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，只对已经安装、由 Profile 明确声明且确实提供 `dsh.bundle` 的外部扩展增加确认式启停；清单变更使用原子备份和事务日志，重启或健康核对失败自动回退。`DSH-Desktop-Setup-0.5.11.exe` 已在通过打包、覆盖安装、恢复演练、安装版 smoke 和远端资产门禁后发布为 Pre-release。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-25 V0.5.10 已发布为 Pre-release；V0.5.11 已实现 Profile 外部扩展的安全启停、事务恢复与包体基线并进入发布门禁；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-25 V0.5.7–V0.5.11 五个连续小版本已完成并发布为 Pre-release；本地安装为 V0.5.11，V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -309,7 +309,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 6. V0.5.8（已完成，产品 Latest）：展示 Code preset、桌面语言策略、项目规则候选链、Harness 持久会话和外部记忆边界；主进程只读取有界元数据，只能按内部标识定位已发现的用户规则，不暴露隐藏系统提示、正文或凭据。
 7. V0.5.9（已发布）：统一桌面持久状态的临时文件、刷新、原子替换和已验证备份；补齐 quality/security/package-smoke 三层 CI，并把覆盖安装的数据验证从瞬态日志哈希调整为语义数据门禁。
 8. V0.5.10（已发布）：增加只读插件 Profile 与依赖健康视图，核对固定运行时闭包、Harness 共享回退链接、Profile 扩展层和 pnpm 外部依赖的一致性。
-9. V0.5.11（发布门禁中）：只对 Profile 明确声明且已安装的外部扩展增加安全启停、失败回退和中断恢复；固定基础扩展层不可关闭，并建立安装包组成基线。
+9. V0.5.11（已发布）：只对 Profile 明确声明且已安装的外部扩展增加安全启停、失败回退和中断恢复；固定基础扩展层不可关闭，并建立安装包组成基线。
 10. V0.5.12：用实际第三方扩展验证安装、启停、运行时重载、Profile 数据迁移和跨版本回退，再决定是否把上游 pnpm 管理流程包装成桌面操作。
 11. V0.5.13：基于包体分类和闭包证据处理重复依赖、增量更新与代码签名评估，不按文件名猜测删除运行时包。
 
