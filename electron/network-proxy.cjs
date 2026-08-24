@@ -82,6 +82,40 @@ const buildHarnessProxyEnvironment = (effectiveProxyUrl) => {
   });
 };
 
+const proxySettingsEqual = (left, right) => {
+  const normalizedLeft = normalizeProxySettings(left);
+  const normalizedRight = normalizeProxySettings(right);
+  return normalizedLeft.mode === normalizedRight.mode && normalizedLeft.proxyUrl === normalizedRight.proxyUrl;
+};
+
+const proxySettingsDescription = (settings) => {
+  const normalized = normalizeProxySettings(settings);
+  if (normalized.mode === 'custom') return `自定义代理 ${normalized.proxyUrl}`;
+  if (normalized.mode === 'system') return 'Windows 系统代理';
+  return '直连';
+};
+
+const confirmProxySettingsChange = async ({ dialog, parentWindow, previous, proposed }) => {
+  const settings = normalizeProxySettings(proposed);
+  if (proxySettingsEqual(previous, settings)) {
+    return Object.freeze({ changed: false, confirmed: true, settings });
+  }
+  const options = {
+    type: 'question',
+    title: '确认修改网络与代理',
+    message: '保存新的 Harness 网络设置？',
+    detail: `当前：${proxySettingsDescription(previous)}\n修改为：${proxySettingsDescription(settings)}\n\n确认后将保存设置并重启 Harness；集成终端和本机回环地址不受影响。`,
+    buttons: ['保存并重启', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  };
+  const result = parentWindow
+    ? await dialog.showMessageBox(parentWindow, options)
+    : await dialog.showMessageBox(options);
+  return Object.freeze({ changed: true, confirmed: result.response === 0, settings });
+};
+
 class ProxySettingsStore {
   constructor({ filePath }) {
     this.filePath = filePath;
@@ -126,6 +160,7 @@ module.exports = {
   ProxySettingsError,
   ProxySettingsStore,
   buildHarnessProxyEnvironment,
+  confirmProxySettingsChange,
   normalizeProxySettings,
   normalizeProxyUrl,
   parseResolvedProxy,

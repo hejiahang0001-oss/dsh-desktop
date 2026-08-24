@@ -34,6 +34,11 @@ test('automatic checkpoint captures code without changing the worktree or real i
   fs.writeFileSync(path.join(root, 'tracked.txt'), 'before agent\n');
   fs.writeFileSync(path.join(root, 'new-file.txt'), 'new code\n');
   fs.writeFileSync(path.join(root, '.env'), 'DEEPSEEK_API_KEY=not-captured\n');
+  fs.mkdirSync(path.join(root, 'secrets'));
+  fs.writeFileSync(path.join(root, 'secrets', 'token.txt'), 'not-captured\n');
+  fs.mkdirSync(path.join(root, 'CrEdEnTiAlS'));
+  fs.writeFileSync(path.join(root, 'CrEdEnTiAlS', 'api.txt'), 'not-captured\n');
+  fs.writeFileSync(path.join(root, 'secretary-notes.md'), 'ordinary project notes\n');
   const statusBefore = git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
   const indexBefore = fs.readFileSync(path.join(root, '.git', 'index'));
 
@@ -46,10 +51,13 @@ test('automatic checkpoint captures code without changing the worktree or real i
   const result = await manager.create({ source: 'automatic' });
   assert.equal(result.created, true);
   assert.equal(result.last.source, 'automatic');
-  assert.equal(result.last.sensitiveExcludedCount, 1);
+  assert.equal(result.last.sensitiveExcludedCount, 3);
   assert.equal(git(root, ['show', `${result.last.commit}:tracked.txt`]), 'before agent\n');
   assert.equal(git(root, ['show', `${result.last.commit}:new-file.txt`]), 'new code\n');
   assert.doesNotMatch(git(root, ['ls-tree', '-r', '--name-only', result.last.commit]), /^\.env$/m);
+  assert.doesNotMatch(git(root, ['ls-tree', '-r', '--name-only', result.last.commit]), /^secrets\/token\.txt$/m);
+  assert.doesNotMatch(git(root, ['ls-tree', '-r', '--name-only', result.last.commit]), /^CrEdEnTiAlS\/api\.txt$/m);
+  assert.match(git(root, ['ls-tree', '-r', '--name-only', result.last.commit]), /^secretary-notes\.md$/m);
   assert.equal(git(root, ['rev-parse', '--verify', LATEST_REF]).trim(), result.last.commit);
   assert.equal(git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']), statusBefore);
   assert.deepEqual(fs.readFileSync(path.join(root, '.git', 'index')), indexBefore);
@@ -72,7 +80,7 @@ test('automatic checkpoint captures code without changing the worktree or real i
   const preview = await manager.previewRestore();
   assert.equal(preview.available, true);
   assert.equal(preview.indexWillChange, true);
-  assert.equal(preview.sensitiveExcludedCount, 2);
+  assert.equal(preview.sensitiveExcludedCount, 4);
   const trashRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-checkpoint-trash-'));
   context.after(() => fs.rmSync(trashRoot, { recursive: true, force: true }));
   const trashed = [];
@@ -175,6 +183,8 @@ test('checkpoint scope refuses a nested workspace and credential-like components
   assert.equal(state.available, false);
   assert.equal(state.reason, 'workspace-is-subdirectory');
   assert.equal(isRestrictedGitPath('config/.credentials.yaml'), true);
+  assert.equal(isRestrictedGitPath('secrets/token.txt'), true);
+  assert.equal(isRestrictedGitPath('src/CrEdEnTiAlS/api.txt'), true);
   assert.equal(isRestrictedGitPath('src/client.ts'), false);
   assert.equal(isCheckpointId('20260824T060000000Z-deadbeef'), true);
   assert.equal(isCheckpointId('../refs/heads/main'), false);

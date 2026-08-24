@@ -125,14 +125,18 @@
     if (state?.mode === 'system') return state.effectiveProxy ? '当前：Windows 系统代理' : '当前：Windows 系统设置（直连）';
     return '当前：直连';
   };
+  const applyState = (state) => {
+    const mode = radios.has(state?.mode) ? state.mode : 'direct';
+    radios.get(mode).checked = true;
+    customInput.value = state?.proxyUrl || '';
+    renderMode();
+  };
   const load = async () => {
     setBusy(true);
     setStatus('正在读取当前设置…');
     try {
       const state = await api.network.getState();
-      const mode = radios.has(state?.mode) ? state.mode : 'direct';
-      radios.get(mode).checked = true;
-      customInput.value = state?.proxyUrl || '';
+      applyState(state);
       setStatus(stateMessage(state), state?.status === 'error' ? 'error' : '');
     } catch {
       radios.get('direct').checked = true;
@@ -186,11 +190,12 @@
     try {
       const result = await api.network.save(proposal());
       if (!result?.ok) {
-        setStatus(result?.message || '代理设置保存失败。', 'error');
         setBusy(false);
+        if (result?.canceled) applyState(result.state);
+        setStatus(result?.message || '代理设置保存失败。', result?.canceled ? '' : 'error');
         return;
       }
-      setStatus('设置已保存，Harness 正在重启…', 'success');
+      setStatus(result?.restarting ? '设置已保存，Harness 正在重启…' : '设置未变化，无需重启。', 'success');
     } catch {
       setStatus('代理设置保存失败，请重试。', 'error');
       setBusy(false);

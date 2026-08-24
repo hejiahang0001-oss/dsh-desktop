@@ -1,6 +1,7 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { TextDecoder } = require('node:util');
+const { isRestrictedPath } = require('./sensitive-path-policy.cjs');
 
 const MAX_RELATIVE_PATH_CHARS = 2048;
 const MAX_DIRECTORY_ENTRIES = 500;
@@ -14,14 +15,6 @@ const MAX_SEARCH_ENTRIES = 20000;
 const MAX_SEARCH_DEPTH = 16;
 const MAX_SEARCH_MS = 1500;
 const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules']);
-const RESTRICTED_FILE_PATTERNS = Object.freeze([
-  /^\.env(?:\.|$)/i,
-  /^\.credentials(?:\.|$)/i,
-  /^(?:credentials|secrets?)(?:\.|$)/i,
-  /^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$)/i,
-  /^(?:\.npmrc|\.pypirc|\.netrc)$/i,
-  /\.(?:pem|key|pfx|p12)$/i
-]);
 const BINARY_EXTENSIONS = new Set([
   '.7z', '.avi', '.bmp', '.class', '.dll', '.doc', '.docx', '.eot', '.exe', '.gif', '.gz',
   '.ico', '.jar', '.jpeg', '.jpg', '.mov', '.mp3', '.mp4', '.otf', '.pdf', '.png', '.ppt',
@@ -74,10 +67,7 @@ const isInside = (rootPath, targetPath) => {
   return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative);
 };
 
-const isRestrictedWorkspaceFile = (relativePath) => {
-  const baseName = path.posix.basename(String(relativePath || ''));
-  return RESTRICTED_FILE_PATTERNS.some((pattern) => pattern.test(baseName));
-};
+const isRestrictedWorkspaceFile = (relativePath) => isRestrictedPath(relativePath);
 
 const languageForPath = (relativePath) => ({
   '.c': 'C',
@@ -175,6 +165,16 @@ class WorkspaceFiles {
 
   async listDirectory(relativePath = '', { maxEntries = MAX_DIRECTORY_ENTRIES } = {}) {
     const resolved = this._resolve(relativePath, { allowRoot: true });
+    if (resolved.relativePath && isRestrictedWorkspaceFile(resolved.relativePath)) {
+      return Object.freeze({
+        available: false,
+        reason: 'restricted',
+        path: resolved.relativePath,
+        entries: Object.freeze([]),
+        truncated: false,
+        message: '疑似凭据或私钥目录默认不在桌面面板中浏览。'
+      });
+    }
     await this._assertNoLinkTraversal(resolved);
     const state = await fsp.lstat(resolved.absolutePath);
     if (state.isSymbolicLink() || !state.isDirectory()) {
@@ -197,7 +197,7 @@ class WorkspaceFiles {
         name: entry.name,
         path: entryPath,
         kind,
-        restricted: kind === 'file' && isRestrictedWorkspaceFile(entryPath)
+        restricted: isRestrictedWorkspaceFile(entryPath)
       }));
     }
     sortEntries(entries);
@@ -376,7 +376,7 @@ class WorkspaceFiles {
         if (kind === 'directory' && IGNORED_DIRECTORIES.has(entry.name)) continue;
         const relativePath = current.relativePath ? `${current.relativePath}/${entry.name}` : entry.name;
         if (kind === 'directory') {
-          if (current.depth < depthLimit) {
+          if (!isRestrictedWorkspaceFile(relativePath) && current.depth < depthLimit) {
             queue.push({
               absolutePath: path.join(current.absolutePath, entry.name),
               relativePath,

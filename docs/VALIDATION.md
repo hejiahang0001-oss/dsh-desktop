@@ -1,6 +1,33 @@
 # Validation evidence
 
-This page records the locally verified V0.5.6 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.6 preserves those surfaces.
+This page records the locally verified V0.5.7 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.7 preserves those surfaces.
+
+## V0.5.7 permission-boundary evidence
+
+- All 125 tests pass. New coverage checks Windows-native proxy confirmation, cancel/no-change behavior, permission-center summaries, shared nested sensitive-path matching, and real temporary-Git checkpoint capture without the former `secret*` false positive.
+- `pnpm audit --prod --audit-level moderate` reports no known vulnerabilities. Electron remains `43.4.1`, external Node.js remains `24.19.0`, and DeepSeek Harness remains `0.1.1-rc.2`.
+- Unpacked and installed desktop, real Harness, IPC-security, and PDF smoke checks all exit with code 0. Harness returns HTTP 200, title `DeepSeek Harness`, synchronized workspace state, and a created session. The PDF visual signal remains `0.3363`.
+- Real Windows UI review confirms that the native permission center exposes the current Harness permission mode and fixed desktop boundaries without adding Renderer capabilities. Proxy changes display before/after values with Cancel focused; Escape leaves persistence untouched and restores the visible choice to Direct.
+
+## V0.5.7 installer and overwrite evidence
+
+| Item | V0.5.7 value |
+| --- | --- |
+| Installer | `DSH-Desktop-Setup-0.5.7.exe` |
+| Size | `183,272,852` bytes |
+| SHA-256 | `CEE81340F8CFEFA22A32487454D2DE57FC1A061B976DFB648C119DB4AF537A17` |
+| Blockmap SHA-256 | `27D6CDE01C7DCE1519E4E0633F4EFAA58C48FFBAC3BB1D42B1ECBD281C0AA276` |
+| Files in unpacked build | `29,370` |
+| Files in installed application | `29,371` (the unpacked set plus the normal uninstaller) |
+| Packaged `app.asar` SHA-256 | `BC3745B0554C1E6E90BA1A5F499DE8B90E8E1A4D0C7C74E3107375F90ED31E62` |
+| Reparse points | `0` |
+| Terminal PDB files | `0` |
+
+The final installer exits with code 0 and the Windows uninstall record reports `DSH Desktop 0.5.7`. Selected application, Electron, Node runtime, PTY, and Harness package hashes match between the unpacked and installed trees. The software Key reference, fourteen sessions, and seven persisted state summaries retain identical pre/post-overwrite hashes. Electron rotates LevelDB `LOG` files during a real smoke, but all five Local Storage data files retain identical hashes; validation therefore distinguishes transient database logs from persisted semantic data.
+
+The rollback snapshot is `backups/pre-v0.5.7-20260825-002436`. It contains 33 files and fourteen session files, contains zero credential copies, and was created only after confirming zero source reparse points.
+
+V0.5.4 remains the published Stable and GitHub `Latest release`. V0.5.7 is published only as a Pre-release after its branch and main Windows CI checks pass; its final remote asset digest and direct-download status are verified after upload.
 
 ## V0.5.6 Electron supported-line evidence
 

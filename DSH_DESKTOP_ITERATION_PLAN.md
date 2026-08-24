@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-24 V0.5.6 已把 Electron 固定升级到官方受支持的 `43.4.1`，完成 PDF、终端/IPC、真实 Harness、安装覆盖和数据保留验证，并已发布为产品 Latest Pre-release；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-25 V0.5.7 已完成权限中心、代理原生默认取消确认、统一敏感路径策略、正式打包、覆盖安装、数据保留和真实界面门禁，等待 GitHub Pre-release 发布；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -297,7 +297,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 ### V0.5：安全、Checkpoint 与记忆
 
-当前进度：V0.5.0 已发布回合前自动代码检查点；V0.5.1 已发布最近点安全恢复；V0.5.2 已发布最近 12 个检查点的有界历史与选择恢复；V0.5.3 已发布软件内 HTTP(S) 代理和受限剪贴板写入修复；V0.5.4 已完成检查点与 Harness 完整回合关联、代码/会话双操作及官方子会话分支验证；V0.5.5 已完成终端/IPC 安全隔离；V0.5.6 已完成 Electron 受支持线升级与真实 PDF 回归。
+当前进度：V0.5.0 已发布回合前自动代码检查点；V0.5.1 已发布最近点安全恢复；V0.5.2 已发布最近 12 个检查点的有界历史与选择恢复；V0.5.3 已发布软件内 HTTP(S) 代理和受限剪贴板写入修复；V0.5.4 已完成检查点与 Harness 完整回合关联、代码/会话双操作及官方子会话分支验证；V0.5.5 已完成终端/IPC 安全隔离；V0.5.6 已完成 Electron 受支持线升级与真实 PDF 回归；V0.5.7 已完成边界实现和全部本地发布门禁。
 
 接下来按小版本收敛：
 
@@ -305,8 +305,11 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 2. V0.5.4（已完成）：关联 Harness 会话/完整回合与代码检查点；“只恢复代码”和“从该回合建立新会话分支”为两个明确动作，官方 fork 已验证不改写原会话、代码、HEAD 或 Git 索引。
 3. V0.5.5（已完成，本机安全基线）：把持久 PTY 移入只加载本地资源的独立窗口；Harness 页面只保留固定打开动作；所有桌面 IPC 统一进行精确 sender、主框架和 URL 校验。V0.5.4 Stable 未改变，公开发布当时因 Electron 支持门禁暂缓。
 4. V0.5.6（已完成，产品 Latest）：把 Electron `35.7.5` 固定升级到官方受支持的 `43.4.1`，逐项回归窗口、Preload、PDF/图片预览、PTY、权限、打包、安装覆盖和数据保留；增加可识别空白误报的真实 PDF 渲染门禁，恢复 GitHub Latest Pre-release 发布流程。
-5. V0.5.7：把 Ask、允许、拒绝和越界确认规则集中为权限中心，增加代理变更的原生默认取消确认，并统一文件/Checkpoint 敏感路径策略；继续复用 Harness 权限语义。
-6. V0.5.8：展示项目规则、Harness 记忆与本轮上下文来源，支持关闭或编辑用户可控来源；补齐 quality/security/package-smoke 三层 CI、Electron Fuses/ASAR 完整性与签名准备，并复测接近 12 个真实检查点、插件 Profile、固定 pnpm store 和故障插件恢复。
+5. V0.5.7（本地门禁完成）：把 Harness 权限状态、待确认入口和桌面固定边界集中到原生权限中心；增加代理变更的原生默认取消确认；文件/Checkpoint 复用大小写不敏感、逐路径组件匹配的敏感策略，并消除 `secret*` 误伤普通文件的问题。
+6. V0.5.8：展示项目规则、Harness 记忆与本轮上下文来源；只对用户可控来源提供打开或后续编辑入口，不暴露隐藏系统提示或凭据。
+7. V0.5.9：统一桌面持久状态的临时文件、刷新、原子替换和已验证备份；补齐 quality/security/package-smoke 三层 CI，并把覆盖安装的数据验证从瞬态日志哈希调整为语义数据门禁。
+8. V0.5.10：增加插件 Profile 与依赖健康视图，核对固定 pnpm store、上游 Profile 和插件依赖闭包的一致性。
+9. V0.5.11：增加安全启停插件、故障插件恢复和失败关闭路径，并建立安装包瘦身与增量更新的可验证基线。
 
 用户能够：
 

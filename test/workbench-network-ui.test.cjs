@@ -17,6 +17,8 @@ test('network settings expose bounded accessible direct, system, and custom prox
   assert.match(source, /api\.network\.getState/);
   assert.match(source, /api\.network\.test/);
   assert.match(source, /api\.network\.save/);
+  assert.match(source, /result\?\.canceled/);
+  assert.match(source, /applyState\(result\.state\)/);
   assert.match(source, /127\.0\.0\.1、localhost、::1/);
   assert.match(source, /event\.key === ','/);
   assert.doesNotMatch(source, /eval\(|innerHTML|ipcRenderer|shell\./);

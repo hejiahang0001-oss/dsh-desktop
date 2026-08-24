@@ -3,7 +3,7 @@
 > 审核日期：2026-08-24  
 > 初始审核对象：`44dcefb`（`codex/v0.5.4-session-checkpoint`）  
 > 审核与整改方式：`code-review-excellence` + OpenAI `security-best-practices` + 测试先行整改 + 安装包真实验证  
-> 结论：**Approve for Latest Pre-release。SEC-001 终端隔离和 SEC-004 IPC sender 校验已在 V0.5.5 完成；SEC-002 Electron 受支持线升级已在 V0.5.6 完成。发布阻断项为 0，剩余重要项继续按 V0.5.7–V0.5.8 整改；V0.5.4 Stable 不变。**
+> 结论：**Approve for Latest Pre-release。SEC-001/SEC-004 已在 V0.5.5 完成，SEC-002 已在 V0.5.6 完成，SEC-003/SEC-005 已在 V0.5.7 完成。发布阻断项为 0，剩余重要项继续按 V0.5.8–V0.5.11 整改；V0.5.4 Stable 不变。**
 
 ## 一、结论摘要
 
@@ -61,7 +61,7 @@
 
 ## 三、重要项
 
-### SEC-003：代理配置可由 Harness 同源脚本静默改写
+### SEC-003：代理配置可由 Harness 同源脚本静默改写（V0.5.7 已修复）
 
 - 严重级别：**Medium / Important**
 - 位置：
@@ -72,6 +72,8 @@
 - 影响：失陷的同源脚本可修改外部网络路由并造成拒绝服务、流量元数据泄露；若系统同时信任攻击者控制的 TLS 根证书，风险会进一步扩大。
 - 已有缓解：代理 URL 禁止用户名/密码，DeepSeek API 使用 HTTPS，回环地址绕过代理。
 - 建议修复：代理变更必须在主进程显示默认取消的原生确认；长期应移到与 Harness 内容隔离的本地设置窗口。
+- 整改结果：主进程在持久化和重启前规范化并比较新旧配置，真实变化必须显示 Windows 原生确认，默认按钮、关闭和 Escape 均为取消；无变化不确认也不重启。取消后 Renderer 使用主进程返回的已保存状态恢复界面，避免保留未落盘的提案。
+- 整改验证：单元测试覆盖可信主框架、非可信发送方、无变化、确认和取消；最终安装版真实界面确认“直连 → Windows 系统代理”的前后值可见，取消默认聚焦，Escape 后显示未修改并恢复“直连”。
 
 ### SEC-004：部分 IPC 没有发送方校验（V0.5.5 已修复）
 
@@ -88,7 +90,7 @@
 - 整改结果：新增共享 `ipc-policy.cjs`；`workspace:get-state/choose`、`diagnostics:get-state/refresh`、`harness:get-state/restart/open-log` 和终端接口全部 fail closed，并区分桌面主框架、Harness 主框架和本地终端主框架。状态页本地 URL 改为精确文件匹配。
 - 整改验证：单元测试覆盖子框架、不同 WebContents、URL 不匹配、导航后 owner 变化；安装版 IPC smoke 退出码 0。
 
-### SEC-005：文件面板未阻止敏感目录下的普通文件名
+### SEC-005：文件面板未阻止敏感目录下的普通文件名（V0.5.7 已修复）
 
 - 严重级别：**Medium / Important**
 - 位置：
@@ -98,6 +100,8 @@
 - 证据：`isRestrictedWorkspaceFile()` 只对 `path.posix.basename(relativePath)` 匹配。实测 `.env` 返回 `true`，但 `secrets/token.txt` 和 `credentials/api.txt` 均返回 `false`。Checkpoint 模块则会检查每一个路径组件，两个策略已经漂移。
 - 影响：文件树与搜索可能展示并读取放在 `secrets/`、`credentials/` 等目录中的文本凭据，与 README“不会显示疑似凭据、私钥”的承诺不一致。
 - 建议修复：复用一份共享敏感路径策略，对每个路径组件检查；为敏感目录、大小写、嵌套路径、重命名和搜索结果增加测试。
+- 整改结果：文件树、搜索、文本/媒体读取和 Git Checkpoint 复用同一共享策略，对规范化路径的每个组件大小写不敏感地精确匹配；敏感目录不再被遍历。Git 排除改为 `icase` 组件精确 pathspec，避免旧 `secret*` 误伤 `secretary-notes.md`。
+- 整改验证：单元测试覆盖 `secrets/token.txt`、`CrEdEnTiAlS/api.txt`、嵌套路径和普通近似名；真实临时 Git 仓库验证敏感文件不进入快照而普通文件仍被捕获。
 
 ### SEC-006：软件 Key 未做 Windows 系统级静态加密
 
@@ -167,16 +171,18 @@
 
 1. **V0.5.5 安全切片（已完成）**：隔离终端 UI/IPC，建立 frame 级能力矩阵，补真实 Electron IPC 测试，并完成解包版/安装版/覆盖升级验证。
 2. **V0.5.6 运行时切片（已完成）**：Electron 固定升级到 `43.4.1`，完成窗口、Preload、真实 PDF/图片预览、PTY、覆盖安装和数据保留回归。
-3. **V0.5.7 边界切片**：代理原生确认、补齐全部 IPC sender 校验、统一敏感路径策略。
-4. **V0.5.8 发布切片**：CI 三层门禁、签名准备、Electron Fuses/ASAR integrity。
+3. **V0.5.7 边界切片（已完成）**：代理原生确认和统一敏感路径策略；全部 IPC sender 校验沿用 V0.5.5 的已验证矩阵。
+4. **V0.5.8–V0.5.11**：上下文来源可见、原子状态与 CI、插件健康、安全启停与故障恢复；签名与 Electron Fuses/ASAR integrity 保持发布加固事项。
 5. **后续 Stable 候选**：DPAPI/Windows Credential Manager 迁移和真实覆盖升级验证；只有维护者明确命令后晋升 Stable。
 
 ## 七、验证记录
 
-- `node --test test/*.test.cjs`：119 通过，0 失败。
+- `node --test test/*.test.cjs`：V0.5.7 为 125 通过，0 失败。
 - `pnpm audit --prod --audit-level moderate`：No known vulnerabilities found。
 - `pnpm view @deepseek-ai/dsh version`：`0.1.1-rc.2`。
 - `pnpm view electron version`：`43.4.1`。
 - V0.5.6 解包版与安装版桌面、Harness、IPC security、PDF smoke 全部退出码 0；Electron 版本 `43.4.1`；真实 Harness HTTP 200、Workspace 同步成功且未发送阻断 PDF 的 CSP。
 - V0.5.6 覆盖安装退出码 0；Windows 注册版本 0.5.6；14 份会话、凭据引用和五项用户状态摘要保持不变；快照中凭据副本为 0。
 - 解包版包含 29,370 个文件，安装目录只额外包含卸载程序；0 reparse point、0 terminal PDB；最终 `app.asar` SHA-256 为 `374C7050C8CBB1B085E66C36636D22AA73B66FC048A68C0BE68EE610CDE21DEC`。
+- V0.5.7 解包版与安装版桌面、Harness、IPC security、PDF smoke 全部退出码 0；正式覆盖安装注册版本 0.5.7，Key 引用、14 份会话和 7 项持久状态摘要保持不变。
+- V0.5.7 安装器 SHA-256 为 `CEE81340F8CFEFA22A32487454D2DE57FC1A061B976DFB648C119DB4AF537A17`；最终 `app.asar` SHA-256 为 `BC3745B0554C1E6E90BA1A5F499DE8B90E8E1A4D0C7C74E3107375F90ED31E62`。
