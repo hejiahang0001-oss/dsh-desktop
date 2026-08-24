@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, safeStorage, session, shell } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -173,6 +173,7 @@ let harnessLocalizationScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
+const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 
 const parseWindowSize = (value) => {
@@ -2340,6 +2341,7 @@ const createWindow = async () => {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      plugins: true,
       sandbox: true,
       spellcheck: true,
       webSecurity: true
@@ -2398,9 +2400,156 @@ const runDesktopSmoke = async (target) => {
     ok: true,
     name: app.getName(),
     version: app.getVersion(),
+    electronVersion: process.versions.electron,
     locale: app.getLocale(),
     safeStorage: safeStorage.isEncryptionAvailable()
   }, null, 2));
+};
+
+const buildPdfSmokeDocument = () => {
+  const content = [
+    'BT',
+    '/F1 22 Tf',
+    '72 712 Td',
+    '(DSH Electron 43 PDF Smoke) Tj',
+    '0 -34 Td',
+    '/F1 13 Tf',
+    '(PDF preview rendered successfully.) Tj',
+    'ET'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(content, 'ascii')} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  ];
+  let pdf = '%PDF-1.4\n%DSH\n';
+  const offsets = [0];
+  objects.forEach((body, index) => {
+    offsets.push(Buffer.byteLength(pdf, 'latin1'));
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf, 'latin1');
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
+};
+
+const runPdfSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), 'pdf-smoke-data');
+  const pdfPath = path.join(smokeRoot, 'preview.pdf');
+  const htmlPath = path.join(smokeRoot, 'preview.html');
+  const screenshotPath = `${resolvedTarget}.png`;
+  await fsp.mkdir(smokeRoot, { recursive: true });
+  await fsp.writeFile(pdfPath, buildPdfSmokeDocument());
+  await fsp.writeFile(htmlPath, `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>DSH PDF smoke</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #e7e5e4; font-family: system-ui, sans-serif; }
+    main { box-sizing: border-box; display: grid; grid-template-rows: auto 1fr; gap: 12px; height: 100%; padding: 16px; }
+    header { color: #292524; font-size: 15px; font-weight: 650; }
+    embed { width: 100%; height: 100%; min-height: 600px; border: 1px solid #a8a29e; border-radius: 8px; background: white; }
+  </style>
+</head>
+<body><main><header>DSH Desktop · Electron PDF 兼容性验证</header><embed id="preview" src="./preview.pdf#page=1&amp;view=FitH" type="application/pdf"></main></body>
+</html>`, 'utf8');
+
+  let renderProcessGone = null;
+  let smokeWindow;
+  let result;
+  try {
+    smokeWindow = new BrowserWindow({
+      width: 1000,
+      height: 780,
+      show: false,
+      backgroundColor: '#e7e5e4',
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        plugins: true,
+        sandbox: true,
+        spellcheck: false,
+        webSecurity: true
+      }
+    });
+    smokeWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    smokeWindow.webContents.once('render-process-gone', (_event, details) => {
+      renderProcessGone = { reason: details.reason, exitCode: details.exitCode };
+    });
+    await smokeWindow.loadFile(htmlPath);
+    const embed = await smokeWindow.webContents.executeJavaScript(`(() => {
+      const element = document.querySelector('#preview');
+      const rect = element?.getBoundingClientRect();
+      return {
+        found: Boolean(element),
+        type: element?.type || '',
+        width: Math.round(rect?.width || 0),
+        height: Math.round(rect?.height || 0)
+      };
+    })()`, true);
+    smokeWindow.showInactive();
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    const sources = await desktopCapturer.getSources({
+      types: ['window'],
+      thumbnailSize: { width: 1000, height: 780 },
+      fetchWindowIcons: false
+    });
+    const source = sources.find((candidate) => candidate.id === smokeWindow.getMediaSourceId());
+    const screenshot = source?.thumbnail || await smokeWindow.webContents.capturePage();
+    const screenshotSize = screenshot.getSize();
+    const bitmap = screenshot.toBitmap();
+    let darkPixels = 0;
+    const pixelCount = Math.floor(bitmap.length / 4);
+    for (let offset = 0; offset + 3 < bitmap.length; offset += 4) {
+      if (Math.max(bitmap[offset], bitmap[offset + 1], bitmap[offset + 2]) < 96) darkPixels += 1;
+    }
+    const viewerDarkPixelRatio = pixelCount ? darkPixels / pixelCount : 0;
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+    result = {
+      ok: !renderProcessGone
+        && embed.found
+        && embed.type === 'application/pdf'
+        && embed.width > 0
+        && embed.height > 0
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0
+        && viewerDarkPixelRatio > 0.08,
+      name: app.getName(),
+      version: app.getVersion(),
+      electronVersion: process.versions.electron,
+      renderProcessGone,
+      embed,
+      visualSignal: {
+        viewerDarkPixelRatio: Number(viewerDarkPixelRatio.toFixed(4))
+      },
+      screenshot: {
+        method: source ? 'desktop-capturer' : 'web-contents-fallback',
+        path: screenshotPath,
+        width: screenshotSize.width,
+        height: screenshotSize.height
+      }
+    };
+  } catch (error) {
+    result = {
+      ok: false,
+      name: app.getName(),
+      version: app.getVersion(),
+      electronVersion: process.versions.electron,
+      renderProcessGone,
+      error: error.message
+    };
+  } finally {
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    allowQuit = true;
+    smokeWindow?.destroy();
+  }
+  if (!result.ok) process.exitCode = 1;
 };
 
 const runHarnessSmoke = async (target) => {
@@ -2410,6 +2559,7 @@ const runHarnessSmoke = async (target) => {
   try {
     const url = await supervisor.start();
     const probe = await probeHarness(url);
+    const rootResponse = await fetch(url);
     const workspaceSync = await synchronizeHarnessWorkspace({
       origin: url,
       workspacePath: supervisor.getState().workspacePath,
@@ -2421,6 +2571,10 @@ const runHarnessSmoke = async (target) => {
       version: app.getVersion(),
       url,
       ...probe,
+      responseHeaders: {
+        contentSecurityPolicy: rootResponse.headers.get('content-security-policy') || '',
+        contentType: rootResponse.headers.get('content-type') || ''
+      },
       workspaceSync: {
         status: workspaceSync.status,
         workspaceTitle: workspaceSync.workspaceTitle,
@@ -2534,6 +2688,12 @@ app.whenReady().then(async () => {
   }
   if (ipcSecuritySmokeTarget) {
     await runIpcSecuritySmoke(ipcSecuritySmokeTarget.slice('--ipc-security-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (pdfSmokeTarget) {
+    await runPdfSmoke(pdfSmokeTarget.slice('--pdf-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;

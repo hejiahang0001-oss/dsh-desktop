@@ -1,8 +1,41 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-24
-> 当前构建：V0.5.5 Latest 候选（本机已覆盖）
-> 状态：V0.5.5 已完成终端/IPC 安全切片、正式覆盖和数据保留验证；V0.5.4 继续保持 Stable，V0.5.5 因 Electron 运行时仍超出支持窗口而暂不公开发布
+> 当前构建：V0.5.6 Latest（本机已覆盖，公开 Pre-release 发布中）
+> 状态：V0.5.6 已把 Electron 升级到官方受支持线并完成真实 PDF、终端/IPC、Harness、覆盖安装和数据保留验证；V0.5.4 继续保持 Stable
+
+## V0.5.6 本轮完成
+
+1. Electron 从 `35.7.5` 固定升级到 `43.4.1`；Electron 官方 Windows x64 压缩包在打包前校验 SHA-256 `C2EF9A5F65472C34D14BD3E67B7D14E66B0C01F124ABA45263D6A4232160E13A`。
+2. 外置 Node.js `24.19.0`、DeepSeek Harness `0.1.1-rc.2` 和 PTY 依赖保持不变，避免把桌面内核、Agent 行为和 Shell 行为混在一次升级中。
+3. 下载脚本改为 `.partial` 临时文件、最多 3 次重试、哈希与 `electron.exe` 双校验，通过后再原子替换目标；真实网络中断留下的损坏文件不会再冒充完整运行时。
+4. 对照 Electron 36–43 破坏性变更复核窗口、Preload、权限、导航和 IPC；旧 API 扫描未发现命中，主窗口继续保持 sandbox、Context Isolation、无 Node Integration 和受限导航。
+5. Electron 41 起 PDF 不再产生独立 WebContents，因此增加真实 PDF 渲染 smoke：生成有效 PDF、用主窗口同等安全偏好加载、通过桌面合成截图检查查看器视觉信号，并保留截图人工核对。
+6. PDF 验收首次发现 CSP 会让查看器空白；去除仅测试页上的错误限制后，确认真实 Harness 页面不发送 CSP，PDF 工具栏、缩略图和正文均正常显示。主窗口只为内置 PDF 查看器启用 `plugins: true`，其他安全偏好未放宽。
+7. V0.5.6 已直接覆盖本机 V0.5.5；Stable 标签、Stable 安装包和 GitHub `Latest release` 继续保持 V0.5.4。
+
+### V0.5.6 当前验证
+
+| 验证项 | 结果 |
+|---|---|
+| 自动化 | 119/119 通过；含固定版本、下载恢复、IPC sender/frame、终端 owner、真实 Windows PTY、PDF 文件边界和既有功能回归 |
+| 生产依赖 | `pnpm audit --prod --audit-level moderate` 未发现已知漏洞；Electron 已进入官方最新三个稳定大版本支持窗口 |
+| 解包运行 | 桌面、Harness、IPC security 与 PDF smoke 均退出码 0；V0.5.6；Electron 43.4.1；Harness HTTP 200、标题 `DeepSeek Harness`、Workspace 同步成功 |
+| PDF 真实视觉 | 1000×754 桌面合成截图显示 Chromium PDF 工具栏、缩略图和正文；深色查看器像素信号 `0.3363`，高于自动门禁 `0.08` |
+| IPC 能力矩阵 | Harness 页面仅 `openWindow`；本地终端窗口仅 `getState/onOutput/onState/resize/start/stop/write`；1449×875 终端截图视觉正常 |
+| 正式覆盖 | 安装器退出码 0；Windows 注册项 `DSH Desktop 0.5.6`；安装版四类 smoke 均退出码 0 |
+| 数据保留 | 软件 Key 引用、14 份会话文件集合及桌面、工作台、代理、Preferences、Harness 设置摘要在覆盖前后完全一致 |
+| 安装包 | `DSH-Desktop-Setup-0.5.6.exe`；183,271,349 字节；SHA-256 `9DD8855634955F12996F2DF6A57CF42F2A3D9B32AF3782A2536299D0C1F7C893` |
+| 安装一致性 | 解包版 `app.asar` SHA-256 `374C7050C8CBB1B085E66C36636D22AA73B66FC048A68C0BE68EE610CDE21DEC`；29,370 个包内文件，安装目录只额外包含卸载程序，0 reparse point、0 terminal PDB |
+| 覆盖前快照 | `backups/pre-v0.5.6-20260824-224757`；含 V0.5.5 安装器和 14 份会话数据；0 个凭据副本 |
+| 发布边界 | 发布阻断项已从 2 项降至 0；V0.5.6 可恢复产品 Latest Pre-release，V0.5.4 继续为正式 Stable |
+
+### V0.5.6 后计划调整
+
+1. V0.5.7 合并权限中心、代理变更原生默认取消确认和统一敏感路径策略；权限语义继续来自 Harness，不建立第二套授权体系。
+2. V0.5.8 增加项目规则、Harness 记忆与本轮上下文来源视图，并补 CI 三层门禁、Electron Fuses/ASAR 完整性和签名准备。
+3. V0.6 优先解决固定 pnpm store、插件 Profile 一致性、故障插件恢复与安装包瘦身/增量更新，再扩展并行 Agent 和插件管理器。
+4. Stable 仍固定 V0.5.4；只有用户明确下达“更新 Stable”命令后才启动晋升验收。
 
 ## V0.5.5 本轮完成
 

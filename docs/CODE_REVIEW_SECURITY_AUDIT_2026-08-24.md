@@ -3,13 +3,13 @@
 > 审核日期：2026-08-24  
 > 初始审核对象：`44dcefb`（`codex/v0.5.4-session-checkpoint`）  
 > 审核与整改方式：`code-review-excellence` + OpenAI `security-best-practices` + 测试先行整改 + 安装包真实验证  
-> 结论：**Changes required。SEC-001 终端隔离和 SEC-004 IPC sender 校验已在 V0.5.5 完成；SEC-002 Electron 运行时升级仍是公开 Latest 的阻断项。V0.5.5 可作为本机候选继续验证，但不创建 GitHub Release/Pre-release。**
+> 结论：**Approve for Latest Pre-release。SEC-001 终端隔离和 SEC-004 IPC sender 校验已在 V0.5.5 完成；SEC-002 Electron 受支持线升级已在 V0.5.6 完成。发布阻断项为 0，剩余重要项继续按 V0.5.7–V0.5.8 整改；V0.5.4 Stable 不变。**
 
 ## 一、结论摘要
 
-- 初始阻断项 2 项；当前已修复 1 项、剩余 1 项：
+- 初始阻断项 2 项；当前已修复 2 项、剩余 0 项：
   - **已修复**：Harness Renderer 不再拥有 PowerShell start/write/resize/stop/state/output；终端移入本地隔离窗口并绑定精确 frame owner。
-  - **仍阻断公开发布**：Electron `35.7.5` 已超出官方“最新三个稳定大版本”的支持范围，审核时官方稳定版本为 `43.4.1`。
+  - **已修复**：Electron 从 `35.7.5` 固定升级到官方受支持的 `43.4.1`，并通过窗口、Preload、IPC、PTY、真实 PDF、Harness、打包和覆盖安装验证。
 - 初始重要项 6 项；当前已修复 1 项、剩余 5 项：
   - 代理保存缺少独立可信确认边界。
   - **已修复**：原先未校验的一组 IPC 已统一验证精确 WebContents、主框架和 URL，预览 iframe 默认拒绝。
@@ -46,13 +46,15 @@
 - 整改结果：V0.5.5 新增只加载 `terminal.html` 的独立 sandboxed BrowserWindow 与 `terminal-preload.cjs`。Harness Preload 仅保留 `openWindow`；所有 PTY 输入、调整和停止只接受独立窗口精确主框架，活动 owner 同时绑定 `webContents.id`、`processId` 与 `routingId`。窗口关闭或 Renderer 丢失会停止 PTY。
 - 整改验证：源代码测试先证明旧边界失败，再完成实现；118 项完整测试通过。解包版和安装版 IPC security smoke 均确认 Harness 侧只有 1 个固定动作、本地终端侧只有 7 个预期能力，并生成真实终端窗口截图。
 
-### SEC-002：Electron 35 已超出官方支持窗口
+### SEC-002：Electron 35 已超出官方支持窗口（V0.5.6 已修复）
 
 - 严重级别：**High / Blocking**
 - 位置：`package.json:18-20`
 - 证据：项目固定 `electron: 35.7.5`。Electron 官方只支持最新三个稳定大版本；2026-08-24 的最新稳定版本为 `43.4.1`，受支持线为 41/42/43。
 - 影响：应用捆绑的 Chromium、Node 和 Electron 安全修复不能继续从官方受支持分支获得，`pnpm audit` 也不会完整覆盖 Chromium/Electron 运行时漏洞。
 - 建议修复：按 Electron 官方迁移建议逐大版本升级并执行回归，目标至少进入受支持线，优先 `43.4.1`；重点验证 Preload sandbox、iframe 导航、权限处理、xterm、node-pty、打包和覆盖安装。
+- 整改结果：`package.json`、锁文件、离线 Electron 压缩包和打包路径统一固定到 `43.4.1`。下载脚本使用 `.partial`、重试、SHA-256 和 `electron.exe` 内容双校验，通过后才替换正式文件；DeepSeek Harness 与外置 Node/PTY 版本未混合升级。
+- 整改验证：119 项测试和生产依赖审计通过；解包版与安装版桌面、Harness、IPC security 和 PDF smoke 均退出码 0。真实 PDF 桌面截图显示工具栏、缩略图和正文，自动视觉信号 `0.3363` 高于门禁 `0.08`；覆盖安装后 14 份会话、凭据引用和五项用户状态摘要完全不变。
 - 验证来源：
   - https://www.electronjs.org/docs/latest/tutorial/electron-timelines
   - https://releases.electronjs.org/release?channel=stable
@@ -136,7 +138,7 @@
 ### ARCH-001：主进程文件职责过载
 
 - 严重级别：**Important（维护性）**
-- 位置：`electron/main.cjs`（2496 行）
+- 位置：`electron/main.cjs`（当前约 2655 行）
 - 证据：窗口导航、权限、Harness 生命周期、工作区、网络、终端、预览、Git、Checkpoint、菜单、诊断和全部 IPC 均集中在一个文件；当前已有“部分 IPC 校验、部分不校验”的实际漂移。
 - 建议修复：先抽出 `ipc-policy` 与能力矩阵，再按 `terminal-controller`、`network-controller`、`checkpoint-controller`、`window-security` 拆分；拆分应保持行为不变并由集成测试护航。
 
@@ -152,28 +154,29 @@
 
 ## 五、已验证的良好控制
 
-- `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`、`webSecurity: true`。
+- `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`、`webSecurity: true`；主窗口仅为 Chromium 内置 PDF 查看器启用插件能力。
 - 主窗口导航、弹窗、新窗口和 Web permission 默认收紧；剪贴板只允许 Harness 主框架进行 sanitized write。
 - Harness 固定绑定随机 `127.0.0.1` 端口；应用预览限制在 loopback，并隔离 Harness origin。
 - Git 接受/拒绝和 Checkpoint 恢复在主进程重新检查状态，并使用默认取消的原生确认。
 - 工作区读取有相对路径、大小、编码、二进制、符号链接和媒体签名限制。
 - 软件 Key 不继承进入 Harness/PTY 环境，代理凭据被拒绝。
 - DeepSeek Harness `0.1.1-rc.2` 与 npm 当前版本一致。
-- 118/118 自动化测试通过；生产依赖审计未发现已知漏洞。
+- 119/119 自动化测试通过；生产依赖审计未发现已知漏洞。
 
 ## 六、建议整改顺序
 
 1. **V0.5.5 安全切片（已完成）**：隔离终端 UI/IPC，建立 frame 级能力矩阵，补真实 Electron IPC 测试，并完成解包版/安装版/覆盖升级验证。
-2. **V0.5.6 运行时切片**：升级 Electron 到受支持线，完成窗口、Preload、预览、PTY、覆盖安装回归。
+2. **V0.5.6 运行时切片（已完成）**：Electron 固定升级到 `43.4.1`，完成窗口、Preload、真实 PDF/图片预览、PTY、覆盖安装和数据保留回归。
 3. **V0.5.7 边界切片**：代理原生确认、补齐全部 IPC sender 校验、统一敏感路径策略。
 4. **V0.5.8 发布切片**：CI 三层门禁、签名准备、Electron Fuses/ASAR integrity。
 5. **后续 Stable 候选**：DPAPI/Windows Credential Manager 迁移和真实覆盖升级验证；只有维护者明确命令后晋升 Stable。
 
 ## 七、验证记录
 
-- `node --test test/*.test.cjs`：118 通过，0 失败。
+- `node --test test/*.test.cjs`：119 通过，0 失败。
 - `pnpm audit --prod --audit-level moderate`：No known vulnerabilities found。
 - `pnpm view @deepseek-ai/dsh version`：`0.1.1-rc.2`。
 - `pnpm view electron version`：`43.4.1`。
-- V0.5.5 解包版与安装版桌面、Harness、IPC security smoke 全部退出码 0；安装版与解包版 `app.asar` 摘要一致。
-- V0.5.5 覆盖安装退出码 0；Windows 注册版本 0.5.5；14 份会话、凭据引用和五项用户状态摘要保持不变；快照中凭据副本为 0。
+- V0.5.6 解包版与安装版桌面、Harness、IPC security、PDF smoke 全部退出码 0；Electron 版本 `43.4.1`；真实 Harness HTTP 200、Workspace 同步成功且未发送阻断 PDF 的 CSP。
+- V0.5.6 覆盖安装退出码 0；Windows 注册版本 0.5.6；14 份会话、凭据引用和五项用户状态摘要保持不变；快照中凭据副本为 0。
+- 解包版包含 29,370 个文件，安装目录只额外包含卸载程序；0 reparse point、0 terminal PDB；最终 `app.asar` SHA-256 为 `374C7050C8CBB1B085E66C36636D22AA73B66FC048A68C0BE68EE610CDE21DEC`。
