@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Node tests on Windows
+  quality:
+    name: Quality / Node tests
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -32,3 +32,48 @@ jobs:
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
         run: npm test
+
+  security:
+    name: Security / production dependencies
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Audit production dependency graph
+        run: pnpm audit --prod --audit-level moderate
+
+  package-smoke:
+    name: Package and semantic-data contracts
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Verify package surfaces and semantic snapshot boundaries
+        run: >-
+          node --test
+          test/release-version.test.cjs
+          test/context-sources-ui.test.cjs
+          test/workbench-accessibility-ui.test.cjs
+          test/workbench-command-ui.test.cjs
+          test/workbench-files-ui.test.cjs
+          test/workbench-network-ui.test.cjs
+          test/workbench-preview-ui.test.cjs
+          test/workbench-terminal-ui.test.cjs
+          test/semantic-state-snapshot.test.cjs

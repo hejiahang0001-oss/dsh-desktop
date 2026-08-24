@@ -1,5 +1,4 @@
-const fsp = require('node:fs/promises');
-const path = require('node:path');
+const { AtomicJsonFile } = require('./atomic-json-store.cjs');
 
 const MIN_REVIEW_WIDTH = 280;
 const MAX_REVIEW_WIDTH = 520;
@@ -45,20 +44,18 @@ class WorkbenchStore {
   constructor({ filePath }) {
     this.filePath = filePath;
     this.state = normalizeWorkbenchState();
+    this.storage = new AtomicJsonFile({ filePath });
+    this.recoverySource = 'uninitialized';
   }
 
   async _persist() {
-    await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-    await fsp.writeFile(this.filePath, `${JSON.stringify({ version: 5, ...this.state }, null, 2)}\n`, 'utf8');
+    await this.storage.write({ version: 5, ...this.state });
   }
 
   async init() {
-    let stored = {};
-    try {
-      stored = JSON.parse(await fsp.readFile(this.filePath, 'utf8'));
-    } catch {
-      stored = {};
-    }
+    const loaded = await this.storage.read({ fallback: {} });
+    const stored = loaded.value;
+    this.recoverySource = loaded.source;
     this.state = normalizeWorkbenchState(stored);
     await this._persist();
     return this.getState();

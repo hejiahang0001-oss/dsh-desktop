@@ -62,7 +62,17 @@ test('proxy settings persist without accepting a corrupted or credential-bearing
   const store = new ProxySettingsStore({ filePath });
   assert.deepEqual(await store.init(), { mode: 'direct', proxyUrl: '' });
   await store.set({ mode: 'custom', proxyUrl: 'https://proxy.example.com:8443' });
-  assert.deepEqual(await new ProxySettingsStore({ filePath }).init(), { mode: 'custom', proxyUrl: 'https://proxy.example.com:8443' });
+  const restored = new ProxySettingsStore({ filePath });
+  assert.deepEqual(await restored.init(), { mode: 'custom', proxyUrl: 'https://proxy.example.com:8443' });
+  fs.writeFileSync(filePath, '{ interrupted');
+  const recovered = new ProxySettingsStore({ filePath });
+  assert.deepEqual(await recovered.init(), { mode: 'custom', proxyUrl: 'https://proxy.example.com:8443' });
+  assert.equal(recovered.recoverySource, 'backup');
+  assert.deepEqual(JSON.parse(fs.readFileSync(filePath, 'utf8')), {
+    version: 1,
+    mode: 'custom',
+    proxyUrl: 'https://proxy.example.com:8443'
+  });
   await assert.rejects(() => store.set({ mode: 'custom', proxyUrl: 'http://user:secret@proxy.example.com' }), ProxySettingsError);
   assert.doesNotMatch(fs.readFileSync(filePath, 'utf8'), /user|secret/);
 });
