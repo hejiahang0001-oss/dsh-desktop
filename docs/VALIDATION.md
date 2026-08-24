@@ -35,7 +35,7 @@ This page records the locally verified V0.5.2 engineering evidence without makin
 
 The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the checkpoint creation/recovery manager, renderer/CSS, existing preview and command assets, and the version 5 workbench store. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
 
-GitHub publication evidence is added after the versioned release, latest redirect, direct installer, digest, and final CI have been checked remotely.
+The published GitHub installer reports the same `162,576,040` byte size and SHA-256 digest as the local final build. The versioned release and `latest` download resolve to V0.5.2, the direct installer URL returns HTTP 200, and the version commit CI run completed successfully with no annotations or Node 20 action-runtime warning.
 
 ## Automatic code-checkpoint and recovery architecture
 
