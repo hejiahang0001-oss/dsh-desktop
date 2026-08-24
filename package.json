@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -16,7 +16,7 @@
     "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis --x64"
   },
   "devDependencies": {
-    "electron": "35.7.5",
+    "electron": "43.4.1",
     "electron-builder": "26.8.1"
   },
   "build": {
@@ -25,7 +25,7 @@
     "asar": true,
     "npmRebuild": false,
     "compression": "store",
-    "electronDist": "build/electron-v35.7.5-win32-x64.zip",
+    "electronDist": "build/electron-v43.4.1-win32-x64.zip",
     "directories": {
       "output": "dist",
       "buildResources": "build"

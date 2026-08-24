@@ -1,6 +1,35 @@
 # Validation evidence
 
-This page records the locally verified V0.5.5 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.5 preserves those surfaces.
+This page records the locally verified V0.5.6 engineering evidence without making the README front page carry the full verification ledger. Earlier checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.6 preserves those surfaces.
+
+## V0.5.6 Electron supported-line evidence
+
+- Electron is fixed at `43.4.1`; the official Windows x64 archive SHA-256 is fixed at `C2EF9A5F65472C34D14BD3E67B7D14E66B0C01F124ABA45263D6A4232160E13A`. The fetch step downloads to `.partial`, retries bounded transport failures, validates the digest and `electron.exe`, and only then replaces the final archive.
+- External Node.js remains `24.19.0`, DeepSeek Harness remains `0.1.1-rc.2`, and the PTY dependency set remains fixed. The runtime upgrade therefore does not also change Agent or shell behavior.
+- All 119 tests pass. `pnpm audit --prod --audit-level moderate` reports no known vulnerabilities. Static review of Electron 36–43 removals found no used removed APIs.
+- Unpacked and installed desktop, real Harness, IPC security, and PDF smoke checks all exit with code 0. The desktop reports Electron `43.4.1`; Harness returns random-loopback HTTP 200, title `DeepSeek Harness`, no CSP header, and successful Workspace/session synchronization.
+- The PDF smoke generates a valid PDF, renders it through the same sandboxed Chromium PDF capability used by the main window, and captures the complete Windows surface. The 1000×754 image visibly contains the viewer toolbar, page thumbnail, and document text. Its dark-viewer signal is `0.3363`, above the automatic blank-viewer rejection threshold `0.08`.
+- The V0.5.5 one-versus-seven terminal capability matrix is unchanged. A fresh 1449×875 rendered terminal image remains visually complete.
+
+## V0.5.6 installer and overwrite evidence
+
+| Item | V0.5.6 value |
+| --- | --- |
+| Installer | `DSH-Desktop-Setup-0.5.6.exe` |
+| Size | `183,271,349` bytes |
+| SHA-256 | `9DD8855634955F12996F2DF6A57CF42F2A3D9B32AF3782A2536299D0C1F7C893` |
+| Blockmap SHA-256 | `F6EF674F26ADFB6AC5FEF34B3C61E661DD7D0EA993DA6BA3565D7228843B1331` |
+| Files in unpacked build | `29,370` |
+| Files in installed application | `29,371` (the unpacked set plus the normal uninstaller) |
+| Packaged `app.asar` SHA-256 | `374C7050C8CBB1B085E66C36636D22AA73B66FC048A68C0BE68EE610CDE21DEC` |
+| Reparse points | `0` |
+| Terminal PDB files | `0` |
+
+The final installer exits with code 0 and the Windows uninstall record reports `DSH Desktop 0.5.6`. Every unpacked relative file is present after installation; selected application, Electron, and runtime file digests match. Fourteen persisted session files retain the same aggregate path/content digest; the credential reference and desktop/workbench/network state, Preferences, and Harness settings retain identical pre/post-overwrite hashes.
+
+The rollback snapshot is `backups/pre-v0.5.6-20260824-224757`. It contains the V0.5.5 installer, fourteen session files, storages, settings, desktop/workbench/network state, Preferences, and local selection storage. It intentionally contains zero credential files and was created only after confirming zero reparse points in the copied source trees.
+
+V0.5.4 remains the published Stable and GitHub `Latest release`. V0.5.6 has zero remaining release-blocking findings and proceeds through the product Latest Pre-release channel after Windows CI; remaining Important findings stay scheduled for V0.5.7 and V0.5.8.
 
 ## V0.5.5 terminal and IPC isolation evidence
 

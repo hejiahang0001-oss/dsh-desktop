@@ -64,7 +64,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**Latest candidate V0.5.5** keeps official DeepSeek Harness `0.1.1-rc.2` and moves the persistent PowerShell PTY into a packaged local-only window with a dedicated Preload and frame-bound IPC owner. The Harness page retains only a fixed “open terminal window” action. The verified local installer is `DSH-Desktop-Setup-0.5.5.exe`; public GitHub Pre-release publication is held until V0.5.6 upgrades Electron into its supported-major window.
+**Latest V0.5.6** keeps official DeepSeek Harness `0.1.1-rc.2`, preserves the V0.5.5 isolated terminal/IPC boundary, and upgrades the desktop runtime from Electron 35 to fixed Electron `43.4.1`. Its packaged and overwrite checks pass, including real Harness, terminal IPC, PDF rendering, and preservation of the managed Key reference and fourteen sessions. It is published through the GitHub Pre-release channel after Windows CI, while the front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -93,7 +93,7 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.5.5 release notes](docs/RELEASE_NOTES_v0.5.5.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [validation details](docs/VALIDATION.md), and the [V0.5.6 release notes](docs/RELEASE_NOTES_v0.5.6.md).
 
 ## Security and current limits
 
@@ -101,7 +101,7 @@ The pinned runtime includes the complete official dependency closure required by
 - Harness credentials are currently stored by Harness `0.1.1-rc.2` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
 - A Workspace Write crash with `0xC0000005` was previously observed on rc.8 in restricted mode. DSH Desktop reports tool failures and never switches to Full Access automatically; the exact rc.2 write path remains a separate compatibility gate.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
-- The terminal provides one persistent PowerShell PTY session with ANSI rendering in an isolated local window. Closing the window stops the PTY; terminal tabs and split panes are not included yet. V0.5.5 lists at most twelve local code checkpoints; only checkpoints created with a selected session and completed turn can create a conversation branch. Older and blank-session checkpoints remain code-only. In-place conversation rewind and remote checkpoint sync are not included. Git accept/reject, code recovery, and conversation branching stay disabled while the PTY or Agent is active. Custom proxy authentication and SOCKS are not included in this release.
+- The terminal provides one persistent PowerShell PTY session with ANSI rendering in an isolated local window. Closing the window stops the PTY; terminal tabs and split panes are not included yet. V0.5.6 lists at most twelve local code checkpoints; only checkpoints created with a selected session and completed turn can create a conversation branch. Older and blank-session checkpoints remain code-only. In-place conversation rewind and remote checkpoint sync are not included. Git accept/reject, code recovery, and conversation branching stay disabled while the PTY or Agent is active. Custom proxy authentication and SOCKS are not included in this release.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Architecture and product boundaries are documented in [the iteration plan](DSH_DESKTOP_ITERATION_PLAN.md).
 
@@ -133,7 +133,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.5 Latest 候选继续固定官方 Harness `0.1.1-rc.2`，保留现有中文过程、Git 审查、文件树、持久 PTY、应用预览、图片/PDF Quick Look、命令面板、可恢复布局、软件代理与可靠复制，并把持久终端迁移到只加载本地资源的独立安全窗口。Harness 页面只能打开或聚焦窗口，不能启动、写入、调整、停止终端或读取输出。本机已完成覆盖验证；因 Electron 运行时仍未进入官方支持线，暂不创建公开 GitHub Pre-release。V0.5.4 继续保持 Stable：
+V0.5.6 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`，保留 V0.5.5 本地安全终端和精确 IPC 边界，并把桌面运行时从 Electron 35 升级到固定 Electron `43.4.1`。安装包 `DSH-Desktop-Setup-0.5.6.exe` 已通过真实 Harness、终端 IPC、PDF 渲染、覆盖安装及 Key/14 份会话保留验证；Windows CI 通过后进入 GitHub Pre-release，V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
