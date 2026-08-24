@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-25 V0.5.7 已完成权限中心、代理原生默认取消确认、统一敏感路径策略、正式打包、覆盖安装、数据保留和真实界面门禁，等待 GitHub Pre-release 发布；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-25 V0.5.7 已完成权限中心、代理原生默认取消确认、统一敏感路径策略、正式打包、覆盖安装、数据保留和真实界面门禁，并已发布为产品 Latest Pre-release；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -297,7 +297,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 ### V0.5：安全、Checkpoint 与记忆
 
-当前进度：V0.5.0 已发布回合前自动代码检查点；V0.5.1 已发布最近点安全恢复；V0.5.2 已发布最近 12 个检查点的有界历史与选择恢复；V0.5.3 已发布软件内 HTTP(S) 代理和受限剪贴板写入修复；V0.5.4 已完成检查点与 Harness 完整回合关联、代码/会话双操作及官方子会话分支验证；V0.5.5 已完成终端/IPC 安全隔离；V0.5.6 已完成 Electron 受支持线升级与真实 PDF 回归；V0.5.7 已完成边界实现和全部本地发布门禁。
+当前进度：V0.5.0 已发布回合前自动代码检查点；V0.5.1 已发布最近点安全恢复；V0.5.2 已发布最近 12 个检查点的有界历史与选择恢复；V0.5.3 已发布软件内 HTTP(S) 代理和受限剪贴板写入修复；V0.5.4 已完成检查点与 Harness 完整回合关联、代码/会话双操作及官方子会话分支验证；V0.5.5 已完成终端/IPC 安全隔离；V0.5.6 已完成 Electron 受支持线升级与真实 PDF 回归；V0.5.7 已完成边界实现、本地发布门禁和 GitHub Pre-release 资产验证。
 
 接下来按小版本收敛：
 

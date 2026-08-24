@@ -33,6 +33,7 @@ V0.5.7 is the permission-boundary release. It keeps Stable at V0.5.4, DeepSeek H
 - The packaged and installed `app.asar` SHA-256 is `BC3745B0554C1E6E90BA1A5F499DE8B90E8E1A4D0C7C74E3107375F90ED31E62`. All 29,370 unpacked files are present after installation; the only extra installed file is the normal uninstaller. Both trees contain zero reparse points and zero terminal PDB files.
 - The final installer overwrites V0.5.6 with exit code 0 and registers `DSH Desktop 0.5.7`. The software Key reference, fourteen sessions, and seven persisted state summaries retain identical hashes. Electron's LevelDB log files rotate during the real smoke, but the five Local Storage data-file hashes remain unchanged.
 - The rollback snapshot is `backups/pre-v0.5.7-20260825-002436`; it contains 33 files and fourteen sessions, contains zero credential copies, and was created only after confirming zero source reparse points.
+- GitHub branch and main Windows CI pass. The published Pre-release is not a draft; all three remote asset sizes and SHA-256 digests match, and the installer direct download returns HTTP 200.
 
 ## Release boundary
 
