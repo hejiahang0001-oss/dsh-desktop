@@ -273,11 +273,12 @@ class GitCheckpointManager {
       else await this.executeGit(['read-tree', '--empty'], { env: indexEnv });
       await this.executeGit(['add', '-A', '--', '.', ...SENSITIVE_PATHSPECS], { env: indexEnv });
       const tree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
-      const [indexTree, untrackedOutput, porcelain] = await Promise.all([
-        this.executeGit(['write-tree']),
-        this.executeGit(['ls-files', '--others', '--exclude-standard', '-z', '--']),
-        this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'])
-      ]);
+      // Keep real-index reads serialized on Windows. `git status` may refresh
+      // and briefly lock the index, so running it beside `write-tree` can make
+      // an otherwise read-only restore preview fail intermittently.
+      const indexTree = await this.executeGit(['write-tree']);
+      const untrackedOutput = await this.executeGit(['ls-files', '--others', '--exclude-standard', '-z', '--']);
+      const porcelain = await this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all']);
       return Object.freeze({
         tree,
         indexTree: indexTree.trim(),
