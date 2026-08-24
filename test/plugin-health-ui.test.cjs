@@ -21,6 +21,8 @@ test('plugin health window is local-only, metadata-only, and packaged', () => {
   assert.match(main, /--plugin-health-smoke-file=/);
   assert.match(main, /runPluginHealthSmoke/);
   assert.match(main, /rendered\.toggleButtons === 1/);
+  assert.match(main, /Date\.now\(\) \+ 15000/);
+  assert.match(main, /plugin-health-smoke-timeout/);
   assert.match(main, /!rendered\.text\.includes\('hidden-plugin-config-marker'\)/);
   assert.match(preload, /plugin-health:get-state/);
   assert.match(preload, /plugin-health:refresh/);
