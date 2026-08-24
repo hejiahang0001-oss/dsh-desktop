@@ -31,6 +31,8 @@ The final installer exited with code 0 and the Windows uninstall record reports 
 
 The rollback snapshot is `backups/pre-v0.5.4-20260824-135649`. It contains the V0.5.3 installer, fourteen sessions, storages, settings, desktop/workbench/network state, and Preferences in 23 files. It intentionally contains zero credential files.
 
+The published [v0.5.4 release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.4) is neither a draft nor a prerelease. GitHub reports the installer as `uploaded`, `162,583,718` bytes, and `sha256:c07cf56b0d809f5d84655ad8513d02fcb77684a98d31420fb99036bd2cfd41f3`; the blockmap digest also matches the local final artifact. The `latest` installer redirect returns HTTP 200, and the main-branch Windows CI run [32697127999](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32697127999) completed successfully.
+
 ## Automated and runtime checks
 
 - 108 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, code-checkpoint/history/recovery, file, media-preview, terminal, application-preview, command-palette, network/proxy, clipboard-policy, release-version, workbench, compact-layout, UI, and localization tests pass locally.

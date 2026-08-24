@@ -2,7 +2,7 @@
 
 > 日期：2026-08-24
 > 当前构建：V0.5.4 Daily Build
-> 状态：V0.5.4 已完成代码、自动化、真实会话分支、紧凑桌面、正式覆盖和数据保留验证；正在完成 GitHub 发布，下一版为 V0.5.5
+> 状态：V0.5.4 已完成代码、自动化、真实会话分支、紧凑桌面、正式覆盖、数据保留和 GitHub 发布完整性验证；下一版为 V0.5.5
 
 ## V0.5.4 本轮完成
 
@@ -31,7 +31,7 @@
 | 安装包 | `DSH-Desktop-Setup-0.5.4.exe`；162,583,718 字节；SHA-256 `C07CF56B0D809F5D84655AD8513D02FCB77684A98D31420FB99036BD2CFD41F3` |
 | 安装一致性 | 安装版与解包版 `app.asar` SHA-256 均为 `812D385BF6F27348A1C21BD75C2002C81BE39906F65D3E4A370C0ADBE5461003`；安装目录 29,369 个文件、0 reparse point、0 terminal PDB |
 | 覆盖前快照 | `backups/pre-v0.5.4-20260824-135649`；23 个文件；14 个会话；0 个凭据副本 |
-| 发布完整性 | 待 GitHub tag、Release、远端摘要和 Windows CI 完成后回填 |
+| 发布完整性 | [v0.5.4](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.4)；正式 latest、非 draft/prerelease；远端大小/摘要一致；latest 直链 HTTP 200；[Windows CI 通过](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32697127999) |
 
 ### V0.5.4 后计划调整
 
