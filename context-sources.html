@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH 上下文来源</title>
+  <link rel="stylesheet" href="assets/context-sources.css">
+  <script defer src="assets/context-sources.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="identity">
+      <div class="title-row">
+        <h1>上下文来源</h1>
+        <span class="mode">只读可见性</span>
+      </div>
+      <p id="workspace-path" class="workspace-path">正在读取当前工作区…</p>
+    </div>
+    <button id="refresh" type="button">刷新</button>
+    <button id="close" type="button">关闭</button>
+  </header>
+  <main>
+    <section aria-labelledby="effective-title">
+      <div class="section-heading">
+        <div><h2 id="effective-title">来源层与边界</h2><p>展示可验证的来源，不把候选文件误报为已进入模型上下文。</p></div>
+      </div>
+      <div id="layers" class="layer-grid" aria-live="polite"></div>
+    </section>
+    <section aria-labelledby="rules-title">
+      <div class="section-heading">
+        <div><h2 id="rules-title">Harness 规则候选</h2><p id="rules-summary">正在检查固定 Harness 使用的候选链…</p></div>
+      </div>
+      <div id="sources" class="source-list"></div>
+    </section>
+    <section aria-labelledby="memory-title">
+      <div class="section-heading"><div><h2 id="memory-title">记忆边界</h2><p>区分持久会话、规则文件和可选外部记忆。</p></div></div>
+      <article class="memory-card"><span id="memory-status" class="badge">检查中</span><h3 id="memory-name">长期记忆</h3><p id="memory-detail"></p></article>
+    </section>
+  </main>
+  <footer>
+    <span id="status" role="status">本窗口只加载本地资源，不读取规则正文或凭据。</span>
+    <span>规则编辑后由 Harness 在会话边界或文件工具成功后更新上下文。</span>
+  </footer>
+</body>
+</html>
