@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每日一个可运行 Daily Build；验证通过后直接覆盖电脑中已安装的旧版，每周验收能力里程碑，每两周形成稳定版。  
-> 执行状态：2026-08-24 已完成并发布 V0.5.1 最近代码检查点恢复；98 项回归、真实桌面默认取消、覆盖安装、数据保留、安装版 Harness、远端摘要和 CI 均通过；V0.5.2 先消除 GitHub Actions Node 20 弃用提示，再进入检查点历史与选择恢复。
+> 执行状态：2026-08-24 V0.5.2 已完成检查点历史、选择恢复、完整回归、真实桌面和覆盖安装验证，并升级 GitHub Actions；正在完成 GitHub 发布验证，下一切片进入代码检查点与 Harness 会话节点关联。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -289,7 +289,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 ### V0.5：安全、Checkpoint 与记忆
 
-当前进度：V0.5.0 已发布回合前自动代码检查点；V0.5.1 已完成最近检查点恢复、恢复前 safety checkpoint、敏感路径/索引保留、原生默认取消、精准变化计数和失败自动回滚，并通过正式覆盖与安装版 Harness 验证。
+当前进度：V0.5.0 已发布回合前自动代码检查点；V0.5.1 已完成最近点安全恢复；V0.5.2 已实现最近 12 个检查点的有界历史、真实影响摘要、严格 ID 选择恢复和键盘可访问界面，正在完成正式验证。
 
 用户能够：
 

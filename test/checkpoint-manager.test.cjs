@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { GitCheckpointManager, LATEST_REF, isRestrictedGitPath, statusPaths } = require('../electron/checkpoint-manager.cjs');
+const { GitCheckpointManager, LATEST_REF, isCheckpointId, isRestrictedGitPath, statusPaths } = require('../electron/checkpoint-manager.cjs');
 
 const git = (root, args) => execFileSync('git', ['-C', root, ...args], {
   encoding: 'utf8',
@@ -127,6 +127,44 @@ test('restore failure rolls back to the safety point and oversized recovery fail
   assert.equal(oversized.affectedCount, 501);
 });
 
+test('history lists bounded verified refs and restores only a selected checkpoint id', async (context) => {
+  const root = createRepository();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let randomCounter = 1;
+  const manager = new GitCheckpointManager({
+    now: () => new Date('2026-08-24T05:00:00.000Z'),
+    random: () => Buffer.from([0, 0, 0, randomCounter++])
+  });
+  await manager.activate(root);
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'first checkpoint\n');
+  const first = await manager.create({ source: 'automatic' });
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'second checkpoint\n');
+  const second = await manager.create({ source: 'manual' });
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'current work\n');
+  git(root, ['update-ref', 'refs/dsh/checkpoints/items/20260824T060000000Z-deadbeef', 'HEAD']);
+
+  const history = await manager.listHistory();
+  assert.equal(history.available, true);
+  assert.equal(history.items.length, 2);
+  assert.equal(history.invalidCount, 1);
+  assert.equal(history.items[0].id, second.last.id);
+  assert.equal(history.items[0].source, 'manual');
+  assert.equal(history.items[0].isLatest, true);
+  assert.equal(history.items[1].id, first.last.id);
+  assert.equal(history.items.every((item) => !Object.hasOwn(item, 'commit')), true);
+
+  const restored = await manager.restoreCheckpoint({
+    id: first.last.id,
+    expectedCommit: first.last.commit,
+    trashItem: async () => {}
+  });
+  assert.equal(restored.restored, true);
+  assert.equal(restored.restoredTo.id, first.last.id);
+  assert.equal(fs.readFileSync(path.join(root, 'tracked.txt'), 'utf8').replaceAll('\r\n', '\n'), 'first checkpoint\n');
+  const rejected = await manager.restoreCheckpoint({ id: 'not-a-checkpoint', trashItem: async () => {} });
+  assert.equal(rejected.restoreReason, 'checkpoint-changed');
+});
+
 test('checkpoint scope refuses a nested workspace and credential-like components are detected', async (context) => {
   const root = createRepository();
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -138,5 +176,7 @@ test('checkpoint scope refuses a nested workspace and credential-like components
   assert.equal(state.reason, 'workspace-is-subdirectory');
   assert.equal(isRestrictedGitPath('config/.credentials.yaml'), true);
   assert.equal(isRestrictedGitPath('src/client.ts'), false);
+  assert.equal(isCheckpointId('20260824T060000000Z-deadbeef'), true);
+  assert.equal(isCheckpointId('../refs/heads/main'), false);
   assert.deepEqual(statusPaths(' M src/a.js\0?? secrets.local\0'), ['src/a.js', 'secrets.local']);
 });

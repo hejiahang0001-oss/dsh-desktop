@@ -1,18 +1,20 @@
 # Validation evidence
 
-This page records the locally verified V0.5.1 engineering evidence without making the README front page carry the full verification ledger.
+This page records the locally verified V0.5.2 engineering evidence without making the README front page carry the full verification ledger.
 
 ## Automated and runtime checks
 
-- 98 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, code-checkpoint/recovery, file, media-preview, terminal, application-preview, command-palette, release-version, workbench, compact-layout, UI, and localization tests pass locally.
+- 100 Supervisor, workspace, loopback, session, credential, Agent/tool/Plan, Git review, code-checkpoint/history/recovery, file, media-preview, terminal, application-preview, command-palette, release-version, workbench, compact-layout, UI, and localization tests pass locally.
 - Preview tests exercise managed HTML/assets, traversal and secret blocking, workspace-change cleanup, external loopback monitoring, file-type rejection, URL normalization, and iframe/control source boundaries.
 - The Windows x64 unpacked and installed applications start the real Harness service and receive HTTP 200 from a random IPv4 loopback address.
-- The Windows uninstall record reports DSH Desktop 0.5.1; the installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
+- The Windows uninstall record reports DSH Desktop 0.5.2; the installed Harness runtime returned HTTP 200 with title `DeepSeek Harness`.
 - In the unpacked desktop application, `Ctrl+Shift+P` opened the command palette; filtering for file search and pressing Enter focused the real left-panel search control, while Escape closed the palette.
 - At a real 1024×720 desktop window, 100% scaling showed complete Files, Terminal, and Git Review panels; 140% scaling activated the narrow overlay layout and compact terminal without clipping panel actions. Layout reset restored 100% and default dimensions, and Tab focus was visibly outlined in the review list.
 - In the unpacked real Harness UI, focusing the prompt composer created an automatic `refs/dsh/checkpoints/items/*` ref. The commit contained the current uncommitted V0.5.0 files; the actual Git index SHA-256 and bounded status SHA-256 were identical before and after creation.
 - Repeating the action produced the visible text `代码未变化，沿用最近检查点。` and retained one item ref.
 - In the V0.5.1 packaged 1024×720 desktop, `Ctrl+Alt+R` opened the native restore summary with Cancel focused. Pressing Enter cancelled it; the complete Git status and real index SHA-256 stayed identical.
+- In the V0.5.2 packaged 1024×720 desktop, `Ctrl+Alt+H` displayed three verified checkpoints without clipping. Down selected an older point, Enter opened the Windows-native selected-restore summary with Cancel focused, and Escape cancelled without restoring or creating a safety point.
+- The same checkpoint dialog remained bounded and readable in a maximized 2560×1392 window. Escape closed it and returned to the existing workbench instead of reloading the Harness page.
 - A packaged JPEG-content file named `.png` rendered with the detected-format notice, and a valid one-page PDF rendered with accessible page text.
 - Normal 1208×794 and maximized 2560×1392 desktop windows displayed the file panel, application preview, and terminal without clipping.
 - `index.html` and its workspace-relative assets rendered inside the packaged application preview on a software-managed random loopback port.
@@ -21,19 +23,19 @@ This page records the locally verified V0.5.1 engineering evidence without makin
 
 ## Release integrity
 
-| Item | V0.5.1 value |
+| Item | V0.5.2 value |
 | --- | --- |
-| Installer | `DSH-Desktop-Setup-0.5.1.exe` |
-| Size | `162,572,783` bytes |
-| SHA-256 | `2B235A1D463EBF203AA0967783CC3ECEBC7AB04D47F3334418B0645EB43D19E6` |
+| Installer | `DSH-Desktop-Setup-0.5.2.exe` |
+| Size | `162,576,040` bytes |
+| SHA-256 | `03D98C21CADD6AEF324A5B9DBAB67086A34EDFE469EEF5F358064C300205B913` |
 | Files in unpacked build | `29,368` |
 | Files in installed application | `29,369` |
-| Packaged `app.asar` SHA-256 | `2B787A808BA46AE20CB29E7B999E433253CEE34AEC2CC1767FCD25256CA087B0` |
+| Packaged `app.asar` SHA-256 | `C5EEEE459A875F1D13C6EF74F33749A9B2AE606104341EC06FDD894B4E515681` |
 | PTY host SHA-256 | `E53CCA015B9DBBD8F8702725AE03AD292617196497E27C2EE131C683748C351E` |
 
 The installed and unpacked `app.asar` files have the same SHA-256. The installed archive contains the checkpoint creation/recovery manager, renderer/CSS, existing preview and command assets, and the version 5 workbench store. The installed closure contains no reparse points and the filtered terminal runtime contains no PDB files.
 
-The published GitHub installer reports the same `162,572,783` byte size and SHA-256 digest as the local final build. The versioned release and `latest` download resolve to V0.5.1, the direct installer URL returns HTTP 200, and the version commit CI run completed successfully.
+GitHub publication evidence is added after the versioned release, latest redirect, direct installer, digest, and final CI have been checked remotely.
 
 ## Automatic code-checkpoint and recovery architecture
 
@@ -46,6 +48,9 @@ The published GitHub installer reports the same `162,572,783` byte size and SHA-
 - Restore preflight builds a temporary current Git tree, compares it with the target tree, and counts only real non-sensitive changes. Identical untracked files already present in the checkpoint are neither reported nor recycled.
 - Recovery is blocked while the terminal or Agent is active, defaults the native confirmation to Cancel, creates a safety checkpoint first, moves changed new files to the Windows Recycle Bin, and does not move the branch or HEAD.
 - Applying more than 500 paths fails closed. A failed target apply automatically restores the safety point and reports whether rollback succeeded; tests cover both rollback and the 501-path boundary.
+- V0.5.2 enumerates only strict private item-ref IDs, scans at most 25 refs, and returns at most the latest 12 verified entries. A ref whose ID, commit trailer, tree, or index-tree metadata does not bind correctly is ignored.
+- History captures the current filtered worktree once, then computes bounded impact summaries for each target. The renderer receives checkpoint IDs and counts, not commits, trees, refs, Git arguments, or affected paths.
+- Selected recovery re-resolves the private ref and requires the commit to match its preflight value before applying, closing the ref-replacement race without allowing arbitrary commit input.
 
 ## Layout recovery and compact-window boundaries
 
@@ -83,12 +88,12 @@ The published GitHub installer reports the same `162,572,783` byte size and SHA-
 
 ## Persistence and credential checks
 
-- V0.5.0 installed directly over V0.4.8; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.5.0`.
+- V0.5.2 installed directly over V0.5.1; the installer exited with code 0 and the Windows uninstall record reports `DSH Desktop 0.5.2`.
 - Thirteen persisted sessions remained discoverable after the upgrade.
 - Credential, desktop-state, v5 workbench-state, Harness settings, and the aggregate of all thirteen session hashes remained unchanged across the overwrite; validation did not read, print, or copy credential plaintext.
-- The pre-upgrade snapshot is `backups/pre-v0.5.0-20260824-035352`; it contains the previous installer, thirteen sessions, storages, settings, and desktop/workbench state in 21 files.
+- The pre-upgrade snapshot is `backups/pre-v0.5.2-20260824-080459`; it contains the previous installer, thirteen sessions, storages, settings, and desktop/workbench state in 21 files.
 - The snapshot intentionally contains no `.credentials.yaml` file.
-- The real repository checkpoint ref remained present across the installer overwrite.
+- All three real repository checkpoint item refs remained present across the installer overwrite.
 - A first lightweight snapshot attempt revealed that `harness/profiles` embeds another `node_modules` closure. That stopped partial snapshot was sent to the Windows Recycle Bin; future per-version snapshots exclude profiles while the complete V0.4.6 last-known-good snapshot remains retained.
 
 ## Existing terminal, file, and Git boundaries
@@ -100,4 +105,4 @@ The published GitHub installer reports the same `162,572,783` byte size and SHA-
 
 ## Evidence boundary
 
-These statements describe the locally verified V0.5.0 build. The earlier rc.8 Workspace Write crash was not re-tested with a paid file-writing model task, so this build does not claim rc.2 fixes it. Automatic checkpoints, layout scaling, the command palette, media preview, and application preview do not relax the existing renderer, credential, navigation, or workspace boundaries. V0.5.0 does not claim rewind because no restore action exists yet. This evidence does not imply DeepSeek endorsement, production stability of Harness `0.1.1-rc.2`, or universal Windows reputation acceptance of the unsigned installer.
+These statements describe the locally verified V0.5.2 build. The earlier rc.8 Workspace Write crash was not re-tested with a paid file-writing model task, so this build does not claim rc.2 fixes it. Checkpoint history/recovery, layout scaling, the command palette, media preview, and application preview do not relax the existing renderer, credential, navigation, or workspace boundaries. V0.5.2 restores code and the Git index only; it does not rewind, delete, branch, or synchronize Harness conversations. This evidence does not imply DeepSeek endorsement, production stability of Harness `0.1.1-rc.2`, or universal Windows reputation acceptance of the unsigned installer.

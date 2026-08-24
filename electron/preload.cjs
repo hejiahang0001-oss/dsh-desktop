@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     getState: () => ipcRenderer.invoke('checkpoints:get-state'),
     create: () => ipcRenderer.invoke('checkpoints:create-manual'),
     createAutomatic: () => ipcRenderer.invoke('checkpoints:create-automatic'),
+    listHistory: () => ipcRenderer.invoke('checkpoints:list-history'),
+    restore: (id) => ipcRenderer.invoke('checkpoints:restore', id),
     restoreLatest: () => ipcRenderer.invoke('checkpoints:restore-latest'),
     onState: (listener) => {
       const handler = (_event, state) => listener(state);

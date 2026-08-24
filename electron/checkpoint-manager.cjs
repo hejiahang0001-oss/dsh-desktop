@@ -7,7 +7,11 @@ const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
 const LATEST_REF = 'refs/dsh/checkpoints/latest';
+const ITEM_REF_PREFIX = 'refs/dsh/checkpoints/items/';
+const HISTORY_LIMIT = 12;
+const HISTORY_SCAN_LIMIT = 25;
 const MAX_RESTORE_PATHS = 500;
+const CHECKPOINT_ID_PATTERN = /^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$/i;
 const RESTRICTED_COMPONENT_PATTERNS = Object.freeze([
   /^\.env(?:\.|$)/i,
   /^\.credentials(?:\.|$)/i,
@@ -68,6 +72,8 @@ const checkpointId = (now, random = randomBytes) => (
   `${now.toISOString().replace(/[-:.]/g, '').replace('Z', 'Z')}-${random(4).toString('hex')}`
 );
 
+const isCheckpointId = (value) => CHECKPOINT_ID_PATTERN.test(String(value || ''));
+
 class GitCheckpointManager {
   constructor({ run = execFileAsync, fsPromises = fsp, now = () => new Date(), random = randomBytes } = {}) {
     this.run = run;
@@ -100,23 +106,50 @@ class GitCheckpointManager {
     }
   }
 
-  async readLatest() {
-    const commit = await this.optionalGit(['rev-parse', '--verify', LATEST_REF]);
-    if (!commit) return null;
-    const [body, tree, createdAt] = await Promise.all([
-      this.executeGit(['show', '-s', '--format=%B', commit]),
-      this.executeGit(['rev-parse', `${commit}^{tree}`]),
-      this.executeGit(['show', '-s', '--format=%cI', commit])
-    ]);
+  async readCheckpoint(commit, expectedId = '') {
+    if (!/^[0-9a-f]{40,64}$/i.test(commit || '')) throw new Error('Invalid checkpoint commit.');
+    const raw = await this.executeGit(['show', '-s', '--format=%H%x00%T%x00%cI%x00%B', commit]);
+    const [reportedCommit, tree, createdAt, ...bodyParts] = raw.split('\0');
+    const body = bodyParts.join('\0');
+    const id = parseTrailer(body, 'DSH-Checkpoint-ID');
+    const indexTree = parseTrailer(body, 'DSH-Index-Tree');
+    if (reportedCommit.trim() !== commit || !isCheckpointId(id) || (expectedId && id !== expectedId)) {
+      throw new Error('Checkpoint metadata did not match its private ref.');
+    }
+    if (!/^[0-9a-f]{40,64}$/i.test(tree.trim()) || !/^[0-9a-f]{40,64}$/i.test(indexTree)) {
+      throw new Error('Checkpoint tree metadata is invalid.');
+    }
+    const source = parseTrailer(body, 'DSH-Checkpoint-Source');
     return Object.freeze({
-      id: parseTrailer(body, 'DSH-Checkpoint-ID'),
+      id,
       commit,
       tree: tree.trim(),
-      indexTree: parseTrailer(body, 'DSH-Index-Tree'),
-      source: parseTrailer(body, 'DSH-Checkpoint-Source') || 'unknown',
+      indexTree,
+      source: ['automatic', 'manual', 'safety'].includes(source) ? source : 'unknown',
       createdAt: createdAt.trim(),
       sensitiveExcludedCount: Number(parseTrailer(body, 'DSH-Sensitive-Excluded')) || 0
     });
+  }
+
+  async readLatest() {
+    const commit = await this.optionalGit(['rev-parse', '--verify', LATEST_REF]);
+    if (!commit) return null;
+    try {
+      return await this.readCheckpoint(commit);
+    } catch {
+      return null;
+    }
+  }
+
+  async resolveCheckpoint(id) {
+    if (!isCheckpointId(id)) return null;
+    const commit = await this.optionalGit(['rev-parse', '--verify', `${ITEM_REF_PREFIX}${id}`]);
+    if (!commit) return null;
+    try {
+      return await this.readCheckpoint(commit, id);
+    } catch {
+      return null;
+    }
   }
 
   async activate(workspacePath) {
@@ -209,7 +242,7 @@ class GitCheckpointManager {
       if (head) commitArgs.push('-p', head);
       commitArgs.push('-m', message);
       const commit = (await this.executeGit(commitArgs, { env: baseEnv })).trim();
-      const itemRef = `refs/dsh/checkpoints/items/${id}`;
+      const itemRef = `${ITEM_REF_PREFIX}${id}`;
       await this.executeGit(['update-ref', itemRef, commit], { env: baseEnv });
       await this.executeGit(['update-ref', LATEST_REF, commit], { env: baseEnv });
       this.last = Object.freeze({
@@ -230,7 +263,7 @@ class GitCheckpointManager {
     }
   }
 
-  async inspectWorktree(snapshot) {
+  async captureCurrentState() {
     const tempRoot = await this.fsPromises.mkdtemp(path.join(os.tmpdir(), 'dsh-restore-preview-'));
     const tempIndex = path.join(tempRoot, 'index');
     const indexEnv = { ...sanitizedEnvironment(), GIT_INDEX_FILE: tempIndex };
@@ -239,22 +272,121 @@ class GitCheckpointManager {
       if (head) await this.executeGit(['read-tree', head], { env: indexEnv });
       else await this.executeGit(['read-tree', '--empty'], { env: indexEnv });
       await this.executeGit(['add', '-A', '--', '.', ...SENSITIVE_PATHSPECS], { env: indexEnv });
-      const currentTree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
-      const [changedOutput, untrackedOutput, porcelain] = await Promise.all([
-        this.executeGit(['diff', '--name-only', '-z', snapshot.tree, currentTree, '--', '.', ...SENSITIVE_PATHSPECS]),
+      const tree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
+      const [indexTree, untrackedOutput, porcelain] = await Promise.all([
+        this.executeGit(['write-tree']),
         this.executeGit(['ls-files', '--others', '--exclude-standard', '-z', '--']),
         this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'])
       ]);
-      const changed = splitNull(changedOutput);
-      const changedSet = new Set(changed);
       return Object.freeze({
-        changed,
-        untrackedChanged: splitNull(untrackedOutput)
-          .filter((entry) => !isRestrictedGitPath(entry) && changedSet.has(entry)),
+        tree,
+        indexTree: indexTree.trim(),
+        untracked: splitNull(untrackedOutput).filter((entry) => !isRestrictedGitPath(entry)),
         sensitiveExcludedCount: new Set(statusPaths(porcelain).filter(isRestrictedGitPath)).size
       });
     } finally {
       await this.fsPromises.rm(tempRoot, { recursive: true, force: true });
+    }
+  }
+
+  async compareSnapshot(snapshot, current) {
+    const [changedOutput, indexOutput] = await Promise.all([
+      this.executeGit(['diff', '--name-only', '-z', snapshot.tree, current.tree, '--', '.', ...SENSITIVE_PATHSPECS]),
+      this.executeGit(['diff', '--name-only', '-z', current.indexTree, snapshot.indexTree, '--', '.', ...SENSITIVE_PATHSPECS])
+    ]);
+    const changed = splitNull(changedOutput);
+    const indexChanges = splitNull(indexOutput);
+    const changedSet = new Set(changed);
+    return Object.freeze({
+      changed,
+      untrackedChanged: current.untracked.filter((entry) => changedSet.has(entry)),
+      sensitiveExcludedCount: current.sensitiveExcludedCount,
+      indexWillChange: indexChanges.length > 0,
+      unchanged: changed.length === 0 && indexChanges.length === 0
+    });
+  }
+
+  async inspectWorktree(snapshot) {
+    const current = await this.captureCurrentState();
+    const comparison = await this.compareSnapshot(snapshot, current);
+    return Object.freeze({
+      ...comparison,
+      currentIndexTree: current.indexTree
+    });
+  }
+
+  async listHistory({ limit = HISTORY_LIMIT } = {}) {
+    const boundedLimit = Math.min(HISTORY_LIMIT, Math.max(1, Number(limit) || HISTORY_LIMIT));
+    if (!this.available) return Object.freeze({ available: false, reason: this.reason, items: [] });
+    if (this.pending) return Object.freeze({ available: false, reason: 'checkpoint-busy', items: [] });
+    try {
+      const output = await this.executeGit([
+        'for-each-ref', `--count=${HISTORY_SCAN_LIMIT}`, '--sort=-refname',
+        '--format=%(refname)%09%(objectname)', ITEM_REF_PREFIX
+      ]);
+      const rows = output.split(/\r?\n/).filter(Boolean);
+      const snapshots = [];
+      let invalidCount = 0;
+      for (const row of rows) {
+        if (snapshots.length >= boundedLimit) break;
+        const [refName, commit] = row.split('\t');
+        const id = refName?.startsWith(ITEM_REF_PREFIX) ? refName.slice(ITEM_REF_PREFIX.length) : '';
+        if (!isCheckpointId(id)) {
+          invalidCount += 1;
+          continue;
+        }
+        try {
+          snapshots.push(await this.readCheckpoint(commit, id));
+        } catch {
+          invalidCount += 1;
+        }
+      }
+      if (snapshots.length === 0) {
+        return Object.freeze({ available: true, reason: 'empty', items: [], truncated: false, invalidCount });
+      }
+      const current = await this.captureCurrentState();
+      const items = [];
+      for (const snapshot of snapshots) {
+        try {
+          const comparison = await this.compareSnapshot(snapshot, current);
+          items.push(Object.freeze({
+            id: snapshot.id,
+            source: snapshot.source,
+            createdAt: snapshot.createdAt,
+            isLatest: snapshot.commit === this.last?.commit,
+            available: comparison.changed.length <= MAX_RESTORE_PATHS,
+            reason: comparison.changed.length > MAX_RESTORE_PATHS ? 'too-many-paths' : 'ready',
+            affectedCount: comparison.changed.length,
+            untrackedTrashCount: comparison.untrackedChanged.length,
+            sensitiveExcludedCount: comparison.sensitiveExcludedCount,
+            indexWillChange: comparison.indexWillChange,
+            unchanged: comparison.unchanged
+          }));
+        } catch {
+          items.push(Object.freeze({
+            id: snapshot.id,
+            source: snapshot.source,
+            createdAt: snapshot.createdAt,
+            isLatest: snapshot.commit === this.last?.commit,
+            available: false,
+            reason: 'invalid-checkpoint',
+            affectedCount: 0,
+            untrackedTrashCount: 0,
+            sensitiveExcludedCount: current.sensitiveExcludedCount,
+            indexWillChange: false,
+            unchanged: false
+          }));
+        }
+      }
+      return Object.freeze({
+        available: true,
+        reason: 'ready',
+        items,
+        truncated: rows.length > boundedLimit,
+        invalidCount
+      });
+    } catch {
+      return Object.freeze({ available: false, reason: 'history-failed', items: [] });
     }
   }
 
@@ -263,28 +395,29 @@ class GitCheckpointManager {
       return Object.freeze({ available: false, reason: this.reason || 'no-checkpoint' });
     }
     try {
-      const [worktree, currentIndexTree] = await Promise.all([
-        this.inspectWorktree(target),
-        this.executeGit(['write-tree'])
-      ]);
-      const indexChanges = splitNull(await this.executeGit([
-        'diff', '--name-only', '-z', currentIndexTree.trim(), target.indexTree, '--', '.', ...SENSITIVE_PATHSPECS
-      ]));
-      const indexWillChange = indexChanges.length > 0;
+      const worktree = await this.inspectWorktree(target);
       return Object.freeze({
         available: worktree.changed.length <= MAX_RESTORE_PATHS,
         reason: worktree.changed.length > MAX_RESTORE_PATHS ? 'too-many-paths' : 'ready',
         targetId: target.id,
+        targetCommit: target.commit,
         targetCreatedAt: target.createdAt,
         affectedCount: worktree.changed.length,
         untrackedTrashCount: worktree.untrackedChanged.length,
         sensitiveExcludedCount: worktree.sensitiveExcludedCount,
-        indexWillChange,
-        unchanged: worktree.changed.length === 0 && !indexWillChange
+        indexWillChange: worktree.indexWillChange,
+        unchanged: worktree.unchanged
       });
     } catch {
       return Object.freeze({ available: false, reason: 'restore-preview-failed' });
     }
+  }
+
+  async previewCheckpoint(id) {
+    const target = await this.resolveCheckpoint(id);
+    return target
+      ? this.previewRestore(target)
+      : Object.freeze({ available: false, reason: 'checkpoint-changed' });
   }
 
   async applySnapshot(snapshot, { trashItem }) {
@@ -296,7 +429,8 @@ class GitCheckpointManager {
     await this.executeGit(['cat-file', '-e', `${snapshot.commit}^{commit}`]);
     await this.executeGit(['cat-file', '-e', `${snapshot.tree}^{tree}`]);
     await this.executeGit(['cat-file', '-e', `${snapshot.indexTree}^{tree}`]);
-    const currentIndexTree = (await this.executeGit(['write-tree'])).trim();
+    const worktree = await this.inspectWorktree(snapshot);
+    const currentIndexTree = worktree.currentIndexTree;
     const [currentTreePaths, targetTreePaths] = await Promise.all([
       this.executeGit(['ls-tree', '-r', '--name-only', '-z', currentIndexTree]),
       this.executeGit(['ls-tree', '-r', '--name-only', '-z', snapshot.indexTree])
@@ -306,7 +440,6 @@ class GitCheckpointManager {
     const sensitivePaths = [...new Set([...currentSensitive, ...targetSensitive])];
     if (sensitivePaths.length > MAX_RESTORE_PATHS) throw new Error('Too many sensitive index paths.');
 
-    const worktree = await this.inspectWorktree(snapshot);
     if (worktree.changed.length > MAX_RESTORE_PATHS) throw new Error('Too many restore paths.');
     if (worktree.untrackedChanged.length > 0 && typeof trashItem !== 'function') throw new Error('Trash integration is unavailable.');
     for (const relativePath of worktree.untrackedChanged) {
@@ -340,8 +473,11 @@ class GitCheckpointManager {
     }
   }
 
-  async restoreLatest({ trashItem } = {}) {
-    const target = this.last ? { ...this.last } : null;
+  async restoreCheckpoint({ id = '', expectedCommit = '', trashItem } = {}) {
+    const target = id ? await this.resolveCheckpoint(id) : (this.last ? { ...this.last } : null);
+    if (!target || (expectedCommit && target.commit !== expectedCommit)) {
+      return this.getState({ status: 'error', restored: false, restoreReason: 'checkpoint-changed' });
+    }
     const preview = await this.previewRestore(target);
     if (!preview.available) return this.getState({ status: 'error', restored: false, restoreReason: preview.reason });
     if (preview.unchanged) return this.getState({ status: 'ready', restored: false, unchanged: true, preview });
@@ -372,13 +508,20 @@ class GitCheckpointManager {
       }
     }
   }
+
+  async restoreLatest({ trashItem } = {}) {
+    return this.restoreCheckpoint({ trashItem });
+  }
 }
 
 module.exports = {
   GitCheckpointManager,
+  HISTORY_LIMIT,
+  ITEM_REF_PREFIX,
   LATEST_REF,
   MAX_RESTORE_PATHS,
   SENSITIVE_PATHSPECS,
   isRestrictedGitPath,
+  isCheckpointId,
   statusPaths
 };

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { GitChangeReviewer } = require('./change-review.cjs');
-const { GitCheckpointManager } = require('./checkpoint-manager.cjs');
+const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness } = require('./harness-supervisor.cjs');
 const {
@@ -495,7 +495,7 @@ const createCodeCheckpoint = async (source = 'manual') => {
   return publishCheckpointState(await pending);
 };
 
-const performRestoreLatestCheckpoint = async () => {
+const performRestoreCheckpoint = async (checkpointId = '') => {
   if (checkpointManager?.pending || checkpointDiagnostics.status === 'creating') {
     await dialog.showMessageBox(mainWindow, {
       type: 'info',
@@ -522,12 +522,17 @@ const performRestoreLatestCheckpoint = async () => {
     });
     return getCheckpointState();
   }
-  const preview = await checkpointManager?.previewRestore();
+  const selected = Boolean(checkpointId);
+  const preview = selected
+    ? await checkpointManager?.previewCheckpoint(checkpointId)
+    : await checkpointManager?.previewRestore();
   if (!preview?.available) {
     await dialog.showMessageBox(mainWindow, {
       type: 'error',
       title: '无法恢复检查点',
-      message: preview?.reason === 'too-many-paths' ? '待恢复文件超过 500 个。' : '最近检查点当前不可恢复。',
+      message: preview?.reason === 'too-many-paths'
+        ? '待恢复文件超过 500 个。'
+        : `${selected ? '所选' : '最近'}检查点当前不可恢复。`,
       detail: '工作区必须是 Git 仓库根目录，且检查点对象和索引树必须仍然存在。',
       buttons: ['确定'],
       defaultId: 0
@@ -538,7 +543,7 @@ const performRestoreLatestCheckpoint = async () => {
     await dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '无需恢复',
-      message: '当前代码和 Git 索引已经与最近检查点一致。',
+      message: `当前代码和 Git 索引已经与${selected ? '所选' : '最近'}检查点一致。`,
       buttons: ['确定'],
       defaultId: 0
     });
@@ -546,7 +551,7 @@ const performRestoreLatestCheckpoint = async () => {
   }
   const answer = await dialog.showMessageBox(mainWindow, {
     type: 'warning',
-    title: '恢复到最近代码检查点',
+    title: `恢复到${selected ? '所选' : '最近'}代码检查点`,
     message: `将恢复 ${preview.affectedCount} 个代码路径${preview.indexWillChange ? '并恢复 Git 索引' : ''}。`,
     detail: [
       `检查点时间：${checkpointTimeLabel(preview.targetCreatedAt)}`,
@@ -564,7 +569,16 @@ const performRestoreLatestCheckpoint = async () => {
 
   if (previewManager?.isActive()) await previewManager.stop();
   publishCheckpointState({ ...getCheckpointState(), status: 'restoring' });
-  const restored = await checkpointManager.restoreLatest({ trashItem: (target) => shell.trashItem(target) });
+  const restored = selected
+    ? await checkpointManager.restoreCheckpoint({
+      id: checkpointId,
+      expectedCommit: preview.targetCommit,
+      trashItem: (target) => shell.trashItem(target)
+    })
+    : await checkpointManager.restoreCheckpoint({
+      expectedCommit: preview.targetCommit,
+      trashItem: (target) => shell.trashItem(target)
+    });
   const state = publishCheckpointState(restored);
   if (restored.restored) {
     await changeReviewer.activate(getWorkspaceState().activePath);
@@ -595,12 +609,14 @@ const performRestoreLatestCheckpoint = async () => {
   return state;
 };
 
-const restoreLatestCheckpoint = () => {
+const restoreCodeCheckpoint = (checkpointId = '') => {
   if (checkpointRestorePromise) return checkpointRestorePromise;
-  checkpointRestorePromise = performRestoreLatestCheckpoint()
+  checkpointRestorePromise = performRestoreCheckpoint(checkpointId)
     .finally(() => { checkpointRestorePromise = null; });
   return checkpointRestorePromise;
 };
+
+const restoreLatestCheckpoint = () => restoreCodeCheckpoint();
 
 const desktopIpcAllowed = (event) => Boolean(
   mainWindow
@@ -1540,6 +1556,12 @@ function installApplicationMenu() {
           click: () => { void createCodeCheckpoint('manual'); }
         },
         {
+          label: '浏览代码检查点…',
+          accelerator: 'CmdOrCtrl+Alt+H',
+          enabled: checkpointDiagnostics.available && Boolean(checkpointDiagnostics.last) && checkpointIdle && harnessReady,
+          click: () => { void mainWindow?.webContents.executeJavaScript('Boolean(window.__DSH_CHECKPOINTS__?.openHistory?.())', true); }
+        },
+        {
           label: '恢复到最近代码检查点…',
           accelerator: 'CmdOrCtrl+Alt+R',
           enabled: checkpointDiagnostics.available && Boolean(checkpointDiagnostics.last) && checkpointIdle,
@@ -1781,6 +1803,18 @@ ipcMain.handle('checkpoints:create-manual', async (event) => {
 ipcMain.handle('checkpoints:create-automatic', async (event) => {
   if (!harnessIpcAllowed(event)) return { available: false, reason: 'untrusted', status: 'empty', last: null };
   return createCodeCheckpoint('automatic');
+});
+ipcMain.handle('checkpoints:list-history', async (event) => {
+  if (!harnessIpcAllowed(event) || checkpointRestorePromise) {
+    return { available: false, reason: 'untrusted-or-busy', items: [] };
+  }
+  return checkpointManager.listHistory();
+});
+ipcMain.handle('checkpoints:restore', async (event, id) => {
+  if (!harnessIpcAllowed(event) || !isCheckpointId(id)) {
+    return { available: false, reason: 'untrusted', status: 'empty', last: null };
+  }
+  return restoreCodeCheckpoint(id);
 });
 ipcMain.handle('checkpoints:restore-latest', async (event) => {
   if (!harnessIpcAllowed(event)) return { available: false, reason: 'untrusted', status: 'empty', last: null };
