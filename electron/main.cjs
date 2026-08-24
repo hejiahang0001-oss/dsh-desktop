@@ -3063,10 +3063,18 @@ const runPluginHealthSmoke = async (target) => {
     await fsp.writeFile(path.join(profileDir, 'cordis.patch.yml'), 'hidden-patch-prose-marker', 'utf8');
     pluginHealthCatalog = new PluginHealthCatalog({ harnessHome, dshPackageDir });
     await createPluginHealthWindow();
-    await pluginHealthWindow.webContents.executeJavaScript(
-      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-      true
-    );
+    const renderedInTime = await pluginHealthWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 15000;
+      const check = () => {
+        const profileReady = document.querySelectorAll('.profile-card').length === 1;
+        const toggleReady = document.querySelectorAll('.toggle-button').length === 1;
+        if (profileReady && toggleReady) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!renderedInTime) throw new Error('plugin-health-smoke-timeout');
     const rendered = await pluginHealthWindow.webContents.executeJavaScript(`({
       apiKeys: Object.keys(window.pluginHealthAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
