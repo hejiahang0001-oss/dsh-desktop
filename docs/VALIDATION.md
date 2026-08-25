@@ -2,6 +2,21 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V0.5.17 tasks and subagents evidence (local release gates complete)
+
+- The local-only Tasks/Subagents window reads the official `session.list` and bounded `subagent.list` catalogs; ordinary forks never enter the tree. It renders at most 32 entries across five levels and treats diagnostic rows as disabled.
+- Opening a child persists the exact catalog-derived parent/child/mode address before Harness reloads. Follow-up and interrupt actions accept only opaque 24-hex renderer ids, re-list the exact parent, and reject stale, mismatched, one-shot, or unavailable-parent requests. Human follow-up content is one 1–8000-character text block.
+- A successful `subagent.prompt` is described only as FIFO inbox acceptance. A successful `subagent.interrupt` is described only as an admitted interrupt request; the UI states that the child may remain visibly running and queued follow-ups remain parked. Native interrupt confirmation defaults to Cancel, and the controller revalidates that the child is still running after confirmation.
+- Background jobs are a read-only projection of the official Web job popover backed by `jobsBySession`; DSH does not create a parallel registry or invent a human kill seam. Job labels are bounded and redact credential assignment, bearer, and `sk-*` shapes before reaching the local renderer.
+- Persisted session `cwd` is compared with the active DSH workspace to label current-worktree, other-directory, and unrecorded children. Two running sessions on one directory produce a visible sharing warning but no automatic migration.
+- The source suite passes 190/190 and the focused task/UI suite passes 7/7. Production dependency audit reports no known vulnerabilities. A review-added race test proves that an already-ended child cannot receive a stale interrupt request.
+- The final unpacked tree contains 29,787 files and 692,578,430 bytes. Desktop, Harness, IPC, PDF, context sources, extension health, worktrees, Tasks/Subagents, and the real PTY pass in both unpacked and installed form. The final 1539×1085 unpacked and installed task screenshots visibly contain the prompt editor and Send action.
+- `DSH-Desktop-Setup-0.5.17.exe` is 183,991,125 bytes with SHA-256 `F9A6478C2A99CC99644F21A5A704EE493500FDF0B81BC6F2FB54C6DA30EB22CD`. Its 188,963-byte blockmap has SHA-256 `3BF702905D416C251AA6C4DA697C23D9DEB61049B293D8E5F330CB7D556C95BA`; the checksum manifest has SHA-256 `615D276422BF9A6A84E4BBB69F230B7BE850614C09F5D83CF8BD1F49BDB0D23F`.
+- V0.5.16 to V0.5.17 reuses 182,962,134 of 183,991,125 bytes (99.4407%) with an estimated 1,028,991-byte differential. The installer is unsigned, signature verification and channel separation are not ready, and automatic update remains disabled.
+- Silent overwrite exits with code 0 and registers `DSH Desktop 0.5.17`. The installed tree contains every unpacked file with equal length and only adds the normal uninstaller; it has zero reparse points. Packaged and installed `app.asar` SHA-256 both equal `BC7413B26F890B8045BA0916F00EE10BE00AB55D347D9F204DC41395A6935614`.
+- The pre-overwrite snapshot `backups/pre-v0.5.17-20260825-175915` retains the V0.5.16 installer, blockmap, and checksum manifest. All 27 semantic files, including 14 sessions and two Profile files, match exactly before overwrite, after overwrite, and after installed smoke; no credential-named file or reparse point was copied.
+- CI, Pre-release creation, and remote three-asset verification remain pending.
+
 ## V0.5.16 worktree evidence
 
 - The local worktree renderer exposes only fixed refresh/create/activate/reveal/remove methods and opaque 24-hex identifiers. It contains no branch, path, command, or Git-argument input; its BrowserWindow remains local-only, sandboxed, context-isolated, and navigation-blocked.
