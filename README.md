@@ -68,7 +68,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.16 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds a local worktree manager with atomic DSH ownership, generated branches and paths, fixed create/switch/reveal/reclaim actions, default-cancel native confirmations, read-only external worktrees, and private recovery checkpoints before reclaiming dirty managed worktrees. Local gates pass for `DSH-Desktop-Setup-0.5.16.exe`; CI and remote-asset verification remain before publication. The front-page download remains Stable.
+**V0.5.16 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds a local worktree manager with atomic DSH ownership, generated branches and paths, fixed create/switch/reveal/reclaim actions, default-cancel native confirmations, read-only external worktrees, and private recovery checkpoints before reclaiming dirty managed worktrees. [`DSH-Desktop-Setup-0.5.16.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v0.5.16/DSH-Desktop-Setup-0.5.16.exe) has passed packaging, overwrite installation, installed smoke, CI, publication, and remote-asset verification. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -139,7 +139,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.16 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版增加隔离工作树管理：软件以原子记录证明 DSH 所有权，只生成受控分支和目录，外部及仿冒工作树保持只读；创建、切换和回收均采用原生默认取消确认，回收有修改的工作树前先建立或复用私有恢复点并保留分支。`DSH-Desktop-Setup-0.5.16.exe` 的本机门禁已通过，CI 与远端资产核验完成后发布。V0.5.4 继续保持 Stable：
+V0.5.16 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版增加隔离工作树管理：软件以原子记录证明 DSH 所有权，只生成受控分支和目录，外部及仿冒工作树保持只读；创建、切换和回收均采用原生默认取消确认，回收有修改的工作树前先建立或复用私有恢复点并保留分支。[`DSH-Desktop-Setup-0.5.16.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v0.5.16/DSH-Desktop-Setup-0.5.16.exe) 已完成打包、覆盖安装、安装版 smoke、CI、Pre-release 发布和远端资产核验。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
