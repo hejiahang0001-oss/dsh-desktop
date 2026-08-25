@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.19 产品 Latest 候选（本地发布门禁完成）
-> 状态：V0.5.7–V0.5.18 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.19 产品 Latest（已发布为 Pre-release）
+> 状态：V0.5.7–V0.5.19 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.19 本轮进展
 
@@ -30,7 +30,8 @@
 | 覆盖与安装版 | 安装器退出码 0，注册 `DSH Desktop 0.5.19`；安装版含解包版全部 29,787 文件并只多正常卸载器，0 缺失/大小差异/链接；安装/解包 `app.asar` 摘要均为 `B2F16F7D80676446A834CECA6DD2B96F1183C82AE6070930FF6928F21DE60F03` |
 | 安装版运行 | 与解包版相同十类 smoke 全部通过；安装版扩展中心 1419×1025 实拍与解包版一致 |
 | 覆盖数据与回滚 | 覆盖前、覆盖后和安装版完整 smoke 后 27 个语义文件逐项 0 差异，清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.19-final-20260825-213155` 含 V0.5.18 三项发布资产，0 哈希差异、0 凭据命名文件、0 reparse point |
-| 发布状态 | 本地门禁完成；PR、主分支 CI、GitHub Pre-release 与远端三资产核验待执行；Stable 仍为 V0.5.4 |
+| PR 与 CI | 实现 PR [#30](https://github.com/hejiahang0001-oss/dsh-desktop/pull/30) 三项 CI [32857098053](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32857098053) 通过并以 `53df6dc3765c36c56e480369723d9531053ffbcc` 合并；主分支 CI [32857243413](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32857243413) 三项通过 |
+| 发布与远端资产 | [V0.5.19 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.19) 非草稿并准确指向合并提交；三项资产远端大小/digest 与本地一致，公开安装包 HTTP 200；干净回下载三项摘要全部匹配且校验清单 2/2 通过；GitHub 正式 Latest 仍为 V0.5.4 |
 
 ## V0.5.18 本轮进展
 

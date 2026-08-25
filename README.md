@@ -70,7 +70,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.19 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It replaces the former extension-health view with a unified Skills / Plugins / Hooks / MCP extension center. The center reads the official live `pluginInventory/list` projection when Harness is ready, falls back to verified fixed-package facts when it is not, and explicitly distinguishes an installed MCP client from a configured MCP service. `DSH-Desktop-Setup-0.5.19.exe` has passed source, production-audit, package, overwrite-installation, installed-runtime, visual, security, and semantic-data gates; CI and remote-asset publication remain before the Pre-release is complete. The front-page download remains Stable.
+**V0.5.19 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It replaces the former extension-health view with a unified Skills / Plugins / Hooks / MCP extension center. The center reads the official live `pluginInventory/list` projection when Harness is ready, falls back to verified fixed-package facts when it is not, and explicitly distinguishes an installed MCP client from a configured MCP service. `DSH-Desktop-Setup-0.5.19.exe` passed source, production-audit, package, overwrite-installation, installed-runtime, visual, security, semantic-data, CI, and remote-asset gates and is published as a [GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.19). The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -142,7 +142,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.19 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版把原“扩展健康”升级为 Skills、Plugins、Hooks、MCP 四类统一扩展中心：实时状态使用 Harness 官方只读清单，固定包与本机 Profile 继续提供可核对的降级信息；MCP 客户端已安装与具体 MCP 服务已配置明确分开，当前上游没有独立 Hooks 管理接口也会直接说明。安装包 `DSH-Desktop-Setup-0.5.19.exe` 已通过源码、依赖、打包、覆盖安装、安装版运行、视觉、安全与数据保留门禁，完成 CI 和远端资产核验后发布为 Pre-release。V0.5.4 继续保持 Stable：
+V0.5.19 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版把原“扩展健康”升级为 Skills、Plugins、Hooks、MCP 四类统一扩展中心：实时状态使用 Harness 官方只读清单，固定包与本机 Profile 继续提供可核对的降级信息；MCP 客户端已安装与具体 MCP 服务已配置明确分开，当前上游没有独立 Hooks 管理接口也会直接说明。安装包 `DSH-Desktop-Setup-0.5.19.exe` 已通过源码、依赖、打包、覆盖安装、安装版运行、视觉、安全、数据保留、CI 与远端三资产门禁，并发布为 [GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.19)。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
