@@ -121,6 +121,25 @@ test('package layout requires the fixed bundled pnpm files, version, and offline
   assert.equal(drifted.requiredPnpmVersionReady, false);
 });
 
+test('package layout requires the trusted Word skill and fixed offline DOCX tool', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-word-skill-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const skillRoot = path.join(root, 'resources', 'skills', 'word-docx');
+  writeFile(path.join(skillRoot, 'SKILL.md'), '---\nname: word-docx\n---\n');
+
+  const incomplete = await inspectPackageLayout(root);
+  assert.equal(incomplete.requiredWordSkillFilesReady, false);
+  assert.deepEqual(incomplete.wordSkillRuntime, {
+    files: 1,
+    bytes: Buffer.byteLength('---\nname: word-docx\n---\n')
+  });
+
+  writeFile(path.join(skillRoot, 'scripts', 'word-docx.cjs'), '// fixed offline tool\n');
+  const ready = await inspectPackageLayout(root);
+  assert.equal(ready.requiredWordSkillFilesReady, true);
+  assert.equal(ready.wordSkillRuntime.files, 2);
+});
+
 test('package manifest excludes the duplicate app PTY and unused xterm development surfaces', () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
   for (const pattern of [

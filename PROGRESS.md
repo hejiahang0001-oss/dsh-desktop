@@ -1,8 +1,35 @@
 # DSH Desktop 执行进度
 
-> 日期：2026-08-25
-> 当前构建：V0.5.19 产品 Latest（已发布为 Pre-release）
-> 状态：V0.5.7–V0.5.19 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 日期：2026-08-26
+> 当前构建：V0.5.20 产品 Latest 候选（Word DOCX 发布门禁中）
+> 状态：V0.5.7–V0.5.19 已发布为 Pre-release；V0.5.20 源码与真实 Harness/Word 验收通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.20 本轮进展
+
+1. 增加官方 Harness 可发现、用户与模型均可调用的 bundled `/word-docx` Skill；工具菜单和固定命令面板可把 Skill 命令写入官方输入框，不建立第二套 Agent 循环。
+2. 增加固定离线 DOCX 工具，支持标题/副标题、1–3 级标题、段落、项目符号、编号、表格、PNG/JPEG 图片、分页、页眉页脚和可编辑 OOXML。
+3. 增加精确文本替换：任一查找项未命中则整体失败，重复查找规则失败关闭；默认不覆盖，明确覆盖先生成同目录回退副本。
+4. 规格、图片、输入和输出限制在当前工作区；拒绝路径穿越、符号链接/联接、伪装图片、远程 URL、超限规格、DOCX、条目和图片。
+5. ZIP 在解压前校验中央目录、条目数量、单项大小和 96 MiB 总声明解压大小；输出写入临时文件并独立回读结构后才替换目标。
+6. 真实软件 Key 验收中，官方 Harness 会话进入运行态、调用 `/word-docx`、生成规格与 DOCX、正常结束并通过独立检查；Key 只复制到验收临时 Harness Home，结束后自动清理，未写入报告或工作区。
+7. Microsoft Word 已实际打开基础、修改、真实 Agent 和图片验收文件；无修复提示和兼容模式，中文、三页分页、图片比例、表格、页眉页脚与替换标记可见。
+
+### V0.5.20 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| 专项自动化 | Word、Harness Supervisor 与发布治理 32/32 通过 |
+| 全量源码 | 216/216 通过；版本、Word、安全、恢复、UI、IPC 与既有桌面能力全部纳入 |
+| 生产依赖 | `pnpm audit --prod --audit-level moderate`：无已知漏洞 |
+| 真实 Harness 发现 | `artifacts/v0.5.20-word/source-harness-skill.json` 为 `ok: true`；`skill.list` 返回 `word-docx`、`modelInvocable: true` |
+| 真实 Harness Agent | `artifacts/v0.5.20-word/real-harness-agent.json` 为 `ok: true`；运行态与正常结束均确认，生成 DOCX 4,992 字节，SHA-256 `D42D3E0DA725E65D62DD28900992A02E5175BCAA955F08109F84390EE2C4899E` |
+| 最终 Word 文件 | 修改版 67,167 字节；12 个 OOXML 条目、27 个段落、1 张表格、1 张 PNG、精确替换 1 次；Microsoft Word 三页视觉验收通过 |
+| 安全审核 | 增加 96 MiB 预解压总量上限、图片签名/尺寸/数量/总量限制、重复替换拒绝、软件独占运行时变量和安装包必需 Skill 文件门禁 |
+| 解包与安装版 | 29,789 个解包文件、692,676,394 字节；安装版逐项等长且只多正常卸载器，0 缺失/大小差异/链接；十类 smoke 与安装版 `word-docx` 发现全部通过 |
+| 安装包 | `DSH-Desktop-Setup-0.5.20.exe`；184,012,614 字节；SHA-256 `0815951648E4376CE7B4AFF6630A44946CFF6984CC9E2C85A0EA85B387C561FC`；blockmap 188,877 字节，SHA-256 `9176D8C43513C8B638856190752C094381A08F1AA471936C6490205AA9911128` |
+| 差分与签名 | V0.5.19→V0.5.20 复用 182,988,030 字节，99.4432%，预计下载 1,024,584 字节；unsigned，自动更新继续关闭 |
+| 覆盖数据与回滚 | 静默覆盖退出码 0；前/安装后/完整 smoke 后 27 个语义文件清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.20-20260826-000034` 已核验 |
+| 发布 | 本地门禁完成；实现 PR、CI、Pre-release 三资产与公开回下载核验待执行，Stable 不变 |
 
 ## V0.5.19 本轮进展
 

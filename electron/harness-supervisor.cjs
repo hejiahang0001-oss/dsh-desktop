@@ -7,6 +7,7 @@ const path = require('node:path');
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
+const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_NODE']);
 const HARNESS_VERSION = '0.1.1-rc.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
@@ -38,12 +39,12 @@ const buildHarnessEnvironment = ({ baseEnv = process.env, overrides = {}, homeDi
   const environment = { ...baseEnv };
   for (const name of Object.keys(environment)) {
     const normalizedName = name.toUpperCase();
-    if (SOFTWARE_MANAGED_CREDENTIALS.has(normalizedName) || SOFTWARE_MANAGED_NETWORK.has(normalizedName)) {
+    if (SOFTWARE_MANAGED_CREDENTIALS.has(normalizedName) || SOFTWARE_MANAGED_NETWORK.has(normalizedName) || SOFTWARE_MANAGED_RUNTIME.has(normalizedName)) {
       delete environment[name];
     }
   }
   for (const [name, value] of Object.entries(overrides)) {
-    if (!SOFTWARE_MANAGED_CREDENTIALS.has(name.toUpperCase())) environment[name] = value;
+    if (!SOFTWARE_MANAGED_CREDENTIALS.has(name.toUpperCase()) && !SOFTWARE_MANAGED_RUNTIME.has(name.toUpperCase())) environment[name] = value;
   }
   environment.DSH_HOME = homeDir;
   if (workspaceDir) environment.DSH_CWD = workspaceDir;
@@ -99,6 +100,13 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     isPackaged && path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml'),
     path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]);
+  const bundledSkillDir = firstExistingFile([
+    isPackaged && path.join(resourcesPath, 'skills'),
+    path.join(rootDir, 'resources', 'skills')
+  ]);
+  const docxToolPath = bundledSkillDir && firstExistingFile([
+    path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs')
+  ]);
 
   if (!nodePath) {
     const error = new Error('找不到 DSH Desktop 固定的 Node 运行时。请先执行 pnpm runtime:fetch。');
@@ -115,7 +123,12 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'HARNESS_PATCH_MISSING';
     throw error;
   }
-  return { nodePath, dshBinPath, patchPath };
+  if (!bundledSkillDir || !docxToolPath) {
+    const error = new Error('找不到 DSH Desktop 内置的 Word DOCX Skill。请重新安装应用。');
+    error.code = 'BUNDLED_WORD_SKILL_MISSING';
+    throw error;
+  }
+  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath };
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -226,7 +239,7 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(this.options.homeDir, { recursive: true });
     await fsp.mkdir(this.options.launchDir, { recursive: true });
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const { nodePath, dshBinPath, patchPath } = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath } = resolveHarnessRuntimePaths(this.options);
 
     this.stopRequested = false;
     this.outputBuffer = '';
@@ -237,13 +250,17 @@ class HarnessSupervisor extends EventEmitter {
     });
 
     try {
+      const environment = buildHarnessEnvironment({
+        overrides: this.options.env,
+        homeDir: this.options.homeDir,
+        workspaceDir: this.options.launchDir
+      });
+      environment.DSH_BUNDLED_SKILL_DIR = bundledSkillDir;
+      environment.DSH_DESKTOP_DOCX_TOOL = docxToolPath;
+      environment.DSH_DESKTOP_NODE = nodePath;
       this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,
-        env: buildHarnessEnvironment({
-          overrides: this.options.env,
-          homeDir: this.options.homeDir,
-          workspaceDir: this.options.launchDir
-        }),
+        env: environment,
         windowsHide: true,
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe']

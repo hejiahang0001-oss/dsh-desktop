@@ -24,6 +24,10 @@ const REQUIRED_PNPM_FILES = Object.freeze([
   'package/package.json',
   'package/LICENSE'
 ]);
+const REQUIRED_WORD_SKILL_FILES = Object.freeze([
+  'SKILL.md',
+  'scripts/word-docx.cjs'
+]);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -168,6 +172,7 @@ const inspectPackageLayout = async (rootPath) => {
   ];
   const terminalPrefix = normalize(path.join('resources', 'terminal', 'node_modules', 'node-pty'));
   const pnpmPrefix = normalize(path.join('resources', 'pnpm'));
+  const wordSkillPrefix = normalize(path.join('resources', 'skills', 'word-docx'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
@@ -176,6 +181,8 @@ const inspectPackageLayout = async (rootPath) => {
   const terminalPaths = new Set();
   const pnpmRuntime = { files: 0, bytes: 0, version: '', wrapperValid: false };
   const pnpmPaths = new Set();
+  const wordSkillRuntime = { files: 0, bytes: 0 };
+  const wordSkillPaths = new Set();
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -213,6 +220,12 @@ const inspectPackageLayout = async (rootPath) => {
         pnpmRuntime.files += 1;
         pnpmRuntime.bytes += info.size;
       }
+      if (relative === wordSkillPrefix || relative.startsWith(`${wordSkillPrefix}/`)) {
+        const wordRelative = relative.slice(wordSkillPrefix.length + 1);
+        wordSkillPaths.add(wordRelative);
+        wordSkillRuntime.files += 1;
+        wordSkillRuntime.bytes += info.size;
+      }
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
@@ -237,6 +250,8 @@ const inspectPackageLayout = async (rootPath) => {
     pnpmRuntime,
     requiredPnpmFilesReady: REQUIRED_PNPM_FILES.every((name) => pnpmPaths.has(name)),
     requiredPnpmVersionReady: pnpmRuntime.version === REQUIRED_PNPM_VERSION,
+    wordSkillRuntime,
+    requiredWordSkillFilesReady: REQUIRED_WORD_SKILL_FILES.every((name) => wordSkillPaths.has(name)),
     reparsePoints
   };
 };
@@ -273,6 +288,7 @@ const main = async () => {
     && packageLayout.requiredPnpmFilesReady
     && packageLayout.requiredPnpmVersionReady
     && packageLayout.pnpmRuntime.wrapperValid
+    && packageLayout.requiredWordSkillFilesReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
@@ -310,6 +326,7 @@ module.exports = {
   REQUIRED_PNPM_FILES,
   REQUIRED_PNPM_VERSION,
   REQUIRED_TERMINAL_FILES,
+  REQUIRED_WORD_SKILL_FILES,
   assessAutomaticUpdate,
   compareBlockmaps,
   decodeBlockmap,

@@ -17,6 +17,27 @@
     target?.focus();
     return Boolean(target);
   };
+  const invokeSkill = (name) => {
+    const candidates = [...document.querySelectorAll('textarea, [contenteditable="true"]')];
+    const target = candidates.find((node) => visible(node) && /描述|构建|消息|ask|message/i.test(node.getAttribute('placeholder') || node.getAttribute('data-placeholder') || ''))
+      || candidates.find((node) => visible(node) && !node.closest('[id^="dsh-"]'));
+    if (!target) return false;
+    const prefix = `/${name} `;
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+      const current = target.value || '';
+      const next = current.startsWith(prefix) ? current : `${prefix}${current}`;
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;
+      if (setter) setter.call(target, next);
+      else target.value = next;
+    } else {
+      const current = target.textContent || '';
+      target.textContent = current.startsWith(prefix) ? current : `${prefix}${current}`;
+    }
+    target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: prefix }));
+    target.focus();
+    if (typeof target.setSelectionRange === 'function') target.setSelectionRange(target.value.length, target.value.length);
+    return true;
+  };
   const clickNewSession = () => {
     const buttons = [...document.querySelectorAll('button')];
     const target = buttons.find((button) => visible(button) && /新建会话|new session/i.test(`${button.getAttribute('aria-label') || ''} ${button.textContent || ''}`));
@@ -42,6 +63,7 @@
     { id: 'session.new', title: '新建会话', detail: '使用官方 Harness 新建会话入口', shortcut: 'Ctrl+N', run: clickNewSession },
     { id: 'side-chat.open', title: '打开 Side Chat', detail: '在当前工作区建立独立 Harness 会话窗口', shortcut: 'Ctrl+Shift+S', run: () => api.sideChat.openWindow() },
     { id: 'extensions.open', title: '打开扩展中心', detail: '查看 Skills、Plugins、Hooks 与 MCP 的来源、范围和实时状态', shortcut: '', run: () => api.extensions.openWindow() },
+    { id: 'word-docx.invoke', title: '创建或修改 Word 文档', detail: '加载内置 /word-docx Skill，在当前工作区生成可编辑 DOCX', shortcut: '', run: () => invokeSkill('word-docx') },
     { id: 'files.toggle', title: '显示或隐藏工作区文件', detail: '切换左侧文件面板', shortcut: 'Ctrl+Alt+E', run: () => togglePanel('filePanelOpen', api.workbench.setFilePanelOpen) },
     { id: 'files.focus', title: '聚焦文件搜索', detail: '打开文件面板并选中搜索框', shortcut: 'Ctrl+Alt+F', run: () => openAndFocus('filePanelOpen', api.workbench.setFilePanelOpen, '__DSH_FILES__') },
     { id: 'preview.toggle', title: '显示或隐藏应用预览', detail: '切换 HTML 与本机服务预览', shortcut: 'Ctrl+Alt+P', run: () => togglePanel('previewPanelOpen', api.workbench.setPreviewPanelOpen) },
@@ -201,7 +223,7 @@
     }
   }, true);
 
-  window.__DSH_COMMAND_PALETTE__ = Object.freeze({ open, close, focus: open, commandCount: commands.length });
+  window.__DSH_COMMAND_PALETTE__ = Object.freeze({ open, close, focus: open, invokeWord: () => invokeSkill('word-docx'), commandCount: commands.length });
   backdrop.inert = true;
   render();
   return true;
