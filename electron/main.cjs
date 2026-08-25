@@ -45,6 +45,12 @@ const {
 } = require('./network-proxy.cjs');
 const { TerminalRunner, resolveTerminalRuntime } = require('./terminal-runner.cjs');
 const {
+  TasksSubagentsController,
+  TasksSubagentsError,
+  getHarnessSubagentSelectionScript,
+  unavailableState: unavailableTasksSubagentsState
+} = require('./tasks-subagents.cjs');
+const {
   getWorkbenchPanelBootstrapScript,
   getWorkbenchPanelLayoutScript
 } = require('./workbench-panel.cjs');
@@ -61,6 +67,7 @@ let terminalWindow;
 let contextSourcesWindow;
 let pluginHealthWindow;
 let worktreesWindow;
+let tasksSubagentsWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -76,10 +83,12 @@ let pluginHealthCatalog;
 let profileBundleManager;
 let controlledPluginInstaller;
 let worktreeManager;
+let tasksSubagentsController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
 let pluginInstallPromise = null;
 let worktreeOperationPromise = null;
+let tasksSubagentsOperationPromise = null;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -170,6 +179,7 @@ const terminalPage = path.join(rootDir, 'terminal.html');
 const contextSourcesPage = path.join(rootDir, 'context-sources.html');
 const pluginHealthPage = path.join(rootDir, 'plugin-health.html');
 const worktreesPage = path.join(rootDir, 'worktrees.html');
+const tasksSubagentsPage = path.join(rootDir, 'tasks-subagents.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
@@ -203,6 +213,7 @@ const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pd
 const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
 const pluginHealthSmokeTarget = process.argv.find((argument) => argument.startsWith('--plugin-health-smoke-file='));
 const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith('--worktrees-smoke-file='));
+const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.startsWith('--tasks-subagents-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 
 const parseWindowSize = (value) => {
@@ -257,6 +268,7 @@ const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
 const contextSourcesUrlAllowed = (value) => localFileUrlMatches(value, contextSourcesPage);
 const pluginHealthUrlAllowed = (value) => localFileUrlMatches(value, pluginHealthPage);
 const worktreesUrlAllowed = (value) => localFileUrlMatches(value, worktreesPage);
+const tasksSubagentsUrlAllowed = (value) => localFileUrlMatches(value, tasksSubagentsPage);
 
 const showStatusPage = async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -995,6 +1007,11 @@ const worktreesIpcAllowed = (event) => isTrustedMainFrameEvent(
   worktreesWindow?.webContents,
   worktreesUrlAllowed
 );
+const tasksSubagentsIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  tasksSubagentsWindow?.webContents,
+  tasksSubagentsUrlAllowed
+);
 
 const sameStringArray = (left = [], right = []) => (
   left.length === right.length && left.every((value, index) => value === right[index])
@@ -1437,6 +1454,146 @@ const openWorktreesWindow = async () => {
   }
   await createWorktreesWindow();
   return { ok: true, reused: false };
+};
+
+const getTasksSubagentsState = () => {
+  const workspace = getWorkspaceState();
+  return tasksSubagentsController?.scan({
+    agentDiagnostics,
+    workspacePath: workspace.activePath,
+    workspaceName: workspace.displayName
+  }) || Promise.resolve(unavailableTasksSubagentsState());
+};
+
+const publishTasksSubagentsState = async () => {
+  const state = await getTasksSubagentsState();
+  if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) {
+    tasksSubagentsWindow.webContents.send('tasks-subagents:state', state);
+  }
+  return state;
+};
+
+const createTasksSubagentsWindow = async () => {
+  const created = new BrowserWindow({
+    width: 1040,
+    height: 760,
+    minWidth: 720,
+    minHeight: 520,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#171716',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH 任务与子代理',
+    webPreferences: {
+      preload: path.join(__dirname, 'tasks-subagents-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  tasksSubagentsWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!tasksSubagentsUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => {
+    if (!tasksSubagentsSmokeTarget) created.show();
+  });
+  created.on('closed', () => {
+    if (tasksSubagentsWindow === created) tasksSubagentsWindow = undefined;
+  });
+  await created.loadFile(tasksSubagentsPage);
+  return created;
+};
+
+const openTasksSubagentsWindow = async () => {
+  if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) {
+    if (tasksSubagentsWindow.isMinimized()) tasksSubagentsWindow.restore();
+    tasksSubagentsWindow.show();
+    tasksSubagentsWindow.focus();
+    await publishTasksSubagentsState();
+    return { ok: true, reused: true };
+  }
+  await createTasksSubagentsWindow();
+  return { ok: true, reused: false };
+};
+
+const taskActionFailure = async (error) => ({
+  ok: false,
+  message: error instanceof TasksSubagentsError ? error.message : 'Harness 任务状态已变化，请刷新后重试。',
+  state: await getTasksSubagentsState()
+});
+
+const runTasksSubagentsOperation = (operation) => {
+  if (tasksSubagentsOperationPromise) return Promise.resolve({ ok: false, message: '另一个任务面板操作仍在处理中。' });
+  tasksSubagentsOperationPromise = Promise.resolve()
+    .then(operation)
+    .catch(taskActionFailure)
+    .finally(() => { tasksSubagentsOperationPromise = null; });
+  return tasksSubagentsOperationPromise;
+};
+
+const performOpenSubagent = async (id) => {
+  if (!tasksSubagentsController || !mainWindow || mainWindow.isDestroyed() || !harnessUiReady()) {
+    throw new TasksSubagentsError('harness-unavailable', 'Harness 页面尚未就绪。');
+  }
+  const address = await tasksSubagentsController.address(id);
+  await mainWindow.webContents.executeJavaScript(getHarnessSubagentSelectionScript(address), true);
+  const loaded = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new TasksSubagentsError('reload-timeout', 'Harness 子代理记录打开超时。')), 10000);
+    timer.unref?.();
+    mainWindow.webContents.once('did-finish-load', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  mainWindow.webContents.reload();
+  await loaded;
+  await waitForHarnessSessionSelection(mainWindow.webContents, address.childSessionId);
+  const restored = await mainWindow.webContents.executeJavaScript(`(() => {
+    try { return JSON.parse(localStorage.getItem('dsh.sessions.current') || '{}'); }
+    catch { return {}; }
+  })()`, true);
+  if (restored?.subagentAddress?.parentSessionId !== address.parentSessionId
+    || restored?.subagentAddress?.childSessionId !== address.childSessionId
+    || restored?.subagentAddress?.mode !== address.mode) {
+    throw new TasksSubagentsError('selection-mismatch', 'Harness 未确认子代理的直接父子地址。');
+  }
+  mainWindow.show();
+  mainWindow.focus();
+  const state = await publishTasksSubagentsState();
+  return { ok: true, message: '已在 Harness 中打开子代理记录。', state };
+};
+
+const performPromptSubagent = async (id, text) => {
+  if (!tasksSubagentsController || !harnessUiReady()) throw new TasksSubagentsError('harness-unavailable', 'Harness 页面尚未就绪。');
+  const receipt = await tasksSubagentsController.prompt(id, text);
+  const state = await publishTasksSubagentsState();
+  return { ...receipt, state };
+};
+
+const performInterruptSubagent = async (id) => {
+  if (!tasksSubagentsController || !harnessUiReady()) throw new TasksSubagentsError('harness-unavailable', 'Harness 页面尚未就绪。');
+  const confirmation = await dialog.showMessageBox(tasksSubagentsWindow || mainWindow, {
+    type: 'warning',
+    title: '中断子代理当前轮次',
+    message: '要向 Harness 发送中断请求吗？',
+    detail: '该操作只请求停止当前轮次。Harness 返回“已受理”后，子代理仍可能短暂显示为运行中，队列里的补充消息也不会被删除。',
+    buttons: ['取消', '发送中断请求'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (confirmation.response !== 1) {
+    return { ok: false, canceled: true, message: '已取消中断请求。', state: await getTasksSubagentsState() };
+  }
+  const receipt = await tasksSubagentsController.interrupt(id);
+  const state = await publishTasksSubagentsState();
+  return { ...receipt, state };
 };
 
 const pluginMutationBusy = () => (
@@ -2222,6 +2379,7 @@ const activateWorkspace = async (workspacePath) => {
     await terminalSettlePromise;
     const workspace = await workspaceStore.activate(workspacePath);
     if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) contextSourcesWindow.close();
+    if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
     contextSourceCatalog?.setWorkspace(workspace.activePath);
     await workspaceFiles.activate(workspace.activePath);
     await previewManager.activate(workspace.activePath);
@@ -2376,6 +2534,13 @@ function installApplicationMenu() {
       submenu: [
         { label: agentStatusLabel(), enabled: false },
         { label: planModeLabel(), enabled: false },
+        {
+          label: '任务与子代理…',
+          accelerator: 'CmdOrCtrl+Shift+A',
+          enabled: harnessReady,
+          click: () => { void openTasksSubagentsWindow(); }
+        },
+        { type: 'separator' },
         {
           label: '进入 Plan 模式…',
           enabled: harnessReady && agentDiagnostics.canEnterPlan,
@@ -3039,6 +3204,30 @@ ipcMain.handle('worktrees:remove', (event, id) => {
   if (worktreeMutationBusy()) return { ok: false, message: '另一个仓库操作仍在进行。' };
   return queueWorktreeOperation(() => performWorktreeRemove(id));
 });
+ipcMain.handle('tasks-subagents:get-state', (event) => (
+  tasksSubagentsIpcAllowed(event) ? getTasksSubagentsState() : unavailableTasksSubagentsState('请求来源未通过安全校验。')
+));
+ipcMain.handle('tasks-subagents:refresh', (event) => (
+  tasksSubagentsIpcAllowed(event) ? getTasksSubagentsState() : unavailableTasksSubagentsState('请求来源未通过安全校验。')
+));
+ipcMain.handle('tasks-subagents:open', (event, id) => {
+  if (!tasksSubagentsIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id)) {
+    return { ok: false, message: '子代理打开请求未通过安全校验。' };
+  }
+  return runTasksSubagentsOperation(() => performOpenSubagent(id));
+});
+ipcMain.handle('tasks-subagents:prompt', (event, id, text) => {
+  if (!tasksSubagentsIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id) || typeof text !== 'string') {
+    return { ok: false, message: '子代理补充消息请求未通过安全校验。' };
+  }
+  return runTasksSubagentsOperation(() => performPromptSubagent(id, text));
+});
+ipcMain.handle('tasks-subagents:interrupt', (event, id) => {
+  if (!tasksSubagentsIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id)) {
+    return { ok: false, message: '子代理中断请求未通过安全校验。' };
+  }
+  return runTasksSubagentsOperation(() => performInterruptSubagent(id));
+});
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -3115,6 +3304,7 @@ const createWindow = async () => {
     stopAgentPolling();
     if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
     if (worktreesWindow && !worktreesWindow.isDestroyed()) worktreesWindow.close();
+    if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
     mainWindow = undefined;
   });
 
@@ -3667,6 +3857,145 @@ const runWorktreesSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runTasksSubagentsSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const rootSessionId = 'session-11111111-1111-4111-8111-111111111111';
+  const childSessionId = 'session-22222222-2222-4222-8222-222222222222';
+  const oneShotSessionId = 'session-33333333-3333-4333-8333-333333333333';
+  const grandchildSessionId = 'session-44444444-4444-4444-8444-444444444444';
+  const observations = [];
+  let idCounter = 0;
+  let result;
+  try {
+    const apiCall = async (_origin, method, payload) => {
+      observations.push({ method, payload });
+      if (method === 'session.list') {
+        return {
+          items: [
+            { sessionId: rootSessionId, updatedAt: 1, running: true, blank: false, cwd: 'C:\\smoke\\project', projections: { values: { title: '主任务：桌面发布' } } },
+            { sessionId: childSessionId, updatedAt: 2, running: true, blank: false, cwd: 'C:\\smoke\\project', parentSessionId: rootSessionId, origin: 'subagent', projections: { values: { title: '审核发布门禁' } } },
+            { sessionId: oneShotSessionId, updatedAt: 3, running: false, blank: false, cwd: 'C:\\smoke\\other-worktree', parentSessionId: rootSessionId, origin: 'subagent' },
+            { sessionId: grandchildSessionId, updatedAt: 4, running: false, blank: false, cwd: 'C:\\smoke\\project', parentSessionId: childSessionId, origin: 'subagent' }
+          ]
+        };
+      }
+      if (method === 'subagent.list' && payload.parentSessionId === rootSessionId) {
+        return {
+          parentAvailable: true,
+          entries: [
+            { kind: 'child', id: childSessionId, mode: 'continuable', label: '审核发布门禁', activity: 'running', hasChildren: true },
+            { kind: 'child', id: oneShotSessionId, mode: 'one-shot', activity: 'inactive', hasChildren: false }
+          ]
+        };
+      }
+      if (method === 'subagent.list' && payload.parentSessionId === childSessionId) {
+        return {
+          parentAvailable: true,
+          entries: [{ kind: 'child', id: grandchildSessionId, mode: 'one-shot', label: '检查安装包', activity: 'inactive', hasChildren: false }]
+        };
+      }
+      if (method === 'subagent.prompt') return { messageId: 'message-smoke-accepted' };
+      if (method === 'subagent.interrupt') return { accepted: true };
+      throw new Error(`unexpected smoke API call: ${method}`);
+    };
+    tasksSubagentsController = new TasksSubagentsController({
+      getOrigin: () => 'http://127.0.0.1:19001',
+      getWebContents: () => ({}),
+      apiCall,
+      readSelection: async () => rootSessionId,
+      readJobs: async () => ({
+        status: 'ready',
+        entries: [
+          { kind: 'pwsh', label: 'pnpm test DEEPSEEK_API_KEY=smoke-secret-value', status: '运行中', duration: '12 秒', live: true },
+          { kind: 'subagent', label: '历史检查', status: '已完成', duration: '8 秒', live: false }
+        ]
+      }),
+      mintId: () => (++idCounter).toString(16).padStart(24, '0')
+    });
+    workspaceStore = {
+      getState: () => ({ activePath: 'C:\\smoke\\project', displayName: 'project', isFallback: false, recentPaths: [] })
+    };
+    await createTasksSubagentsWindow();
+    const renderedInTime = await tasksSubagentsWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        if (document.querySelectorAll('.subagent-row').length === 3 && document.querySelectorAll('.job-row').length === 2) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!renderedInTime) throw new Error('tasks-subagents-smoke-timeout');
+    await tasksSubagentsWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`, true);
+    await tasksSubagentsWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const control = [...document.querySelectorAll('.subagent-actions button')].find((node) => node.textContent === '补充消息');
+      control?.click();
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(Boolean(control))));
+    })`, true);
+    const state = await getTasksSubagentsState();
+    const continuable = state.subagents.find((item) => item.kind === 'child' && item.mode === 'continuable');
+    if (!continuable) throw new Error('tasks-subagents-smoke-continuable-missing');
+    const promptReceipt = await tasksSubagentsController.prompt(continuable.id, '补充核对远端资产');
+    const interruptReceipt = await tasksSubagentsController.interrupt(continuable.id);
+    const rendered = await tasksSubagentsWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.tasksSubagentsAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      subagents: document.querySelectorAll('.subagent-row').length,
+      jobs: document.querySelectorAll('.job-row').length,
+      promptButtons: [...document.querySelectorAll('.subagent-actions button')].filter((node) => node.textContent === '补充消息').length,
+      interruptButtons: [...document.querySelectorAll('.subagent-actions button')].filter((node) => node.textContent === '中断当前轮次').length,
+      composeOpen: document.querySelectorAll('.compose.open textarea[maxlength="8000"]').length,
+      composeVisible: (() => { const node = document.querySelector('.compose.open'); return Boolean(node && getComputedStyle(node).display === 'grid' && node.getBoundingClientRect().height > 40); })(),
+      text: document.body.innerText
+    })`, true);
+    const screenshot = await tasksSubagentsWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    const promptCall = observations.find((item) => item.method === 'subagent.prompt');
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'interrupt', 'onState', 'open', 'prompt', 'refresh'])
+        && rendered.title === '任务与子代理'
+        && rendered.subagents === 3
+        && rendered.jobs === 2
+        && rendered.promptButtons === 1
+        && rendered.interruptButtons === 1
+        && rendered.composeOpen === 1
+        && rendered.composeVisible
+        && rendered.text.includes('主任务：桌面发布')
+        && rendered.text.includes('检查安装包')
+        && !rendered.text.includes('smoke-secret-value')
+        && rendered.text.includes('[已隐藏]')
+        && promptReceipt.accepted === true
+        && interruptReceipt.accepted === true
+        && promptCall?.payload?.content?.[0]?.text === '补充核对远端资产'
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      subagents: rendered.subagents,
+      jobs: rendered.jobs,
+      controlledPrompt: promptReceipt.accepted === true,
+      interruptAcknowledgement: interruptReceipt.accepted === true,
+      credentialHidden: !rendered.text.includes('smoke-secret-value'),
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error.message };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    tasksSubagentsWindow?.destroy();
+    tasksSubagentsWindow = undefined;
+    tasksSubagentsController = undefined;
+    workspaceStore = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
@@ -3728,6 +4057,12 @@ app.whenReady().then(async () => {
   }
   if (worktreesSmokeTarget) {
     await runWorktreesSmoke(worktreesSmokeTarget.slice('--worktrees-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (tasksSubagentsSmokeTarget) {
+    await runTasksSubagentsSmoke(tasksSubagentsSmokeTarget.slice('--tasks-subagents-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;
@@ -3800,6 +4135,10 @@ app.whenReady().then(async () => {
   const toggleRecovery = await profileBundleManager.recoverPending();
   pluginRecoveryOutcomes = Object.freeze([...lifecycleRecovery, ...toggleRecovery]);
   supervisor = createSupervisor(dataRoot, workspace.activePath);
+  tasksSubagentsController = new TasksSubagentsController({
+    getOrigin: () => harnessOrigin,
+    getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined)
+  });
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   installApplicationMenu();
   await createWindow();

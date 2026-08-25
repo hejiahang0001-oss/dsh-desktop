@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH 任务与子代理</title>
+  <link rel="stylesheet" href="assets/tasks-subagents.css">
+  <script defer src="assets/tasks-subagents.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="identity">
+      <div class="title-row"><h1>任务与子代理</h1><span class="mode">Harness 实时状态</span></div>
+      <p>查看主任务、子代理、后台任务和等待确认；操作始终交回 DeepSeek Harness。</p>
+    </div>
+    <button id="refresh" type="button">刷新</button>
+    <button id="close" type="button">关闭</button>
+  </header>
+  <main>
+    <section class="summary-section" aria-labelledby="current-title">
+      <div class="section-heading"><div><h2 id="current-title">当前任务</h2><p id="root-line">正在读取 Harness 会话…</p></div></div>
+      <div id="summary" class="summary-grid" aria-live="polite"></div>
+    </section>
+    <section aria-labelledby="subagents-title">
+      <div class="section-heading">
+        <div><h2 id="subagents-title">子代理</h2><p>普通会话分支不会出现在这里；工作目录按当前 DSH 工作树核对，共享目录只提示、不自动迁移。</p></div>
+      </div>
+      <div id="subagent-list" class="subagent-list" aria-live="polite" aria-busy="true"><p class="empty-state">正在读取子代理目录…</p></div>
+    </section>
+    <section aria-labelledby="jobs-title">
+      <div class="section-heading">
+        <div><h2 id="jobs-title">后台任务</h2><p>只读显示当前会话的上游任务镜像；状态和失败原因由 Harness 提供。</p></div>
+        <span class="read-only">只读</span>
+      </div>
+      <div id="job-list" class="job-list" aria-live="polite"><p class="empty-state">当前没有后台任务。</p></div>
+    </section>
+  </main>
+  <footer>
+    <span id="status" role="status">补充消息进入 FIFO 队列；中断“已受理”不等于“已经停止”。</span>
+    <span>Esc 关闭 · F5 刷新</span>
+  </footer>
+</body>
+</html>

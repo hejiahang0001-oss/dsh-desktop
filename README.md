@@ -48,6 +48,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Extension health and safe toggles** — inspect the fixed Harness dependency closure, shared fallback links, initialized Profiles, ordered bundle layers, and Profile-declared pnpm dependencies; only already-installed external bundle dependencies can be enabled or disabled through a confirmed, atomic, rollback-capable restart.
 - **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **Isolated Git worktrees** — create a generated DSH-owned branch and worktree, switch the active Harness workspace, and safely reclaim only DSH-owned worktree directories. External worktrees stay read-only; dirty removal creates a private recovery checkpoint and retains the branch.
+- **Harness-native tasks and subagents** — inspect the authoritative subagent tree, live background-job mirror, approval count, and working-directory sharing risk; open the exact child transcript, queue a bounded follow-up to a continuable child, or request interruption without treating acknowledgement as completion.
 - **In-app network settings** — choose direct access, the current Windows system proxy, or a credential-free custom HTTP(S) proxy; test DeepSeek connectivity before saving and keep loopback services and the integrated terminal outside that route.
 - **Reliable copy actions** — Harness can write sanitized text to the clipboard from its trusted main page, while clipboard reads, subframes, and unrelated permission requests remain denied.
 - **Packaged runtime** — the installer includes pinned Node.js and Harness runtimes; users do not need to install Node.js first.
@@ -68,7 +69,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.16 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds a local worktree manager with atomic DSH ownership, generated branches and paths, fixed create/switch/reveal/reclaim actions, default-cancel native confirmations, read-only external worktrees, and private recovery checkpoints before reclaiming dirty managed worktrees. [`DSH-Desktop-Setup-0.5.16.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v0.5.16/DSH-Desktop-Setup-0.5.16.exe) has passed packaging, overwrite installation, installed smoke, CI, publication, and remote-asset verification. The front-page download remains Stable.
+**V0.5.17 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds a local Tasks/Subagents window over the official direct-child catalogs and background-job mirror, keeps ordinary forks out of the subagent tree, shows working-directory sharing, and revalidates the exact durable address before opening, prompting, or interrupting a child. The final `DSH-Desktop-Setup-0.5.17.exe` passes source, packaged, overwrite-installation, installed-runtime, visual, security, and semantic-data gates; CI and remote three-asset verification remain before publication. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -99,7 +100,7 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.16 release notes](docs/RELEASE_NOTES_v0.5.16.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.17 release notes](docs/RELEASE_NOTES_v0.5.17.md).
 
 ## Security and current limits
 
@@ -139,7 +140,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.16 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版增加隔离工作树管理：软件以原子记录证明 DSH 所有权，只生成受控分支和目录，外部及仿冒工作树保持只读；创建、切换和回收均采用原生默认取消确认，回收有修改的工作树前先建立或复用私有恢复点并保留分支。[`DSH-Desktop-Setup-0.5.16.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v0.5.16/DSH-Desktop-Setup-0.5.16.exe) 已完成打包、覆盖安装、安装版 smoke、CI、Pre-release 发布和远端资产核验。V0.5.4 继续保持 Stable：
+V0.5.17 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版增加“任务与子代理”窗口：直接读取上游子代理目录和后台任务镜像，普通会话分支不会伪装成子代理；显示工作目录共享风险，并在打开记录、补充消息或中断前重新核对直接父子地址。最终安装包 `DSH-Desktop-Setup-0.5.17.exe` 的源码、打包、覆盖安装、安装版运行、视觉、安全与数据保留门禁均已通过，完成 CI 和远端三资产核验后发布。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
@@ -163,6 +164,8 @@ V0.5.16 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1
 - `Ctrl+Alt+H` 打开最近 12 个本地检查点，显示来源、时间、当前影响、索引、回收站和会话回合关联摘要；
 - “只恢复代码”继续使用原生默认取消确认和 safety checkpoint；“建立会话分支”调用 Harness 官方 `session.fork`，按已完成回合建立并切换到子会话，原会话、当前代码和 Git 索引不变；
 - 旧版检查点、无当前会话或尚未完成首个回合时建立的检查点仍可恢复代码，但不会显示为可建立会话分支；
+- `Ctrl+Shift+W` 管理 DSH 创建的隔离工作树；外部工作树只读，回收有修改的受管工作树前建立私有恢复点并保留分支；
+- `Ctrl+Shift+A` 打开“任务与子代理”，查看 Harness 确认的主任务、子代理、后台任务、等待确认和工作目录共享；可继续子代理支持受控补充消息和当前轮次中断，一次性子代理保持只读；
 - 历史界面只接收严格检查点 ID 和有界摘要，不接收 commit/tree/ref、文件路径或任意 Git 参数；伪造或损坏的私有 ref 被忽略；
 - `Ctrl+,`、模型菜单或命令面板可打开“网络与代理”，选择直连、Windows 系统代理或无账号密码的自定义 HTTP(S) 代理，并在保存前测试 DeepSeek API 连通性；
 - 软件代理只传给 Harness 外部请求；`127.0.0.1`、`localhost`、`::1` 与集成终端不受影响，软件设置会隔离继承的代理环境变量；
