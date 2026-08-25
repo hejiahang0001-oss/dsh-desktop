@@ -6,7 +6,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('controlled plugin install is fixed-catalog, native-confirmed, busy-gated, and rollback-capable', () => {
+test('controlled plugin lifecycle is fixed-catalog, native-confirmed, busy-gated, and crash-recoverable', () => {
   const main = read('electron/main.cjs');
   const installer = read('electron/controlled-plugin-installer.cjs');
   const preload = read('electron/plugin-health-preload.cjs');
@@ -14,21 +14,29 @@ test('controlled plugin install is fixed-catalog, native-confirmed, busy-gated, 
   const manifest = JSON.parse(read('package.json'));
 
   assert.match(main, /ipcMain\.handle\('plugin-health:install'/);
+  assert.match(main, /ipcMain\.handle\('plugin-health:lifecycle'/);
   assert.match(main, /if \(!pluginHealthIpcAllowed\(event\)\)/);
   assert.match(main, /pluginTogglePromise \|\| pluginInstallPromise/);
-  assert.match(main, /buttons: \['取消', '安装并重启 Harness'\]/);
+  assert.match(main, /\['install', 'upgrade', 'uninstall', 'rollback'\]\.includes\(action\)/);
+  assert.match(main, /buttons: \['取消', `\$\{selectedAction\.verb\}并重启 Harness`\]/);
   assert.match(main, /defaultId: 0/);
   assert.match(main, /cancelId: 0/);
-  assert.match(main, /controlledPluginInstaller\.install/);
+  assert.match(main, /controlledPluginInstaller\[selectedAction\.method\]/);
   assert.match(main, /controlledPluginInstaller\.commit/);
   assert.match(main, /controlledPluginInstaller\.rollback/);
-  assert.match(main, /verifiedDependency\?\.compatibility\?\.status !== 'verified'/);
+  assert.match(main, /verifiedDependency\?\.compatibility\?\.status === 'verified'/);
   assert.match(preload, /install: \(profileId, catalogId\)/);
+  assert.match(preload, /lifecycle: \(profileId, catalogId, action\)/);
   assert.doesNotMatch(preload, /packageSpec|pnpmArgs|command/);
 
   assert.match(installer, /id: 'catppuccin-0\.3\.1'/);
   assert.match(installer, /name: '@nonamelego\/dsh-catppuccin'/);
   assert.match(installer, /version: '0\.3\.1'/);
+  assert.match(installer, /'0\.3\.0': Object\.freeze/);
+  assert.match(installer, /LIFECYCLE_JOURNAL_NAME = 'package\.json\.dsh-desktop-plugin-transaction\.json'/);
+  assert.match(installer, /LAST_KNOWN_GOOD_NAME = 'package\.json\.dsh-desktop-plugin-last-known-good\.json'/);
+  assert.match(installer, /async recoverPending/);
+  assert.match(installer, /rollbackLastKnownGood/);
   assert.match(installer, /BUNDLED_PNPM_VERSION = '11\.19\.0'/);
   assert.match(installer, /'--save-exact'/);
   assert.match(installer, /'--ignore-scripts'/);

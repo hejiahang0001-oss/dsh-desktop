@@ -96,28 +96,36 @@
       const text = document.createElement('span');
       text.textContent = target.available ? `Profile：${target.profileName}` : `Profile：${target.profileName}（尚未初始化）`;
       row.append(text);
-      if (target.installed) {
-        row.append(makeBadge('installed'));
-      } else if (target.canInstall) {
-        const install = document.createElement('button');
-        install.type = 'button';
-        install.className = 'install-button';
-        install.textContent = `安装到 ${target.profileName}`;
-        install.addEventListener('click', async () => {
-          install.disabled = true;
-          status.textContent = `正在安装 ${item.name}@${item.version}；请勿关闭软件…`;
+      const actions = document.createElement('div');
+      actions.className = 'catalog-actions';
+      if (target.installed) actions.append(makeBadge('installed'));
+      let actionCount = 0;
+      const addLifecycleButton = (action, caption, className = '') => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `lifecycle-button ${className}`.trim();
+        button.dataset.action = action;
+        button.textContent = caption;
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          status.textContent = `正在${caption} ${item.name}；请勿关闭软件…`;
           try {
-            const result = await api.install(target.profileId, item.id);
+            const result = await api.lifecycle(target.profileId, item.id, action);
             if (result?.state) render(result.state);
-            status.textContent = result?.message || (result?.ok ? '插件安装完成。' : '插件未安装。');
+            status.textContent = result?.message || (result?.ok ? '插件生命周期操作完成。' : '插件状态未更改。');
           } catch {
-            status.textContent = '受控插件安装失败；Profile 保持或恢复为安装前状态。';
-          } finally { install.disabled = false; }
+            status.textContent = '受控插件生命周期操作失败；将按持久事务保持或恢复原状态。';
+          } finally { button.disabled = false; }
         });
-        row.append(install);
-      } else {
-        row.append(makeBadge(target.available ? 'blocked' : 'unavailable'));
-      }
+        actions.append(button);
+        actionCount += 1;
+      };
+      if (target.canInstall) addLifecycleButton('install', `安装到 ${target.profileName}`, 'install-button');
+      if (target.canUpgrade) addLifecycleButton('upgrade', `升级到 ${item.version}`, 'upgrade-button');
+      if (target.canUninstall) addLifecycleButton('uninstall', '卸载', 'uninstall-button');
+      if (target.canRollback) addLifecycleButton('rollback', '回退', 'rollback-button');
+      if (actionCount === 0) actions.append(makeBadge(target.available ? 'blocked' : 'unavailable'));
+      row.append(actions);
       targets.append(row);
     }
     card.append(targets);
@@ -198,9 +206,11 @@
     }
     const recovery = state.recovery || [];
     const recoveryMessage = recovery.find((item) => item.status === 'rolled-back')
-      ? '已恢复一次中断的扩展变更；Profile 已回到变更前状态。'
+      ? '已恢复一次中断的插件事务；Profile 已回到变更前状态。'
+      : recovery.find((item) => item.status === 'committed')
+        ? '已完成一次提交阶段中断的插件事务；最近可用回退点保持有效。'
       : recovery.find((item) => ['failed', 'conflict'].includes(item.status))
-        ? '检测到无法自动处理的扩展变更，请先检查 Profile 备份。'
+        ? '检测到无法安全自动处理的插件事务；该 Profile 已封锁，请先检查事务记录。'
         : '';
     status.textContent = recoveryMessage || (state.available === false
       ? (state.message || '扩展健康暂时不可用。')
