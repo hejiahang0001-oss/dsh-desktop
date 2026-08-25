@@ -73,7 +73,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.22 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/powerpoint-pptx` Skill and fixed offline PPTX tool for editable text, shapes, tables, native charts with embedded Excel data, workspace PNG/JPEG images, a real master, two layouts, speaker notes, exact replacement, and strict risk checks. Source discovery, a real credential-backed Agent invocation, Microsoft PowerPoint opening, and page-by-page rendering have passed; package, overwrite-install, CI, and remote release gates remain required before publication. The candidate installer name is `DSH-Desktop-Setup-0.5.22.exe`; Stable and the front-page download remain V0.5.4.
+**V0.5.22 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/powerpoint-pptx` Skill and fixed offline PPTX tool for editable text, shapes, tables, native charts with embedded Excel data, workspace PNG/JPEG images, a real master, two layouts, speaker notes, exact replacement, and strict risk checks. Source, real Agent, Microsoft PowerPoint, rendering, package, overwrite-install, semantic-data, CI, and clean remote-download gates have passed. Download `DSH-Desktop-Setup-0.5.22.exe` from the [V0.5.22 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.22); Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -151,7 +151,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.22 产品 Latest 候选版继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/powerpoint-pptx` Skill：可在当前工作区离线生成和受控修改可编辑 PPTX，支持原生文本、形状、表格、带内嵌 Excel 数据的图表、PNG/JPEG、真实母版、两套版式、演讲者备注和严格风险检查。源码发现、真实 Key Agent 调用、Microsoft PowerPoint 打开和逐页渲染已通过；完成打包、覆盖安装、安装版运行、用户数据保留、PR/CI 和远端三资产门禁后才发布。候选安装包名为 `DSH-Desktop-Setup-0.5.22.exe`；V0.5.4 继续保持 Stable：
+V0.5.22 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/powerpoint-pptx` Skill：可在当前工作区离线生成和受控修改可编辑 PPTX，支持原生文本、形状、表格、带内嵌 Excel 数据的图表、PNG/JPEG、真实母版、两套版式、演讲者备注和严格风险检查。源码发现、真实 Key Agent、Microsoft PowerPoint、逐页渲染、打包、覆盖安装、安装版运行、用户数据保留、PR/CI 和远端干净回下载门禁均已通过；请从 [V0.5.22 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.22) 下载 `DSH-Desktop-Setup-0.5.22.exe`，V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
