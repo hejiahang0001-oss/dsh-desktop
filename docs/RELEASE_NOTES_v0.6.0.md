@@ -17,11 +17,14 @@ V0.6.0 closes the first integrated parallel-work, extension, and editable Office
 
 ## Verification status
 
-- The focused Office-center and three Office-preservation suite passes 13/13. The complete source suite passes 251/251, the production dependency audit reports no known vulnerability, and the unpacked real-window smoke renders three Office cards, three integration nodes, and three enabled fixed actions without clipping or overlap. Final package, overwrite-install, semantic-data, real Office, complete runtime, CI, and remote three-asset gates must pass before the V0.6.0 Pre-release is published.
+- The focused Office-center and three Office-preservation suite passes 13/13. The complete source suite passes 251/251, the production dependency audit reports no known vulnerability, and the unpacked real-window smoke renders three Office cards, three integration nodes, and three enabled fixed actions without clipping or overlap.
+- Unpacked and installed ten-part GUI matrices plus terminal smokes pass. Source, unpacked, and installed Harness discovery finds all three Office Skills as model-invocable. Microsoft Word, Excel, and PowerPoint 16 each start the maintained acceptance file in an isolated process and remain responsive.
+- Silent overwrite registers V0.6.0 and preserves all 27 credential-free semantic files byte-for-byte. The installed tree contains every unpacked file at equal length plus only the normal uninstaller; both trees have zero reparse points and matching `app.asar` SHA-256 `53F51881A682B043CD4193360217D761CE5F079D4B53FB10A64D64EF10BC2D3A`.
+- Implementation PR [#38](https://github.com/hejiahang0001-oss/dsh-desktop/pull/38) and its main follow-up CI pass all three jobs. The remote three-asset publication check is the only remaining release gate.
 
 ## Current limits
 
 - The center is an invocation and readiness surface, not an Office editor. Microsoft Office or a compatible editor remains authoritative for final editing and rendering.
 - Automatic update remains disabled because the Windows installer is unsigned and the signature, publisher, trust-chain, and Stable/Pre-release feed-separation gates are not complete.
 
-Candidate installer: `DSH-Desktop-Setup-0.6.0.exe`. Stable remains V0.5.4 unless the maintainer explicitly promotes a tested Latest build.
+Final installer: `DSH-Desktop-Setup-0.6.0.exe` — 184,045,391 bytes, SHA-256 `863A10686ABBB317E2AD564CB4F1E9E07848ED930721626459945D7062F0BEAF`. Its 188,843-byte blockmap hashes to `6177FEF8701C0F14BD038B3ED210A641D5C805D99DE27C5C1F1CB76A2C28EB4C`; the checksum manifest hashes to `5528CC5FCB0F623822E7422F48633B63E60DC892B7348A63CCF2F09FAAE1F252`. Stable remains V0.5.4 unless the maintainer explicitly promotes a tested Latest build.
