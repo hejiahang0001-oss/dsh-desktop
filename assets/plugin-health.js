@@ -2,6 +2,8 @@
   const api = window.pluginHealthAPI;
   if (!api) return;
   const root = document.getElementById('profiles-root');
+  const extensionSurfaces = document.getElementById('extension-surfaces');
+  const extensionIssues = document.getElementById('extension-issues');
   const runtime = document.getElementById('runtime');
   const issues = document.getElementById('issues');
   const catalog = document.getElementById('catalog');
@@ -12,7 +14,7 @@
   const closeButton = document.getElementById('close');
 
   const empty = (node) => { while (node.firstChild) node.firstChild.remove(); };
-  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '不可用', ready: '可解析', installed: '已安装', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', verified: '兼容已验证', review: '需要审查', 'not-bundle': '不是扩展层' }[value] || '未知');
+  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '实时未连接', unsupported: '上游未提供', ready: '已就绪', installed: '已安装', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', verified: '兼容已验证', review: '需要审查', disabled: '已禁用', pending: '等待加载', loading: '加载中', unloading: '卸载中', failed: '加载失败', 'not-bundle': '不是扩展层' }[value] || '未知');
   const makeBadge = (value) => {
     const node = document.createElement('span');
     node.className = `badge ${value || ''}`;
@@ -32,6 +34,49 @@
     const patch = value.bundlePatch === 'ready' ? 'Patch 正常' : value.bundlePatch === 'missing' ? 'Patch 缺失' : 'Patch 已阻止';
     const peer = value.peers || {};
     return `${source} · ${platform} · ${patch} · Peer ${peer.healthy || 0}/${peer.expected || 0}`;
+  };
+  const extensionSurfaceCard = (item) => {
+    const card = document.createElement('article');
+    card.className = `surface-card ${item.id || ''}`;
+    const header = document.createElement('div');
+    header.className = 'surface-header';
+    const identity = document.createElement('div');
+    const title = document.createElement('h3'); title.textContent = item.title || '未命名能力';
+    const subtitle = document.createElement('p'); subtitle.textContent = item.subtitle || '';
+    identity.append(title, subtitle); header.append(identity, makeBadge(item.status));
+    const metrics = document.createElement('div'); metrics.className = 'surface-metrics';
+    for (const [number, caption] of [[item.active || 0, '活动'], [item.disabled || 0, '禁用'], [item.failed || 0, '失败']]) {
+      const node = document.createElement('div');
+      const value = document.createElement('strong'); value.textContent = String(number);
+      const text = document.createElement('span'); text.textContent = caption;
+      node.append(value, text); metrics.append(node);
+    }
+    const facts = document.createElement('dl'); facts.className = 'surface-facts';
+    for (const [term, value] of [['来源', item.source], ['范围', item.scope], ['权限', item.permission], ['版本', item.version || '跟随 Harness']]) {
+      const dt = document.createElement('dt'); dt.textContent = term;
+      const dd = document.createElement('dd'); dd.textContent = value || '未确认';
+      facts.append(dt, dd);
+    }
+    const message = document.createElement('p'); message.className = 'surface-message'; message.textContent = item.message || '';
+    card.append(header, metrics, facts, message);
+    return card;
+  };
+
+  const renderExtensionCenter = (center = {}) => {
+    empty(extensionSurfaces); empty(extensionIssues);
+    for (const item of center.surfaces || []) extensionSurfaces.append(extensionSurfaceCard(item));
+    if ((center.surfaces || []).length === 0) {
+      const node = document.createElement('p'); node.className = 'empty-state'; node.textContent = '扩展能力状态尚未初始化。'; extensionSurfaces.append(node);
+    }
+    for (const issue of center.issues || []) {
+      const row = document.createElement('div'); row.className = 'extension-issue-row';
+      const category = document.createElement('span'); category.textContent = ({ skills: 'Skills', plugins: 'Plugins', mcp: 'MCP' })[issue.category] || '扩展';
+      const name = document.createElement('code'); name.textContent = issue.moduleName || '未知加载项';
+      row.append(category, name, makeBadge(issue.status)); extensionIssues.append(row);
+    }
+    if ((center.issues || []).length === 0 && center.available) {
+      const node = document.createElement('p'); node.className = 'inventory-ok'; node.textContent = '官方实时清单没有报告禁用、过渡中或失败的加载项。'; extensionIssues.append(node);
+    }
   };
   const packageRow = (item, kind, profile) => {
     const row = document.createElement('li');
@@ -133,7 +178,8 @@
   };
 
   const render = (state = {}) => {
-    root.textContent = state.profilesRoot || '$DSH_HOME/profiles';
+    root.textContent = state.profilesRoot || '本机 Harness 配置 / profiles';
+    renderExtensionCenter(state.extensionCenter || {});
     empty(runtime); empty(issues); empty(catalog); empty(profiles);
     const rt = state.runtime || {};
     const title = document.createElement('div');
@@ -213,14 +259,14 @@
         ? '检测到无法安全自动处理的插件事务；该 Profile 已封锁，请先检查事务记录。'
         : '';
     status.textContent = recoveryMessage || (state.available === false
-      ? (state.message || '扩展健康暂时不可用。')
+      ? (state.message || '扩展中心暂时不可用。')
       : pnpm.status !== 'ready'
-        ? '扩展健康检查完成；软件随附 pnpm 暂不可用，安装入口已关闭。'
-        : (state.message || '扩展健康检查完成。'));
+        ? '扩展状态检查完成；软件随附 pnpm 暂不可用，安装入口已关闭。'
+        : (state.extensionCenter?.message || state.message || '扩展状态检查完成。'));
   };
 
   const refresh = async () => {
-    refreshButton.disabled = true; status.textContent = '正在重新核对扩展依赖…';
+    refreshButton.disabled = true; status.textContent = '正在从 Harness 重新核对扩展状态…';
     try { render(await api.refresh()); } catch { status.textContent = '刷新失败；没有放宽文件或 IPC 边界。'; }
     finally { refreshButton.disabled = false; }
   };
@@ -230,5 +276,5 @@
     if (event.key === 'Escape') window.close();
     if (event.key === 'F5') { event.preventDefault(); void refresh(); }
   });
-  api.getState().then(render).catch(() => { status.textContent = '扩展健康暂时不可用。'; });
+  api.getState().then(render).catch(() => { status.textContent = '扩展中心暂时不可用。'; });
 })();

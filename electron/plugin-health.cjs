@@ -8,6 +8,11 @@ const MAX_MANIFEST_BYTES = 1_048_576;
 const MAX_PROFILES = 16;
 const MAX_PACKAGES = 1_024;
 const PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
+const CAPABILITY_PACKAGES = Object.freeze({
+  skills: '@deepseek-ai/dsh-skill',
+  mcp: '@deepseek-ai/dsh-mcp-client',
+  pluginInventory: '@deepseek-ai/dsh-host-plugin-inventory'
+});
 
 const immutable = (value) => Object.freeze(value);
 
@@ -120,6 +125,28 @@ const runtimeClosure = async (dshPackageDir, installRoot) => {
     }
   }
   return packages;
+};
+
+const inspectRuntimeCapabilities = async (closure) => {
+  const result = {};
+  for (const [id, packageName] of Object.entries(CAPABILITY_PACKAGES)) {
+    const packageDir = closure.get(packageName);
+    if (!packageDir) {
+      result[id] = immutable({ status: 'missing', packageName, version: '' });
+      continue;
+    }
+    try {
+      const manifest = await readJsonObject(path.join(packageDir, 'package.json'));
+      result[id] = immutable({
+        status: manifest.name === packageName ? 'ready' : 'invalid',
+        packageName,
+        version: typeof manifest.version === 'string' ? manifest.version : ''
+      });
+    } catch {
+      result[id] = immutable({ status: 'invalid', packageName, version: '' });
+    }
+  }
+  return immutable(result);
 };
 
 const inspectFallback = async ({ fallbackRoot, expected }) => {
@@ -268,7 +295,7 @@ class PluginHealthCatalog {
     } catch {
       return immutable({
         available: false,
-        profilesRoot: '$DSH_HOME/profiles',
+        profilesRoot: '本机 Harness 配置 / profiles',
         runtime: immutable({ status: 'unavailable', version: '', expected: 0, healthy: 0, missing: 0, misdirected: 0, issues: immutable([]) }),
         profiles: immutable([]),
         message: '无法读取当前固定 Harness 运行时。'
@@ -288,8 +315,12 @@ class PluginHealthCatalog {
     for (const entry of entries) profiles.push(await this._profile(entry));
     return immutable({
       available: true,
-      profilesRoot: '$DSH_HOME/profiles',
-      runtime: immutable({ ...runtime, version: typeof dshManifest.version === 'string' ? dshManifest.version : '' }),
+      profilesRoot: '本机 Harness 配置 / profiles',
+      runtime: immutable({
+        ...runtime,
+        version: typeof dshManifest.version === 'string' ? dshManifest.version : '',
+        capabilities: await inspectRuntimeCapabilities(closure)
+      }),
       profiles: immutable(profiles),
       profileLimitReached: entries.length >= MAX_PROFILES,
       message: '只读取包名、版本、解析结果和链接元数据；不会读取插件配置、补丁正文、凭据或会话内容。'
@@ -306,10 +337,12 @@ class PluginHealthCatalog {
 }
 
 module.exports = {
+  CAPABILITY_PACKAGES,
   MAX_MANIFEST_BYTES,
   MAX_PACKAGES,
   MAX_PROFILES,
   PluginHealthCatalog,
+  inspectRuntimeCapabilities,
   inspectFallback,
   runtimeClosure,
   validPackageName

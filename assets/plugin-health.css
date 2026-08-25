@@ -16,6 +16,25 @@ main { display: grid; gap: 22px; width: min(100%, 1080px); margin: 0 auto; paddi
 .section-heading { margin-bottom: 10px; }
 .section-heading h2 { margin: 0; font-size: 13px; font-weight: 680; }
 .section-heading p { margin: 3px 0 0; color: #aaa7a1; font-size: 10px; }
+.surface-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.surface-card { min-width: 0; padding: 13px; border: 1px solid #3d3b38; border-radius: 9px; background: #20201f; }
+.surface-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.surface-header > div { min-width: 0; }
+.surface-header h3 { margin: 0; font-size: 13px; }
+.surface-header p, .surface-message { margin: 4px 0 0; color: #aaa7a1; font-size: 9px; line-height: 1.45; }
+.surface-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 10px; }
+.surface-metrics div { padding: 7px; border-radius: 6px; background: #292927; }
+.surface-metrics strong, .surface-metrics span { display: block; }
+.surface-metrics strong { font: 650 14px/1.2 "Cascadia Code", Consolas, monospace; }
+.surface-metrics span { margin-top: 2px; color: #aaa7a1; font-size: 8px; }
+.surface-facts { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 7px; margin: 10px 0 0; font-size: 9px; line-height: 1.45; }
+.surface-facts dt { color: #777570; }
+.surface-facts dd { min-width: 0; margin: 0; color: #c8c6c1; overflow-wrap: anywhere; }
+.extension-issues { display: grid; gap: 5px; margin-top: 8px; }
+.extension-issue-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 9px; border: 1px solid #3d3b38; border-radius: 7px; background: #20201f; }
+.extension-issue-row > span:first-child { color: #aaa7a1; font-size: 9px; }
+.extension-issue-row code { min-width: 0; overflow: hidden; color: #d8d6d1; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-ok { margin: 0; padding: 8px 10px; border-radius: 7px; color: #8ddbb3; background: #203d31; font-size: 9px; }
 .runtime-card, .catalog-card, .profile-card { border: 1px solid #3d3b38; border-radius: 9px; background: #20201f; }
 .runtime-card { padding: 14px; }
 .runtime-title { justify-content: space-between; }
@@ -28,7 +47,8 @@ main { display: grid; gap: 22px; width: min(100%, 1080px); margin: 0 auto; paddi
 .metrics span { margin-top: 2px; color: #aaa7a1; font-size: 9px; }
 .badge { flex: none; padding: 2px 6px; border-radius: 999px; color: #c8c6c1; background: #343330; font-size: 9px; }
 .badge.healthy, .badge.ready, .badge.verified, .badge.installed { color: #8ddbb3; background: #203d31; }
-.badge.degraded, .badge.missing, .badge.misdirected, .badge.invalid, .badge.blocked, .badge.review, .badge.not-bundle { color: #edc16c; background: #423722; }
+.badge.degraded, .badge.missing, .badge.misdirected, .badge.invalid, .badge.blocked, .badge.review, .badge.not-bundle, .badge.disabled, .badge.pending, .badge.loading, .badge.unloading, .badge.failed { color: #edc16c; background: #423722; }
+.badge.unsupported, .badge.unavailable { color: #aaa7a1; background: #343330; }
 .issue-list, .profile-list { display: grid; gap: 7px; margin-top: 7px; }
 .catalog-list { display: grid; gap: 8px; }
 .catalog-card { padding: 13px; }
@@ -64,6 +84,6 @@ main { display: grid; gap: 22px; width: min(100%, 1080px); margin: 0 auto; paddi
 .package-columns .empty-package { display: block; color: #aaa7a1; font-size: 10px; text-align: center; }
 .empty-state { margin: 0; padding: 18px; border: 1px dashed #3d3b38; border-radius: 9px; color: #aaa7a1; text-align: center; font-size: 11px; }
 footer { display: flex; gap: 20px; justify-content: space-between; padding: 9px 18px; border-top: 1px solid #3d3b38; color: #aaa7a1; background: #20201f; font-size: 9px; }
-@media (max-width: 780px) { .package-columns { grid-template-columns: 1fr; } footer span:last-child { display: none; } }
-@media (forced-colors: active) { .toolbar, footer, button, .runtime-card, .catalog-card, .profile-card, .issue-row { border-color: CanvasText; } }
+@media (max-width: 780px) { .surface-grid, .package-columns { grid-template-columns: 1fr; } footer span:last-child { display: none; } }
+@media (forced-colors: active) { .toolbar, footer, button, .surface-card, .runtime-card, .catalog-card, .profile-card, .issue-row, .extension-issue-row { border-color: CanvasText; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

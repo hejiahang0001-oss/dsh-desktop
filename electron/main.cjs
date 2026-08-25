@@ -15,6 +15,7 @@ const {
   resolveControlledPnpmRuntime
 } = require('./controlled-plugin-installer.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
+const { buildExtensionCenter, callHarnessRemote } = require('./extension-center.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
   captureHarnessCheckpointLink,
@@ -1372,16 +1373,28 @@ const openContextSourcesWindow = async () => {
   return { ok: true, reused: false };
 };
 
-const unavailablePluginHealth = (message = '扩展健康尚未初始化。') => ({
+const unavailablePluginHealth = (message = '扩展中心尚未初始化。') => ({
   available: false,
-  profilesRoot: '$DSH_HOME/profiles',
+  profilesRoot: '本机 Harness 配置 / profiles',
   runtime: { status: 'unavailable', version: '', expected: 0, healthy: 0, missing: 0, misdirected: 0, issues: [] },
   profiles: [],
+  extensionCenter: buildExtensionCenter({ inventoryError: message }),
   message
 });
 
+const readHarnessExtensionInventory = async () => {
+  if (!harnessOrigin || !harnessUiReady()) return { inventoryError: 'Harness 尚未就绪，无法读取实时扩展清单。' };
+  try {
+    const inventory = await callHarnessRemote(harnessOrigin, 'pluginInventory', 'list', {}, { timeoutMs: 3000 });
+    return { inventory };
+  } catch (error) {
+    return { inventoryError: `Harness 实时扩展清单不可用：${error?.message || String(error)}` };
+  }
+};
+
 const getPluginHealthState = async () => {
   const state = pluginHealthCatalog ? await pluginHealthCatalog.scan() : unavailablePluginHealth();
+  const live = await readHarnessExtensionInventory();
   const pnpm = controlledPluginInstaller?.getRuntimeStatus() || { status: 'unavailable', version: '', registry: 'registry.npmjs.org' };
   const catalog = await Promise.all(controlledCatalog().map(async (item) => ({
     ...item,
@@ -1415,6 +1428,12 @@ const getPluginHealthState = async () => {
   })));
   return {
     ...state,
+    extensionCenter: buildExtensionCenter({
+      runtimeVersion: state.runtime?.version || '',
+      runtimeCapabilities: state.runtime?.capabilities || {},
+      profiles: state.profiles,
+      ...live
+    }),
     pnpm,
     catalog,
     recovery: pluginRecoveryOutcomes.map((item) => ({ ...item }))
@@ -1431,7 +1450,7 @@ const createPluginHealthWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#171716',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH 扩展健康',
+    title: 'DSH 扩展中心',
     webPreferences: {
       preload: path.join(__dirname, 'plugin-health-preload.cjs'),
       contextIsolation: true,
@@ -2867,7 +2886,7 @@ function installApplicationMenu() {
           click: () => { void openContextSourcesWindow(); }
         },
         {
-          label: '扩展健康…',
+          label: '扩展中心…',
           click: () => { void openPluginHealthWindow(); }
         },
         {
@@ -3492,6 +3511,11 @@ ipcMain.handle('side-chat:open-window', (event) => (
     ? openSideChatWindow()
     : { ok: false, reason: 'untrusted', message: 'Side Chat 请求未通过安全校验。' }
 ));
+ipcMain.handle('extensions:open-window', (event) => (
+  harnessIpcAllowed(event)
+    ? openPluginHealthWindow()
+    : { ok: false, message: '扩展中心请求未通过安全校验。' }
+));
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -3758,11 +3782,33 @@ const runHarnessSmoke = async (target) => {
       workspacePath: supervisor.getState().workspacePath,
       agentState: { status: 'ready', pendingCount: 0, queuedCount: 0 }
     });
+    const liveInventory = await callHarnessRemote(url, 'pluginInventory', 'list');
+    const runtimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
+    const runtimeCatalog = new PluginHealthCatalog({
+      harnessHome: path.join(smokeRoot, 'harness'),
+      dshPackageDir: path.resolve(path.dirname(runtimePaths.dshBinPath), '..')
+    });
+    const runtimeState = await runtimeCatalog.scan();
+    const extensionCenter = buildExtensionCenter({
+      runtimeVersion: runtimeState.runtime?.version || '',
+      runtimeCapabilities: runtimeState.runtime?.capabilities || {},
+      inventory: liveInventory
+    });
+    const skillSurface = extensionCenter.surfaces.find((item) => item.id === 'skills');
+    const pluginSurface = extensionCenter.surfaces.find((item) => item.id === 'plugins');
+    const hookSurface = extensionCenter.surfaces.find((item) => item.id === 'hooks');
+    const mcpSurface = extensionCenter.surfaces.find((item) => item.id === 'mcp');
     result = {
       ok: sideChat.kind === 'fresh'
         && sideChat.sourceSessionId === workspaceSync.sessionId
         && sideChat.sideSessionId !== workspaceSync.sessionId
-        && sideChat.permission === 'workspace-write',
+        && sideChat.permission === 'workspace-write'
+        && extensionCenter.available
+        && pluginSurface?.total > 0
+        && skillSurface?.total > 0
+        && mcpSurface?.status === 'ready'
+        && mcpSurface?.total === 0
+        && hookSurface?.status === 'unsupported',
       name: app.getName(),
       version: app.getVersion(),
       url,
@@ -3780,6 +3826,13 @@ const runHarnessSmoke = async (target) => {
         kind: sideChat.kind,
         independent: sideChat.sideSessionId !== sideChat.sourceSessionId,
         permission: sideChat.permission
+      },
+      extensionCenter: {
+        source: extensionCenter.source,
+        plugins: { total: pluginSurface?.total || 0, active: pluginSurface?.active || 0, failed: pluginSurface?.failed || 0 },
+        skills: { total: skillSurface?.total || 0, active: skillSurface?.active || 0 },
+        mcp: { status: mcpSurface?.status || 'unknown', version: mcpSurface?.version || '', total: mcpSurface?.total || 0, active: mcpSurface?.active || 0 },
+        hooks: hookSurface?.status || 'unknown'
       }
     };
   } catch (error) {
@@ -3932,14 +3985,27 @@ const runPluginHealthSmoke = async (target) => {
   const installRoot = path.join(smokeRoot, 'runtime', 'node_modules');
   const dshPackageDir = path.join(installRoot, '@deepseek-ai', 'dsh');
   const basePackageDir = path.join(installRoot, '@deepseek-ai', 'dsh-base');
+  const capabilityPackageNames = ['dsh-skill', 'dsh-mcp-client', 'dsh-host-plugin-inventory'];
   const harnessHome = path.join(smokeRoot, 'harness');
   const fallbackRoot = path.join(harnessHome, 'profiles', 'node_modules');
   const profileDir = path.join(harnessHome, 'profiles', 'web');
   const externalPackageDir = path.join(profileDir, 'node_modules', 'community-bundle');
   let result;
   try {
-    await writeSmokePackage(dshPackageDir, { name: '@deepseek-ai/dsh', version: '0.1.1-rc.2', dependencies: { '@deepseek-ai/dsh-base': '0.1.1-rc.2' } });
+    await writeSmokePackage(dshPackageDir, {
+      name: '@deepseek-ai/dsh',
+      version: '0.1.1-rc.2',
+      dependencies: Object.fromEntries([
+        ['@deepseek-ai/dsh-base', '0.1.1-rc.2'],
+        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.1-rc.2'])
+      ])
+    });
     await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.1-rc.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    for (const name of capabilityPackageNames) {
+      const packageDir = path.join(installRoot, '@deepseek-ai', name);
+      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.1-rc.2' });
+      await linkSmokePackage(fallbackRoot, `@deepseek-ai/${name}`, packageDir);
+    }
     await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });
     await fsp.writeFile(path.join(externalPackageDir, 'cordis.patch.yml'), 'hidden-patch-prose-marker', 'utf8');
     await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh', dshPackageDir);
@@ -3963,7 +4029,8 @@ const runPluginHealthSmoke = async (target) => {
       const check = () => {
         const profileReady = document.querySelectorAll('.profile-card').length === 1;
         const toggleReady = document.querySelectorAll('.toggle-button').length === 1;
-        if (profileReady && toggleReady) return resolve(true);
+        const surfacesReady = document.querySelectorAll('.surface-card').length === 4;
+        if (profileReady && toggleReady && surfacesReady) return resolve(true);
         if (Date.now() >= deadline) return resolve(false);
         setTimeout(check, 50);
       };
@@ -3975,6 +4042,7 @@ const runPluginHealthSmoke = async (target) => {
       title: document.querySelector('h1')?.textContent || '',
       catalogRows: document.querySelectorAll('.catalog-card').length,
       installButtons: document.querySelectorAll('.install-button').length,
+      surfaceRows: document.querySelectorAll('.surface-card').length,
       profileRows: document.querySelectorAll('.profile-card').length,
       toggleButtons: document.querySelectorAll('.toggle-button').length,
       text: document.body.innerText
@@ -3984,7 +4052,8 @@ const runPluginHealthSmoke = async (target) => {
     const screenshotSize = screenshot.getSize();
     result = {
       ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'install', 'lifecycle', 'refresh', 'reveal', 'toggle'])
-        && rendered.title === '扩展健康'
+        && rendered.title === '扩展中心'
+        && rendered.surfaceRows === 4
         && rendered.catalogRows === 1
         && rendered.installButtons === 1
         && rendered.profileRows === 1
@@ -3993,6 +4062,11 @@ const runPluginHealthSmoke = async (target) => {
         && rendered.text.includes('community-bundle')
         && rendered.text.includes('兼容已验证')
         && rendered.text.includes('固定 registry · Web · Patch 正常 · Peer 0/0')
+        && rendered.text.includes('Skills')
+        && rendered.text.includes('Plugins')
+        && rendered.text.includes('Hooks')
+        && rendered.text.includes('MCP')
+        && rendered.text.includes('上游未提供')
         && rendered.text.includes('共享回退由 Harness 启动时维护')
         && !rendered.text.includes('hidden-plugin-config-marker')
         && !rendered.text.includes('hidden-patch-prose-marker')
@@ -4003,6 +4077,7 @@ const runPluginHealthSmoke = async (target) => {
       title: rendered.title,
       catalogRows: rendered.catalogRows,
       installButtons: rendered.installButtons,
+      surfaceRows: rendered.surfaceRows,
       profileRows: rendered.profileRows,
       toggleButtons: rendered.toggleButtons,
       compatibilityVerified: rendered.text.includes('兼容已验证'),

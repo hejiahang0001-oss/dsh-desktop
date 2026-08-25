@@ -41,6 +41,7 @@
     { id: 'chat.focus', title: '聚焦对话输入', detail: '继续向当前 Harness 会话提问', shortcut: 'Ctrl+Alt+M', run: focusChat },
     { id: 'session.new', title: '新建会话', detail: '使用官方 Harness 新建会话入口', shortcut: 'Ctrl+N', run: clickNewSession },
     { id: 'side-chat.open', title: '打开 Side Chat', detail: '在当前工作区建立独立 Harness 会话窗口', shortcut: 'Ctrl+Shift+S', run: () => api.sideChat.openWindow() },
+    { id: 'extensions.open', title: '打开扩展中心', detail: '查看 Skills、Plugins、Hooks 与 MCP 的来源、范围和实时状态', shortcut: '', run: () => api.extensions.openWindow() },
     { id: 'files.toggle', title: '显示或隐藏工作区文件', detail: '切换左侧文件面板', shortcut: 'Ctrl+Alt+E', run: () => togglePanel('filePanelOpen', api.workbench.setFilePanelOpen) },
     { id: 'files.focus', title: '聚焦文件搜索', detail: '打开文件面板并选中搜索框', shortcut: 'Ctrl+Alt+F', run: () => openAndFocus('filePanelOpen', api.workbench.setFilePanelOpen, '__DSH_FILES__') },
     { id: 'preview.toggle', title: '显示或隐藏应用预览', detail: '切换 HTML 与本机服务预览', shortcut: 'Ctrl+Alt+P', run: () => togglePanel('previewPanelOpen', api.workbench.setPreviewPanelOpen) },
