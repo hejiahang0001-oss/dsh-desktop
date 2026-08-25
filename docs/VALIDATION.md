@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.5.21 Excel XLSX evidence (release candidate)
+## V0.5.21 Excel XLSX evidence (published)
 
 - The pinned source Harness starts on a random IPv4 loopback origin and `skill.list` returns bundled `excel-xlsx` with `modelInvocable: true`.
 - A real credential-backed isolated Harness session accepted Workspace Write, entered running state, invoked `/excel-xlsx`, created a 5,970-byte editable workbook and its JSON specification, completed, and passed independent strict inspection: 3 sheets, 69 cells, 10 formulas, 3 filters, 3 frozen panes, and zero formula errors, risky formulas, external links, connections, query tables, or macros. The temporary credential copy was removed.
@@ -13,7 +13,9 @@ This page records versioned local engineering evidence without making the README
 - The focused Excel/UI/Supervisor/Word-preservation/governance suite passes 38/38, the complete source suite passes 233/233, the production dependency audit reports no known vulnerability, and `git diff --check` passes. Source, packaged, and installed Harness discovery all find model-invocable `excel-xlsx`; both ten-part runtime smoke matrices pass.
 - The unpacked tree contains 29,791 files and 692,728,208 bytes. The installed tree contains all unpacked files at equal length plus only the normal uninstaller; both have zero reparse points and matching `app.asar` SHA-256 `FE739C0B080C0286D96BCC7E51BEAD0C2E420EB1102A1B478E0E6B73424CBBC8`.
 - The final installer is 184,026,194 bytes with SHA-256 `16A67381E798A01A1B107BA00861D78021B50250012B71CE6A545FAA0EB673A0`; its 188,874-byte blockmap hashes to `8249192B195150243670609B991FEC586720D8CB772529F86C6BB0007D1B471A`, and the checksum manifest hashes to `43069A1450A5A936F12B21DE9266FE0D5FF46D837489183DB05796D1844D4DFA`. Differential reuse from V0.5.20 is 182,967,366 bytes (99.4246%), leaving 1,058,828 bytes. The installer remains unsigned and automatic update remains disabled.
-- Silent overwrite exits with code 0 and Windows registers V0.5.21. Backup `backups/pre-v0.5.21-20260826-020523` contains 27 credential-free semantic files and all three V0.5.20 release assets with exact expected hashes and zero reparse points. The semantic manifest stays exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after installed smoke. PR/CI, release, and remote-asset evidence remains pending.
+- Silent overwrite exits with code 0 and Windows registers V0.5.21. Backup `backups/pre-v0.5.21-20260826-020523` contains 27 credential-free semantic files and all three V0.5.20 release assets with exact expected hashes and zero reparse points. The semantic manifest stays exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after installed smoke.
+- Implementation PR [#34](https://github.com/hejiahang0001-oss/dsh-desktop/pull/34) passes all three jobs in run [32882802354](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32882802354) and merges as `bd75fcb6a0e2038761a257bc3d696b372eba6607`. Main CI run [32882923123](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32882923123) passes all three jobs.
+- [V0.5.21](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.21) is non-draft, marked Pre-release, and targets the exact implementation merge. GitHub reports all three assets with exact local sizes and SHA-256 digests; a clean download matches 3/3 assets and 2/2 manifest entries, the public installer returns HTTP 200 with content length 184,026,194, and GitHub formal Latest remains V0.5.4.
 
 ## V0.5.20 Word DOCX evidence (published)
 

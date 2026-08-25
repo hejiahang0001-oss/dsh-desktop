@@ -27,7 +27,9 @@ V0.5.21 adds editable Excel workbook delivery through the official DeepSeek Harn
 - The unpacked package contains 29,791 files and 692,728,208 bytes. The installed tree contains every unpacked file with equal length plus only the normal uninstaller; both have zero reparse points and matching `app.asar` SHA-256 `FE739C0B080C0286D96BCC7E51BEAD0C2E420EB1102A1B478E0E6B73424CBBC8`.
 - Silent overwrite exits with code 0 and registers V0.5.21. The 27-file credential-free semantic manifest remains `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before installation, after installation, and after installed smoke. Rollback point: `backups/pre-v0.5.21-20260826-020523`.
 - The installer is 184,026,194 bytes with SHA-256 `16A67381E798A01A1B107BA00861D78021B50250012B71CE6A545FAA0EB673A0`; its 188,874-byte blockmap hashes to `8249192B195150243670609B991FEC586720D8CB772529F86C6BB0007D1B471A`, and the checksum manifest hashes to `43069A1450A5A936F12B21DE9266FE0D5FF46D837489183DB05796D1844D4DFA`.
-- V0.5.20 to V0.5.21 reuses 182,967,366 bytes (99.4246%), leaving 1,058,828 differential bytes. CI and remote-asset verification remain publication gates.
+- V0.5.20 to V0.5.21 reuses 182,967,366 bytes (99.4246%), leaving 1,058,828 differential bytes.
+- Implementation PR [#34](https://github.com/hejiahang0001-oss/dsh-desktop/pull/34) passes all three jobs in run [32882802354](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32882802354) and merges as `bd75fcb6a0e2038761a257bc3d696b372eba6607`. Main CI run [32882923123](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32882923123) passes the same three jobs.
+- [V0.5.21](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.21) is non-draft, marked Pre-release, and targets the exact implementation merge. GitHub's three asset sizes and digests match local evidence; a clean download reproduces all three SHA-256 values, the downloaded manifest validates 2/2 entries, and the public installer returns HTTP 200 with content length 184,026,194. GitHub formal Latest remains V0.5.4.
 
 ## Current limits
 
@@ -35,4 +37,4 @@ V0.5.21 adds editable Excel workbook delivery through the official DeepSeek Harn
 - Formula validation is a bounded safety policy, not a complete Excel calculation engine. Microsoft Excel remains authoritative for final calculation and rendering.
 - The Windows installer remains unsigned and automatic update remains disabled until the existing signing and trust gates are satisfied.
 
-Candidate installer: `DSH-Desktop-Setup-0.5.21.exe`. Stable remains V0.5.4 unless the maintainer explicitly promotes a tested Latest build.
+Installer: `DSH-Desktop-Setup-0.5.21.exe`. Stable remains V0.5.4 unless the maintainer explicitly promotes a tested Latest build.

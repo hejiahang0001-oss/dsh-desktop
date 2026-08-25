@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.5.21 产品 Latest 候选（Excel XLSX）
-> 状态：V0.5.7–V0.5.20 已发布为 Pre-release；V0.5.21 本地、打包与覆盖安装门禁已通过，正在执行 PR/CI 和 GitHub 发布；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.21 产品 Latest（Excel XLSX）
+> 状态：V0.5.7–V0.5.21 已发布为 Pre-release；下一版 V0.5.22 PPT 准备启动；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.21 本轮进展
 
@@ -27,7 +27,8 @@
 | 安装包 | `DSH-Desktop-Setup-0.5.21.exe`；184,026,194 字节；SHA-256 `16A67381E798A01A1B107BA00861D78021B50250012B71CE6A545FAA0EB673A0`；blockmap 188,874 字节，SHA-256 `8249192B195150243670609B991FEC586720D8CB772529F86C6BB0007D1B471A` |
 | 差分与签名 | V0.5.20→V0.5.21 复用 182,967,366 字节，99.4246%，预计下载 1,058,828 字节；unsigned，自动更新继续关闭 |
 | 覆盖数据与回滚 | 静默覆盖退出码 0，Windows 登记 V0.5.21；前/安装后/完整 smoke 后 27 个语义文件清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.21-20260826-020523` 已核验且无凭据副本 |
-| 待完成 | PR/CI、Pre-release 与远端三资产复核 |
+| PR 与 CI | 实现 PR [#34](https://github.com/hejiahang0001-oss/dsh-desktop/pull/34) 三项 CI [32882802354](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32882802354) 通过并以 `bd75fcb6a0e2038761a257bc3d696b372eba6607` 合并；主分支 CI [32882923123](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32882923123) 三项通过 |
+| 发布与远端资产 | [V0.5.21 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.21) 非草稿并准确指向实现合并提交；三项资产远端大小/digest 与本地一致，公开安装包 HTTP 200；干净回下载三项摘要全部匹配且校验清单 2/2 通过；GitHub 正式 Latest 仍为 V0.5.4 |
 
 ## V0.5.20 本轮进展
 

@@ -72,7 +72,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.21 product Latest release candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/excel-xlsx` Skill and fixed offline XLSX tool for multi-sheet creation, CSV import, typed updates, formulas, styles, filters, frozen panes, reconciliation, and strict risk checks. Source discovery, a real credential-backed Agent invocation, Microsoft Excel visual/recalculation checks, 233/233 source tests, production dependency audit, package governance, direct overwrite installation, semantic-data preservation, and both ten-part runtime matrices pass; CI and remote-asset verification remain release gates. The installer name is `DSH-Desktop-Setup-0.5.21.exe`; the front-page download remains Stable until the Pre-release is published.
+**V0.5.21 product Latest Pre-release** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/excel-xlsx` Skill and fixed offline XLSX tool for multi-sheet creation, CSV import, typed updates, formulas, styles, filters, frozen panes, reconciliation, and strict risk checks. Source discovery, a real credential-backed Agent invocation, Microsoft Excel visual/recalculation checks, 233/233 source tests, production dependency audit, package governance, direct overwrite installation, semantic-data preservation, both ten-part runtime matrices, PR/main CI, and remote three-asset verification pass. Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -148,7 +148,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.21 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/excel-xlsx` Skill：可在当前工作区离线生成和修改可编辑 XLSX，支持多 Sheet、公式、样式、筛选、冻结窗格、CSV 导入、勾稽检查和严格风险检查。源码发现、真实 Key Agent 调用、Microsoft Excel 打开/重算/视觉验收、232/232 源码测试和生产依赖审计已经通过；`DSH-Desktop-Setup-0.5.21.exe` 仍需完成打包、覆盖安装、安装版运行、用户数据保留、CI 和远端三资产门禁后才发布为 Pre-release。V0.5.4 继续保持 Stable：
+V0.5.21 产品 Latest 已发布为 Pre-release，继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/excel-xlsx` Skill：可在当前工作区离线生成和修改可编辑 XLSX，支持多 Sheet、公式、样式、筛选、冻结窗格、CSV 导入、勾稽检查和严格风险检查。源码发现、真实 Key Agent 调用、Microsoft Excel 打开/重算/视觉验收、233/233 源码测试、打包、覆盖安装、安装版运行、用户数据保留、PR/CI 和远端三资产门禁均已通过。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
