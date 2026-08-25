@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.5.22 PowerPoint PPTX evidence (candidate)
+## V0.5.22 PowerPoint PPTX evidence (published)
 
 - The pinned source Harness starts on a random IPv4 loopback origin and `skill.list` returns bundled `powerpoint-pptx` with `modelInvocable: true`.
 - A real credential-backed isolated Harness session accepted Workspace Write, entered running state, invoked `/powerpoint-pptx`, created a 20,601-byte editable PPTX and its JSON specification, completed, and passed independent strict inspection: 3 slides, 8 shapes, 29 text runs, 1 table, 1 native chart, 1 embedded workbook, 3 notes, 1 master, 2 layouts, and zero external relationships, external links, macros, OLE, or ActiveX. The temporary credential copy was removed.
@@ -11,7 +11,11 @@ This page records versioned local engineering evidence without making the README
 - The fixed engine applies workspace containment, link/junction refusal, PNG/JPEG signature and dimension checks, bounded specifications/PPTX/slides/elements/text/images/charts/data, bounded chart magnitude, transactional output, rollback-backed explicit overwrite, and all-or-nothing exact replacement.
 - Strict policy rejects external relationship modes including alternate quote syntax, absolute URI/UNC relationship targets, macros, external links, OLE, and ActiveX. It does not execute or fetch external content.
 - The focused PowerPoint/UI/Supervisor/governance/release suite passes 41/41; the complete source suite passes 247/247; the production dependency audit reports no known vulnerability; and `git diff --check` passes.
-- Package, overwrite-install, installed-runtime, semantic-data, CI, and remote-release evidence will be appended only after those gates pass.
+- The unpacked tree contains 29,793 files and 692,792,809 bytes. The installed tree contains every unpacked file at equal length plus only the normal uninstaller; both have zero reparse points and matching `app.asar` SHA-256 `85D365B2579AAA2C645F8280681BABACE42B9D16DE78D472A5E64ED7B3AB81F2`. Both ten-part runtime matrices pass, and source, packaged, and installed Harness discovery find all three model-invocable Word, Excel, and PowerPoint Skills.
+- The final installer is 184,041,512 bytes with SHA-256 `D682772B9AC1AE2E18127848C031B960B6A6877159A4A1C6C8A8E6B6B5B886A1`; its 188,964-byte blockmap hashes to `9D2EE4C628AC7BC4735FAB5DBC568B4A7B8FF7F51D4D5C6EE37020A945B87491`, and the checksum manifest hashes to `FCDA25460E2991941DAF9158A538654E388B1B30E289BE342ED2C4D4006E0810`. Differential reuse from V0.5.21 is 182,986,303 bytes (99.4266%), leaving 1,055,209 bytes. The installer remains unsigned and automatic update remains disabled.
+- Silent overwrite registers V0.5.22. Backup `backups/pre-v0.5.22-20260826-033037` contains all 27 credential-free semantic files plus all three V0.5.21 release assets with exact hashes and zero reparse points. The 27 semantic state/session/Profile files remain byte-identical before overwrite and after the complete installed smoke matrix.
+- Implementation PR [#36](https://github.com/hejiahang0001-oss/dsh-desktop/pull/36) passes all three jobs in run [32888306493](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32888306493) and merges as `d227731f5b6824e2df1a69da0b9018c58410781b`. Main CI run [32888445447](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32888445447) passes all three jobs.
+- [V0.5.22](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.22) is non-draft, marked Pre-release, and targets the exact implementation merge. GitHub reports all three asset sizes and digests equal to local evidence; the public installer returns HTTP 200 with content length 184,041,512, and a clean download matches 3/3 assets plus 2/2 checksum-manifest entries. GitHub formal Latest remains V0.5.4.
 
 ## V0.5.21 Excel XLSX evidence (published)
 

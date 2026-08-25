@@ -21,7 +21,10 @@ V0.5.22 adds editable PowerPoint presentation delivery through the official Deep
 - Source `skill.list` discovers `powerpoint-pptx` with `modelInvocable: true`.
 - A real credential-backed isolated Harness Agent created a 20,601-byte, three-slide editable PPTX and its JSON specification. Independent strict inspection confirms one table, one native chart, one embedded workbook, three notes, one master, two layouts, and zero external relationship, macro, OLE, or ActiveX content.
 - Microsoft PowerPoint 16 opens the maintained acceptance presentation and the real Agent output and remains responsive. PPT Master package validation passes with no relationship problem; strict per-slide conversion reports zero diagnostics, and visual review passes 4/4 maintained pages plus 3/3 Agent pages without cropping or overlap.
-- The focused PowerPoint/UI/Supervisor/governance/release suite passes 41/41. The complete source suite passes 247/247, the production dependency audit reports no known vulnerability, and `git diff --check` passes. Package governance, packaged/installed runtime matrices, overwrite installation, semantic-data preservation, CI, and remote three-asset verification must still pass before the Pre-release is published.
+- The focused PowerPoint/UI/Supervisor/governance/release suite passes 41/41. The complete source suite passes 247/247, the production dependency audit reports no known vulnerability, and `git diff --check` passes. Both unpacked and installed runtime matrices pass, all three bundled Office Skills are discoverable, and the installed tree matches all 29,793 unpacked files at equal length plus only the normal uninstaller.
+- Silent overwrite registers V0.5.22 and preserves all 27 semantic state/session/Profile files byte-for-byte. Package governance passes with zero reparse points and 99.4266% blockmap reuse from V0.5.21.
+- The 184,041,512-byte installer has SHA-256 `D682772B9AC1AE2E18127848C031B960B6A6877159A4A1C6C8A8E6B6B5B886A1`; the 188,964-byte blockmap has SHA-256 `9D2EE4C628AC7BC4735FAB5DBC568B4A7B8FF7F51D4D5C6EE37020A945B87491`.
+- GitHub publishes the release as a non-draft Pre-release targeting merge `d227731f5b6824e2df1a69da0b9018c58410781b`. A clean download matches all three local assets, the checksum manifest verifies both payload entries, and the public installer returns HTTP 200 with the exact content length. GitHub formal Latest remains V0.5.4.
 
 ## Current limits
 
@@ -29,4 +32,4 @@ V0.5.22 adds editable PowerPoint presentation delivery through the official Deep
 - Exact replacement does not guess across multiple mixed-format text runs. Microsoft PowerPoint remains authoritative for final editing and rendering.
 - The Windows installer remains unsigned and automatic update remains disabled until the existing signing and trust gates are satisfied.
 
-Candidate installer: `DSH-Desktop-Setup-0.5.22.exe`. Stable remains V0.5.4 unless the maintainer explicitly promotes a tested Latest build.
+Installer: `DSH-Desktop-Setup-0.5.22.exe`. This release advances only the Pre-release channel; Stable remains V0.5.4 unless the maintainer explicitly promotes a tested Latest build.

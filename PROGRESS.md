@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.5.22 产品 Latest 候选版（PowerPoint PPTX）
-> 状态：V0.5.7–V0.5.21 已发布为 Pre-release；V0.5.22 已完成源码、真实 Agent、真实 Office 启动与逐页视觉验收，正在进入打包与发布门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.22 产品 Latest（PowerPoint PPTX）
+> 状态：V0.5.7–V0.5.22 已发布为 Pre-release；V0.5.22 的源码、真实 Agent、PowerPoint、打包、覆盖安装、数据保留、CI 和远端三资产门禁均已通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.22 本轮进展
 
@@ -22,7 +22,11 @@
 | 真实 Harness Agent | `artifacts/v0.5.22-powerpoint/real-agent-smoke.json` 为 `ok: true`；生成 PPTX 20,601 字节，SHA-256 `8119092C0D302EBBF7BBEB9F014418B15E0A1CEA65B2242BC096E5163B0FF662` |
 | PowerPoint 与逐页视觉 | 本机 Office 16 保持响应；PPT Master 包检查通过，严格转换 0 诊断；维护者 4/4 页、Agent 3/3 页无裁切或重叠 |
 | 源码回归 | 聚焦门禁 41/41、全量 247/247、生产依赖审计 0 个已知漏洞、`git diff --check` 通过 |
-| 打包/安装/发布 | 待执行；必须通过 package governance、覆盖安装、用户数据保留、安装版矩阵、PR/CI 和远端三资产核验 |
+| 解包与安装版 | 29,793 个解包文件、692,792,809 字节；安装版逐项等长且只多正常卸载器，0 缺失/大小差异/链接；两套十类 smoke 与三项 Office Skill 发现均通过；`app.asar` SHA-256 `85D365B2579AAA2C645F8280681BABACE42B9D16DE78D472A5E64ED7B3AB81F2` |
+| 安装包与差分 | 安装包 184,041,512 字节，SHA-256 `D682772B9AC1AE2E18127848C031B960B6A6877159A4A1C6C8A8E6B6B5B886A1`；blockmap 188,964 字节，SHA-256 `9D2EE4C628AC7BC4735FAB5DBC568B4A7B8FF7F51D4D5C6EE37020A945B87491`；从 V0.5.21 复用 182,986,303 字节（99.4266%） |
+| 覆盖数据与回滚 | 静默覆盖并登记 V0.5.22；前后 27 个状态/会话/Profile 语义文件逐字节一致；回滚点 `backups/pre-v0.5.22-20260826-033037` 不含凭据且 0 链接 |
+| PR 与 CI | 实现 PR [#36](https://github.com/hejiahang0001-oss/dsh-desktop/pull/36) 三项 CI [32888306493](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32888306493) 通过并以 `d227731f5b6824e2df1a69da0b9018c58410781b` 合并；主分支 CI [32888445447](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32888445447) 三项通过 |
+| 发布与远端资产 | [V0.5.22 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.22) 非草稿并指向实现合并提交；远端三项大小/digest 匹配，公网安装包 HTTP 200 且长度准确，干净回下载 3/3 摘要与清单 2/2 通过；GitHub 正式 Latest 仍为 V0.5.4 |
 
 ## V0.5.21 本轮进展
 

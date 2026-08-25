@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-26 V0.5.7–V0.5.21 已发布为 Pre-release；V0.5.22 PPT 的源码、真实 Harness Agent、Microsoft PowerPoint 启动和逐页视觉验收已通过，正在进入打包、覆盖安装、安装版矩阵、PR/CI 与远端发布门禁；V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-26 V0.5.7–V0.5.22 已发布为 Pre-release；V0.5.22 PPT 的源码、真实 Harness Agent、Microsoft PowerPoint、逐页视觉、打包、覆盖安装、数据保留、PR/CI 和远端三资产门禁均已通过；当前进入 V0.6.0 统一验收，V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -320,7 +320,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 17. V0.5.19（已发布）：形成 Skills、Plugins、Hooks、MCP 扩展中心，统一来源、作用域、权限、版本、启停、错误和回滚入口；官方实时清单与固定运行时事实已贯通，MCP“包已安装/服务已配置”和 Hooks 上游缺口已明确分层。源码 201/201、生产审计、解包/安装十类 smoke、视觉、覆盖数据、回滚、PR/CI 和 Pre-release 远端三资产门禁均已通过。
 18. V0.5.20（已发布）：增加 Word 能力；官方 Harness bundled `/word-docx` 支持从对话生成和精确修改可编辑 DOCX，覆盖标题、正文、列表、表格、工作区 PNG/JPEG 图片、分页、页眉页脚；真实 Key Agent 调用、结构检查、Microsoft Word 三页视觉、216/216 源码、打包、覆盖安装、安装版十类 smoke、用户数据保留、PR/CI 与 Pre-release 三资产远端核验均已通过。
 19. V0.5.21（已发布）：增加 Excel 能力；官方 Harness bundled `/excel-xlsx` 支持生成和修改可编辑 XLSX、多 Sheet、公式、样式、筛选、冻结、CSV 导入、勾稽与严格风险检查；源码发现、真实 Key Agent、Microsoft Excel 实际打开/重算/视觉、233/233 源码、打包、覆盖安装、安装版十类 smoke、用户数据保留、PR/CI 与 Pre-release 三资产远端核验均已通过。
-20. V0.5.22（候选版验证中）：增加 PPT 能力；官方 Harness bundled `/powerpoint-pptx` 已支持生成和精确修改可编辑 PPTX，包含原生文本、形状、表格、图表、内嵌 Excel 数据、PNG/JPEG、真实母版、两套版式和逐页演讲者备注；源码发现、真实 Key Agent、Microsoft PowerPoint 启动和 7/7 页视觉验收已通过，待完成打包与发布门禁。
+20. V0.5.22（已发布）：增加 PPT 能力；官方 Harness bundled `/powerpoint-pptx` 支持生成和精确修改可编辑 PPTX，包含原生文本、形状、表格、图表、内嵌 Excel 数据、PNG/JPEG、真实母版、两套版式和逐页演讲者备注；源码发现、真实 Key Agent、Microsoft PowerPoint、7/7 页视觉、打包、覆盖安装、数据保留、PR/CI 与 Pre-release 三资产远端核验均已通过。
 21. V0.6.0：统一验收并行、扩展和 Office 能力；完成全量回归、打包、覆盖安装、数据保留、故障回滚和 GitHub Pre-release 资产核验。
 
 用户能够：
