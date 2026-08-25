@@ -2614,6 +2614,21 @@ const invokeExcelXlsxSkill = async () => {
   return false;
 };
 
+const invokePowerPointPptxSkill = async () => {
+  if (!harnessUiReady()) return false;
+  const invoked = await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.invokePowerPoint?.())', true).catch(() => false);
+  if (invoked) return true;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'PowerPoint 演示文稿能力',
+    message: '在对话输入框中输入 /powerpoint-pptx 后描述演示文稿。',
+    detail: '内置 Skill 可离线创建、检查和精确替换当前工作区内的可编辑 PPTX，支持文本、形状、表格、原生图表、PNG/JPEG、母版、版式与演讲者备注。输出默认不覆盖已有文件；覆盖时会保留同目录回退副本。',
+    buttons: ['确定'],
+    defaultId: 0
+  });
+  return false;
+};
+
 const showPermissionCenter = async () => {
   await refreshAgentDiagnostics({ rebuildMenu: false });
   const model = buildPermissionCenterDialog({
@@ -2931,6 +2946,12 @@ function installApplicationMenu() {
           click: () => { void invokeExcelXlsxSkill(); }
         },
         { label: 'Excel 工作簿：内置 /excel-xlsx · 公式与勾稽检查', enabled: false },
+        {
+          label: '创建或修改 PowerPoint 演示文稿…',
+          enabled: harnessReady,
+          click: () => { void invokePowerPointPptxSkill(); }
+        },
+        { label: 'PowerPoint：内置 /powerpoint-pptx · 可编辑对象与严格检查', enabled: false },
         {
           label: '定位当前/最近工具',
           enabled: harnessReady && agentDiagnostics.canFocusTool,

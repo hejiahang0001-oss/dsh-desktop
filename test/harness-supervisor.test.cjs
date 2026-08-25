@@ -18,11 +18,14 @@ const writeBundledOfficeSkills = (root) => {
   const bundledSkillDir = path.join(root, 'resources', 'skills');
   const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
   const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
+  const pptxToolPath = path.join(bundledSkillDir, 'powerpoint-pptx', 'scripts', 'powerpoint-pptx.cjs');
   fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
   fs.mkdirSync(path.dirname(xlsxToolPath), { recursive: true });
+  fs.mkdirSync(path.dirname(pptxToolPath), { recursive: true });
   fs.writeFileSync(docxToolPath, '// test');
   fs.writeFileSync(xlsxToolPath, '// test');
-  return { bundledSkillDir, docxToolPath, xlsxToolPath };
+  fs.writeFileSync(pptxToolPath, '// test');
+  return { bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath };
 };
 
 test('software-managed credential policy removes inherited DeepSeek keys case-insensitively', () => {
@@ -132,10 +135,13 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   const bundledSkillDir = path.join(resourcesPath, 'skills');
   const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
   const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
+  const pptxToolPath = path.join(bundledSkillDir, 'powerpoint-pptx', 'scripts', 'powerpoint-pptx.cjs');
   fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
   fs.mkdirSync(path.dirname(xlsxToolPath), { recursive: true });
+  fs.mkdirSync(path.dirname(pptxToolPath), { recursive: true });
   fs.writeFileSync(docxToolPath, '// test');
   fs.writeFileSync(xlsxToolPath, '// test');
+  fs.writeFileSync(pptxToolPath, '// test');
 
   assert.equal(resolvePnpmDshBin(nodeModules), pnpmBin);
   const resolved = resolveHarnessRuntimePaths({
@@ -144,7 +150,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
     isPackaged: true,
     env: {}
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath });
 });
 
 test('runtime resolver fails closed when the desktop language patch is missing', () => {
@@ -188,7 +194,7 @@ test('supervisor launches Harness in the selected workspace directory', async (c
     "const fs = require('node:fs');",
     "fs.writeFileSync(process.env.DSH_TEST_CWD_FILE, process.cwd());",
     "fs.writeFileSync(process.env.DSH_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));",
-    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, docx: process.env.DSH_DESKTOP_DOCX_TOOL, xlsx: process.env.DSH_DESKTOP_XLSX_TOOL, node: process.env.DSH_DESKTOP_NODE }));",
+    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, docx: process.env.DSH_DESKTOP_DOCX_TOOL, xlsx: process.env.DSH_DESKTOP_XLSX_TOOL, pptx: process.env.DSH_DESKTOP_PPTX_TOOL, node: process.env.DSH_DESKTOP_NODE }));",
     "process.stdout.write('dsh web: http://127.0.0.1:45678\\n');",
     'setInterval(() => {}, 1000);'
   ].join('\n'));
@@ -210,7 +216,8 @@ test('supervisor launches Harness in the selected workspace directory', async (c
       DSH_TEST_ENV_FILE: envFile,
       DSH_BUNDLED_SKILL_DIR: 'C:\\untrusted-skills',
       DSH_DESKTOP_DOCX_TOOL: 'C:\\untrusted-word-tool.cjs',
-      DSH_DESKTOP_XLSX_TOOL: 'C:\\untrusted-excel-tool.cjs'
+      DSH_DESKTOP_XLSX_TOOL: 'C:\\untrusted-excel-tool.cjs',
+      DSH_DESKTOP_PPTX_TOOL: 'C:\\untrusted-powerpoint-tool.cjs'
     }
   });
   context.after(async () => {
@@ -224,5 +231,5 @@ test('supervisor launches Harness in the selected workspace directory', async (c
   assert.deepEqual(args.slice(0, 3), ['web', '--patch', patchPath]);
   assert.equal(supervisor.getState().workspacePath, workspace);
   const environment = JSON.parse(fs.readFileSync(envFile, 'utf8'));
-  assert.deepEqual(environment, { bundled: office.bundledSkillDir, docx: office.docxToolPath, xlsx: office.xlsxToolPath, node: process.execPath });
+  assert.deepEqual(environment, { bundled: office.bundledSkillDir, docx: office.docxToolPath, xlsx: office.xlsxToolPath, pptx: office.pptxToolPath, node: process.execPath });
 });

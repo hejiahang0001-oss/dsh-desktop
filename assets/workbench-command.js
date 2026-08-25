@@ -65,6 +65,7 @@
     { id: 'extensions.open', title: '打开扩展中心', detail: '查看 Skills、Plugins、Hooks 与 MCP 的来源、范围和实时状态', shortcut: '', run: () => api.extensions.openWindow() },
     { id: 'word-docx.invoke', title: '创建或修改 Word 文档', detail: '加载内置 /word-docx Skill，在当前工作区生成可编辑 DOCX', shortcut: '', run: () => invokeSkill('word-docx') },
     { id: 'excel-xlsx.invoke', title: '创建或修改 Excel 工作簿', detail: '加载内置 /excel-xlsx Skill，在当前工作区生成可编辑 XLSX', shortcut: '', run: () => invokeSkill('excel-xlsx') },
+    { id: 'powerpoint-pptx.invoke', title: '创建或修改 PowerPoint 演示文稿', detail: '加载内置 /powerpoint-pptx Skill，在当前工作区生成可编辑 PPTX', shortcut: '', run: () => invokeSkill('powerpoint-pptx') },
     { id: 'files.toggle', title: '显示或隐藏工作区文件', detail: '切换左侧文件面板', shortcut: 'Ctrl+Alt+E', run: () => togglePanel('filePanelOpen', api.workbench.setFilePanelOpen) },
     { id: 'files.focus', title: '聚焦文件搜索', detail: '打开文件面板并选中搜索框', shortcut: 'Ctrl+Alt+F', run: () => openAndFocus('filePanelOpen', api.workbench.setFilePanelOpen, '__DSH_FILES__') },
     { id: 'preview.toggle', title: '显示或隐藏应用预览', detail: '切换 HTML 与本机服务预览', shortcut: 'Ctrl+Alt+P', run: () => togglePanel('previewPanelOpen', api.workbench.setPreviewPanelOpen) },
@@ -224,7 +225,7 @@
     }
   }, true);
 
-  window.__DSH_COMMAND_PALETTE__ = Object.freeze({ open, close, focus: open, invokeWord: () => invokeSkill('word-docx'), invokeExcel: () => invokeSkill('excel-xlsx'), commandCount: commands.length });
+  window.__DSH_COMMAND_PALETTE__ = Object.freeze({ open, close, focus: open, invokeWord: () => invokeSkill('word-docx'), invokeExcel: () => invokeSkill('excel-xlsx'), invokePowerPoint: () => invokeSkill('powerpoint-pptx'), commandCount: commands.length });
   backdrop.inert = true;
   render();
   return true;

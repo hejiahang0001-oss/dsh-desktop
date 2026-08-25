@@ -159,6 +159,25 @@ test('package layout requires the trusted Excel skill and fixed offline XLSX too
   assert.equal(ready.excelSkillRuntime.files, 2);
 });
 
+test('package layout requires the trusted PowerPoint skill and fixed offline PPTX tool', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-powerpoint-skill-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const skillRoot = path.join(root, 'resources', 'skills', 'powerpoint-pptx');
+  writeFile(path.join(skillRoot, 'SKILL.md'), '---\nname: powerpoint-pptx\n---\n');
+
+  const incomplete = await inspectPackageLayout(root);
+  assert.equal(incomplete.requiredPowerpointSkillFilesReady, false);
+  assert.deepEqual(incomplete.powerpointSkillRuntime, {
+    files: 1,
+    bytes: Buffer.byteLength('---\nname: powerpoint-pptx\n---\n')
+  });
+
+  writeFile(path.join(skillRoot, 'scripts', 'powerpoint-pptx.cjs'), '// fixed offline tool\n');
+  const ready = await inspectPackageLayout(root);
+  assert.equal(ready.requiredPowerpointSkillFilesReady, true);
+  assert.equal(ready.powerpointSkillRuntime.files, 2);
+});
+
 test('package manifest excludes the duplicate app PTY and unused xterm development surfaces', () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
   for (const pattern of [

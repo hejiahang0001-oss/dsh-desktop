@@ -1,8 +1,28 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.5.21 产品 Latest（Excel XLSX）
-> 状态：V0.5.7–V0.5.21 已发布为 Pre-release；下一版 V0.5.22 PPT 准备启动；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.22 产品 Latest 候选版（PowerPoint PPTX）
+> 状态：V0.5.7–V0.5.21 已发布为 Pre-release；V0.5.22 已完成源码、真实 Agent、真实 Office 启动与逐页视觉验收，正在进入打包与发布门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.22 本轮进展
+
+1. 增加官方 Harness 可发现、用户与模型均可调用的 bundled `/powerpoint-pptx` Skill；工具菜单和固定命令面板只向官方输入框写入 Skill 命令。
+2. 增加固定离线 PPTX 引擎：支持可编辑文本、形状、表格、柱形图/条形图/折线图/饼图、内嵌 Excel 图表数据、工作区 PNG/JPEG、真实母版、Title/Content 两套版式、页码和逐页演讲者备注。
+3. 增加完整文本节点的精确替换、全有或全无语义、默认不覆盖和带 `.dsh-backup-*` 回滚副本的显式覆盖。
+4. 严格检查拒绝外部关系模式、绝对外部 Target、外链、宏、OLE 和 ActiveX；拒绝工作区逃逸、链接/联接、伪装图片、超限规格和异常大图表数值。
+5. 真实软件 Key 验收中，Harness Agent 成功生成 3 页 PPTX：1 个表格、1 个原生图表、1 个内嵌工作簿、3 页备注、1 个母版和 2 套版式，正常结束并通过独立严格检查。
+6. Microsoft PowerPoint 16 已启动维护者验收文件和 Agent 产物且保持响应；PPT Master 完成交付包检查与严格逐页转换，4/4 + 3/3 页视觉检查无裁切和重叠。
+
+### V0.5.22 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| PPTX 核心与安全 | 已完成；文本、形状、表格、图表、图片、母版、版式、备注、替换、回滚和严格风险检查均有测试 |
+| 真实 Harness 发现 | `artifacts/v0.5.22-powerpoint/source-skill-discovery.json` 为 `ok: true`；`skill.list` 返回 `powerpoint-pptx`、`modelInvocable: true` |
+| 真实 Harness Agent | `artifacts/v0.5.22-powerpoint/real-agent-smoke.json` 为 `ok: true`；生成 PPTX 20,601 字节，SHA-256 `8119092C0D302EBBF7BBEB9F014418B15E0A1CEA65B2242BC096E5163B0FF662` |
+| PowerPoint 与逐页视觉 | 本机 Office 16 保持响应；PPT Master 包检查通过，严格转换 0 诊断；维护者 4/4 页、Agent 3/3 页无裁切或重叠 |
+| 源码回归 | 聚焦门禁 41/41、全量 247/247、生产依赖审计 0 个已知漏洞、`git diff --check` 通过 |
+| 打包/安装/发布 | 待执行；必须通过 package governance、覆盖安装、用户数据保留、安装版矩阵、PR/CI 和远端三资产核验 |
 
 ## V0.5.21 本轮进展
 

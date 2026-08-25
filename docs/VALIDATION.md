@@ -2,6 +2,17 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V0.5.22 PowerPoint PPTX evidence (candidate)
+
+- The pinned source Harness starts on a random IPv4 loopback origin and `skill.list` returns bundled `powerpoint-pptx` with `modelInvocable: true`.
+- A real credential-backed isolated Harness session accepted Workspace Write, entered running state, invoked `/powerpoint-pptx`, created a 20,601-byte editable PPTX and its JSON specification, completed, and passed independent strict inspection: 3 slides, 8 shapes, 29 text runs, 1 table, 1 native chart, 1 embedded workbook, 3 notes, 1 master, 2 layouts, and zero external relationships, external links, macros, OLE, or ActiveX. The temporary credential copy was removed.
+- The maintained acceptance file is 85,775 bytes and contains 4 slides, 21 editable shapes, 51 text runs, 1 table, 1 native chart, 1 workspace PNG, 4 notes, 1 master, 2 layouts, and 1 embedded workbook. Its SHA-256 is `848769EE6A1F90F15CAE8972CA62E46A2FFCFB0CA51F8268E5564F917312B3D6`.
+- Microsoft PowerPoint 16 starts both presentations and remains responsive. PPT Master delivery checks report valid ZIP structure, unique parts, and no relationship problem. Strict PPTX-to-SVG conversion reports zero diagnostics; visual review passes all 4 maintained pages and all 3 Agent pages without cropping or overlap.
+- The fixed engine applies workspace containment, link/junction refusal, PNG/JPEG signature and dimension checks, bounded specifications/PPTX/slides/elements/text/images/charts/data, bounded chart magnitude, transactional output, rollback-backed explicit overwrite, and all-or-nothing exact replacement.
+- Strict policy rejects external relationship modes including alternate quote syntax, absolute URI/UNC relationship targets, macros, external links, OLE, and ActiveX. It does not execute or fetch external content.
+- The focused PowerPoint/UI/Supervisor/governance/release suite passes 41/41; the complete source suite passes 247/247; the production dependency audit reports no known vulnerability; and `git diff --check` passes.
+- Package, overwrite-install, installed-runtime, semantic-data, CI, and remote-release evidence will be appended only after those gates pass.
+
 ## V0.5.21 Excel XLSX evidence (published)
 
 - The pinned source Harness starts on a random IPv4 loopback origin and `skill.list` returns bundled `excel-xlsx` with `modelInvocable: true`.
