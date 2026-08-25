@@ -4,27 +4,32 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSH 扩展健康</title>
+  <title>DSH 扩展中心</title>
   <link rel="stylesheet" href="assets/plugin-health.css">
   <script defer src="assets/plugin-health.js"></script>
 </head>
 <body>
   <header class="toolbar">
     <div class="identity">
-      <div class="title-row"><h1>扩展健康</h1><span class="mode">受控管理</span></div>
-      <p id="profiles-root" class="root-path">正在核对 Harness Profile 与扩展依赖…</p>
+      <div class="title-row"><h1>扩展中心</h1><span class="mode">官方状态 + 受控管理</span></div>
+      <p id="profiles-root" class="root-path">正在核对 Skills、Plugins、Hooks、MCP 与 Harness Profile…</p>
     </div>
     <button id="refresh" type="button">刷新</button>
     <button id="close" type="button">关闭</button>
   </header>
   <main>
+    <section aria-labelledby="surfaces-title">
+      <div class="section-heading"><div><h2 id="surfaces-title">扩展能力</h2><p>实时状态来自 Harness 官方只读清单；没有上游管理接口的能力会明确标出，不维护第二份加载状态。</p></div></div>
+      <div id="extension-surfaces" class="surface-grid" aria-live="polite"></div>
+      <div id="extension-issues" class="extension-issues"></div>
+    </section>
     <section aria-labelledby="runtime-title">
       <div class="section-heading"><div><h2 id="runtime-title">固定运行时闭包</h2><p>检查软件随附 Harness 包闭包与共享回退链接，不把所有上游插件误报为已启用。</p></div></div>
       <article id="runtime" class="runtime-card" aria-live="polite"></article>
       <div id="issues" class="issue-list"></div>
     </section>
     <section aria-labelledby="catalog-title">
-      <div class="section-heading"><div><h2 id="catalog-title">已验证插件生命周期</h2><p>安装、升级、卸载和回退只使用软件固定的包、版本、registry 与完整性摘要；不接受任意 pnpm 命令。</p></div></div>
+      <div class="section-heading"><div><h2 id="catalog-title">已验证外部插件生命周期</h2><p>安装、升级、卸载和回退只使用软件固定的包、版本、registry 与完整性摘要；不接受任意 pnpm 命令。</p></div></div>
       <div id="catalog" class="catalog-list" aria-live="polite"></div>
     </section>
     <section aria-labelledby="profiles-title">
@@ -32,6 +37,6 @@
       <div id="profiles" class="profile-list"></div>
     </section>
   </main>
-  <footer><span id="status" role="status">本窗口不会读取插件配置、补丁正文、凭据或会话内容。</span><span>插件生命周期使用软件随附 pnpm，并保留最近可用回退点。</span></footer>
+  <footer><span id="status" role="status">本窗口不会读取 Skill 正文、插件配置、Hook 脚本、MCP 密钥或会话内容。</span><span>外部插件生命周期使用软件随附 pnpm，并保留最近可用回退点。</span></footer>
 </body>
 </html>

@@ -45,7 +45,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Bounded checkpoint history** — inspect the latest twelve verified local safety points, compare their real impact, and choose an older target without exposing commit or ref input.
 - **Checkpoint-linked conversation branches** — associate new checkpoints with the selected completed Harness turn, then either restore code only or create and switch to an official child session while preserving the source conversation.
 - **Visible context sources** — inspect the Code preset, desktop language policy, project-rule candidate chain, and durable-session boundary in a local read-only window without exposing hidden prompts, credentials, or rule contents; Harness remains authoritative for content deduplication and prompt-budget inclusion.
-- **Extension health and safe toggles** — inspect the fixed Harness dependency closure, shared fallback links, initialized Profiles, ordered bundle layers, and Profile-declared pnpm dependencies; only already-installed external bundle dependencies can be enabled or disabled through a confirmed, atomic, rollback-capable restart.
+- **Harness-backed extension center** — inspect Skills, Plugins, Hooks, and MCP through one local metadata-only surface. Official live inventory remains authoritative; source, scope, permission, version, disabled/loading/failed states, fixed runtime closure, Profiles, controlled lifecycle actions, and rollback points are kept visible without reading Skill prose, plugin configuration, Hook scripts, MCP keys, or session content.
 - **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **Isolated Git worktrees** — create a generated DSH-owned branch and worktree, switch the active Harness workspace, and safely reclaim only DSH-owned worktree directories. External worktrees stay read-only; dirty removal creates a private recovery checkpoint and retains the branch.
 - **Harness-native tasks and subagents** — inspect the authoritative subagent tree, live background-job mirror, approval count, and working-directory sharing risk; open the exact child transcript, queue a bounded follow-up to a continuable child, or request interruption without treating acknowledgement as completion.
@@ -70,7 +70,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.18 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds an isolated Side Chat over official session create/fork, rename, prompt, history, and permission projections. The main and side windows use separate session storage, and the side renderer receives no desktop command bridge. `DSH-Desktop-Setup-0.5.18.exe` passed its package, overwrite-installation, installed-runtime, visual, security, semantic-data, CI, and remote-asset gates and is published as a [GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.18). The front-page download remains Stable.
+**V0.5.19 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It replaces the former extension-health view with a unified Skills / Plugins / Hooks / MCP extension center. The center reads the official live `pluginInventory/list` projection when Harness is ready, falls back to verified fixed-package facts when it is not, and explicitly distinguishes an installed MCP client from a configured MCP service. `DSH-Desktop-Setup-0.5.19.exe` has passed source, production-audit, package, overwrite-installation, installed-runtime, visual, security, and semantic-data gates; CI and remote-asset publication remain before the Pre-release is complete. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -95,14 +95,14 @@ Open repository → run or approve the agent in Harness
 → or press Ctrl+Alt+H to compare the latest twelve verified local points
 → restore only code, or create an official Harness child session from a linked completed turn
 → open Tools → Context sources to inspect the effective rule and session layers
-→ open Tools → Extension health to verify the fixed closure and actual Profile bundles
+→ open Tools → Extension center to inspect Skills, Plugins, Hooks, MCP, fixed closure, and Profile lifecycle
 → press Ctrl+Shift+S to fork the completed main turn into an isolated Side Chat window
 → press Ctrl+, to choose direct, Windows system, or custom HTTP(S) proxy and test connectivity
 → reload, open in the browser, stop, and visibly distinguish owned from external ports
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.18 release notes](docs/RELEASE_NOTES_v0.5.18.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.19 release notes](docs/RELEASE_NOTES_v0.5.19.md).
 
 ## Security and current limits
 
@@ -142,7 +142,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.18 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增隔离 Side Chat：从当前已完成普通会话调用官方 create/fork、rename、prompt、history 与权限投影，主窗口和 Side Chat 使用不同临时会话存储，Side Chat 不获得桌面命令桥接。安装包 `DSH-Desktop-Setup-0.5.18.exe` 已通过源码、打包、覆盖安装、安装版运行、视觉、安全、数据保留、CI 与远端三资产门禁，并发布为 [GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.18)。V0.5.4 继续保持 Stable：
+V0.5.19 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版把原“扩展健康”升级为 Skills、Plugins、Hooks、MCP 四类统一扩展中心：实时状态使用 Harness 官方只读清单，固定包与本机 Profile 继续提供可核对的降级信息；MCP 客户端已安装与具体 MCP 服务已配置明确分开，当前上游没有独立 Hooks 管理接口也会直接说明。安装包 `DSH-Desktop-Setup-0.5.19.exe` 已通过源码、依赖、打包、覆盖安装、安装版运行、视觉、安全与数据保留门禁，完成 CI 和远端资产核验后发布为 Pre-release。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
