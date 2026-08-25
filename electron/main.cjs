@@ -1,7 +1,8 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, safeStorage, session, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, safeStorage, screen, session, shell } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { randomBytes } = require('node:crypto');
 const { GitChangeReviewer } = require('./change-review.cjs');
 const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
 const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
@@ -58,6 +59,7 @@ const { WorkbenchStore, normalizeWorkbenchState } = require('./workbench-store.c
 const { GitWorktreeManager, runGitCommand } = require('./worktree-manager.cjs');
 const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
+const { SideChatController, SideChatError } = require('./side-chat.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setName('DSH Desktop');
@@ -68,6 +70,7 @@ let contextSourcesWindow;
 let pluginHealthWindow;
 let worktreesWindow;
 let tasksSubagentsWindow;
+let sideChatWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -84,11 +87,16 @@ let profileBundleManager;
 let controlledPluginInstaller;
 let worktreeManager;
 let tasksSubagentsController;
+let sideChatController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
 let pluginInstallPromise = null;
 let worktreeOperationPromise = null;
 let tasksSubagentsOperationPromise = null;
+let sideChatOperationPromise = null;
+let sideChatSelectionTimer;
+let sideChatPartitionSession;
+let sideChatMainLayout;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -214,7 +222,23 @@ const contextSourcesSmokeTarget = process.argv.find((argument) => argument.start
 const pluginHealthSmokeTarget = process.argv.find((argument) => argument.startsWith('--plugin-health-smoke-file='));
 const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith('--worktrees-smoke-file='));
 const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.startsWith('--tasks-subagents-smoke-file='));
+const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith('--side-chat-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
+const isolatedSmokeTarget = [
+  desktopSmokeTarget,
+  harnessSmokeTarget,
+  ipcSecuritySmokeTarget,
+  pdfSmokeTarget,
+  contextSourcesSmokeTarget,
+  pluginHealthSmokeTarget,
+  worktreesSmokeTarget,
+  tasksSubagentsSmokeTarget,
+  sideChatSmokeTarget
+].find(Boolean);
+if (isolatedSmokeTarget) {
+  const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
+  app.setPath('userData', `${path.resolve(outputPath)}.user-data`);
+}
 
 const parseWindowSize = (value) => {
   const match = /^(\d{3,4})x(\d{3,4})$/i.exec(value || '');
@@ -252,6 +276,37 @@ const currentUrlAllowed = (value) => {
   }
 };
 
+const sideChatUrlAllowed = (value) => {
+  try {
+    return Boolean(harnessOrigin && new URL(value).origin === harnessOrigin);
+  } catch {
+    return false;
+  }
+};
+
+const configureHarnessSessionPermissions = (targetSession, getTrustedWebContents) => {
+  targetSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
+    isTrustedClipboardWrite({
+      webContents,
+      mainWebContents: getTrustedWebContents?.(),
+      permission,
+      requestingUrl: details?.requestingUrl || requestingOrigin,
+      harnessOrigin,
+      isMainFrame: details?.isMainFrame
+    })
+  ));
+  targetSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    callback(isTrustedClipboardWrite({
+      webContents,
+      mainWebContents: getTrustedWebContents?.(),
+      permission,
+      requestingUrl: details?.requestingUrl,
+      harnessOrigin,
+      isMainFrame: details?.isMainFrame
+    }));
+  });
+};
+
 const localFileUrlMatches = (value, target) => {
   try {
     const url = new URL(value);
@@ -278,6 +333,8 @@ const showStatusPage = async () => {
 
 const startHarnessForWindow = async ({ restart = false } = {}) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, error: '窗口不可用。' };
+  if (sideChatOperationPromise) await sideChatOperationPromise;
+  closeSideChatWindow();
   stopAgentPolling();
   harnessOrigin = null;
   loadFailureHandled = false;
@@ -1522,6 +1579,197 @@ const openTasksSubagentsWindow = async () => {
   return { ok: true, reused: false };
 };
 
+const captureSideChatMainLayout = () => {
+  if (!mainWindow || mainWindow.isDestroyed() || sideChatMainLayout) return;
+  sideChatMainLayout = Object.freeze({
+    bounds: mainWindow.getBounds(),
+    maximized: mainWindow.isMaximized(),
+    fullScreen: mainWindow.isFullScreen()
+  });
+};
+
+const arrangeSideChatWindows = () => {
+  if (!mainWindow || mainWindow.isDestroyed() || !sideChatWindow || sideChatWindow.isDestroyed()) return;
+  captureSideChatMainLayout();
+  const display = screen.getDisplayMatching(mainWindow.getBounds());
+  const area = display.workArea;
+  if (area.width < 1480) {
+    sideChatWindow.center();
+    return;
+  }
+  if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  const gap = 8;
+  const mainWidth = Math.max(820, Math.floor((area.width - gap) * 0.55));
+  const sideWidth = area.width - gap - mainWidth;
+  if (sideWidth < 640) return;
+  mainWindow.setBounds({ x: area.x, y: area.y, width: mainWidth, height: area.height });
+  sideChatWindow.setBounds({ x: area.x + mainWidth + gap, y: area.y, width: sideWidth, height: area.height });
+};
+
+const restoreSideChatMainLayout = () => {
+  const layout = sideChatMainLayout;
+  sideChatMainLayout = undefined;
+  if (!layout || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.setBounds(layout.bounds);
+  if (layout.maximized) mainWindow.maximize();
+  if (layout.fullScreen) mainWindow.setFullScreen(true);
+};
+
+const stopSideChatSelectionMonitor = () => {
+  clearInterval(sideChatSelectionTimer);
+  sideChatSelectionTimer = undefined;
+};
+
+const releaseSideChatPartition = () => {
+  const isolated = sideChatPartitionSession;
+  sideChatPartitionSession = undefined;
+  if (isolated) void isolated.clearStorageData().catch(() => {});
+};
+
+const closeSideChatWindow = () => {
+  stopSideChatSelectionMonitor();
+  const current = sideChatWindow;
+  sideChatWindow = undefined;
+  if (current && !current.isDestroyed()) current.destroy();
+  releaseSideChatPartition();
+  restoreSideChatMainLayout();
+};
+
+const createSideChatHarnessWindow = async (context) => {
+  if (!harnessOrigin || !sideChatUrlAllowed(harnessOrigin)) {
+    throw new SideChatError('harness-unavailable', 'Harness 页面尚未就绪。');
+  }
+  const partitionOptions = Object.freeze({ partition: `dsh-side-chat-${randomBytes(12).toString('hex')}` });
+  const partition = partitionOptions.partition;
+  sideChatPartitionSession = session.fromPartition(partition);
+  await applySessionProxy(sideChatPartitionSession, proxyStore?.getState() || { mode: 'direct' });
+
+  const created = new BrowserWindow({
+    width: 760,
+    height: 800,
+    minWidth: 640,
+    minHeight: 560,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#171b24',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: context.sideTitle,
+    webPreferences: {
+      partition,
+      preload: path.join(__dirname, 'side-chat-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      plugins: false,
+      sandbox: true,
+      spellcheck: true,
+      webSecurity: true
+    }
+  });
+  sideChatWindow = created;
+  configureHarnessSessionPermissions(sideChatPartitionSession, () => (
+    sideChatWindow && !sideChatWindow.isDestroyed() ? sideChatWindow.webContents : undefined
+  ));
+  sideChatPartitionSession.on('will-download', (event) => event.preventDefault());
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!sideChatUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-frame-navigate', (details) => {
+    if (details.url.startsWith('blob:')) return;
+    if (!sideChatUrlAllowed(details.url)) details.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event, url) => {
+    if (!sideChatUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('page-title-updated', (event) => {
+    event.preventDefault();
+    if (!created.isDestroyed()) created.setTitle(context.sideTitle);
+  });
+  created.on('closed', () => {
+    if (sideChatWindow === created) sideChatWindow = undefined;
+    stopSideChatSelectionMonitor();
+    releaseSideChatPartition();
+    restoreSideChatMainLayout();
+    installApplicationMenu();
+  });
+
+  await created.loadURL(harnessOrigin);
+  const selected = await selectHarnessSession(created.webContents, context.sideSessionId);
+  if (selected.changed) {
+    await created.loadURL(harnessOrigin);
+    await waitForHarnessSessionSelection(created.webContents, context.sideSessionId);
+  }
+  const [mainSelection, sideSelection] = await Promise.all([
+    readHarnessSessionSelection(mainWindow.webContents),
+    readHarnessSessionSelection(created.webContents)
+  ]);
+  if (mainSelection !== context.sourceSessionId || sideSelection !== context.sideSessionId) {
+    throw new SideChatError('selection-mismatch', '主会话或 Side Chat 的独立选择状态没有保持稳定。');
+  }
+
+  sideChatSelectionTimer = setInterval(() => {
+    if (!sideChatWindow || sideChatWindow.isDestroyed()) return;
+    void readHarnessSessionSelection(sideChatWindow.webContents).then(async (sessionId) => {
+      if (sessionId === context.sideSessionId || !sideChatWindow || sideChatWindow.isDestroyed()) return;
+      const restored = await selectHarnessSession(sideChatWindow.webContents, context.sideSessionId);
+      if (restored.changed && sideChatWindow && !sideChatWindow.isDestroyed()) sideChatWindow.webContents.reload();
+    }).catch(() => {});
+  }, 1000);
+  sideChatSelectionTimer.unref?.();
+  arrangeSideChatWindows();
+  if (!sideChatSmokeTarget) {
+    created.show();
+    created.focus();
+  }
+  installApplicationMenu();
+  return created;
+};
+
+const openSideChatWindow = () => {
+  if (sideChatWindow && !sideChatWindow.isDestroyed()) {
+    if (sideChatWindow.isMinimized()) sideChatWindow.restore();
+    sideChatWindow.show();
+    sideChatWindow.focus();
+    return Promise.resolve({ ok: true, reused: true });
+  }
+  if (sideChatOperationPromise) return sideChatOperationPromise;
+  sideChatOperationPromise = Promise.resolve().then(async () => {
+    if (!sideChatController || !mainWindow || mainWindow.isDestroyed() || !harnessUiReady()) {
+      throw new SideChatError('harness-unavailable', 'Harness 页面尚未就绪。');
+    }
+    await refreshAgentDiagnostics({ rebuildMenu: false });
+    const context = await sideChatController.create({
+      mainWebContents: mainWindow.webContents,
+      workspacePath: getWorkspaceState().activePath,
+      agentState: agentDiagnostics
+    });
+    await createSideChatHarnessWindow(context);
+    return { ok: true, reused: false, kind: context.kind, permission: context.permission };
+  }).catch(async (error) => {
+    closeSideChatWindow();
+    if (!sideChatSmokeTarget) {
+      const options = {
+        type: 'warning',
+        title: '无法打开 Side Chat',
+        message: error instanceof SideChatError ? error.message : 'Side Chat 建立失败。',
+        detail: error instanceof SideChatError ? '主会话和工作区没有被修改。' : (error?.message || String(error)),
+        buttons: ['关闭'],
+        defaultId: 0,
+        cancelId: 0
+      };
+      if (mainWindow && !mainWindow.isDestroyed()) await dialog.showMessageBox(mainWindow, options);
+      else await dialog.showMessageBox(options);
+    }
+    return { ok: false, reason: error?.code || 'failed', message: error?.message || 'Side Chat 建立失败。' };
+  }).finally(() => {
+    sideChatOperationPromise = null;
+    installApplicationMenu();
+  });
+  return sideChatOperationPromise;
+};
+
 const taskActionFailure = async (error) => ({
   ok: false,
   message: error instanceof TasksSubagentsError ? error.message : 'Harness 任务状态已变化，请刷新后重试。',
@@ -2374,6 +2622,8 @@ const showWorkspaceError = async (error) => {
 
 const activateWorkspace = async (workspacePath) => {
   try {
+    if (sideChatOperationPromise) await sideChatOperationPromise;
+    closeSideChatWindow();
     if (terminalRunner?.isActive()) await terminalRunner.stop();
     await previewManager?.stop();
     await terminalSettlePromise;
@@ -2539,6 +2789,15 @@ function installApplicationMenu() {
           accelerator: 'CmdOrCtrl+Shift+A',
           enabled: harnessReady,
           click: () => { void openTasksSubagentsWindow(); }
+        },
+        {
+          label: sideChatWindow && !sideChatWindow.isDestroyed() ? '聚焦 Side Chat' : '打开 Side Chat…',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          enabled: harnessReady && (Boolean(sideChatWindow && !sideChatWindow.isDestroyed())
+            || (agentDiagnostics.status === 'ready'
+              && agentDiagnostics.pendingCount === 0
+              && agentDiagnostics.queuedCount === 0)),
+          click: () => { void openSideChatWindow(); }
         },
         { type: 'separator' },
         {
@@ -3228,6 +3487,11 @@ ipcMain.handle('tasks-subagents:interrupt', (event, id) => {
   }
   return runTasksSubagentsOperation(() => performInterruptSubagent(id));
 });
+ipcMain.handle('side-chat:open-window', (event) => (
+  harnessIpcAllowed(event)
+    ? openSideChatWindow()
+    : { ok: false, reason: 'untrusted', message: 'Side Chat 请求未通过安全校验。' }
+));
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -3302,6 +3566,7 @@ const createWindow = async () => {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.on('closed', () => {
     stopAgentPolling();
+    closeSideChatWindow();
     if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
     if (worktreesWindow && !worktreesWindow.isDestroyed()) worktreesWindow.close();
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
@@ -3472,7 +3737,8 @@ const runPdfSmoke = async (target) => {
 };
 
 const runHarnessSmoke = async (target) => {
-  const smokeRoot = path.join(path.dirname(target), 'harness-smoke-data');
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), 'harness-smoke-data');
   supervisor = createSupervisor(smokeRoot);
   let result;
   try {
@@ -3484,8 +3750,19 @@ const runHarnessSmoke = async (target) => {
       workspacePath: supervisor.getState().workspacePath,
       fallbackTitle: 'DSH 临时工作区'
     });
+    const sideChat = await new SideChatController({
+      getOrigin: () => url,
+      readSelection: async () => workspaceSync.sessionId
+    }).create({
+      mainWebContents: {},
+      workspacePath: supervisor.getState().workspacePath,
+      agentState: { status: 'ready', pendingCount: 0, queuedCount: 0 }
+    });
     result = {
-      ok: true,
+      ok: sideChat.kind === 'fresh'
+        && sideChat.sourceSessionId === workspaceSync.sessionId
+        && sideChat.sideSessionId !== workspaceSync.sessionId
+        && sideChat.permission === 'workspace-write',
       name: app.getName(),
       version: app.getVersion(),
       url,
@@ -3498,6 +3775,11 @@ const runHarnessSmoke = async (target) => {
         status: workspaceSync.status,
         workspaceTitle: workspaceSync.workspaceTitle,
         sessionCreated: workspaceSync.sessionCreated
+      },
+      sideChat: {
+        kind: sideChat.kind,
+        independent: sideChat.sideSessionId !== sideChat.sourceSessionId,
+        permission: sideChat.permission
       }
     };
   } catch (error) {
@@ -3506,8 +3788,8 @@ const runHarnessSmoke = async (target) => {
   } finally {
     await supervisor.stop();
   }
-  await fsp.mkdir(path.dirname(target), { recursive: true });
-  await fsp.writeFile(target, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+  await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 };
 
 const runIpcSecuritySmoke = async (target) => {
@@ -3996,28 +4278,103 @@ const runTasksSubagentsSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runSideChatSmoke = async (target) => {
+  const http = require('node:http');
+  const resolvedTarget = path.resolve(target);
+  const mainSessionId = 'session-11111111-1111-4111-8111-111111111111';
+  const sideSessionId = 'session-22222222-2222-4222-8222-222222222222';
+  let fixtureServer;
+  let result;
+  try {
+    fixtureServer = http.createServer((_request, response) => {
+      response.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'content-security-policy': "default-src 'self'; style-src 'self' 'unsafe-inline'"
+      });
+      response.end(`<!doctype html><html><head><meta charset="utf-8"><title>Harness Smoke</title>
+        <style>body{margin:0;background:#0f1117;color:#eef3ff;font:16px system-ui}.smoke_frame{display:grid;grid-template-columns:220px 1fr;min-height:100vh}.smoke_sidebarCol{padding:56px 20px;background:#202637}.content{padding:72px 32px}code{color:#9ec4ff}</style>
+        </head><body><div class="smoke_frame"><aside class="smoke_sidebarCol">Harness sidebar</aside><main class="content"><h1>Harness Side Chat</h1><p>Official session selection is stored by the Harness renderer.</p></main></div></body></html>`);
+    });
+    await new Promise((resolve, reject) => {
+      fixtureServer.once('error', reject);
+      fixtureServer.listen(0, '127.0.0.1', resolve);
+    });
+    const address = fixtureServer.address();
+    harnessOrigin = `http://127.0.0.1:${address.port}`;
+    workspaceStore = {
+      getState: () => ({ activePath: path.resolve(rootDir), displayName: 'Side Chat Smoke', isFallback: false, recentPaths: [] })
+    };
+    proxyStore = { getState: () => ({ mode: 'direct', proxyUrl: '' }) };
+    agentDiagnostics = Object.freeze({ ...unavailableAgentDiagnostics(), status: 'ready' });
+    mainWindow = new BrowserWindow({
+      width: 1120,
+      height: 760,
+      show: false,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true }
+    });
+    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    await mainWindow.loadURL(harnessOrigin);
+    await selectHarnessSession(mainWindow.webContents, mainSessionId);
+    await createSideChatHarnessWindow({
+      sourceSessionId: mainSessionId,
+      sideSessionId,
+      sourceTitle: '主线发布',
+      sideTitle: 'Side Chat · 主线发布',
+      workspacePath: path.resolve(rootDir),
+      permission: 'workspace-write',
+      kind: 'fork'
+    });
+    const [mainSelection, sideSelection, rendered] = await Promise.all([
+      readHarnessSessionSelection(mainWindow.webContents),
+      readHarnessSessionSelection(sideChatWindow.webContents),
+      sideChatWindow.webContents.executeJavaScript(`(() => ({
+        banner: document.getElementById('dsh-side-chat-banner')?.textContent || '',
+        sidebarDisplay: getComputedStyle(document.querySelector('.smoke_sidebarCol')).display,
+        desktopApiExposed: Boolean(window.desktopAPI),
+        bodyText: document.body.innerText
+      }))()`, true)
+    ]);
+    const screenshot = await sideChatWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    result = {
+      ok: mainSelection === mainSessionId
+        && sideSelection === sideSessionId
+        && rendered.banner.includes('Workspace Write / Ask')
+        && rendered.sidebarDisplay === 'none'
+        && rendered.desktopApiExposed === false
+        && rendered.bodyText.includes('Harness Side Chat')
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      mainSelection,
+      sideSelection,
+      independentStorage: mainSelection !== sideSelection,
+      permission: 'workspace-write',
+      approval: 'ask',
+      desktopApiExposed: rendered.desktopApiExposed,
+      sidebarDisplay: rendered.sidebarDisplay,
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    if (fixtureServer) await new Promise((resolve) => fixtureServer.close(resolve));
+    closeSideChatWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+    mainWindow = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
-  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
-    isTrustedClipboardWrite({
-      webContents,
-      mainWebContents: mainWindow?.webContents,
-      permission,
-      requestingUrl: details?.requestingUrl || requestingOrigin,
-      harnessOrigin,
-      isMainFrame: details?.isMainFrame
-    })
-  ));
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    callback(isTrustedClipboardWrite({
-      webContents,
-      mainWebContents: mainWindow?.webContents,
-      permission,
-      requestingUrl: details?.requestingUrl,
-      harnessOrigin,
-      isMainFrame: details?.isMainFrame
-    }));
-  });
+  configureHarnessSessionPermissions(session.defaultSession, () => mainWindow?.webContents);
 
   if (desktopSmokeTarget) {
     await runDesktopSmoke(desktopSmokeTarget.slice('--smoke-test-file='.length));
@@ -4063,6 +4420,12 @@ app.whenReady().then(async () => {
   }
   if (tasksSubagentsSmokeTarget) {
     await runTasksSubagentsSmoke(tasksSubagentsSmokeTarget.slice('--tasks-subagents-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (sideChatSmokeTarget) {
+    await runSideChatSmoke(sideChatSmokeTarget.slice('--side-chat-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;
@@ -4139,6 +4502,7 @@ app.whenReady().then(async () => {
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined)
   });
+  sideChatController = new SideChatController({ getOrigin: () => harnessOrigin });
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   installApplicationMenu();
   await createWindow();
@@ -4149,6 +4513,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', (event) => {
   stopAgentPolling();
+  stopSideChatSelectionMonitor();
   if (allowQuit || (!supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
   event.preventDefault();
   const stops = [];

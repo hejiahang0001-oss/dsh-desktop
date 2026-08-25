@@ -2,6 +2,19 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V0.5.18 Side Chat evidence (local release gates complete)
+
+- Side Chat uses only official Harness Workspace and `session.list/create/fork/prompt/rename/history` seams. Nonblank ordinary sessions preserve parent lineage; blank sources create another ordinary member in the same Workspace. Running, pending, queued, subagent, missing, or wrong-directory sources fail closed.
+- DSH submits `/permission workspace-write` and waits for the durable permission projection. A real rc.2 Harness smoke exposed that an accepted slash-command receipt can arrive before its projection; the controller now treats only the projection as final confirmation. The main session's full durable projection, cwd, lineage, and running state are fingerprinted before and after creation.
+- The second BrowserWindow uses a random non-persistent Electron partition, has no DSH IPC bridge or Node integration, and denies popups, webviews, downloads, redirects, and external main/subframe navigation. Its exact Harness main frame alone may request sanitized clipboard writes. Closing clears the partition but intentionally retains the official Harness session record.
+- Every Electron release-smoke target redirects `userData` before app readiness. The first candidate smoke revealed one Chromium `electron.media.device_id_salt` rotation in the real Preferences file; after isolation and final rebuild, the real 27-file profile remains byte-identical across the complete unpacked and installed smoke matrices.
+- Focused Side Chat tests pass 6/6, the complete source suite passes 196/196, and the production audit reports no known vulnerability. The final unpacked and installed ten-part matrices cover desktop, real Harness, IPC, PDF, context sources, extension health, worktrees, Tasks/Subagents, Side Chat, and a real credential-isolated PTY.
+- The final unpacked tree contains 29,787 files and 692,604,565 bytes. The installed tree contains all unpacked files with equal lengths plus only the normal uninstaller; neither tree has a reparse point. Packaged and installed `app.asar` SHA-256 both equal `6BAB9C0A346AEBCAD50259F697481895FF73D001E06C4E8B5E1CF1BBE773AF3D`.
+- The final installer is 183,995,185 bytes with SHA-256 `605DF28C7149D8AF535CACA9BDD6817C2163BE51270686E255B53EBB0876F33D`; its 188,939-byte blockmap hashes to `989D0A696A26264BF9EEF93573F492DDFFAF3C1E317FB702D963A03C62012EA6`, and the checksum manifest hashes to `0ACAB1E7B5B9E41DCDEA70955B832FDD54D1C6FF1FCABBC16AD23915D2212D2A`.
+- Differential reuse from V0.5.17 is 183,106,241 bytes (99.5169%), leaving 888,944 bytes. The installer is unsigned and automatic update remains disabled.
+- Silent overwrite exits 0 and registers V0.5.18. Snapshot `backups/pre-v0.5.18-final-20260825-201721` contains 27 credential-free semantic files plus V0.5.17 release assets with zero copy mismatch or reparse point. The semantic manifest SHA-256 is exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after installed smoke.
+- PR/CI, merge, Pre-release, and remote-asset evidence remains pending until publication. V0.5.4 remains Stable.
+
 ## V0.5.17 tasks and subagents evidence (local release gates complete)
 
 - The local-only Tasks/Subagents window reads the official `session.list` and bounded `subagent.list` catalogs; ordinary forks never enter the tree. It renders at most 32 entries across five levels and treats diagnostic rows as disabled.

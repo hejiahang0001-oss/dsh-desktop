@@ -76,6 +76,9 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   terminal: Object.freeze({
     openWindow: () => ipcRenderer.invoke('terminal:open-window')
   }),
+  sideChat: Object.freeze({
+    openWindow: () => ipcRenderer.invoke('side-chat:open-window')
+  }),
   harness: Object.freeze({
     getState: () => ipcRenderer.invoke('harness:get-state'),
     restart: () => ipcRenderer.invoke('harness:restart'),
