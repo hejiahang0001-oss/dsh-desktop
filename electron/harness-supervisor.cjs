@@ -7,7 +7,7 @@ const path = require('node:path');
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
-const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_NODE']);
+const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_NODE']);
 const HARNESS_VERSION = '0.1.1-rc.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
@@ -110,6 +110,9 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
   const xlsxToolPath = bundledSkillDir && firstExistingFile([
     path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs')
   ]);
+  const pptxToolPath = bundledSkillDir && firstExistingFile([
+    path.join(bundledSkillDir, 'powerpoint-pptx', 'scripts', 'powerpoint-pptx.cjs')
+  ]);
 
   if (!nodePath) {
     const error = new Error('找不到 DSH Desktop 固定的 Node 运行时。请先执行 pnpm runtime:fetch。');
@@ -136,7 +139,12 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'BUNDLED_EXCEL_SKILL_MISSING';
     throw error;
   }
-  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath };
+  if (!pptxToolPath) {
+    const error = new Error('找不到 DSH Desktop 内置的 PowerPoint PPTX Skill。请重新安装应用。');
+    error.code = 'BUNDLED_POWERPOINT_SKILL_MISSING';
+    throw error;
+  }
+  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath };
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -247,7 +255,7 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(this.options.homeDir, { recursive: true });
     await fsp.mkdir(this.options.launchDir, { recursive: true });
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath } = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath } = resolveHarnessRuntimePaths(this.options);
 
     this.stopRequested = false;
     this.outputBuffer = '';
@@ -266,6 +274,7 @@ class HarnessSupervisor extends EventEmitter {
       environment.DSH_BUNDLED_SKILL_DIR = bundledSkillDir;
       environment.DSH_DESKTOP_DOCX_TOOL = docxToolPath;
       environment.DSH_DESKTOP_XLSX_TOOL = xlsxToolPath;
+      environment.DSH_DESKTOP_PPTX_TOOL = pptxToolPath;
       environment.DSH_DESKTOP_NODE = nodePath;
       this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,

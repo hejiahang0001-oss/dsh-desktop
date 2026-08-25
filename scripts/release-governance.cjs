@@ -32,6 +32,10 @@ const REQUIRED_EXCEL_SKILL_FILES = Object.freeze([
   'SKILL.md',
   'scripts/excel-xlsx.cjs'
 ]);
+const REQUIRED_POWERPOINT_SKILL_FILES = Object.freeze([
+  'SKILL.md',
+  'scripts/powerpoint-pptx.cjs'
+]);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -178,6 +182,7 @@ const inspectPackageLayout = async (rootPath) => {
   const pnpmPrefix = normalize(path.join('resources', 'pnpm'));
   const wordSkillPrefix = normalize(path.join('resources', 'skills', 'word-docx'));
   const excelSkillPrefix = normalize(path.join('resources', 'skills', 'excel-xlsx'));
+  const powerpointSkillPrefix = normalize(path.join('resources', 'skills', 'powerpoint-pptx'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
@@ -190,6 +195,8 @@ const inspectPackageLayout = async (rootPath) => {
   const wordSkillPaths = new Set();
   const excelSkillRuntime = { files: 0, bytes: 0 };
   const excelSkillPaths = new Set();
+  const powerpointSkillRuntime = { files: 0, bytes: 0 };
+  const powerpointSkillPaths = new Set();
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -239,6 +246,12 @@ const inspectPackageLayout = async (rootPath) => {
         excelSkillRuntime.files += 1;
         excelSkillRuntime.bytes += info.size;
       }
+      if (relative === powerpointSkillPrefix || relative.startsWith(`${powerpointSkillPrefix}/`)) {
+        const powerpointRelative = relative.slice(powerpointSkillPrefix.length + 1);
+        powerpointSkillPaths.add(powerpointRelative);
+        powerpointSkillRuntime.files += 1;
+        powerpointSkillRuntime.bytes += info.size;
+      }
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
@@ -267,6 +280,8 @@ const inspectPackageLayout = async (rootPath) => {
     requiredWordSkillFilesReady: REQUIRED_WORD_SKILL_FILES.every((name) => wordSkillPaths.has(name)),
     excelSkillRuntime,
     requiredExcelSkillFilesReady: REQUIRED_EXCEL_SKILL_FILES.every((name) => excelSkillPaths.has(name)),
+    powerpointSkillRuntime,
+    requiredPowerpointSkillFilesReady: REQUIRED_POWERPOINT_SKILL_FILES.every((name) => powerpointSkillPaths.has(name)),
     reparsePoints
   };
 };
@@ -305,6 +320,7 @@ const main = async () => {
     && packageLayout.pnpmRuntime.wrapperValid
     && packageLayout.requiredWordSkillFilesReady
     && packageLayout.requiredExcelSkillFilesReady
+    && packageLayout.requiredPowerpointSkillFilesReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
