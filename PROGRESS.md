@@ -1,8 +1,40 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.12 Latest 候选（真实插件门禁已通过，正在执行打包与发布门禁）
-> 状态：V0.5.7–V0.5.11 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.13 Latest 候选（包体治理、增量更新与签名评估）
+> 状态：V0.5.7–V0.5.12 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.13 本轮进展
+
+1. `app.asar`/`app.asar.unpacked` 曾被生产依赖自动收集规则重复打入完整 `node-pty` 和 `node-addon-api`，其中包含非 Windows 平台预编译物；实际终端只从 `resources/terminal` 的独立 Win-x64 运行时加载。V0.5.13 只排除这组有解析证据、外置替代和 smoke 覆盖的冗余内容。
+2. 排除 xterm 的 TypeScript 源码、source map 和未使用 ESM 构建；保留实际页面加载的固定 UMD JS、CSS 与许可证。
+3. 新增有界发布治理：gzip blockmap 最大输入/解压/文件/块数限制、逐块多重集复用计算、PE Certificate Table 结构检查、包体重复/跨平台/PDB/reparse point/终端必需文件检查。
+4. V0.5.11→V0.5.12 的真实 blockmap 显示 181,350,275 / 183,289,373 字节可复用，复用率 98.9421%，理论差分下载 1,939,098 字节；这证明 blockmap 有价值，但桌面自动更新仍未启用。
+5. 当前安装器没有嵌入 Authenticode 证书，`verifyUpdateCodeSignature` 仍为 false；即使未来出现证书块，也必须显式验证可信证书链、预期 Publisher 和 Stable/Pre-release 独立更新通道，否则自动更新继续失败关闭。
+
+### V0.5.13 当前门禁
+
+| 验证项 | 当前结果 |
+|---|---|
+| 治理单测 | 6/6 通过；覆盖重复块计数、压缩输入边界、PE 证书表、自动更新失败关闭、包体重复与固定排除清单 |
+| V0.5.12 发布回填 | [v0.5.12](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.12) 为非 Draft 的 Pre-release；三个资产状态、大小与摘要一致，安装包直链 HTTP 200；主分支 CI 32794365753 通过；V0.5.4 仍为正式 Latest |
+| 全量自动化 | 159/159 通过；生产依赖审计无已知漏洞 |
+| 解包包体 | 29,331 个文件、673,292,351 字节；较 V0.5.12 减少 39 个文件、11,904,570 字节；`app.asar` 从 6,818,148 降至 1,046,561 字节 |
+| PTY 治理 | 应用内重复 PTY/Node Addon 为 0；独立终端 19 个受控包文件、1,661,537 字节，必需文件齐全、0 外平台、0 PDB、0 reparse point；真实连续命令/Key 隔离 smoke 通过 |
+| 差分更新 | V0.5.12→V0.5.13 可复用 179,039,823 / 180,063,440 字节，复用率 99.4315%，预计下载 1,023,617 字节 |
+| 签名门禁 | PE Certificate Table 为 unsigned，Windows Authenticode 为 NotSigned，`verifyUpdateCodeSignature=false`；可信证书链、预期 Publisher 和独立更新通道也未验证，自动更新 `automaticUpdateReady=false` |
+| 安装包 | `DSH-Desktop-Setup-0.5.13.exe`；180,063,440 字节；SHA-256 `FE1AF65E08FC641E0937E8D045B06934087C31CE58DF7959144BE11FAA486AE1` |
+| 覆盖安装 | 已直接覆盖 V0.5.12；注册版本 `0.5.13`；安装目录 29,334 个文件，只比当前解包目录多正常卸载器；核心 `app.asar` SHA-256 为 `8C069093DDEEC9BEDA097C5EC6430226554951865023189292184254AB8FE7DA` |
+| 安装版运行 | 桌面、Harness、IPC、PDF、上下文来源、插件健康和真实 PTY 七类 smoke 全部通过；Harness HTTP 200，第三方扩展兼容已验证，终端连续命令和 Key 隔离通过 |
+| 覆盖数据 | 覆盖前后均为 25 个语义文件、14 个会话；0 项变化，聚合摘要均为 `046A2EB027B3C6179CB80D84D481464B9416E5113DD656315C35CB7120B59CE4` |
+| 回滚点 | `backups/pre-v0.5.13-20260825-092028`；25 个语义文件逐文件哈希一致，0 个凭据命名文件、0 reparse point，并保留 V0.5.12 三件发布资产 |
+| V0.5.13 发布状态 | 本地包体、覆盖、安装版运行和语义数据门禁已通过；PR/主分支 CI 与 GitHub 远端资产门禁待执行 |
+
+### V0.5.13 后计划调整
+
+1. 若排除规则未让 `app.asar.unpacked` 冗余归零，禁止继续扩大删除范围，回到 electron-builder 依赖收集规则定位原因。
+2. 保留 `compression: store`，优先保证高 blockmap 复用与可回退更新，不为缩小完整安装包牺牲小版本差分效率。
+3. V0.5.14 才开放固定 registry/固定版本/忽略脚本的受控 pnpm 安装；V0.5.13 不增加任意安装入口。
 
 ## V0.5.12 本轮进展
 
