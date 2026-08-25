@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.14 产品 Latest（已覆盖安装并通过本机发布门禁）；下一迭代进入 V0.5.15 插件生命周期
-> 状态：V0.5.7–V0.5.13 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.14 产品 Latest（已覆盖安装并发布为 Pre-release）；下一迭代进入 V0.5.15 插件生命周期
+> 状态：V0.5.7–V0.5.14 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.14 本轮进展
 
@@ -29,7 +29,8 @@
 | 安装版运行 | 桌面、Harness、IPC、PDF、上下文、扩展健康、真实 PTY 七类 smoke 全部通过；安装版资源再次完成真实受控插件安装与回滚 |
 | 覆盖数据 | 覆盖前后均为 25 个语义文件、14 个会话；逐项完全一致；规范化路径/内容聚合摘要均为 `0C473FC78E8801581734BDCD37B0A4F04B5750F526593DE58528497A46897233` |
 | 回滚点 | `backups/pre-v0.5.14-20260825-105431`；25 个语义文件哈希一致，0 个凭据命名文件、0 reparse point，并保留 V0.5.13 三件发布资产 |
-| 待完成 | GitHub PR/主分支 CI、Pre-release 与远端资产核验 |
+| 发布状态 | [PR #20](https://github.com/hejiahang0001-oss/dsh-desktop/pull/20) 三项检查和[主分支 CI 32803918073](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32803918073) 均通过；[v0.5.14](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.14) 为非 Draft 的 Pre-release，目标提交 `e6e96ee82f6ebef33d18409e3dd53f385e93b3aa`；三项远端资产大小/摘要一致，安装包直链 HTTP 200；V0.5.4 仍为正式 Latest |
+| 本地清理 | V0.5.13 安装包、blockmap 和摘要清单在回滚点摘要核对一致后送入 Windows 回收站；本地 `dist` 只保留 Stable V0.5.4 和当前 Latest V0.5.14，可从回收站或回滚点恢复旧资产 |
 
 ### V0.5.14 后计划调整
 
