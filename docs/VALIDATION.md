@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.5.16 worktree evidence (local release gates complete)
+## V0.5.16 worktree evidence
 
 - The local worktree renderer exposes only fixed refresh/create/activate/reveal/remove methods and opaque 24-hex identifiers. It contains no branch, path, command, or Git-argument input; its BrowserWindow remains local-only, sandboxed, context-isolated, and navigation-blocked.
 - Creation always generates a `dsh/worktree-*` branch and a direct child of `%APPDATA%/DSH Desktop/worktrees/<repository-hash>`. The manager validates real directories, rejects links/junctions and subdirectory workspace roots, caps total and managed counts, and disables activation/removal for unsafe or unavailable paths.
@@ -12,7 +12,7 @@ This page records versioned local engineering evidence without making the README
 - The real worktree smoke creates a dirty DSH-owned worktree, renders two cards with the expected fixed actions and no Key marker, creates or verifies a private checkpoint, safely removes the directory, retains the branch, and leaves only the main worktree. A two-frame paint barrier fixed an initially stale loading-state screenshot; the final 1539×1055 image was visually inspected.
 - Silent overwrite exits 0 and registers `DSH Desktop 0.5.16`. The installed tree contains every unpacked file plus only the normal uninstaller, has zero size mismatches and zero reparse points, and shares `app.asar` SHA-256 `9ED240A572ECABEF5A65DF56AD81F22AFD2C0BD3D3D9A2B3BB1583A6356B64EB`.
 - The 27-file semantic manifest is byte-identical before overwrite and after installed smoke: fourteen sessions, two Profile files, and manifest SHA-256 `DC196E825AB811D95A477CCF09911ED3F6F2B67A298F49E5A2DD55DF34B5F949`. Backup `pre-v0.5.16-20260825-134010` contains the three V0.5.15 release assets with zero copy mismatch, credential-named file, or reparse point.
-- The final installer is 183,982,493 bytes with SHA-256 `FF87D8D55892899EAF12CFF9C2DC0720663BCAF627412491E075E9B5F0C590F8`; its 188,923-byte blockmap hashes to `6FF72CA24ADCE1F556DF3DE9464548142BC7EF52F83CAD17CD1763A0D6312176`. Differential reuse from V0.5.15 is 182,912,276 bytes (99.4183%), leaving 1,070,217 bytes. The PE remains unsigned, so automatic update stays disabled. CI and remote Pre-release asset verification remain pending.
+- The final installer is 183,982,493 bytes with SHA-256 `FF87D8D55892899EAF12CFF9C2DC0720663BCAF627412491E075E9B5F0C590F8`; its 188,923-byte blockmap hashes to `6FF72CA24ADCE1F556DF3DE9464548142BC7EF52F83CAD17CD1763A0D6312176`. Differential reuse from V0.5.15 is 182,912,276 bytes (99.4183%), leaving 1,070,217 bytes. The PE remains unsigned, so automatic update stays disabled. PR #24 and main-branch CI run 32820893222 pass; the non-draft V0.5.16 Pre-release targets `4266f248340d8378ad29b4bd4efb2176eef6c5e9`. All three downloaded assets exactly match local size and SHA-256, and the public installer returns HTTP 200 with content length 183,982,493.
 
 ## V0.5.15 plugin-lifecycle evidence
 
