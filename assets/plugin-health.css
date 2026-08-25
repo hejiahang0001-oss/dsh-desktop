@@ -40,7 +40,9 @@ main { display: grid; gap: 22px; width: min(100%, 1080px); margin: 0 auto; paddi
 .catalog-targets { display: grid; gap: 5px; margin-top: 10px; }
 .catalog-targets > div { min-height: 32px; padding: 6px 8px; border-radius: 6px; background: #292927; }
 .catalog-targets span { color: #c8c6c1; font-size: 10px; }
-.install-button { min-height: 26px; padding: 3px 8px; font-size: 9px; }
+.catalog-actions { display: flex; flex: none; gap: 5px; align-items: center; }
+.lifecycle-button { min-height: 26px; padding: 3px 8px; font-size: 9px; }
+.uninstall-button { color: #edc16c; }
 .issue-row { display: flex; justify-content: space-between; padding: 7px 10px; border: 1px solid #3d3b38; border-radius: 7px; background: #20201f; }
 .issue-row code { overflow: hidden; text-overflow: ellipsis; color: #d8d6d1; font-size: 10px; }
 .profile-card { padding: 13px; }

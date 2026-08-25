@@ -6,6 +6,8 @@ const test = require('node:test');
 const {
   BUNDLED_PNPM_VERSION,
   CONTROLLED_PLUGIN_CATALOG,
+  LIFECYCLE_JOURNAL_NAME,
+  REVIEWED_PLUGIN_VERSIONS,
   ControlledPluginInstaller,
   buildControlledInstallEnvironment
 } = require('../electron/controlled-plugin-installer.cjs');
@@ -65,20 +67,44 @@ const fixture = (root, runCommand) => {
   };
 };
 
-const installFiles = (profileDir) => {
+const installFiles = (profileDir, version = plugin.version, enabled = true) => {
   const manifestPath = path.join(profileDir, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  manifest.dependencies[plugin.name] = plugin.version;
-  manifest.dsh.profile.bundles.push(plugin.name);
+  manifest.dependencies ||= {};
+  manifest.dependencies[plugin.name] = version;
+  manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((name) => name !== plugin.name);
+  if (enabled) manifest.dsh.profile.bundles.push(plugin.name);
   writeJson(manifestPath, manifest);
   const packageDir = path.join(profileDir, 'node_modules', ...plugin.name.split('/'));
   writeJson(path.join(packageDir, 'package.json'), {
     name: plugin.name,
-    version: plugin.version,
+    version,
     dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } }
   });
   fs.writeFileSync(path.join(packageDir, 'cordis.patch.yml'), '- insert: []\n');
-  fs.writeFileSync(path.join(profileDir, 'pnpm-lock.yaml'), `lockfileVersion: 9.0\n  integrity: ${plugin.integrity}\n`);
+  fs.writeFileSync(path.join(profileDir, 'pnpm-lock.yaml'), `lockfileVersion: 9.0\n  integrity: ${REVIEWED_PLUGIN_VERSIONS[version].integrity}\n`);
+};
+
+const removeFiles = (profileDir) => {
+  const manifestPath = path.join(profileDir, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  delete manifest.dependencies[plugin.name];
+  if (Object.keys(manifest.dependencies).length === 0) delete manifest.dependencies;
+  manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((name) => name !== plugin.name);
+  writeJson(manifestPath, manifest);
+  fs.rmSync(path.join(profileDir, 'node_modules', ...plugin.name.split('/')), { recursive: true, force: true });
+  fs.writeFileSync(path.join(profileDir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+};
+
+const lifecycleCommand = (getCreated) => async (_command, args) => {
+  const created = getCreated();
+  if (args[0].endsWith('pnpm.mjs')) return { code: 0, stdout: `${BUNDLED_PNPM_VERSION}\n`, stderr: '', timedOut: false, error: null };
+  if (args.includes('add')) {
+    const spec = args[args.indexOf('add') + 1];
+    installFiles(created.profileDir, spec.slice(spec.lastIndexOf('@') + 1));
+  }
+  if (args.includes('remove')) removeFiles(created.profileDir);
+  return { code: 0, stdout: '', stderr: '', timedOut: false, error: null };
 };
 
 test('controlled environment keeps only fixed pnpm paths, proxy state, and no software key', () => {
@@ -215,4 +241,197 @@ test('controlled installer rollback removes the package and restores tracked pro
   await created.manager.rollback(result.id);
   for (const [name, bytes] of before) assert.deepEqual(fs.readFileSync(path.join(created.profileDir, name)), bytes);
   assert.equal(fs.existsSync(path.join(created.profileDir, 'node_modules', ...plugin.name.split('/'))), false);
+});
+
+test('committed install, uninstall, and last-known-good rollback remain bounded to reviewed states', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-lifecycle-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+
+  const installed = await created.manager.install({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  await created.manager.commit(installed.id);
+  let lifecycle = await created.manager.inspectLifecycle({ profileDir: created.profileDir, catalogId: plugin.id });
+  assert.equal(lifecycle.installedVersion, '0.3.1');
+  assert.equal(lifecycle.canUninstall, true);
+  assert.equal(lifecycle.canRollback, true);
+
+  const uninstalled = await created.manager.uninstall({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  assert.deepEqual(uninstalled.target, { version: null, enabled: false });
+  await created.manager.commit(uninstalled.id);
+  lifecycle = await created.manager.inspectLifecycle({ profileDir: created.profileDir, catalogId: plugin.id });
+  assert.equal(lifecycle.canInstall, true);
+  assert.equal(lifecycle.canRollback, true);
+
+  const restored = await created.manager.rollbackLastKnownGood({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  assert.deepEqual(restored.target, { version: '0.3.1', enabled: true });
+  await created.manager.commit(restored.id);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(created.profileDir, 'package.json'), 'utf8')).dependencies[plugin.name], '0.3.1');
+});
+
+test('reviewed 0.3.0 upgrades to 0.3.1 and last-known-good restores the exact prior state', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-upgrade-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+  installFiles(created.profileDir, '0.3.0', false);
+  const before = new Map(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].map((name) => [name, fs.readFileSync(path.join(created.profileDir, name))]));
+
+  const initial = await created.manager.inspectLifecycle({ profileDir: created.profileDir, catalogId: plugin.id });
+  assert.equal(initial.canUpgrade, true);
+  const upgraded = await created.manager.upgrade({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  assert.deepEqual(upgraded.target, { version: '0.3.1', enabled: false });
+  await created.manager.commit(upgraded.id);
+  const rollback = await created.manager.rollbackLastKnownGood({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  await created.manager.commit(rollback.id);
+  for (const [name, bytes] of before) assert.deepEqual(fs.readFileSync(path.join(created.profileDir, name)), bytes);
+  const manifest = JSON.parse(fs.readFileSync(path.join(created.profileDir, 'package.json'), 'utf8'));
+  assert.equal(manifest.dependencies[plugin.name], '0.3.0');
+  assert.equal(manifest.dsh.profile.bundles.includes(plugin.name), false);
+});
+
+test('startup recovery rolls back an applied lifecycle transaction after a simulated crash', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-crash-recovery-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+  installFiles(created.profileDir, '0.3.0');
+  const before = fs.readFileSync(path.join(created.profileDir, 'package.json'));
+  await created.manager.upgrade({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  assert.equal(fs.existsSync(path.join(created.profileDir, LIFECYCLE_JOURNAL_NAME)), true);
+
+  const restarted = new ControlledPluginInstaller({
+    profilesRoot: created.profilesRoot,
+    harnessHome: created.harnessHome,
+    nodePath: created.nodePath,
+    dshBinPath: created.dshBinPath,
+    runtimeModulesDir: created.runtimeModulesDir,
+    pnpmRuntime: created.pnpmRuntime,
+    baseEnv: { SystemRoot: 'C:\\Windows' },
+    runCommand
+  });
+  const outcomes = await restarted.recoverPending({ workspacePath: root });
+  assert.deepEqual(outcomes, [{ profile: 'web', kind: 'plugin-lifecycle', status: 'rolled-back' }]);
+  assert.deepEqual(fs.readFileSync(path.join(created.profileDir, 'package.json')), before);
+  assert.equal(fs.existsSync(path.join(created.profileDir, LIFECYCLE_JOURNAL_NAME)), false);
+});
+
+test('startup recovery blocks a conflicting external manifest edit instead of overwriting it', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-crash-conflict-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+  await created.manager.install({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  const manifestPath = path.join(created.profileDir, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.externalEdit = true;
+  writeJson(manifestPath, manifest);
+
+  const restarted = new ControlledPluginInstaller({
+    profilesRoot: created.profilesRoot,
+    harnessHome: created.harnessHome,
+    nodePath: created.nodePath,
+    dshBinPath: created.dshBinPath,
+    runtimeModulesDir: created.runtimeModulesDir,
+    pnpmRuntime: created.pnpmRuntime,
+    baseEnv: { SystemRoot: 'C:\\Windows' },
+    runCommand
+  });
+  const outcomes = await restarted.recoverPending({ workspacePath: root });
+  assert.deepEqual(outcomes, [{ profile: 'web', kind: 'plugin-lifecycle', status: 'conflict' }]);
+  assert.equal(JSON.parse(fs.readFileSync(manifestPath, 'utf8')).externalEdit, true);
+  await assert.rejects(
+    restarted.uninstall({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root }),
+    (error) => error?.code === 'profile-busy'
+  );
+});
+
+test('startup recovery falls back to the atomic journal backup when the primary record is corrupt', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-journal-backup-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+  installFiles(created.profileDir, '0.3.0');
+  await created.manager.upgrade({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  const journalPath = path.join(created.profileDir, LIFECYCLE_JOURNAL_NAME);
+  assert.equal(fs.existsSync(`${journalPath}.bak`), true);
+  fs.writeFileSync(journalPath, '{corrupt');
+
+  const restarted = new ControlledPluginInstaller({
+    profilesRoot: created.profilesRoot,
+    harnessHome: created.harnessHome,
+    nodePath: created.nodePath,
+    dshBinPath: created.dshBinPath,
+    runtimeModulesDir: created.runtimeModulesDir,
+    pnpmRuntime: created.pnpmRuntime,
+    baseEnv: { SystemRoot: 'C:\\Windows' },
+    runCommand
+  });
+  const outcomes = await restarted.recoverPending({ workspacePath: root });
+  assert.deepEqual(outcomes, [{ profile: 'web', kind: 'plugin-lifecycle', status: 'rolled-back' }]);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(created.profileDir, 'package.json'), 'utf8')).dependencies[plugin.name], '0.3.0');
+  assert.equal(fs.existsSync(journalPath), false);
+  assert.equal(fs.existsSync(`${journalPath}.bak`), false);
+});
+
+test('startup recovery recognizes an owned uninstall while its journal is still in running phase', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-running-uninstall-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+  installFiles(created.profileDir, '0.3.1');
+  await created.manager.uninstall({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  const journalPath = path.join(created.profileDir, LIFECYCLE_JOURNAL_NAME);
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
+  journal.phase = 'running';
+  journal.appliedSnapshot = null;
+  writeJson(journalPath, journal);
+
+  const restarted = new ControlledPluginInstaller({
+    profilesRoot: created.profilesRoot,
+    harnessHome: created.harnessHome,
+    nodePath: created.nodePath,
+    dshBinPath: created.dshBinPath,
+    runtimeModulesDir: created.runtimeModulesDir,
+    pnpmRuntime: created.pnpmRuntime,
+    baseEnv: { SystemRoot: 'C:\\Windows' },
+    runCommand
+  });
+  const outcomes = await restarted.recoverPending({ workspacePath: root });
+  assert.deepEqual(outcomes, [{ profile: 'web', kind: 'plugin-lifecycle', status: 'rolled-back' }]);
+  const manifest = JSON.parse(fs.readFileSync(path.join(created.profileDir, 'package.json'), 'utf8'));
+  assert.equal(manifest.dependencies[plugin.name], '0.3.1');
+});
+
+test('a second lifecycle manager cannot delete or replace an existing transaction claim', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-transaction-claim-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  const runCommand = lifecycleCommand(() => created);
+  created = fixture(root, runCommand);
+  const pending = await created.manager.install({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  const journalPath = path.join(created.profileDir, LIFECYCLE_JOURNAL_NAME);
+  const before = fs.readFileSync(journalPath);
+  const second = new ControlledPluginInstaller({
+    profilesRoot: created.profilesRoot,
+    harnessHome: created.harnessHome,
+    nodePath: created.nodePath,
+    dshBinPath: created.dshBinPath,
+    runtimeModulesDir: created.runtimeModulesDir,
+    pnpmRuntime: created.pnpmRuntime,
+    baseEnv: { SystemRoot: 'C:\\Windows' },
+    runCommand
+  });
+  await assert.rejects(
+    second.uninstall({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root }),
+    (error) => error?.code === 'recovery-pending'
+  );
+  assert.deepEqual(fs.readFileSync(journalPath), before);
+  await created.manager.rollback(pending.id);
 });

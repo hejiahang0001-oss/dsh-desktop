@@ -1,8 +1,36 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.14 产品 Latest（已覆盖安装并发布为 Pre-release）；下一迭代进入 V0.5.15 插件生命周期
+> 当前构建：V0.5.15 产品 Latest 候选（本机打包、覆盖安装、语义数据与安装版真实 pnpm 生命周期门禁已通过，待 GitHub PR/CI 和 Pre-release）
 > 状态：V0.5.7–V0.5.14 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.15 本轮进展
+
+1. 固定目录仍只有 `@nonamelego/dsh-catppuccin`，并把允许版本收紧为已分别审核的 `0.3.0` 与 `0.3.1`；Renderer 只能提交 Profile、目录 id 和 `install/upgrade/uninstall/rollback` 四个枚举动作。
+2. 每次生命周期操作先原子写入 `prepared/running/applied/committed` 持久事务；快照只包含 `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`，逐文件限制 8 MiB、合计限制 16 MiB，并保存字节数、SHA-256 和内容。
+3. 提交后保存一个可验证的最近可用状态，用户可在扩展窗口执行回退；回退完成后当前状态成为新的回退点，因此可撤销刚刚的回退。
+4. 启动恢复优先读取主事务，损坏时读取原子备份；只对逐字节命中 applied 状态或能证明仅插件字段变化的 running 状态自动回退。发现外部清单编辑、未知版本、越界包目录或无效事务时封锁 Profile。
+5. 修复真实 pnpm 演练发现的边界：`dsh plugin remove` 在最后一个依赖被移除时会删除整个 `dependencies` 字段；生命周期读取现在把缺失字段安全视为空依赖，而不是误报 Profile 无效。
+6. 覆盖安装语义数据门禁新增 Profile 的三份 pnpm 清单、启停事务和生命周期事务/最近可用记录，但继续排除 `node_modules`、凭据和瞬态日志。
+
+### V0.5.15 当前门禁
+
+| 验证项 | 当前结果 |
+|---|---|
+| 全量自动化 | 最终版本号源代码套件 174/174 通过；覆盖生命周期、并发事务占用、UI、IPC、语义数据、恢复和既有桌面能力 |
+| 真实 pnpm 生命周期 | 使用打包资源完成 `0.3.0`→`0.3.1`、模拟崩溃启动恢复、升级回退、卸载回退和再次回退；22 个受控子进程检查全部隔离软件 Key 并优先使用随附 pnpm |
+| 冲突保护 | applied 字节快照、running 插件字段归一化、原子备份恢复通过；外部清单字段变化时拒绝自动覆盖 |
+| 生产依赖 | 无已知漏洞 |
+| 解包包体 | 29,785 个文件、692,356,703 字节；`app.asar` 1,109,110 字节；pnpm 454 个文件、19,001,803 字节；0 reparse point、0 重复应用 PTY、0 外平台终端文件、0 终端 PDB |
+| 解包运行 | 桌面、Harness HTTP/工作区、IPC、PDF、上下文、扩展健康、真实 PTY 七类 smoke 通过；扩展窗口显示 1 个固定目录和 1 个安装入口 |
+| 真实生命周期 | 解包资源和安装版资源分别完成固定安装、升级、崩溃恢复、卸载和双向回退；22 个子进程观察均确认 Key 隔离与随附 pnpm `11.19.0` |
+| 差分与签名 | V0.5.14→V0.5.15 可复用 183,045,581 / 183,973,500 字节，99.4956%，预计下载 927,919 字节；unsigned、NotSigned、`verifyUpdateCodeSignature=false`，自动更新继续关闭 |
+| 安装包 | `DSH-Desktop-Setup-0.5.15.exe`；183,973,500 字节；SHA-256 `BFBC4FEB21512AA24D67ABB553DF9B67FE1BB68575D7A8C089586B96CAB00BDA`；blockmap 188,904 字节，SHA-256 `237DA59196A96E8919E249F25DB7191BB252003F16E390E1A969676F804F968D` |
+| 覆盖安装 | 退出码 0，注册版本 `0.5.15`；安装版包含解包版 29,787 个原始文件并只多正常卸载器；安装/解包 `app.asar` 摘要均为 `A5F58150E4FA1602A2DA10DEBA64BEAB807CC07A1DDD7ADFD4F3CC067A994DF9`；0 reparse point |
+| 安装版运行 | 桌面、Harness、IPC、PDF、上下文、扩展健康和真实 PTY 七类 smoke 全部通过；安装版资源再次完成完整真实插件生命周期 |
+| 覆盖数据 | 覆盖前、覆盖后及安装版 smoke 后均为 27 个语义文件、14 个会话、2 个插件 Profile 文件；逐项完全一致，聚合摘要均为 `5770CFD30539FDDAAB931FB715EE114570385F984A0E73E5706E89BF3BFAF30D` |
+| 回滚点 | `backups/pre-v0.5.15-20260825-122152`；27 个语义文件、14 个会话、2 个插件 Profile 文件逐项一致，0 个凭据命名文件、0 reparse point，并保留 V0.5.14 三件发布资产 |
+| 待完成 | GitHub PR/CI、Pre-release 及远端三资产核验；V0.5.4 继续保持 Stable |
 
 ## V0.5.14 本轮进展
 

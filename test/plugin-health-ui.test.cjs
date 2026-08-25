@@ -32,6 +32,7 @@ test('plugin health window is local-only, metadata-only, and packaged', () => {
   assert.match(preload, /plugin-health:reveal/);
   assert.match(preload, /plugin-health:toggle/);
   assert.match(preload, /plugin-health:install/);
+  assert.match(preload, /plugin-health:lifecycle/);
   assert.doesNotMatch(preload, /readFile|writeFile|shell|ipcRenderer\.send/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /pnpm 只管理 Profile 自己声明的外部依赖/);
@@ -39,7 +40,10 @@ test('plugin health window is local-only, metadata-only, and packaged', () => {
   assert.match(renderer, /compatibilityText\(item\.compatibility\)/);
   assert.match(renderer, /makeBadge\(item\.compatibility\.status\)/);
   assert.match(renderer, /api\.toggle\(profile\.id, item\.name, !item\.enabled\)/);
-  assert.match(renderer, /api\.install\(target\.profileId, item\.id\)/);
+  assert.match(renderer, /api\.lifecycle\(target\.profileId, item\.id, action\)/);
+  for (const action of ['install', 'upgrade', 'uninstall', 'rollback']) {
+    assert.match(renderer, new RegExp(`addLifecycleButton\\('${action}'`));
+  }
   assert.match(renderer, /安装脚本已禁止/);
   assert.match(renderer, /软件随附 pnpm/);
   assert.doesNotMatch(renderer, /document\.createElement\(['"]input['"]\)/);

@@ -16,6 +16,17 @@ const FIXED_STATE_FILES = Object.freeze([
 ]);
 const MAX_TREE_DEPTH = 4;
 const MAX_SNAPSHOT_FILES = 4096;
+const PROFILE_STATE_NAMES = Object.freeze(new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'package.json.dsh-desktop-toggle.json',
+  'package.json.dsh-desktop-toggle.json.bak',
+  'package.json.dsh-desktop-plugin-transaction.json',
+  'package.json.dsh-desktop-plugin-transaction.json.bak',
+  'package.json.dsh-desktop-plugin-last-known-good.json',
+  'package.json.dsh-desktop-plugin-last-known-good.json.bak'
+]));
 
 const hashFile = async (filePath) => {
   const hash = createHash('sha256');
@@ -80,11 +91,29 @@ const addDirectoryTree = async (root, relativeDirectory, category, files, depth 
   }
 };
 
+const addProfileState = async (root, files) => {
+  const relativeRoot = 'harness/profiles';
+  let profiles;
+  try { profiles = await fsp.readdir(path.join(root, relativeRoot), { withFileTypes: true }); } catch { return; }
+  for (const profile of profiles
+    .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && entry.name !== 'node_modules')
+    .sort((left, right) => left.name.localeCompare(right.name, 'en'))
+    .slice(0, 16)) {
+    let entries;
+    try { entries = await fsp.readdir(path.join(root, relativeRoot, profile.name), { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
+      if (!entry.isFile() || entry.isSymbolicLink() || !PROFILE_STATE_NAMES.has(entry.name)) continue;
+      await addFile(root, path.join(relativeRoot, profile.name, entry.name), 'pluginProfile', files);
+    }
+  }
+};
+
 const snapshotSemanticUserData = async (rootPath) => {
   const root = path.resolve(rootPath);
   const files = [];
   for (const relativePath of FIXED_STATE_FILES) await addFile(root, relativePath, 'state', files);
   await addDirectoryTree(root, 'harness/sessions', 'session', files);
+  await addProfileState(root, files);
   await addFlatDirectory(root, 'Local Storage/leveldb', 'local-storage', semanticLevelDbName, files);
   files.sort((left, right) => left.path.localeCompare(right.path, 'en'));
   return Object.freeze({
@@ -93,6 +122,7 @@ const snapshotSemanticUserData = async (rootPath) => {
     counts: Object.freeze({
       state: files.filter((file) => file.category === 'state').length,
       sessions: files.filter((file) => file.category === 'session').length,
+      pluginProfiles: files.filter((file) => file.category === 'pluginProfile').length,
       localStorage: files.filter((file) => file.category === 'local-storage').length
     })
   });
