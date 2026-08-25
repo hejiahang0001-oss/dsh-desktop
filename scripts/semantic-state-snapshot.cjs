@@ -9,6 +9,8 @@ const FIXED_STATE_FILES = Object.freeze([
   'network-state.json',
   'Preferences',
   'workbench-state.json',
+  'worktrees/ownership.json',
+  'worktrees/ownership.json.bak',
   'harness/.anonymous-user-id',
   'harness/settings.yaml',
   'harness/storages/session_project_catalog.json',

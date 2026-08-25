@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH 隔离工作树</title>
+  <link rel="stylesheet" href="assets/worktrees.css">
+  <script defer src="assets/worktrees.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="identity">
+      <div class="title-row"><h1>隔离工作树</h1><span class="mode">Git 隔离</span></div>
+      <p id="repository-path" class="repository-path">正在检查当前仓库…</p>
+    </div>
+    <button id="create" class="primary" type="button">新建隔离工作树</button>
+    <button id="refresh" type="button">刷新</button>
+    <button id="close" type="button">关闭</button>
+  </header>
+  <main>
+    <section aria-labelledby="summary-title">
+      <div class="section-heading">
+        <div><h2 id="summary-title">仓库状态</h2><p>每个工作树绑定独立分支与目录；软件 Key 不进入 Git 子进程。</p></div>
+      </div>
+      <div id="summary" class="summary-grid" aria-live="polite"></div>
+    </section>
+    <section aria-labelledby="worktrees-title">
+      <div class="section-heading">
+        <div><h2 id="worktrees-title">工作树</h2><p>外部工作树只读展示；安全回收保留分支，并为未提交修改建立私有恢复点。</p></div>
+      </div>
+      <div id="worktree-list" class="worktree-list" aria-live="polite" aria-busy="true">
+        <p class="empty-state">正在读取 Git 工作树列表…</p>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <span id="status" role="status">本窗口只调用固定的 Git worktree 操作。</span>
+    <span>Esc 关闭 · F5 刷新</span>
+  </footer>
+</body>
+</html>

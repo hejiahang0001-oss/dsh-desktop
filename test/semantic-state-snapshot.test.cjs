@@ -22,6 +22,8 @@ test('semantic user-data snapshot ignores transient logs and credential files', 
   write('harness/profiles/web/package.json', '{"dependencies":{}}');
   write('harness/profiles/web/pnpm-lock.yaml', 'lockfileVersion: 9.0');
   write('harness/profiles/web/node_modules/plugin/secret.txt', 'must-not-be-hashed');
+  write('worktrees/ownership.json', '{"version":1,"worktrees":[]}');
+  write('worktrees/repository/worktree-20260825-000000-a1b2c3/pending.txt', 'working copy must not enter backup');
 
   const before = await snapshotSemanticUserData(root);
   write('Local Storage/leveldb/LOG', 'rotated transient log');
@@ -30,6 +32,8 @@ test('semantic user-data snapshot ignores transient logs and credential files', 
   assert.deepEqual(afterTransient, before);
   assert.equal(before.files.some((file) => /credentials|\/LOG$/i.test(file.path)), false);
   assert.equal(before.files.some((file) => /node_modules/i.test(file.path)), false);
+  assert.equal(before.files.some((file) => file.path === 'worktrees/ownership.json'), true);
+  assert.equal(before.files.some((file) => /pending\.txt$/i.test(file.path)), false);
   assert.equal(before.counts.pluginProfiles, 2);
 
   write('harness/sessions/project/session.jsonl', '{"type":"changed"}\n');
