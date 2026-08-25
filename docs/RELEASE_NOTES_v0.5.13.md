@@ -32,5 +32,5 @@ V0.5.13 adds evidence-based package governance and update/signing readiness chec
 - V0.5.13 directly overwrites V0.5.12. The installed tree has 29,334 files and differs from the current unpacked tree only by the normal uninstaller; the installed `app.asar` matches SHA-256 `8C069093DDEEC9BEDA097C5EC6430226554951865023189292184254AB8FE7DA`.
 - All seven installed smoke classes pass: desktop, Harness, IPC isolation, PDF rendering, context sources, third-party plugin health, and a real two-command PTY with credential isolation. The 25-file semantic snapshot, including fourteen sessions, is byte-for-byte unchanged after overwrite.
 - The last-known-good backup is `backups/pre-v0.5.13-20260825-092028`; it contains no credential-named file or reparse point and retains all three V0.5.12 release assets.
-- CI and GitHub remote-asset gates remain required before publication.
+- PR #18 and main CI pass all three jobs. The published Pre-release contains three uploaded assets whose remote sizes and SHA-256 digests match the local artifacts; the installer URL returns HTTP 200.
 - V0.5.4 remains the formal Stable and GitHub Latest release.
