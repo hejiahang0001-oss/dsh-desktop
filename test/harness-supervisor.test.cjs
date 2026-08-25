@@ -14,6 +14,14 @@ const {
   stripAnsi
 } = require('../electron/harness-supervisor.cjs');
 
+const writeBundledWordSkill = (root) => {
+  const bundledSkillDir = path.join(root, 'resources', 'skills');
+  const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
+  fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
+  fs.writeFileSync(docxToolPath, '// test');
+  return { bundledSkillDir, docxToolPath };
+};
+
 test('software-managed credential policy removes inherited DeepSeek keys case-insensitively', () => {
   const baseEnv = {
     PATH: 'runtime-path',
@@ -83,13 +91,14 @@ test('runtime resolver prefers explicit, existing paths', () => {
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(dshPath, 'test');
   fs.writeFileSync(patchPath, '[]');
+  const word = writeBundledWordSkill(root);
   const resolved = resolveHarnessRuntimePaths({
     rootDir: root,
     resourcesPath: root,
     isPackaged: false,
     env: { DSH_DESKTOP_NODE: nodePath, DSH_DESKTOP_DSH_BIN: dshPath, DSH_DESKTOP_PATCH: patchPath }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...word });
 });
 
 test('packaged runtime resolves DSH from the real pnpm package path', () => {
@@ -117,6 +126,10 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   fs.writeFileSync(pnpmBin, 'real package');
   fs.mkdirSync(path.dirname(patchPath), { recursive: true });
   fs.writeFileSync(patchPath, '[]');
+  const bundledSkillDir = path.join(resourcesPath, 'skills');
+  const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
+  fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
+  fs.writeFileSync(docxToolPath, '// test');
 
   assert.equal(resolvePnpmDshBin(nodeModules), pnpmBin);
   const resolved = resolveHarnessRuntimePaths({
@@ -125,7 +138,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
     isPackaged: true,
     env: {}
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath });
 });
 
 test('runtime resolver fails closed when the desktop language patch is missing', () => {
@@ -134,6 +147,7 @@ test('runtime resolver fails closed when the desktop language patch is missing',
   const dshPath = path.join(root, 'bin.js');
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(dshPath, 'test');
+  writeBundledWordSkill(root);
   assert.throws(() => resolveHarnessRuntimePaths({
     rootDir: root,
     resourcesPath: root,
@@ -160,6 +174,7 @@ test('supervisor launches Harness in the selected workspace directory', async (c
   const workspace = path.join(root, 'selected-workspace');
   const outputFile = path.join(root, 'cwd.txt');
   const argsFile = path.join(root, 'args.json');
+  const envFile = path.join(root, 'env.json');
   const fakeHarness = path.join(root, 'fake-harness.cjs');
   const patchPath = path.join(root, 'desktop.patch.yml');
   fs.mkdirSync(workspace, { recursive: true });
@@ -167,10 +182,12 @@ test('supervisor launches Harness in the selected workspace directory', async (c
     "const fs = require('node:fs');",
     "fs.writeFileSync(process.env.DSH_TEST_CWD_FILE, process.cwd());",
     "fs.writeFileSync(process.env.DSH_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));",
+    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, tool: process.env.DSH_DESKTOP_DOCX_TOOL, node: process.env.DSH_DESKTOP_NODE }));",
     "process.stdout.write('dsh web: http://127.0.0.1:45678\\n');",
     'setInterval(() => {}, 1000);'
   ].join('\n'));
   fs.writeFileSync(patchPath, '[]');
+  const word = writeBundledWordSkill(root);
   const supervisor = new HarnessSupervisor({
     rootDir: root,
     resourcesPath: root,
@@ -183,7 +200,10 @@ test('supervisor launches Harness in the selected workspace directory', async (c
       DSH_DESKTOP_DSH_BIN: fakeHarness,
       DSH_DESKTOP_PATCH: patchPath,
       DSH_TEST_CWD_FILE: outputFile,
-      DSH_TEST_ARGS_FILE: argsFile
+      DSH_TEST_ARGS_FILE: argsFile,
+      DSH_TEST_ENV_FILE: envFile,
+      DSH_BUNDLED_SKILL_DIR: 'C:\\untrusted-skills',
+      DSH_DESKTOP_DOCX_TOOL: 'C:\\untrusted-tool.cjs'
     }
   });
   context.after(async () => {
@@ -196,4 +216,6 @@ test('supervisor launches Harness in the selected workspace directory', async (c
   const args = JSON.parse(fs.readFileSync(argsFile, 'utf8'));
   assert.deepEqual(args.slice(0, 3), ['web', '--patch', patchPath]);
   assert.equal(supervisor.getState().workspacePath, workspace);
+  const environment = JSON.parse(fs.readFileSync(envFile, 'utf8'));
+  assert.deepEqual(environment, { bundled: word.bundledSkillDir, tool: word.docxToolPath, node: process.execPath });
 });

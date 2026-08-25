@@ -2584,6 +2584,21 @@ const showPowerShellCompatibility = async () => {
   if (canOpenPermission && result.response === 0) await runHarnessUiAction('open-permission-mode');
 };
 
+const invokeWordDocxSkill = async () => {
+  if (!harnessUiReady()) return false;
+  const invoked = await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.invokeWord?.())', true).catch(() => false);
+  if (invoked) return true;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Word 文档能力',
+    message: '在对话输入框中输入 /word-docx 后描述文档。',
+    detail: '内置 Skill 可离线创建、检查和受控替换当前工作区内的可编辑 DOCX。输出默认不覆盖已有文件；覆盖时会保留同目录回退副本。',
+    buttons: ['确定'],
+    defaultId: 0
+  });
+  return false;
+};
+
 const showPermissionCenter = async () => {
   await refreshAgentDiagnostics({ rebuildMenu: false });
   const model = buildPermissionCenterDialog({
@@ -2889,6 +2904,12 @@ function installApplicationMenu() {
           label: '扩展中心…',
           click: () => { void openPluginHealthWindow(); }
         },
+        {
+          label: '创建或修改 Word 文档…',
+          enabled: harnessReady,
+          click: () => { void invokeWordDocxSkill(); }
+        },
+        { label: 'Word 文档：内置 /word-docx · 工作区内离线生成', enabled: false },
         {
           label: '定位当前/最近工具',
           enabled: harnessReady && agentDiagnostics.canFocusTool,
@@ -3919,7 +3940,16 @@ const runContextSourcesSmoke = async (target) => {
     contextSourceCatalog = new ContextSourceCatalog({ workspacePath, harnessHome });
     await createContextSourcesWindow();
     await contextSourcesWindow.webContents.executeJavaScript(
-      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      `new Promise((resolve, reject) => {
+        const deadline = Date.now() + 5_000;
+        const check = () => {
+          const text = document.getElementById('status')?.textContent || '';
+          if (text.startsWith('\u5df2\u5237\u65b0') || text.includes('\u4e0d\u53ef\u7528') || text.includes('\u5931\u8d25')) return resolve();
+          if (Date.now() >= deadline) return reject(new Error('Timed out waiting for context sources to render'));
+          setTimeout(check, 25);
+        };
+        check();
+      })`,
       true
     );
     const rendered = await contextSourcesWindow.webContents.executeJavaScript(`({
