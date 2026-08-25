@@ -49,6 +49,7 @@ const {
   getWorkbenchPanelLayoutScript
 } = require('./workbench-panel.cjs');
 const { WorkbenchStore, normalizeWorkbenchState } = require('./workbench-store.cjs');
+const { GitWorktreeManager, runGitCommand } = require('./worktree-manager.cjs');
 const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 
@@ -59,6 +60,7 @@ let mainWindow;
 let terminalWindow;
 let contextSourcesWindow;
 let pluginHealthWindow;
+let worktreesWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -73,9 +75,11 @@ let contextSourceCatalog;
 let pluginHealthCatalog;
 let profileBundleManager;
 let controlledPluginInstaller;
+let worktreeManager;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
 let pluginInstallPromise = null;
+let worktreeOperationPromise = null;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -165,6 +169,7 @@ const statusPage = path.join(rootDir, 'harness-status.html');
 const terminalPage = path.join(rootDir, 'terminal.html');
 const contextSourcesPage = path.join(rootDir, 'context-sources.html');
 const pluginHealthPage = path.join(rootDir, 'plugin-health.html');
+const worktreesPage = path.join(rootDir, 'worktrees.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
@@ -197,6 +202,7 @@ const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWi
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
 const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
 const pluginHealthSmokeTarget = process.argv.find((argument) => argument.startsWith('--plugin-health-smoke-file='));
+const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith('--worktrees-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 
 const parseWindowSize = (value) => {
@@ -250,6 +256,7 @@ const localFileUrlMatches = (value, target) => {
 const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
 const contextSourcesUrlAllowed = (value) => localFileUrlMatches(value, contextSourcesPage);
 const pluginHealthUrlAllowed = (value) => localFileUrlMatches(value, pluginHealthPage);
+const worktreesUrlAllowed = (value) => localFileUrlMatches(value, worktreesPage);
 
 const showStatusPage = async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -983,6 +990,11 @@ const pluginHealthIpcAllowed = (event) => isTrustedMainFrameEvent(
   pluginHealthWindow?.webContents,
   pluginHealthUrlAllowed
 );
+const worktreesIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  worktreesWindow?.webContents,
+  worktreesUrlAllowed
+);
 
 const sameStringArray = (left = [], right = []) => (
   left.length === right.length && left.every((value, index) => value === right[index])
@@ -1381,12 +1393,64 @@ const openPluginHealthWindow = async () => {
   return { ok: true, reused: false };
 };
 
+const createWorktreesWindow = async () => {
+  const created = new BrowserWindow({
+    width: 1040,
+    height: 740,
+    minWidth: 700,
+    minHeight: 500,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#171716',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH 隔离工作树',
+    webPreferences: {
+      preload: path.join(__dirname, 'worktrees-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  worktreesWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!worktreesUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => created.show());
+  created.on('closed', () => {
+    if (worktreesWindow === created) worktreesWindow = undefined;
+  });
+  await created.loadFile(worktreesPage);
+  return created;
+};
+
+const openWorktreesWindow = async () => {
+  if (worktreesWindow && !worktreesWindow.isDestroyed()) {
+    if (worktreesWindow.isMinimized()) worktreesWindow.restore();
+    worktreesWindow.show();
+    worktreesWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createWorktreesWindow();
+  return { ok: true, reused: false };
+};
+
 const pluginMutationBusy = () => (
   Boolean(terminalRunner?.isActive())
   || agentDiagnostics.canStop
   || agentDiagnostics.status === 'waiting'
   || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)
 );
+
+const worktreeExternalBusy = () => (
+  pluginMutationBusy()
+  || Boolean(pluginTogglePromise || pluginInstallPromise)
+);
+const worktreeMutationBusy = () => worktreeExternalBusy() || Boolean(worktreeOperationPromise);
 
 const performPluginToggle = async ({ profileId, packageName, enable }) => {
   if (!profileBundleManager || !pluginHealthCatalog) {
@@ -1571,6 +1635,134 @@ const performPluginInstall = async ({ profileId, catalogId, action = 'install' }
       : '受控生命周期管理器未提交可见变更。';
     return { ok: false, message: `${error.message || '插件生命周期操作失败。'} ${suffix}`, state: await getPluginHealthState() };
   }
+};
+
+const unavailableWorktreeState = (message = 'Git 工作树管理尚未初始化。') => Object.freeze({
+  available: false,
+  reason: 'unavailable',
+  status: 'unavailable',
+  message,
+  repository: Object.freeze({ root: '', commonDir: '', branch: '', head: '', headShort: '', detached: false }),
+  limits: Object.freeze({ total: 32, managed: 12 }),
+  counts: Object.freeze({ total: 0, managed: 0, dirty: 0, unavailable: 0 }),
+  worktrees: Object.freeze([])
+});
+
+const getWorktreeState = () => worktreeManager
+  ? worktreeManager.inspect(getWorkspaceState().activePath)
+  : Promise.resolve(unavailableWorktreeState());
+
+const performWorktreeCreate = async () => {
+  if (!worktreeManager) return { ok: false, message: 'Git 工作树管理尚未初始化。', state: unavailableWorktreeState() };
+  if (worktreeExternalBusy()) return { ok: false, message: '请先结束当前 Agent、插件、终端或检查点任务。', state: await getWorktreeState() };
+  const workspacePath = getWorkspaceState().activePath;
+  const before = await getWorktreeState();
+  if (!before.available || before.status !== 'ready' || before.counts.managed >= before.limits.managed) {
+    return { ok: false, message: before.message || '当前仓库不能创建更多隔离工作树。', state: before };
+  }
+  const confirmation = await dialog.showMessageBox(worktreesWindow || mainWindow, {
+    type: 'info',
+    title: '新建隔离工作树',
+    message: '确认从当前提交创建新的隔离分支和目录？',
+    detail: `基础分支：${before.repository.branch || 'detached HEAD'}\n基础提交：${before.repository.headShort}\n\n软件会生成固定的 dsh/worktree-* 分支，并把目录放在 DSH Desktop 的受控数据目录。当前工作区不会自动切换；软件 Key 不进入 Git 子进程。`,
+    buttons: ['取消', '创建工作树'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，仓库未修改。', state: before };
+  if (worktreeExternalBusy()) return { ok: false, message: '确认期间运行状态已变化，仓库未修改。', state: await getWorktreeState() };
+  const confirmedWorkspacePath = getWorkspaceState().activePath;
+  const confirmed = await getWorktreeState();
+  if (!confirmed.available || confirmed.repository.root !== before.repository.root
+    || confirmed.repository.head !== before.repository.head || confirmed.repository.branch !== before.repository.branch
+    || confirmedWorkspacePath !== workspacePath) {
+    return { ok: false, message: '确认期间当前仓库、分支或提交已变化，请刷新后重试。', state: confirmed };
+  }
+  try {
+    const result = await worktreeManager.create({ workspacePath });
+    return { ok: true, message: `${result.branch} 已创建；可在列表中切换进入。`, state: result.state };
+  } catch (error) {
+    return { ok: false, message: error?.message || '隔离工作树创建失败。', state: await getWorktreeState() };
+  }
+};
+
+const performWorktreeActivate = async (id) => {
+  if (!worktreeManager) return { ok: false, message: 'Git 工作树管理尚未初始化。', state: unavailableWorktreeState() };
+  if (worktreeExternalBusy()) return { ok: false, message: '请先结束当前 Agent、插件、终端或检查点任务。', state: await getWorktreeState() };
+  let resolved;
+  try { resolved = await worktreeManager.resolve({ workspacePath: getWorkspaceState().activePath, id }); } catch (error) {
+    return { ok: false, message: error?.message || '工作树已变化。', state: await getWorktreeState() };
+  }
+  const item = resolved.item;
+  if (!item.canActivate) return { ok: false, message: '所选工作树当前不能切换。', state: await getWorktreeState() };
+  const confirmation = await dialog.showMessageBox(worktreesWindow || mainWindow, {
+    type: 'warning',
+    title: '切换工作树',
+    message: `确认切换到 ${item.branch || item.directoryName}？`,
+    detail: `目录：${item.path}\n提交：${item.headShort}\n未提交修改：${item.status.changed}\n\n切换会停止当前预览并重启 Harness；当前工作树及其修改不会被删除。`,
+    buttons: ['取消', '切换并重启 Harness'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，当前工作区未切换。', state: await getWorktreeState() };
+  if (worktreeExternalBusy()) return { ok: false, message: '确认期间运行状态已变化，当前工作区未切换。', state: await getWorktreeState() };
+  try {
+    const confirmed = await worktreeManager.resolve({ workspacePath: getWorkspaceState().activePath, id });
+    if (confirmed.item.path !== item.path || confirmed.item.head !== item.head || !confirmed.item.canActivate) {
+      return { ok: false, message: '确认期间工作树状态已变化，请刷新后重试。', state: await getWorktreeState() };
+    }
+    const activated = await activateWorkspace(item.path);
+    if (!activated.ok) return { ok: false, message: activated.error || 'Harness 未能切换到所选工作树。', state: await getWorktreeState() };
+    return { ok: true, message: `已切换到 ${item.branch || item.directoryName}，Harness 已重新绑定。`, state: await getWorktreeState() };
+  } catch (error) {
+    return { ok: false, message: error?.message || '工作树切换失败。', state: await getWorktreeState() };
+  }
+};
+
+const performWorktreeRemove = async (id) => {
+  if (!worktreeManager) return { ok: false, message: 'Git 工作树管理尚未初始化。', state: unavailableWorktreeState() };
+  if (worktreeExternalBusy()) return { ok: false, message: '请先结束当前 Agent、插件、终端或检查点任务。', state: await getWorktreeState() };
+  let preview;
+  try { preview = await worktreeManager.previewRemove({ workspacePath: getWorkspaceState().activePath, id }); } catch (error) {
+    return { ok: false, message: error?.message || '工作树已变化。', state: await getWorktreeState() };
+  }
+  const recoveryDetail = preview.status.clean
+    ? `工作树没有未提交修改；分支 ${preview.branch} 和提交 ${preview.headShort} 会保留。`
+    : `检测到 ${preview.status.changed} 项未提交修改（暂存 ${preview.status.staged}、未暂存 ${preview.status.unstaged}、新文件 ${preview.status.untracked}）。软件会先建立私有恢复点；只有恢复点和最终状态复核都成功后才移除目录。`;
+  const confirmation = await dialog.showMessageBox(worktreesWindow || mainWindow, {
+    type: 'warning',
+    title: '安全回收隔离工作树',
+    message: `确认回收 ${preview.branch} 的工作树目录？`,
+    detail: `目录：${preview.path}\n${recoveryDetail}\n\n分支不会删除，当前打开的工作树不能从这里回收。`,
+    buttons: ['取消', '建立恢复并回收'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，工作树和分支均未修改。', state: await getWorktreeState() };
+  if (worktreeExternalBusy()) return { ok: false, message: '确认期间运行状态已变化，工作树未回收。', state: await getWorktreeState() };
+  try {
+    const result = await worktreeManager.remove({
+      workspacePath: getWorkspaceState().activePath,
+      id,
+      expectedFingerprint: preview.fingerprint
+    });
+    const recovery = result.checkpoint
+      ? `私有恢复点 ${result.checkpoint.id} 已保留。`
+      : `分支 ${result.branch} 与提交 ${result.head.slice(0, 10)} 已保留。`;
+    return { ok: true, message: `工作树目录已安全回收；${recovery}`, state: result.state };
+  } catch (error) {
+    return { ok: false, message: error?.message || '安全回收失败；工作树保持原状态。', state: await getWorktreeState() };
+  }
+};
+
+const queueWorktreeOperation = (operation) => {
+  if (worktreeOperationPromise) return worktreeOperationPromise;
+  worktreeOperationPromise = Promise.resolve().then(operation)
+    .finally(() => { worktreeOperationPromise = null; });
+  return worktreeOperationPromise;
 };
 
 const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
@@ -2041,6 +2233,9 @@ const activateWorkspace = async (workspacePath) => {
     installApplicationMenu();
     applyWindowTitle();
     const result = await startHarnessForWindow({ restart: true });
+    if (worktreesWindow && !worktreesWindow.isDestroyed()) {
+      worktreesWindow.webContents.send('worktrees:state', await getWorktreeState());
+    }
     return { ...result, workspace };
   } catch (error) {
     await showWorkspaceError(error);
@@ -2112,6 +2307,12 @@ function installApplicationMenu() {
       submenu: [
         { label: '打开代码仓库…', accelerator: 'CmdOrCtrl+O', click: () => { void chooseWorkspace(); } },
         { label: '最近使用', submenu: recentItems },
+        {
+          label: '管理隔离工作树…',
+          accelerator: 'CmdOrCtrl+Shift+W',
+          enabled: !workspace.isFallback,
+          click: () => { void openWorktreesWindow(); }
+        },
         { type: 'separator' },
         { label: `当前：${workspace.displayName}`, enabled: false },
         { label: workspaceSyncLabel(), enabled: false },
@@ -2801,6 +3002,43 @@ ipcMain.handle('plugin-health:lifecycle', (event, profileId, catalogId, action) 
     .finally(() => { pluginInstallPromise = null; });
   return pluginInstallPromise;
 });
+ipcMain.handle('worktrees:get-state', (event) => (
+  worktreesIpcAllowed(event) ? getWorktreeState() : unavailableWorktreeState('请求来源未通过安全校验。')
+));
+ipcMain.handle('worktrees:refresh', (event) => (
+  worktreesIpcAllowed(event) ? getWorktreeState() : unavailableWorktreeState('请求来源未通过安全校验。')
+));
+ipcMain.handle('worktrees:create', (event) => {
+  if (!worktreesIpcAllowed(event)) return { ok: false, message: '工作树创建请求未通过安全校验。', state: unavailableWorktreeState() };
+  if (worktreeMutationBusy()) return { ok: false, message: '另一个仓库操作仍在进行。' };
+  return queueWorktreeOperation(() => performWorktreeCreate());
+});
+ipcMain.handle('worktrees:activate', (event, id) => {
+  if (!worktreesIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id)) {
+    return { ok: false, message: '工作树切换请求未通过安全校验。' };
+  }
+  if (worktreeMutationBusy()) return { ok: false, message: '另一个仓库操作仍在进行。' };
+  return queueWorktreeOperation(() => performWorktreeActivate(id));
+});
+ipcMain.handle('worktrees:reveal', async (event, id) => {
+  if (!worktreesIpcAllowed(event) || !worktreeManager || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id)) {
+    return { ok: false, message: '工作树定位请求未通过安全校验。' };
+  }
+  try {
+    const resolved = await worktreeManager.resolve({ workspacePath: getWorkspaceState().activePath, id });
+    shell.showItemInFolder(resolved.item.path);
+    return { ok: true, message: '已在文件资源管理器中定位工作树。', state: await getWorktreeState() };
+  } catch (error) {
+    return { ok: false, message: error?.message || '工作树已变化。', state: await getWorktreeState() };
+  }
+});
+ipcMain.handle('worktrees:remove', (event, id) => {
+  if (!worktreesIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id)) {
+    return { ok: false, message: '工作树回收请求未通过安全校验。' };
+  }
+  if (worktreeMutationBusy()) return { ok: false, message: '另一个仓库操作仍在进行。' };
+  return queueWorktreeOperation(() => performWorktreeRemove(id));
+});
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -2876,6 +3114,7 @@ const createWindow = async () => {
   mainWindow.on('closed', () => {
     stopAgentPolling();
     if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
+    if (worktreesWindow && !worktreesWindow.isDestroyed()) worktreesWindow.close();
     mainWindow = undefined;
   });
 
@@ -3312,6 +3551,122 @@ const runPluginHealthSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runWorktreesSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), `worktrees-smoke-data-${process.pid}-${Date.now()}`);
+  const repositoryPath = path.join(smokeRoot, 'repository');
+  const managedRoot = path.join(smokeRoot, 'managed');
+  let result;
+  let createdWorktree;
+  try {
+    await fsp.mkdir(repositoryPath, { recursive: true });
+    const gitSmoke = (args) => runGitCommand('git', repositoryPath, args, {
+      baseEnv: { ...process.env, DEEPSEEK_API_KEY: 'hidden-worktree-smoke-key' }
+    });
+    await gitSmoke(['init', '--initial-branch=main']);
+    await gitSmoke(['config', 'user.name', 'DSH Worktree Smoke']);
+    await gitSmoke(['config', 'user.email', 'worktree-smoke@dsh-desktop.local']);
+    await fsp.writeFile(path.join(repositoryPath, 'README.md'), '# Worktree smoke\n', 'utf8');
+    await gitSmoke(['add', 'README.md']);
+    await gitSmoke(['commit', '-m', 'smoke baseline']);
+    workspaceStore = {
+      getState: () => ({ activePath: repositoryPath, displayName: 'repository', isFallback: false, recentPaths: [repositoryPath] })
+    };
+    worktreeManager = new GitWorktreeManager({
+      managedRoot,
+      now: () => new Date('2026-08-25T09:10:11.000Z'),
+      random: () => Buffer.from('0a0b0c', 'hex'),
+      baseEnv: { ...process.env, DEEPSEEK_API_KEY: 'hidden-worktree-smoke-key' }
+    });
+    createdWorktree = await worktreeManager.create({ workspacePath: repositoryPath });
+    await fsp.writeFile(path.join(createdWorktree.path, 'pending-change.txt'), 'recoverable smoke change\n', 'utf8');
+    await createWorktreesWindow();
+    const renderedInTime = await worktreesWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        if (document.querySelectorAll('.worktree-card').length === 2) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!renderedInTime) throw new Error('worktrees-smoke-timeout');
+    await worktreesWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`, true);
+    const rendered = await worktreesWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.worktreesAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      cards: document.querySelectorAll('.worktree-card').length,
+      managedBadges: [...document.querySelectorAll('.badge')].filter((node) => node.textContent === 'DSH 管理').length,
+      removeButtons: [...document.querySelectorAll('.worktree-actions button')].filter((node) => node.textContent === '安全回收').length,
+      switchButtons: [...document.querySelectorAll('.worktree-actions button')].filter((node) => node.textContent === '切换').length,
+      text: document.body.innerText
+    })`, true);
+    const screenshot = await worktreesWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    const removalPreview = await worktreeManager.previewRemove({
+      workspacePath: repositoryPath,
+      id: createdWorktree.createdId
+    });
+    const removal = await worktreeManager.remove({
+      workspacePath: repositoryPath,
+      id: createdWorktree.createdId,
+      expectedFingerprint: removalPreview.fingerprint
+    });
+    const retainedBranch = (await gitSmoke(['show-ref', '--verify', `refs/heads/${createdWorktree.branch}`]))
+      .trim()
+      .endsWith(` refs/heads/${createdWorktree.branch}`);
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['activate', 'create', 'getState', 'onState', 'refresh', 'remove', 'reveal'])
+        && rendered.title === '隔离工作树'
+        && rendered.cards === 2
+        && rendered.managedBadges === 1
+        && rendered.removeButtons === 1
+        && rendered.switchButtons === 1
+        && rendered.text.includes('dsh/worktree-20260825-091011-0a0b0c')
+        && rendered.text.includes('1 项修改')
+        && !rendered.text.includes('hidden-worktree-smoke-key')
+        && removal.ok
+        && Boolean(removal.checkpoint?.id)
+        && retainedBranch
+        && removal.state.worktrees.length === 1
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      cards: rendered.cards,
+      managedBadges: rendered.managedBadges,
+      removeButtons: rendered.removeButtons,
+      switchButtons: rendered.switchButtons,
+      credentialHidden: !rendered.text.includes('hidden-worktree-smoke-key'),
+      lifecycle: {
+        dirtyRemoval: removal.ok,
+        recoveryCheckpoint: Boolean(removal.checkpoint?.id),
+        branchRetained: retainedBranch,
+        remainingWorktrees: removal.state.worktrees.length
+      },
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error.message };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    worktreesWindow?.destroy();
+    worktreesWindow = undefined;
+    if (createdWorktree?.path) {
+      await runGitCommand('git', repositoryPath, ['worktree', 'remove', '--force', createdWorktree.path]).catch(() => {});
+    }
+    worktreeManager = undefined;
+    workspaceStore = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
@@ -3371,11 +3726,20 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  if (worktreesSmokeTarget) {
+    await runWorktreesSmoke(worktreesSmokeTarget.slice('--worktrees-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
 
   dataRoot = app.getPath('userData');
   workspaceStore = new WorkspaceStore({
     filePath: path.join(dataRoot, 'desktop-state.json'),
     fallbackDir: path.join(dataRoot, 'launch-root')
+  });
+  worktreeManager = new GitWorktreeManager({
+    managedRoot: path.join(dataRoot, 'worktrees')
   });
   workbenchStore = new WorkbenchStore({
     filePath: path.join(dataRoot, 'workbench-state.json')
