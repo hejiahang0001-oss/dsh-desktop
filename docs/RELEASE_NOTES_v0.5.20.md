@@ -23,7 +23,8 @@ V0.5.20 adds the first built-in Office delivery capability: editable Word DOCX c
 - Microsoft Word opened both generated acceptance documents without repair or compatibility mode. Chinese text, headings, bullets, numbering, table, header/footer, exact replacement, and a real embedded PNG rendered correctly across three pages.
 - The focused Word, supervisor, and package-governance suite passes 32/32; the complete source suite passes 216/216; the production audit reports no known vulnerability.
 - Both unpacked and installed ten-part smoke matrices pass, including real pinned Harness, context, extension center, worktrees, Tasks/Subagents, Side Chat, a real credential-isolated PTY, and installed `word-docx` discovery. Silent overwrite exits 0, all 29,789 unpacked files match the installed tree, and the 27-file semantic profile is byte-identical before and after installation and smoke testing.
-- The 184,012,614-byte installer hashes to `0815951648E4376CE7B4AFF6630A44946CFF6984CC9E2C85A0EA85B387C561FC`; the 188,877-byte blockmap hashes to `9176D8C43513C8B638856190752C094381A08F1AA471936C6490205AA9911128`. CI and clean remote-asset download verification remain publication gates.
+- The 184,012,614-byte installer hashes to `0815951648E4376CE7B4AFF6630A44946CFF6984CC9E2C85A0EA85B387C561FC`; the 188,877-byte blockmap hashes to `9176D8C43513C8B638856190752C094381A08F1AA471936C6490205AA9911128`.
+- Implementation PR [#32](https://github.com/hejiahang0001-oss/dsh-desktop/pull/32) and main-branch CI both pass all three jobs. The non-draft [V0.5.20 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20) targets the exact merge commit; remote sizes and digests match, the public installer returns HTTP 200, and a clean download reproduces all three asset hashes with 2/2 manifest entries. Stable remains V0.5.4.
 
 ## Current limits
 

@@ -71,7 +71,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.20 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/word-docx` Skill and fixed offline DOCX tool for editable document creation, PNG/JPEG embedding, exact text replacement, structural inspection, and rollback-backed overwrite. Source discovery, a real credential-backed Agent invocation, Microsoft Word visual checks, 216/216 source tests, production dependency audit, packaging, overwrite installation, installed-runtime smoke, and semantic-data preservation pass. `DSH-Desktop-Setup-0.5.20.exe` advances to Pre-release after CI and clean remote-asset verification. The front-page download remains Stable.
+**V0.5.20 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/word-docx` Skill and fixed offline DOCX tool for editable document creation, PNG/JPEG embedding, exact text replacement, structural inspection, and rollback-backed overwrite. Source discovery, a real credential-backed Agent invocation, Microsoft Word visual checks, 216/216 source tests, production dependency audit, packaging, overwrite installation, installed-runtime smoke, semantic-data preservation, CI, and clean remote-asset verification pass. Download `DSH-Desktop-Setup-0.5.20.exe` from the [V0.5.20 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20). The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -145,7 +145,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.20 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/word-docx` Skill：可在当前工作区离线生成带标题、段落、列表、表格、PNG/JPEG 图片、分页、页眉页脚的可编辑 DOCX，也可做精确文本替换、结构检查和带回退副本的明确覆盖。源码发现、真实 Key Agent 调用、Microsoft Word 三页视觉验收、216/216 源码测试、生产依赖审计、打包、覆盖安装、安装版运行和用户数据保留均已通过；安装包 `DSH-Desktop-Setup-0.5.20.exe` 通过 CI 和远端三资产干净回下载核验后发布为 Pre-release。V0.5.4 继续保持 Stable：
+V0.5.20 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/word-docx` Skill：可在当前工作区离线生成带标题、段落、列表、表格、PNG/JPEG 图片、分页、页眉页脚的可编辑 DOCX，也可做精确文本替换、结构检查和带回退副本的明确覆盖。源码发现、真实 Key Agent 调用、Microsoft Word 三页视觉验收、216/216 源码测试、生产依赖审计、打包、覆盖安装、安装版运行、用户数据保留、CI 和远端三资产干净回下载核验均已通过；安装包已发布到 [V0.5.20 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20)。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
