@@ -1,6 +1,21 @@
 # Validation evidence
 
-This page records the locally verified V0.5.11 engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because V0.5.11 preserves those surfaces.
+This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
+
+## V0.5.14 controlled-install evidence
+
+- pnpm `11.19.0` is a packaged, release-governed resource invoked only by bundled Node.js. The governance scan requires 454 pnpm files, the exact manifest version, launcher/distribution/license/config files, safe relative wrapper targets, no reparse points, and no system-pnpm fallback.
+- The renderer can submit only an opaque Profile id and fixed catalog id. It has no package/version/registry/path/command input. Windows-native confirmation defaults to Cancel, and the main process rechecks health and busy state before the transaction.
+- The first and only catalog entry is `@nonamelego/dsh-catppuccin@0.3.1` with its reviewed registry integrity. Install uses the official `dsh plugin` path with exact-save and ignored scripts; verification checks the Profile manifest, installed manifest, lock integrity, package containment, Patch, Web platform, peers, and final compatibility.
+- The child environment strips the software Key, inherited PATH, and inherited `NPM_CONFIG_*`, then applies only the fixed pnpm/Node/Windows paths, empty configs, fixed registry, script blocking, exact-save mode, `$DSH_HOME/.pnpm-store`, and the selected credential-free software proxy.
+- The initial real rollback rehearsal exposed that `pnpm remove` does not accept the add-only `--ignore-scripts` and `--registry` CLI flags and that a hoisted package can remain until prune. The corrected path keeps those policies in environment variables, forwards no unsupported remove flags, runs a fixed prune, and restores tracked files after prune.
+- A fresh isolated real transaction now installs and verifies `0.3.1`, confirms bundled pnpm `11.19.0`, credential isolation and fixed PATH, then remove/prunes the package and restores `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` to their exact prior byte digests.
+- The final unpacked tree contains 29,785 files and 692,326,513 bytes, including 454 pnpm files and 19,001,800 pnpm bytes. Seven existing unpacked smoke classes pass, and the packaged Extension Health window exposes exactly five narrow methods, one catalog card, one usable install button, one Profile, and one existing toggle without leaking fixture configuration or Patch contents.
+- The complete source suite passes 167/167 and the production audit reports no known vulnerability. Review hardening strips Node/Corepack/pnpm execution overrides, fixes the Windows command interpreter, enforces TLS, preserves only the selected safe proxy variables, and blocks a rollback-uncertain Profile for the rest of the process.
+- The final installer is 183,969,223 bytes with SHA-256 `A394AB263423309A9F6C022C27A11F9737D3E6B25A76AAB5912F6EB0A91DC2FB`; the 188,872-byte blockmap has SHA-256 `50405F8E31A919DFF31F9C08E542B80DF1806BAF1569C0576DFE916E420F1DCA`. The real V0.5.13→V0.5.14 differential is 5,003,659 bytes with 97.2802% reuse.
+- Windows Authenticode and structural PE checks both report unsigned; trusted chain, Publisher, signature verification, and separated update-feed evidence remain absent, so automatic update stays fail-closed.
+- The silent overwrite exits 0 and registers V0.5.14. The installed raw tree contains every one of the 29,787 unpacked files plus only `Uninstall DSH Desktop.exe`; both `app.asar` files hash to `051254B7703B767EEC7FAB494A96AE362460B3C25A02573D35FD686F7AD00DE4` and the installed tree has zero reparse points or terminal PDB files.
+- All seven installed smoke classes and an installed-resource controlled install/rollback pass. The semantic manifest is identical across overwrite: 25 files, fourteen sessions, and canonical aggregate `0C473FC78E8801581734BDCD37B0A4F04B5750F526593DE58528497A46897233`. Backup `pre-v0.5.14-20260825-105431` contains the three V0.5.13 release files and no credential-named file or reparse point.
 
 ## V0.5.11 safe-toggle and recovery evidence
 

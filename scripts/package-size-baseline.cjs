@@ -2,13 +2,14 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 const MAX_FILES = 50_000;
-const CATEGORY_ORDER = Object.freeze(['appAsar', 'harnessRuntime', 'nodeRuntime', 'terminalRuntime', 'electronShell']);
+const CATEGORY_ORDER = Object.freeze(['appAsar', 'harnessRuntime', 'nodeRuntime', 'pnpmRuntime', 'terminalRuntime', 'electronShell']);
 
 const categoryFor = (relativePath) => {
   const normalized = relativePath.replaceAll('\\', '/');
   if (normalized === 'resources/app.asar') return 'appAsar';
   if (normalized.startsWith('resources/harness/')) return 'harnessRuntime';
   if (normalized.startsWith('resources/runtime/')) return 'nodeRuntime';
+  if (normalized.startsWith('resources/pnpm/')) return 'pnpmRuntime';
   if (normalized.startsWith('resources/terminal/')) return 'terminalRuntime';
   return 'electronShell';
 };

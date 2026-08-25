@@ -46,6 +46,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Checkpoint-linked conversation branches** — associate new checkpoints with the selected completed Harness turn, then either restore code only or create and switch to an official child session while preserving the source conversation.
 - **Visible context sources** — inspect the Code preset, desktop language policy, project-rule candidate chain, and durable-session boundary in a local read-only window without exposing hidden prompts, credentials, or rule contents; Harness remains authoritative for content deduplication and prompt-budget inclusion.
 - **Extension health and safe toggles** — inspect the fixed Harness dependency closure, shared fallback links, initialized Profiles, ordered bundle layers, and Profile-declared pnpm dependencies; only already-installed external bundle dependencies can be enabled or disabled through a confirmed, atomic, rollback-capable restart.
+- **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **In-app network settings** — choose direct access, the current Windows system proxy, or a credential-free custom HTTP(S) proxy; test DeepSeek connectivity before saving and keep loopback services and the integrated terminal outside that route.
 - **Reliable copy actions** — Harness can write sanitized text to the clipboard from its trusted main page, while clipboard reads, subframes, and unrelated permission requests remain denied.
 - **Packaged runtime** — the installer includes pinned Node.js and Harness runtimes; users do not need to install Node.js first.
@@ -66,7 +67,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.13 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, removes only package surfaces proven redundant with the isolated terminal runtime, and adds bounded release governance for differential blockmaps, package layout, and executable signature readiness. `DSH-Desktop-Setup-0.5.13.exe` is published as a Pre-release after package, overwrite, installed-smoke, CI, and remote-asset gates pass. The front-page download remains Stable.
+**V0.5.14 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, bundles pnpm `11.19.0`, and adds a native-confirmed, fixed-catalog installation path for the verified `@nonamelego/dsh-catppuccin@0.3.1` Web extension. `DSH-Desktop-Setup-0.5.14.exe` is published as a Pre-release only after package, overwrite, installed-smoke, CI, and remote-asset gates pass. The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -97,7 +98,7 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.13 release notes](docs/RELEASE_NOTES_v0.5.13.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.14 release notes](docs/RELEASE_NOTES_v0.5.14.md).
 
 ## Security and current limits
 
@@ -137,7 +138,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.13 产品 Latest 继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，只移除已证明与独立终端运行时重复的打包内容，并新增差分 blockmap、包体布局和可执行文件签名就绪度的有界发布治理。`DSH-Desktop-Setup-0.5.13.exe` 已在通过打包、覆盖安装、安装版 smoke、CI 和远端资产门禁后发布为 Pre-release。V0.5.4 继续保持 Stable：
+V0.5.14 产品 Latest 继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，内置 pnpm `11.19.0`，并为已验证的 `@nonamelego/dsh-catppuccin@0.3.1` Web 扩展提供原生确认、固定目录、固定版本、禁止安装脚本、Key 隔离、健康复核和失败回退。`DSH-Desktop-Setup-0.5.14.exe` 只有在通过打包、覆盖安装、安装版 smoke、CI 和远端资产门禁后才作为 Pre-release 发布。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

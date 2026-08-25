@@ -16,6 +16,15 @@ const REQUIRED_TERMINAL_FILES = Object.freeze([
   'prebuilds/win32-x64/conpty/conpty.dll',
   'prebuilds/win32-x64/conpty/OpenConsole.exe'
 ]);
+const REQUIRED_PNPM_FILES = Object.freeze([
+  'pnpm.cmd',
+  'empty.npmrc',
+  'package/bin/pnpm.mjs',
+  'package/dist/pnpm.mjs',
+  'package/package.json',
+  'package/LICENSE'
+]);
+const REQUIRED_PNPM_VERSION = '11.19.0';
 
 const normalize = (value) => value.replaceAll('\\', '/');
 
@@ -158,12 +167,15 @@ const inspectPackageLayout = async (rootPath) => {
     normalize(path.join('resources', 'app.asar.unpacked', 'node_modules', 'node-addon-api'))
   ];
   const terminalPrefix = normalize(path.join('resources', 'terminal', 'node_modules', 'node-pty'));
+  const pnpmPrefix = normalize(path.join('resources', 'pnpm'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
   const redundantAppRuntime = { files: 0, bytes: 0 };
   const terminalRuntime = { files: 0, bytes: 0, foreignPlatformFiles: 0, pdbFiles: 0 };
   const terminalPaths = new Set();
+  const pnpmRuntime = { files: 0, bytes: 0, version: '', wrapperValid: false };
+  const pnpmPaths = new Set();
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -195,12 +207,36 @@ const inspectPackageLayout = async (rootPath) => {
         if (/^prebuilds\/(?!win32-x64(?:\/|$))/i.test(terminalRelative) || /^third_party\//i.test(terminalRelative)) terminalRuntime.foreignPlatformFiles += 1;
         if (/\.pdb$/i.test(terminalRelative)) terminalRuntime.pdbFiles += 1;
       }
+      if (relative === pnpmPrefix || relative.startsWith(`${pnpmPrefix}/`)) {
+        const pnpmRelative = relative.slice(pnpmPrefix.length + 1);
+        pnpmPaths.add(pnpmRelative);
+        pnpmRuntime.files += 1;
+        pnpmRuntime.bytes += info.size;
+      }
     }
+  }
+  const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
+  if (pnpmPaths.has('package/package.json')) {
+    try {
+      const manifest = JSON.parse(await fsp.readFile(pnpmManifestPath, 'utf8'));
+      if (manifest.name === 'pnpm' && typeof manifest.version === 'string') pnpmRuntime.version = manifest.version;
+    } catch {
+      pnpmRuntime.version = '';
+    }
+  }
+  if (pnpmPaths.has('pnpm.cmd')) {
+    const wrapper = await fsp.readFile(path.join(root, 'resources', 'pnpm', 'pnpm.cmd'), 'utf8');
+    pnpmRuntime.wrapperValid = /\.\.\\runtime\\node\.exe/i.test(wrapper)
+      && /package\\bin\\pnpm\.mjs/i.test(wrapper)
+      && !/\b(?:curl|powershell|cmd\s+\/c|npm|npx)\b/i.test(wrapper);
   }
   return {
     redundantAppRuntime,
     terminalRuntime,
     requiredTerminalFilesReady: REQUIRED_TERMINAL_FILES.every((name) => terminalPaths.has(name)),
+    pnpmRuntime,
+    requiredPnpmFilesReady: REQUIRED_PNPM_FILES.every((name) => pnpmPaths.has(name)),
+    requiredPnpmVersionReady: pnpmRuntime.version === REQUIRED_PNPM_VERSION,
     reparsePoints
   };
 };
@@ -234,6 +270,9 @@ const main = async () => {
     && packageLayout.terminalRuntime.foreignPlatformFiles === 0
     && packageLayout.terminalRuntime.pdbFiles === 0
     && packageLayout.requiredTerminalFilesReady
+    && packageLayout.requiredPnpmFilesReady
+    && packageLayout.requiredPnpmVersionReady
+    && packageLayout.pnpmRuntime.wrapperValid
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
@@ -268,6 +307,8 @@ module.exports = {
   MAX_BLOCKMAP_COMPRESSED_BYTES,
   MAX_BLOCKMAP_RAW_BYTES,
   MAX_PACKAGE_FILES,
+  REQUIRED_PNPM_FILES,
+  REQUIRED_PNPM_VERSION,
   REQUIRED_TERMINAL_FILES,
   assessAutomaticUpdate,
   compareBlockmaps,

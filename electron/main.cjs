@@ -8,6 +8,11 @@ const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.c
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
 const { buildPermissionCenterDialog } = require('./permission-center.cjs');
 const { ContextSourceCatalog } = require('./context-sources.cjs');
+const {
+  ControlledPluginInstaller,
+  controlledCatalog,
+  resolveControlledPnpmRuntime
+} = require('./controlled-plugin-installer.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
@@ -67,8 +72,10 @@ let workspaceFiles;
 let contextSourceCatalog;
 let pluginHealthCatalog;
 let profileBundleManager;
+let controlledPluginInstaller;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
+let pluginInstallPromise = null;
 let dataRoot;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
@@ -1289,7 +1296,32 @@ const unavailablePluginHealth = (message = '扩展健康尚未初始化。') => 
 
 const getPluginHealthState = async () => {
   const state = pluginHealthCatalog ? await pluginHealthCatalog.scan() : unavailablePluginHealth();
-  return { ...state, recovery: pluginRecoveryOutcomes.map((item) => ({ ...item })) };
+  const pnpm = controlledPluginInstaller?.getRuntimeStatus() || { status: 'unavailable', version: '', registry: 'registry.npmjs.org' };
+  const catalog = controlledCatalog().map((item) => ({
+    ...item,
+    targets: item.profiles.map((profileName) => {
+      const profile = state.profiles.find((candidate) => candidate.name === profileName);
+      const dependency = profile?.dependencies.find((candidate) => candidate.name === item.name);
+      return {
+        profileId: profile?.id || '',
+        profileName,
+        available: Boolean(profile),
+        installed: Boolean(dependency),
+        installedVersion: dependency?.version || '',
+        canInstall: pnpm.status === 'ready'
+          && state.runtime.status === 'healthy'
+          && profile?.status === 'healthy'
+          && profile.workspaceReady
+          && !dependency
+      };
+    })
+  }));
+  return {
+    ...state,
+    pnpm,
+    catalog,
+    recovery: pluginRecoveryOutcomes.map((item) => ({ ...item }))
+  };
 };
 
 const createPluginHealthWindow = async () => {
@@ -1405,6 +1437,7 @@ const performPluginToggle = async ({ profileId, packageName, enable }) => {
   } catch (error) {
     let rollbackOk = false;
     let restartOk = false;
+    const unresolvedRollback = error?.code === 'install-rollback-failed';
     if (transaction?.changed) {
       try {
         await profileBundleManager.rollback(transaction.id);
@@ -1420,6 +1453,94 @@ const performPluginToggle = async ({ profileId, packageName, enable }) => {
           : (restartOk ? '已自动恢复变更前状态并重新启动 Harness。' : 'Profile 已恢复，但 Harness 未能重新启动。'))
       : '未确认写入完成；下次启动会按事务日志尝试恢复。';
     return { ok: false, message: `${error.message || '扩展变更失败。'} ${suffix}`, state: await getPluginHealthState() };
+  }
+};
+
+const performPluginInstall = async ({ profileId, catalogId }) => {
+  if (!controlledPluginInstaller || !pluginHealthCatalog) {
+    return { ok: false, message: '受控插件安装尚未初始化。', state: await getPluginHealthState() };
+  }
+  if (pluginMutationBusy()) {
+    return { ok: false, message: '请先结束当前 Agent、待确认操作、终端或检查点任务。', state: await getPluginHealthState() };
+  }
+  const before = await getPluginHealthState();
+  const catalogItem = before.catalog.find((item) => item.id === catalogId);
+  const target = catalogItem?.targets.find((item) => item.profileId === profileId);
+  if (!catalogItem || !target?.canInstall) {
+    return { ok: false, message: '安装目录、Profile 或健康状态已变化，请刷新后重试。', state: before };
+  }
+  const confirmation = await dialog.showMessageBox(pluginHealthWindow || mainWindow, {
+    type: 'warning',
+    title: '安装已验证扩展',
+    message: `确认安装 ${catalogItem.displayName}？`,
+    detail: `固定包：${catalogItem.name}@${catalogItem.version}\nProfile：${target.profileName}\n来源：https://registry.npmjs.org\n\n软件只会使用随附 pnpm ${before.pnpm.version}、精确版本和已审核完整性摘要，并强制忽略安装脚本。软件 Key 不会进入安装进程；网络使用当前软件代理设置。安装完成后将重启 Harness 并重新检查兼容状态。`,
+    buttons: ['取消', '安装并重启 Harness'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，Profile 未修改。', state: before };
+  if (pluginMutationBusy()) {
+    return { ok: false, message: '确认期间 Agent、终端或检查点状态已变化，Profile 未修改。', state: await getPluginHealthState() };
+  }
+  const confirmed = await getPluginHealthState();
+  const confirmedItem = confirmed.catalog.find((item) => item.id === catalogId);
+  const confirmedTarget = confirmedItem?.targets.find((item) => item.profileId === profileId);
+  if (!confirmedItem || !confirmedTarget?.canInstall) {
+    return { ok: false, message: '确认期间安装目录、Profile 或健康状态已变化，Profile 未修改。', state: confirmed };
+  }
+  const profileDir = await pluginHealthCatalog.resolveProfilePath(profileId);
+  if (!profileDir) return { ok: false, message: 'Profile 已变化，请刷新后重试。', state: confirmed };
+
+  let transaction;
+  let restartAttempted = false;
+  try {
+    transaction = await controlledPluginInstaller.install({
+      profileDir,
+      catalogId,
+      workspacePath: workspaceStore.getState().activePath,
+      proxyEnvironment: harnessProxyEnvironment
+    });
+    if (pluginMutationBusy()) throw new Error('安装期间 Agent、终端或检查点状态发生变化。');
+    restartAttempted = true;
+    const restarted = await startHarnessForWindow({ restart: true });
+    if (!restarted.ok) throw new Error(restarted.error || 'Harness 重启失败。');
+    const verifiedState = await getPluginHealthState();
+    const verifiedProfile = verifiedState.profiles.find((item) => item.id === profileId);
+    const verifiedDependency = verifiedProfile?.dependencies.find((item) => item.name === transaction.plugin.name);
+    if (verifiedState.runtime.status !== 'healthy'
+      || verifiedProfile?.status !== 'healthy'
+      || verifiedDependency?.version !== transaction.plugin.version
+      || verifiedDependency?.enabled !== true
+      || verifiedDependency?.compatibility?.status !== 'verified') {
+      throw new Error('重启后的插件版本、启用状态或兼容健康结果不一致。');
+    }
+    await controlledPluginInstaller.commit(transaction.id);
+    return {
+      ok: true,
+      message: `${transaction.plugin.name}@${transaction.plugin.version} 已安装，Harness 已完成健康重启。`,
+      state: verifiedState
+    };
+  } catch (error) {
+    let rollbackOk = false;
+    let restartOk = false;
+    if (transaction?.changed) {
+      try {
+        await controlledPluginInstaller.rollback(transaction.id);
+        rollbackOk = true;
+        restartOk = restartAttempted ? Boolean((await startHarnessForWindow({ restart: true })).ok) : true;
+      } catch {
+        // V0.5.15 will add persisted lifecycle recovery; this run remains blocked until manual inspection.
+      }
+    }
+    const suffix = unresolvedRollback
+      ? '未能确认 Profile 已恢复；本次运行已封锁该 Profile，请退出软件并检查 Profile 后再继续。'
+      : transaction?.changed
+      ? (rollbackOk
+          ? (restartOk ? '已恢复安装前 Profile 并重新启动 Harness。' : 'Profile 已恢复，但 Harness 未能重新启动。')
+          : '未能确认 Profile 已恢复；请勿继续安装插件。')
+      : '受控安装器未提交可见变更。';
+    return { ok: false, message: `${error.message || '插件安装失败。'} ${suffix}`, state: await getPluginHealthState() };
   }
 };
 
@@ -2622,10 +2743,22 @@ ipcMain.handle('plugin-health:toggle', (event, profileId, packageName, enable) =
   if (typeof profileId !== 'string' || typeof packageName !== 'string' || typeof enable !== 'boolean') {
     return { ok: false, message: '扩展变更参数无效。' };
   }
-  if (pluginTogglePromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
+  if (pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
   pluginTogglePromise = performPluginToggle({ profileId, packageName, enable })
     .finally(() => { pluginTogglePromise = null; });
   return pluginTogglePromise;
+});
+ipcMain.handle('plugin-health:install', (event, profileId, catalogId) => {
+  if (!pluginHealthIpcAllowed(event)) {
+    return { ok: false, message: '插件安装请求未通过安全校验。' };
+  }
+  if (typeof profileId !== 'string' || typeof catalogId !== 'string') {
+    return { ok: false, message: '插件安装参数无效。' };
+  }
+  if (pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
+  pluginInstallPromise = performPluginInstall({ profileId, catalogId })
+    .finally(() => { pluginInstallPromise = null; });
+  return pluginInstallPromise;
 });
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
@@ -3062,6 +3195,16 @@ const runPluginHealthSmoke = async (target) => {
     await writeSmokePackage(profileDir, { name: 'dsh-profile-web', dependencies: { 'community-bundle': '1.0.0' }, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'community-bundle'] } }, hiddenMarker: 'hidden-plugin-config-marker' });
     await fsp.writeFile(path.join(profileDir, 'pnpm-workspace.yaml'), 'packages:\n  - .\n', 'utf8');
     pluginHealthCatalog = new PluginHealthCatalog({ harnessHome, dshPackageDir });
+    const packagedHarness = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
+    controlledPluginInstaller = new ControlledPluginInstaller({
+      profilesRoot: path.join(harnessHome, 'profiles'),
+      harnessHome,
+      nodePath: packagedHarness.nodePath,
+      dshBinPath: packagedHarness.dshBinPath,
+      runtimeModulesDir: path.join(process.resourcesPath, 'harness', 'node_modules'),
+      pnpmRuntime: resolveControlledPnpmRuntime({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged })
+    });
+    await controlledPluginInstaller.inspectRuntime();
     await createPluginHealthWindow();
     const renderedInTime = await pluginHealthWindow.webContents.executeJavaScript(`new Promise((resolve) => {
       const deadline = Date.now() + 15000;
@@ -3078,6 +3221,8 @@ const runPluginHealthSmoke = async (target) => {
     const rendered = await pluginHealthWindow.webContents.executeJavaScript(`({
       apiKeys: Object.keys(window.pluginHealthAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
+      catalogRows: document.querySelectorAll('.catalog-card').length,
+      installButtons: document.querySelectorAll('.install-button').length,
       profileRows: document.querySelectorAll('.profile-card').length,
       toggleButtons: document.querySelectorAll('.toggle-button').length,
       text: document.body.innerText
@@ -3086,8 +3231,10 @@ const runPluginHealthSmoke = async (target) => {
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'refresh', 'reveal', 'toggle'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'install', 'refresh', 'reveal', 'toggle'])
         && rendered.title === '扩展健康'
+        && rendered.catalogRows === 1
+        && rendered.installButtons === 1
         && rendered.profileRows === 1
         && rendered.toggleButtons === 1
         && rendered.text.includes('@deepseek-ai/dsh-base')
@@ -3102,6 +3249,8 @@ const runPluginHealthSmoke = async (target) => {
       version: app.getVersion(),
       apiKeys: rendered.apiKeys,
       title: rendered.title,
+      catalogRows: rendered.catalogRows,
+      installButtons: rendered.installButtons,
       profileRows: rendered.profileRows,
       toggleButtons: rendered.toggleButtons,
       compatibilityVerified: rendered.text.includes('兼容已验证'),
@@ -3117,6 +3266,7 @@ const runPluginHealthSmoke = async (target) => {
     await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
     pluginHealthWindow?.destroy();
     pluginHealthWindow = undefined;
+    controlledPluginInstaller = undefined;
   }
   if (!result.ok) process.exitCode = 1;
 };
@@ -3206,10 +3356,20 @@ app.whenReady().then(async () => {
     resourcesPath: process.resourcesPath,
     isPackaged: app.isPackaged
   });
+  const dshPackageDir = path.resolve(path.dirname(harnessRuntime.dshBinPath), '..');
   pluginHealthCatalog = new PluginHealthCatalog({
     harnessHome: path.join(dataRoot, 'harness'),
-    dshPackageDir: path.resolve(path.dirname(harnessRuntime.dshBinPath), '..')
+    dshPackageDir
   });
+  controlledPluginInstaller = new ControlledPluginInstaller({
+    profilesRoot: path.join(dataRoot, 'harness', 'profiles'),
+    harnessHome: path.join(dataRoot, 'harness'),
+    nodePath: harnessRuntime.nodePath,
+    dshBinPath: harnessRuntime.dshBinPath,
+    runtimeModulesDir: path.resolve(dshPackageDir, '..', '..'),
+    pnpmRuntime: resolveControlledPnpmRuntime({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged })
+  });
+  await controlledPluginInstaller.inspectRuntime();
   profileBundleManager = new ProfileBundleManager({
     profilesRoot: path.join(dataRoot, 'harness', 'profiles')
   });

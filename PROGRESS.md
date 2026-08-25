@@ -1,8 +1,41 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.13 产品 Latest（已发布）；下一迭代进入 V0.5.14 受控 pnpm 插件安装
+> 当前构建：V0.5.14 产品 Latest（已覆盖安装并通过本机发布门禁）；下一迭代进入 V0.5.15 插件生命周期
 > 状态：V0.5.7–V0.5.13 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.14 本轮进展
+
+1. 内置并固定 pnpm `11.19.0`，用软件随附 Node.js 启动；发布治理核对 wrapper、空配置、package manifest、launcher、distribution、license、版本与无 reparse point。
+2. 扩展健康窗口新增“已验证安装目录”，当前只提供 `@nonamelego/dsh-catppuccin@0.3.1` 到 Web Profile；Renderer 没有包名、版本、registry、路径或 pnpm 参数输入。
+3. 安装前使用 Windows 原生默认取消确认并再次核对 Profile、固定闭包、兼容状态和运行忙碌；安装后重启 Harness，只有固定版本、锁文件完整性、边界、Patch、平台、Peer 与启用状态全部正确才提交。
+4. 插件子进程移除软件 Key、系统 PATH、`NODE_OPTIONS`、Node TLS/模块劫持变量、Corepack/pnpm 变量和继承的 `NPM_CONFIG_*`；固定 `ComSpec`/`PATHEXT`，只保留固定 pnpm/Node/Windows 路径、TLS、固定 registry、空配置、忽略脚本、精确版本、`$DSH_HOME/.pnpm-store` 和软件选择的无凭据代理。
+5. 首次真实回滚暴露两项问题：pnpm remove 不接受 add 阶段的 CLI flags，且 hoisted 包会在只恢复清单后残留。现已把策略固定在环境变量中，remove 不再携带无效参数，并在恢复清单前执行固定 prune。
+6. 修复后新的隔离事务完成真实安装、兼容验证、remove/prune 与回滚；三份受跟踪 Profile 文件摘要逐字节恢复，插件目录移除，Key 标记未进入数据目录。
+7. 代码审核补充回滚失败门禁：无法确认恢复时不再误报“未提交可见变更”，并在当前进程持续封锁该 Profile，等待 V0.5.15 的持久启动恢复。
+
+### V0.5.14 当前门禁
+
+| 验证项 | 当前结果 |
+|---|---|
+| 全量自动化 | 167/167 通过；覆盖受控环境、固定目录、任意输入拒绝、回滚失败封锁、真实验证器、UI、包体和发布治理 |
+| 生产依赖 | 无已知漏洞 |
+| 解包包体 | 29,785 个文件、692,326,513 字节；pnpm 454 个文件、19,001,800 字节；0 reparse point、0 重复应用 PTY、0 外平台终端文件、0 终端 PDB |
+| 解包运行 | 桌面、Harness、IPC、PDF、上下文、扩展健康、真实 PTY 七类 smoke 通过；Harness HTTP 200；扩展窗口显示 1 个已验证目录和 1 个安装按钮 |
+| 真实受控安装 | `@nonamelego/dsh-catppuccin@0.3.1`、pnpm `11.19.0`、固定 registry、忽略脚本、Key 隔离、固定 PATH、兼容 verified、remove/prune 与三份 Profile 文件逐字节恢复均通过 |
+| 差分与签名 | V0.5.13→V0.5.14 可复用 178,965,564 / 183,969,223 字节，97.2802%，预计下载 5,003,659 字节；unsigned、NotSigned、`verifyUpdateCodeSignature=false`，自动更新继续关闭 |
+| 安装包 | `DSH-Desktop-Setup-0.5.14.exe`；183,969,223 字节；SHA-256 `A394AB263423309A9F6C022C27A11F9737D3E6B25A76AAB5912F6EB0A91DC2FB`；blockmap SHA-256 `50405F8E31A919DFF31F9C08E542B80DF1806BAF1569C0576DFE916E420F1DCA` |
+| 覆盖安装 | 退出码 0，注册版本 `0.5.14`；安装版包含解包版 29,787 个原始文件并只多正常卸载器；`app.asar` 安装/解包摘要均为 `051254B7703B767EEC7FAB494A96AE362460B3C25A02573D35FD686F7AD00DE4`；0 reparse point、0 终端 PDB |
+| 安装版运行 | 桌面、Harness、IPC、PDF、上下文、扩展健康、真实 PTY 七类 smoke 全部通过；安装版资源再次完成真实受控插件安装与回滚 |
+| 覆盖数据 | 覆盖前后均为 25 个语义文件、14 个会话；逐项完全一致；规范化路径/内容聚合摘要均为 `0C473FC78E8801581734BDCD37B0A4F04B5750F526593DE58528497A46897233` |
+| 回滚点 | `backups/pre-v0.5.14-20260825-105431`；25 个语义文件哈希一致，0 个凭据命名文件、0 reparse point，并保留 V0.5.13 三件发布资产 |
+| 待完成 | GitHub PR/主分支 CI、Pre-release 与远端资产核验 |
+
+### V0.5.14 后计划调整
+
+1. V0.5.15 优先将安装事务写入持久 journal，覆盖进程崩溃后的启动恢复；不能把 V0.5.14 的进程内回滚当作崩溃恢复。
+2. 插件升级/卸载必须复用真实发现的 remove/prune 顺序，并增加 store/残留目录检查、last-known-good 选择与 Profile/lock/Patch/数据一致性证据。
+3. V0.5.14 只开放一个已验证扩展；扩充目录必须逐包固定版本、完整性、许可证、Patch、平台、Peer、脚本和真实回滚证据。
 
 ## V0.5.13 本轮进展
 
