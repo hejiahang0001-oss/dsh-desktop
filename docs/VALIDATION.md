@@ -15,7 +15,8 @@ This page records versioned local engineering evidence without making the README
 - V0.5.16 to V0.5.17 reuses 182,962,134 of 183,991,125 bytes (99.4407%) with an estimated 1,028,991-byte differential. The installer is unsigned, signature verification and channel separation are not ready, and automatic update remains disabled.
 - Silent overwrite exits with code 0 and registers `DSH Desktop 0.5.17`. The installed tree contains every unpacked file with equal length and only adds the normal uninstaller; it has zero reparse points. Packaged and installed `app.asar` SHA-256 both equal `BC7413B26F890B8045BA0916F00EE10BE00AB55D347D9F204DC41395A6935614`.
 - The pre-overwrite snapshot `backups/pre-v0.5.17-20260825-175915` retains the V0.5.16 installer, blockmap, and checksum manifest. All 27 semantic files, including 14 sessions and two Profile files, match exactly before overwrite, after overwrite, and after installed smoke; no credential-named file or reparse point was copied.
-- CI, Pre-release creation, and remote three-asset verification remain pending.
+- [PR #26](https://github.com/hejiahang0001-oss/dsh-desktop/pull/26) and its CI run 32837455967 pass all three jobs. Merge commit `23e955aeae79ce89b8579e1b9e2475b245827d6d` passes all three jobs again in [main-branch CI run 32837559866](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32837559866).
+- The published [v0.5.17 release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.17) is a non-draft Pre-release targeting the merge commit. GitHub reports the installer, blockmap, and checksum manifest with exact local sizes and SHA-256 digests; the public installer returns HTTP 200 and content length 183,991,125. V0.5.4 remains GitHub's formal Latest release.
 
 ## V0.5.16 worktree evidence
 

@@ -28,7 +28,8 @@ V0.5.17 adds a bounded Tasks/Subagents surface over the official DeepSeek Harnes
 - The final unpacked and installed Electron 43 task windows render three subagents, two background jobs, one visible prompt editor and Send action, one interrupt action, working-directory sharing, and credential redaction. Both 1539×1085 screenshots were visually inspected.
 - The 183,991,125-byte installer has SHA-256 `F9A6478C2A99CC99644F21A5A704EE493500FDF0B81BC6F2FB54C6DA30EB22CD`; its 188,963-byte blockmap has SHA-256 `3BF702905D416C251AA6C4DA697C23D9DEB61049B293D8E5F330CB7D556C95BA`. V0.5.16→V0.5.17 reuses 99.4407% of installer bytes.
 - Overwrite installation registers V0.5.17 and preserves all 27 selected semantic files, including 14 sessions and two Profile files, before and after the installed smoke. The installed tree equals the unpacked 29,787-file tree plus the normal uninstaller, with no reparse point.
-- CI, GitHub Pre-release creation, and remote three-asset verification remain pending.
+- PR #26 and the merge commit pass all three CI jobs. The non-draft GitHub Pre-release targets `23e955aeae79ce89b8579e1b9e2475b245827d6d`; all three remote assets match local sizes and SHA-256 digests, and the installer public download returns HTTP 200 with 183,991,125 bytes.
+- V0.5.4 remains Stable and GitHub's formal Latest release.
 
 ## Deferred to V0.5.18
 
