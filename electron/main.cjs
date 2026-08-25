@@ -3055,12 +3055,12 @@ const runPluginHealthSmoke = async (target) => {
   try {
     await writeSmokePackage(dshPackageDir, { name: '@deepseek-ai/dsh', version: '0.1.1-rc.2', dependencies: { '@deepseek-ai/dsh-base': '0.1.1-rc.2' } });
     await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.1-rc.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
-    await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });
+    await fsp.writeFile(path.join(externalPackageDir, 'cordis.patch.yml'), 'hidden-patch-prose-marker', 'utf8');
     await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh', dshPackageDir);
     await linkSmokePackage(fallbackRoot, '@deepseek-ai/dsh-base', basePackageDir);
     await writeSmokePackage(profileDir, { name: 'dsh-profile-web', dependencies: { 'community-bundle': '1.0.0' }, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'community-bundle'] } }, hiddenMarker: 'hidden-plugin-config-marker' });
     await fsp.writeFile(path.join(profileDir, 'pnpm-workspace.yaml'), 'packages:\n  - .\n', 'utf8');
-    await fsp.writeFile(path.join(profileDir, 'cordis.patch.yml'), 'hidden-patch-prose-marker', 'utf8');
     pluginHealthCatalog = new PluginHealthCatalog({ harnessHome, dshPackageDir });
     await createPluginHealthWindow();
     const renderedInTime = await pluginHealthWindow.webContents.executeJavaScript(`new Promise((resolve) => {
@@ -3092,6 +3092,8 @@ const runPluginHealthSmoke = async (target) => {
         && rendered.toggleButtons === 1
         && rendered.text.includes('@deepseek-ai/dsh-base')
         && rendered.text.includes('community-bundle')
+        && rendered.text.includes('兼容已验证')
+        && rendered.text.includes('固定 registry · Web · Patch 正常 · Peer 0/0')
         && rendered.text.includes('共享回退由 Harness 启动时维护')
         && !rendered.text.includes('hidden-plugin-config-marker')
         && !rendered.text.includes('hidden-patch-prose-marker')
@@ -3102,6 +3104,7 @@ const runPluginHealthSmoke = async (target) => {
       title: rendered.title,
       profileRows: rendered.profileRows,
       toggleButtons: rendered.toggleButtons,
+      compatibilityVerified: rendered.text.includes('兼容已验证'),
       configHidden: !rendered.text.includes('hidden-plugin-config-marker') && !rendered.text.includes('hidden-patch-prose-marker'),
       screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
     };

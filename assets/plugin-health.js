@@ -11,12 +11,26 @@
   const closeButton = document.getElementById('close');
 
   const empty = (node) => { while (node.firstChild) node.firstChild.remove(); };
-  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '不可用', ready: '可解析', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', 'not-bundle': '不是扩展层' }[value] || '未知');
+  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '不可用', ready: '可解析', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', verified: '兼容已验证', review: '需要审查', 'not-bundle': '不是扩展层' }[value] || '未知');
   const makeBadge = (value) => {
     const node = document.createElement('span');
     node.className = `badge ${value || ''}`;
     node.textContent = label(value);
     return node;
+  };
+  const compatibilityText = (value) => {
+    if (!value) return '';
+    const source = {
+      'registry-exact': '固定 registry',
+      'registry-range': '浮动 registry',
+      'registry-tag': 'registry 标签',
+      local: '本地来源',
+      git: 'Git 来源'
+    }[value.sourceType] || '来源待确认';
+    const platform = { web: 'Web', host: 'Host', unsupported: '平台不支持' }[value.clientPlatform] || '平台待确认';
+    const patch = value.bundlePatch === 'ready' ? 'Patch 正常' : value.bundlePatch === 'missing' ? 'Patch 缺失' : 'Patch 已阻止';
+    const peer = value.peers || {};
+    return `${source} · ${platform} · ${patch} · Peer ${peer.healthy || 0}/${peer.expected || 0}`;
   };
   const packageRow = (item, kind, profile) => {
     const row = document.createElement('li');
@@ -27,9 +41,16 @@
     const source = { runtime: '软件随附', profile: 'Profile 安装', none: '未解析', outside: '边界外' }[item.source] || '未知来源';
     detail.textContent = `${kind} · ${source}${item.version ? ` · ${item.version}` : ''}`;
     body.append(name, detail);
+    if (item.compatibility) {
+      const compatibility = document.createElement('span');
+      compatibility.className = 'compatibility-detail';
+      compatibility.textContent = compatibilityText(item.compatibility);
+      body.append(compatibility);
+    }
     const actions = document.createElement('div');
     actions.className = 'package-actions';
     actions.append(makeBadge(item.status));
+    if (item.compatibility) actions.append(makeBadge(item.compatibility.status));
     if (kind === 'pnpm 管理' && item.toggleable) {
       const toggle = document.createElement('button');
       toggle.type = 'button';

@@ -2,6 +2,7 @@ const { createHash } = require('node:crypto');
 const { createRequire } = require('node:module');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { inspectThirdPartyCompatibility } = require('./plugin-compatibility.cjs');
 
 const MAX_MANIFEST_BYTES = 1_048_576;
 const MAX_PROFILES = 16;
@@ -62,7 +63,7 @@ const sourceForRealPath = ({ realDir, installRoot, profileModules }) => {
   return 'outside';
 };
 
-const inspectResolvedPackage = async ({ candidate, installRoot, profileModules }) => {
+const inspectResolvedPackage = async ({ candidate, installRoot, profileModules, profileDir, dependencySpec }) => {
   if (!candidate) return immutable({ status: 'missing', source: 'none', version: '', declaresBundle: false });
   const realDir = await realpathOrNull(candidate);
   if (!realDir) return immutable({ status: 'missing', source: 'none', version: '', declaresBundle: false });
@@ -70,11 +71,15 @@ const inspectResolvedPackage = async ({ candidate, installRoot, profileModules }
   if (source === 'outside') return immutable({ status: 'blocked', source, version: '', declaresBundle: false });
   try {
     const manifest = await readJsonObject(path.join(realDir, 'package.json'));
+    const compatibility = source === 'profile'
+      ? await inspectThirdPartyCompatibility({ packageDir: realDir, profileDir, runtimeModulesDir: installRoot, dependencySpec })
+      : null;
     return immutable({
       status: 'ready',
       source,
       version: typeof manifest.version === 'string' ? manifest.version : '',
-      declaresBundle: typeof manifest.dsh?.bundle?.patch === 'string'
+      declaresBundle: typeof manifest.dsh?.bundle?.patch === 'string',
+      ...(compatibility ? { compatibility: immutable(compatibility) } : {})
     });
   } catch {
     return immutable({ status: 'invalid', source, version: '', declaresBundle: false });
@@ -160,7 +165,7 @@ class PluginHealthCatalog {
     this.profilePaths = new Map();
   }
 
-  async _resolveForProfile(name, profileDir, { bundle = false } = {}) {
+  async _resolveForProfile(name, profileDir, { bundle = false, dependencySpec } = {}) {
     const anchors = bundle
       ? [path.join(this.dshPackageDir, 'package.json'), path.join(profileDir, 'package.json')]
       : [path.join(profileDir, 'package.json')];
@@ -172,7 +177,9 @@ class PluginHealthCatalog {
     return inspectResolvedPackage({
       candidate,
       installRoot: this.installRoot,
-      profileModules: path.join(profileDir, 'node_modules')
+      profileModules: path.join(profileDir, 'node_modules'),
+      profileDir,
+      dependencySpec
     });
   }
 
@@ -212,7 +219,10 @@ class PluginHealthCatalog {
     const dependencyNames = uniquePackageNames(Object.keys(manifest.dependencies || {}));
     const dependencySet = new Set(dependencyNames);
     for (const name of uniquePackageNames(rawBundles)) {
-      const resolved = await this._resolveForProfile(name, profileDir, { bundle: true });
+      const resolved = await this._resolveForProfile(name, profileDir, {
+        bundle: true,
+        dependencySpec: dependencySet.has(name) ? manifest.dependencies[name] : undefined
+      });
       bundles.push(immutable({
         name,
         ...resolved,
@@ -222,18 +232,20 @@ class PluginHealthCatalog {
     }
     const dependencies = [];
     for (const name of dependencyNames) {
-      const resolved = await this._resolveForProfile(name, profileDir);
+      const resolved = await this._resolveForProfile(name, profileDir, { dependencySpec: manifest.dependencies[name] });
       dependencies.push(immutable({
         name,
         ...resolved,
         enabled: rawBundles.includes(name),
-        toggleable: resolved.status === 'ready' && resolved.declaresBundle
+        toggleable: resolved.status === 'ready'
+          && resolved.declaresBundle
+          && resolved.compatibility?.status !== 'blocked'
       }));
     }
     const workspaceReady = Boolean(await lstatOrNull(path.join(profileDir, 'pnpm-workspace.yaml')));
     const degraded = !workspaceReady
       || bundles.some(({ status }) => status !== 'ready')
-      || dependencies.some(({ status }) => status !== 'ready');
+      || dependencies.some(({ status, compatibility }) => status !== 'ready' || compatibility?.status === 'blocked');
     return immutable({
       id,
       name: entry.name,
