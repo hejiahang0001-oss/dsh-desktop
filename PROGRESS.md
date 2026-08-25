@@ -1,8 +1,37 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.17 产品 Latest（已发布为 Pre-release）
-> 状态：V0.5.7–V0.5.17 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.18 产品 Latest 候选（本地发布门禁已完成）
+> 状态：V0.5.7–V0.5.17 已发布为 Pre-release；V0.5.18 等待 PR/CI、合并与远端三资产核验；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.18 本轮进展
+
+1. 新增 Side Chat：`Ctrl+Shift+S`、Agent 菜单和命令面板从当前已完成普通 Harness 会话建立独立会话；非空会话使用官方 `session.fork`，空会话在同一 Workspace 使用官方 `session.create`。
+2. 建立前后核对主会话目录、运行/确认/队列状态、Plan 与权限投影；主会话运行、等待确认、选择子代理、目录不一致或期间发生状态竞争时失败关闭。
+3. Side Chat 通过官方 `/permission workspace-write` 写路径固定为 Workspace Write / Ask，并等待持久权限投影确认；真实 Harness 测试发现命令回执可能先于投影到达，现已按上游投影作为最终事实源。
+4. Side Chat 使用唯一非持久 Electron 分区，不共享主窗口的会话选择、cookie、缓存或本地存储；窗口关闭时清理临时分区，但保留 Harness 会话记录供审计。
+5. Side Chat Renderer 不获得 DSH 桌面 IPC、Node、webview、弹窗、下载或外部导航；仅允许来自准确 Harness 主框架的清洗后剪贴板写入。
+6. 宽屏自动并排，关闭后恢复主窗口原尺寸/最大化/全屏状态；顶部固定显示独立会话、Workspace Write / Ask 与“代码修改使用隔离工作树”的边界提示。
+7. 安装版首轮 smoke 发现 Chromium 会在真实 `Preferences` 中轮换非业务 `electron.media.device_id_salt`；九类 Electron smoke 现统一在应用就绪前切换到各自隔离 `userData`，避免测试再触碰维护者真实 Profile。
+
+### V0.5.18 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| 上游所有权 | 仅使用官方 Workspace、session create/fork/rename/prompt/history/list 与权限投影；不复刻 Agent loop |
+| 主会话保护 | 会话 id、cwd、运行、等待、队列、Plan 和权限前后核对；Side Chat 有独立选择存储 |
+| Renderer 边界 | 非持久独立分区；Context Isolation、Sandbox、无 Node/DSH IPC、无外部导航/弹窗/webview/下载 |
+| 真实 Harness | 固定 rc.2 真实启动、空主会话创建独立 Side Chat、`workspace-write` 权限投影确认通过 |
+| 真实窗口 | Electron 43 主/侧选择不同，侧栏隐藏、权限横幅可见、无 desktop API；截图已核对 |
+| 自动化与审计 | Side Chat 专项 6/6、全量源码 196/196；生产依赖无已知漏洞；代码审核补齐异步权限投影、子框架导航和 smoke Profile 隔离 |
+| 解包包体 | 29,787 个文件、692,604,565 字节；`app.asar` 1,249,351 字节；pnpm 454 个文件、19,001,803 字节；0 reparse point、0 重复 PTY、0 外平台终端文件、0 PDB |
+| 解包与安装版运行 | 桌面、真实 Harness、IPC、PDF、上下文、扩展、工作树、任务/子代理、Side Chat、真实 PTY 十类 smoke 均通过 |
+| 真实视觉 | 最终解包版与安装版 Side Chat 截图均确认权限横幅、单列内容、隐藏重复侧栏和独立会话文案可见 |
+| 安装包 | `DSH-Desktop-Setup-0.5.18.exe`；183,995,185 字节；SHA-256 `605DF28C7149D8AF535CACA9BDD6817C2163BE51270686E255B53EBB0876F33D`；blockmap 188,939 字节，SHA-256 `989D0A696A26264BF9EEF93573F492DDFFAF3C1E317FB702D963A03C62012EA6` |
+| 差分与签名 | V0.5.17→V0.5.18 复用 183,106,241 / 183,995,185 字节，99.5169%，预计下载 888,944 字节；unsigned，自动更新继续关闭 |
+| 覆盖安装 | 最终安装器退出码 0，注册 `DSH Desktop 0.5.18`；安装版含解包版 29,787 个文件并只多卸载器，0 缺失/大小差异/链接；安装/解包 `app.asar` 摘要均为 `6BAB9C0A346AEBCAD50259F697481895FF73D001E06C4E8B5E1CF1BBE773AF3D` |
+| 覆盖数据与回滚 | 最终覆盖前、覆盖后及隔离安装版 smoke 后 27 个语义文件、14 个会话、2 个 Profile 文件逐项一致，清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.18-final-20260825-201721` 为 0 哈希差异、0 凭据命名文件、0 reparse point，并保留 V0.5.17 三资产 |
+| 待完成 | PR 三项 CI、合并后主分支 CI、GitHub Pre-release、远端三资产大小/摘要和公开下载核验 |
 
 ## V0.5.17 本轮进展
 

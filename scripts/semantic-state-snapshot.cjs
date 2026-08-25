@@ -134,12 +134,20 @@ const readArgument = (name) => process.argv.find((value) => value.startsWith(`--
 
 if (require.main === module) {
   const root = readArgument('root');
+  const output = readArgument('output');
   if (!root) {
     process.stderr.write('Usage: node scripts/semantic-state-snapshot.cjs --root=<DSH user-data directory>\n');
     process.exitCode = 2;
   } else {
     snapshotSemanticUserData(root)
-      .then((snapshot) => process.stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`))
+      .then(async (snapshot) => {
+        const serialized = `${JSON.stringify(snapshot, null, 2)}\n`;
+        if (output) {
+          const target = path.resolve(output);
+          await fsp.mkdir(path.dirname(target), { recursive: true });
+          await fsp.writeFile(target, serialized, 'utf8');
+        } else process.stdout.write(serialized);
+      })
       .catch((error) => {
         process.stderr.write(`${error.message}\n`);
         process.exitCode = 1;
