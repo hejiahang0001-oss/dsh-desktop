@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.5.19 extension-center evidence (local release gates in progress)
+## V0.5.19 extension-center evidence (published)
 
 - The local extension center exposes four fixed surfaces: Skills, Plugins, Hooks, and MCP. Each reports bounded source, scope, permission, version, active/disabled/failed counts, and a plain-language boundary; no Skill prose, plugin configuration, Hook script, MCP secret, hidden prompt, or session content enters the renderer.
 - Live state uses the pinned Harness Typert Remote endpoint `/api/pluginInventory/list` with envelope method `pluginInventory/list` and payload `{ args: {} }`. The caller accepts only a random IPv4 loopback origin, ordinary-object arguments, fixed endpoint segments, bounded timeouts, matching RPC ids, and bounded/sanitized inventory entries.
@@ -13,7 +13,9 @@ This page records versioned local engineering evidence without making the README
 - Both unpacked and installed ten-part matrices pass desktop, real Harness, IPC, PDF, context sources, extension center, worktrees, Tasks/Subagents, Side Chat, and a real credential-isolated PTY. The final unpacked package contains 29,787 files and 692,626,330 bytes; the installed tree contains every unpacked file with equal length plus only the normal uninstaller. Both trees have zero reparse points and matching `app.asar` SHA-256 `B2F16F7D80676446A834CECA6DD2B96F1183C82AE6070930FF6928F21DE60F03`.
 - The final installer is 183,999,047 bytes with SHA-256 `2913E2FC1C9DC7BDE5D2D3014F428272D3506D5440687D4AEC8AB93C7FADE6A6`; its 189,055-byte blockmap hashes to `C6B627EFE5E63899E5E05B61DF32AA808495E0EDDAD6839689D3D185EE51DC9F`. V0.5.18 to V0.5.19 reuses 183,054,366 bytes (99.4866%), leaving 944,681 differential bytes. The installer remains unsigned and automatic update remains disabled.
 - Silent overwrite exits 0 and registers V0.5.19. Backup `backups/pre-v0.5.19-final-20260825-213155` contains 27 credential-free semantic files and all three V0.5.18 release assets with zero copy mismatch or reparse point. The semantic manifest SHA-256 remains exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after the installed smoke matrix.
-- Final unpacked and installed extension-center captures are 1419×1025 and visibly preserve four cards, explicit Hooks/MCP boundaries, fixed runtime closure, and the lower controlled lifecycle surface. PR, main CI, and remote three-asset publication remain pending at this local-gate checkpoint.
+- Final unpacked and installed extension-center captures are 1419×1025 and visibly preserve four cards, explicit Hooks/MCP boundaries, fixed runtime closure, and the lower controlled lifecycle surface.
+- Implementation PR [#30](https://github.com/hejiahang0001-oss/dsh-desktop/pull/30) passed all three jobs in run [32857098053](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32857098053) and merged as `53df6dc3765c36c56e480369723d9531053ffbcc`. Main CI run [32857243413](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32857243413) passed the same three jobs.
+- [V0.5.19](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.19) is non-draft, marked Pre-release, and targets the exact merge commit. All three remote asset sizes and GitHub digests match local evidence; the public installer returns HTTP 200 with the exact content length, and a clean download reproduces all three SHA-256 values with 2/2 checksum-manifest entries. GitHub formal Latest remains V0.5.4.
 
 ## V0.5.18 Side Chat evidence (published)
 
