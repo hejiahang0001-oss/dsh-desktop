@@ -2599,6 +2599,21 @@ const invokeWordDocxSkill = async () => {
   return false;
 };
 
+const invokeExcelXlsxSkill = async () => {
+  if (!harnessUiReady()) return false;
+  const invoked = await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.invokeExcel?.())', true).catch(() => false);
+  if (invoked) return true;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Excel 工作簿能力',
+    message: '在对话输入框中输入 /excel-xlsx 后描述工作簿。',
+    detail: '内置 Skill 可离线创建、导入、检查和受控修改当前工作区内的可编辑 XLSX，并提供勾稽与公式风险检查。输出默认不覆盖已有文件；覆盖时会保留同目录回退副本。',
+    buttons: ['确定'],
+    defaultId: 0
+  });
+  return false;
+};
+
 const showPermissionCenter = async () => {
   await refreshAgentDiagnostics({ rebuildMenu: false });
   const model = buildPermissionCenterDialog({
@@ -2910,6 +2925,12 @@ function installApplicationMenu() {
           click: () => { void invokeWordDocxSkill(); }
         },
         { label: 'Word 文档：内置 /word-docx · 工作区内离线生成', enabled: false },
+        {
+          label: '创建或修改 Excel 工作簿…',
+          enabled: harnessReady,
+          click: () => { void invokeExcelXlsxSkill(); }
+        },
+        { label: 'Excel 工作簿：内置 /excel-xlsx · 公式与勾稽检查', enabled: false },
         {
           label: '定位当前/最近工具',
           enabled: harnessReady && agentDiagnostics.canFocusTool,

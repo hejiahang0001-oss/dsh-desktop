@@ -47,6 +47,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Visible context sources** — inspect the Code preset, desktop language policy, project-rule candidate chain, and durable-session boundary in a local read-only window without exposing hidden prompts, credentials, or rule contents; Harness remains authoritative for content deduplication and prompt-budget inclusion.
 - **Harness-backed extension center** — inspect Skills, Plugins, Hooks, and MCP through one local metadata-only surface. Official live inventory remains authoritative; source, scope, permission, version, disabled/loading/failed states, fixed runtime closure, Profiles, controlled lifecycle actions, and rollback points are kept visible without reading Skill prose, plugin configuration, Hook scripts, MCP keys, or session content.
 - **Editable Word delivery** — invoke the bundled `/word-docx` Skill from Tools or the command palette to create and structurally inspect editable DOCX files with headings, lists, tables, workspace PNG/JPEG images, headers, and footers, or perform exact rollback-backed text replacement without an online Office service.
+- **Editable Excel delivery** — invoke the bundled `/excel-xlsx` Skill to create, import, edit, and strictly inspect editable XLSX workbooks with typed cells, multi-sheet formulas, styles, filters, frozen panes, and explicit reconciliation checks without an online Office service.
 - **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **Isolated Git worktrees** — create a generated DSH-owned branch and worktree, switch the active Harness workspace, and safely reclaim only DSH-owned worktree directories. External worktrees stay read-only; dirty removal creates a private recovery checkpoint and retains the branch.
 - **Harness-native tasks and subagents** — inspect the authoritative subagent tree, live background-job mirror, approval count, and working-directory sharing risk; open the exact child transcript, queue a bounded follow-up to a continuable child, or request interruption without treating acknowledgement as completion.
@@ -71,7 +72,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.20 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/word-docx` Skill and fixed offline DOCX tool for editable document creation, PNG/JPEG embedding, exact text replacement, structural inspection, and rollback-backed overwrite. Source discovery, a real credential-backed Agent invocation, Microsoft Word visual checks, 216/216 source tests, production dependency audit, packaging, overwrite installation, installed-runtime smoke, semantic-data preservation, CI, and clean remote-asset verification pass. Download `DSH-Desktop-Setup-0.5.20.exe` from the [V0.5.20 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20). The front-page download remains Stable.
+**V0.5.21 product Latest release candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds the trusted `/excel-xlsx` Skill and fixed offline XLSX tool for multi-sheet creation, CSV import, typed updates, formulas, styles, filters, frozen panes, reconciliation, and strict risk checks. Source discovery, a real credential-backed Agent invocation, Microsoft Excel visual/recalculation checks, 233/233 source tests, production dependency audit, package governance, direct overwrite installation, semantic-data preservation, and both ten-part runtime matrices pass; CI and remote-asset verification remain release gates. The installer name is `DSH-Desktop-Setup-0.5.21.exe`; the front-page download remains Stable until the Pre-release is published.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -98,13 +99,14 @@ Open repository → run or approve the agent in Harness
 → open Tools → Context sources to inspect the effective rule and session layers
 → open Tools → Extension center to inspect Skills, Plugins, Hooks, MCP, fixed closure, and Profile lifecycle
 → open Tools → Create or edit Word document to invoke the bundled /word-docx Skill
+→ open Tools → Create or edit Excel workbook to invoke the bundled /excel-xlsx Skill
 → press Ctrl+Shift+S to fork the completed main turn into an isolated Side Chat window
 → press Ctrl+, to choose direct, Windows system, or custom HTTP(S) proxy and test connectivity
 → reload, open in the browser, stop, and visibly distinguish owned from external ports
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.20 release notes](docs/RELEASE_NOTES_v0.5.20.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.5.21 release notes](docs/RELEASE_NOTES_v0.5.21.md).
 
 ## Security and current limits
 
@@ -113,6 +115,7 @@ The pinned runtime includes the complete official dependency closure required by
 - A Workspace Write crash with `0xC0000005` was previously observed on rc.8 in restricted mode. DSH Desktop reports tool failures and never switches to Full Access automatically; the exact rc.2 write path remains a separate compatibility gate.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
 - V0.5.20 Word editing performs exact replacement inside one OOXML text node; it does not guess across mixed-format runs, convert `.doc`, or provide tracked changes, comments, equations, or arbitrary Word DOM editing. Embedded images are limited to bounded workspace PNG/JPEG files.
+- V0.5.21 Excel supports bounded `.xlsx` creation, CSV import, explicit cell updates, formulas, styles, filters, frozen panes, and reconciliation. It does not execute macros, external links, connections, query tables, Power Query, arbitrary scripts, or legacy `.xls`; unsupported or risky content fails strict inspection.
 - The terminal provides one persistent PowerShell PTY session with ANSI rendering in an isolated local window. Closing the window stops the PTY; terminal tabs and split panes are not included yet. V0.5.7 lists at most twelve local code checkpoints; only checkpoints created with a selected session and completed turn can create a conversation branch. Older and blank-session checkpoints remain code-only. In-place conversation rewind and remote checkpoint sync are not included. Git accept/reject, code recovery, conversation branching, and proxy changes stay disabled while the PTY or Agent is active. Custom proxy authentication and SOCKS are not included in this release.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Architecture and product boundaries are documented in [the iteration plan](DSH_DESKTOP_ITERATION_PLAN.md).
@@ -145,7 +148,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.20 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/word-docx` Skill：可在当前工作区离线生成带标题、段落、列表、表格、PNG/JPEG 图片、分页、页眉页脚的可编辑 DOCX，也可做精确文本替换、结构检查和带回退副本的明确覆盖。源码发现、真实 Key Agent 调用、Microsoft Word 三页视觉验收、216/216 源码测试、生产依赖审计、打包、覆盖安装、安装版运行、用户数据保留、CI 和远端三资产干净回下载核验均已通过；安装包已发布到 [V0.5.20 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20)。V0.5.4 继续保持 Stable：
+V0.5.21 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增官方 Harness 可发现的内置 `/excel-xlsx` Skill：可在当前工作区离线生成和修改可编辑 XLSX，支持多 Sheet、公式、样式、筛选、冻结窗格、CSV 导入、勾稽检查和严格风险检查。源码发现、真实 Key Agent 调用、Microsoft Excel 打开/重算/视觉验收、232/232 源码测试和生产依赖审计已经通过；`DSH-Desktop-Setup-0.5.21.exe` 仍需完成打包、覆盖安装、安装版运行、用户数据保留、CI 和远端三资产门禁后才发布为 Pre-release。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
