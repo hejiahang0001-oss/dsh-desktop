@@ -1,8 +1,33 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.5.20 产品 Latest（Word DOCX，已发布 Pre-release）
-> 状态：V0.5.7–V0.5.20 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.21 产品 Latest 候选（Excel XLSX）
+> 状态：V0.5.7–V0.5.20 已发布为 Pre-release；V0.5.21 本地、打包与覆盖安装门禁已通过，正在执行 PR/CI 和 GitHub 发布；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.5.21 本轮进展
+
+1. 增加官方 Harness 可发现、用户与模型均可调用的 bundled `/excel-xlsx` Skill；工具菜单和固定命令面板只向官方输入框写入 Skill 命令。
+2. 增加固定离线 XLSX 引擎：支持多 Sheet、文本/数字/布尔/日期/公式、样式、列宽、合并单元格、筛选、冻结窗格、CSV 导入和自动勾稽表。
+3. 增加明确单元格更新、公式缓存失效、全量重算标记、默认不覆盖和带 `.dsh-backup-*` 回滚副本的显式覆盖。
+4. 严格检查覆盖公式错误、共享/数组/数据表公式结构、风险公式、外部链接、连接、查询表和宏；拒绝工作区逃逸、链接/联接、重复更新、超限规格和网络/DDE 类公式。
+5. 真实软件 Key 验收中，Harness Agent 成功生成 3 Sheet、69 单元格、10 公式的 XLSX，正常结束并通过独立严格检查。
+6. Microsoft Excel 实际打开维护者验收文件和 Agent 生成文件；发现并修复 XML 元素顺序与条件格式颜色两个兼容问题。最终无修复提示，公式重算、筛选、冻结、样式、勾稽和 CSV 文本保真均通过。
+
+### V0.5.21 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| 专项自动化 | Excel、UI、Harness Supervisor、Word 保持与发布治理 38/38 通过 |
+| 全量源码 | 233/233 通过；生产依赖审计无已知漏洞；`git diff --check` 通过 |
+| 真实 Harness 发现 | `artifacts/v0.5.21-excel/source-skill-discovery.json` 为 `ok: true`；`skill.list` 返回 `excel-xlsx`、`modelInvocable: true` |
+| 真实 Harness Agent | `artifacts/v0.5.21-excel/real-agent-smoke.json` 为 `ok: true`；生成 XLSX 5,970 字节，SHA-256 `E9A02920CEAD1A84D0FDC5A3E50ECD5E75B90B377D7560016F37094AB8E539D5` |
+| 最终 Excel 文件 | Microsoft Excel 打开与重算通过；3 Sheet、17 公式、3 筛选、3 冻结窗格；总额 2,940、勾稽差异 0、状态 OK；CSV `001` 和公式样文本保真 |
+| 安全审核 | 工作区/链接/大小/公式/外链/连接/查询表/宏限制已实现；临时 Key 副本在隔离 Harness Home 中使用并自动清理 |
+| 解包与安装版 | 29,791 个解包文件、692,728,208 字节；安装版逐项等长且只多正常卸载器，0 缺失/大小差异/链接；两套十类 smoke 和源码/打包/安装版 `excel-xlsx` 发现全部通过 |
+| 安装包 | `DSH-Desktop-Setup-0.5.21.exe`；184,026,194 字节；SHA-256 `16A67381E798A01A1B107BA00861D78021B50250012B71CE6A545FAA0EB673A0`；blockmap 188,874 字节，SHA-256 `8249192B195150243670609B991FEC586720D8CB772529F86C6BB0007D1B471A` |
+| 差分与签名 | V0.5.20→V0.5.21 复用 182,967,366 字节，99.4246%，预计下载 1,058,828 字节；unsigned，自动更新继续关闭 |
+| 覆盖数据与回滚 | 静默覆盖退出码 0，Windows 登记 V0.5.21；前/安装后/完整 smoke 后 27 个语义文件清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.21-20260826-020523` 已核验且无凭据副本 |
+| 待完成 | PR/CI、Pre-release 与远端三资产复核 |
 
 ## V0.5.20 本轮进展
 

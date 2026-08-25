@@ -14,12 +14,15 @@ const {
   stripAnsi
 } = require('../electron/harness-supervisor.cjs');
 
-const writeBundledWordSkill = (root) => {
+const writeBundledOfficeSkills = (root) => {
   const bundledSkillDir = path.join(root, 'resources', 'skills');
   const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
+  const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
   fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
+  fs.mkdirSync(path.dirname(xlsxToolPath), { recursive: true });
   fs.writeFileSync(docxToolPath, '// test');
-  return { bundledSkillDir, docxToolPath };
+  fs.writeFileSync(xlsxToolPath, '// test');
+  return { bundledSkillDir, docxToolPath, xlsxToolPath };
 };
 
 test('software-managed credential policy removes inherited DeepSeek keys case-insensitively', () => {
@@ -91,14 +94,14 @@ test('runtime resolver prefers explicit, existing paths', () => {
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(dshPath, 'test');
   fs.writeFileSync(patchPath, '[]');
-  const word = writeBundledWordSkill(root);
+  const office = writeBundledOfficeSkills(root);
   const resolved = resolveHarnessRuntimePaths({
     rootDir: root,
     resourcesPath: root,
     isPackaged: false,
     env: { DSH_DESKTOP_NODE: nodePath, DSH_DESKTOP_DSH_BIN: dshPath, DSH_DESKTOP_PATCH: patchPath }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...word });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office });
 });
 
 test('packaged runtime resolves DSH from the real pnpm package path', () => {
@@ -128,8 +131,11 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   fs.writeFileSync(patchPath, '[]');
   const bundledSkillDir = path.join(resourcesPath, 'skills');
   const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
+  const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
   fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
+  fs.mkdirSync(path.dirname(xlsxToolPath), { recursive: true });
   fs.writeFileSync(docxToolPath, '// test');
+  fs.writeFileSync(xlsxToolPath, '// test');
 
   assert.equal(resolvePnpmDshBin(nodeModules), pnpmBin);
   const resolved = resolveHarnessRuntimePaths({
@@ -138,7 +144,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
     isPackaged: true,
     env: {}
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath });
 });
 
 test('runtime resolver fails closed when the desktop language patch is missing', () => {
@@ -147,7 +153,7 @@ test('runtime resolver fails closed when the desktop language patch is missing',
   const dshPath = path.join(root, 'bin.js');
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(dshPath, 'test');
-  writeBundledWordSkill(root);
+  writeBundledOfficeSkills(root);
   assert.throws(() => resolveHarnessRuntimePaths({
     rootDir: root,
     resourcesPath: root,
@@ -182,12 +188,12 @@ test('supervisor launches Harness in the selected workspace directory', async (c
     "const fs = require('node:fs');",
     "fs.writeFileSync(process.env.DSH_TEST_CWD_FILE, process.cwd());",
     "fs.writeFileSync(process.env.DSH_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));",
-    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, tool: process.env.DSH_DESKTOP_DOCX_TOOL, node: process.env.DSH_DESKTOP_NODE }));",
+    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, docx: process.env.DSH_DESKTOP_DOCX_TOOL, xlsx: process.env.DSH_DESKTOP_XLSX_TOOL, node: process.env.DSH_DESKTOP_NODE }));",
     "process.stdout.write('dsh web: http://127.0.0.1:45678\\n');",
     'setInterval(() => {}, 1000);'
   ].join('\n'));
   fs.writeFileSync(patchPath, '[]');
-  const word = writeBundledWordSkill(root);
+  const office = writeBundledOfficeSkills(root);
   const supervisor = new HarnessSupervisor({
     rootDir: root,
     resourcesPath: root,
@@ -203,7 +209,8 @@ test('supervisor launches Harness in the selected workspace directory', async (c
       DSH_TEST_ARGS_FILE: argsFile,
       DSH_TEST_ENV_FILE: envFile,
       DSH_BUNDLED_SKILL_DIR: 'C:\\untrusted-skills',
-      DSH_DESKTOP_DOCX_TOOL: 'C:\\untrusted-tool.cjs'
+      DSH_DESKTOP_DOCX_TOOL: 'C:\\untrusted-word-tool.cjs',
+      DSH_DESKTOP_XLSX_TOOL: 'C:\\untrusted-excel-tool.cjs'
     }
   });
   context.after(async () => {
@@ -217,5 +224,5 @@ test('supervisor launches Harness in the selected workspace directory', async (c
   assert.deepEqual(args.slice(0, 3), ['web', '--patch', patchPath]);
   assert.equal(supervisor.getState().workspacePath, workspace);
   const environment = JSON.parse(fs.readFileSync(envFile, 'utf8'));
-  assert.deepEqual(environment, { bundled: word.bundledSkillDir, tool: word.docxToolPath, node: process.execPath });
+  assert.deepEqual(environment, { bundled: office.bundledSkillDir, docx: office.docxToolPath, xlsx: office.xlsxToolPath, node: process.execPath });
 });

@@ -6,9 +6,9 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-test('V0.5.20 packages the trusted Word skill and its fixed offline tool', () => {
+test('V0.5.21 preserves the trusted Word skill and its fixed offline tool', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.equal(manifest.version, '0.5.20');
+  assert.equal(manifest.version, '0.5.21');
   assert.ok(manifest.build.extraResources.some((entry) => entry.from === 'resources/skills' && entry.to === 'skills'));
   const skill = read('resources/skills/word-docx/SKILL.md');
   assert.match(skill, /^---\nname: word-docx\n/m);
@@ -29,7 +29,7 @@ test('Word capability is visible in both the native Tools menu and command palet
 
 test('Harness receives only desktop-owned absolute Word runtime paths', () => {
   const supervisor = read('electron/harness-supervisor.cjs');
-  assert.match(supervisor, /SOFTWARE_MANAGED_RUNTIME = new Set\(\['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_NODE'\]\)/);
+  assert.match(supervisor, /SOFTWARE_MANAGED_RUNTIME = new Set\(\['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_NODE'\]\)/);
   assert.match(supervisor, /environment\.DSH_BUNDLED_SKILL_DIR = bundledSkillDir/);
   assert.match(supervisor, /environment\.DSH_DESKTOP_DOCX_TOOL = docxToolPath/);
   assert.match(supervisor, /environment\.DSH_DESKTOP_NODE = nodePath/);

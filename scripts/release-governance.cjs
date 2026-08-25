@@ -28,6 +28,10 @@ const REQUIRED_WORD_SKILL_FILES = Object.freeze([
   'SKILL.md',
   'scripts/word-docx.cjs'
 ]);
+const REQUIRED_EXCEL_SKILL_FILES = Object.freeze([
+  'SKILL.md',
+  'scripts/excel-xlsx.cjs'
+]);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -173,6 +177,7 @@ const inspectPackageLayout = async (rootPath) => {
   const terminalPrefix = normalize(path.join('resources', 'terminal', 'node_modules', 'node-pty'));
   const pnpmPrefix = normalize(path.join('resources', 'pnpm'));
   const wordSkillPrefix = normalize(path.join('resources', 'skills', 'word-docx'));
+  const excelSkillPrefix = normalize(path.join('resources', 'skills', 'excel-xlsx'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
@@ -183,6 +188,8 @@ const inspectPackageLayout = async (rootPath) => {
   const pnpmPaths = new Set();
   const wordSkillRuntime = { files: 0, bytes: 0 };
   const wordSkillPaths = new Set();
+  const excelSkillRuntime = { files: 0, bytes: 0 };
+  const excelSkillPaths = new Set();
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -226,6 +233,12 @@ const inspectPackageLayout = async (rootPath) => {
         wordSkillRuntime.files += 1;
         wordSkillRuntime.bytes += info.size;
       }
+      if (relative === excelSkillPrefix || relative.startsWith(`${excelSkillPrefix}/`)) {
+        const excelRelative = relative.slice(excelSkillPrefix.length + 1);
+        excelSkillPaths.add(excelRelative);
+        excelSkillRuntime.files += 1;
+        excelSkillRuntime.bytes += info.size;
+      }
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
@@ -252,6 +265,8 @@ const inspectPackageLayout = async (rootPath) => {
     requiredPnpmVersionReady: pnpmRuntime.version === REQUIRED_PNPM_VERSION,
     wordSkillRuntime,
     requiredWordSkillFilesReady: REQUIRED_WORD_SKILL_FILES.every((name) => wordSkillPaths.has(name)),
+    excelSkillRuntime,
+    requiredExcelSkillFilesReady: REQUIRED_EXCEL_SKILL_FILES.every((name) => excelSkillPaths.has(name)),
     reparsePoints
   };
 };
@@ -289,6 +304,7 @@ const main = async () => {
     && packageLayout.requiredPnpmVersionReady
     && packageLayout.pnpmRuntime.wrapperValid
     && packageLayout.requiredWordSkillFilesReady
+    && packageLayout.requiredExcelSkillFilesReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
@@ -326,6 +342,7 @@ module.exports = {
   REQUIRED_PNPM_FILES,
   REQUIRED_PNPM_VERSION,
   REQUIRED_TERMINAL_FILES,
+  REQUIRED_EXCEL_SKILL_FILES,
   REQUIRED_WORD_SKILL_FILES,
   assessAutomaticUpdate,
   compareBlockmaps,

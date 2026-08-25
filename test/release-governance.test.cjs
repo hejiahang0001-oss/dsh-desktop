@@ -140,6 +140,25 @@ test('package layout requires the trusted Word skill and fixed offline DOCX tool
   assert.equal(ready.wordSkillRuntime.files, 2);
 });
 
+test('package layout requires the trusted Excel skill and fixed offline XLSX tool', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-excel-skill-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const skillRoot = path.join(root, 'resources', 'skills', 'excel-xlsx');
+  writeFile(path.join(skillRoot, 'SKILL.md'), '---\nname: excel-xlsx\n---\n');
+
+  const incomplete = await inspectPackageLayout(root);
+  assert.equal(incomplete.requiredExcelSkillFilesReady, false);
+  assert.deepEqual(incomplete.excelSkillRuntime, {
+    files: 1,
+    bytes: Buffer.byteLength('---\nname: excel-xlsx\n---\n')
+  });
+
+  writeFile(path.join(skillRoot, 'scripts', 'excel-xlsx.cjs'), '// fixed offline tool\n');
+  const ready = await inspectPackageLayout(root);
+  assert.equal(ready.requiredExcelSkillFilesReady, true);
+  assert.equal(ready.excelSkillRuntime.files, 2);
+});
+
 test('package manifest excludes the duplicate app PTY and unused xterm development surfaces', () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
   for (const pattern of [
