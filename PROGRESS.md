@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.5.20 产品 Latest 候选（Word DOCX 发布门禁中）
-> 状态：V0.5.7–V0.5.19 已发布为 Pre-release；V0.5.20 源码与真实 Harness/Word 验收通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.20 产品 Latest（Word DOCX，已发布 Pre-release）
+> 状态：V0.5.7–V0.5.20 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.20 本轮进展
 
@@ -29,7 +29,8 @@
 | 安装包 | `DSH-Desktop-Setup-0.5.20.exe`；184,012,614 字节；SHA-256 `0815951648E4376CE7B4AFF6630A44946CFF6984CC9E2C85A0EA85B387C561FC`；blockmap 188,877 字节，SHA-256 `9176D8C43513C8B638856190752C094381A08F1AA471936C6490205AA9911128` |
 | 差分与签名 | V0.5.19→V0.5.20 复用 182,988,030 字节，99.4432%，预计下载 1,024,584 字节；unsigned，自动更新继续关闭 |
 | 覆盖数据与回滚 | 静默覆盖退出码 0；前/安装后/完整 smoke 后 27 个语义文件清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.20-20260826-000034` 已核验 |
-| 发布 | 本地门禁完成；实现 PR、CI、Pre-release 三资产与公开回下载核验待执行，Stable 不变 |
+| PR 与 CI | 实现 PR [#32](https://github.com/hejiahang0001-oss/dsh-desktop/pull/32) 三项 CI [32872710785](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32872710785) 通过并以 `1917277853d73e7b5b7be886735b83ab541867af` 合并；主分支 CI [32872841947](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32872841947) 三项通过 |
+| 发布与远端资产 | [V0.5.20 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20) 非草稿并准确指向合并提交；三项资产远端大小/digest 与本地一致，公开安装包 HTTP 200；干净回下载三项摘要全部匹配且校验清单 2/2 通过；GitHub 正式 Latest 仍为 V0.5.4 |
 
 ## V0.5.19 本轮进展
 

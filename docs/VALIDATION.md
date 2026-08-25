@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.5.20 Word DOCX evidence (release candidate)
+## V0.5.20 Word DOCX evidence (published)
 
 - The official pinned Harness source runtime starts on a random IPv4 loopback origin and `skill.list` returns the bundled `word-docx` entry with `modelInvocable: true`.
 - A real credential-backed isolated Harness session accepted `/permission workspace-write`, entered the running state, invoked `/word-docx`, created `real-harness-word-spec.json` plus an editable 4,992-byte DOCX, completed, and passed an independent tool inspection. The temporary credential copy was removed and no credential value appears in the report.
@@ -11,7 +11,9 @@ This page records versioned local engineering evidence without making the README
 - The focused Word/Supervisor/governance suite passes 32/32, the complete source suite passes 216/216, and the production dependency audit reports no known vulnerability.
 - The unpacked tree contains 29,789 files and 692,676,394 bytes. The installed tree contains all unpacked files at equal length plus only the normal uninstaller; both have zero reparse points and matching `app.asar` SHA-256 `1DA27490F2D7491F0F9B0E0438E30051479A2C87CB711D9D45F957ADB128BE3E`. Both ten-part smoke matrices and source/packaged/installed Harness `word-docx` discovery pass.
 - The final installer is 184,012,614 bytes with SHA-256 `0815951648E4376CE7B4AFF6630A44946CFF6984CC9E2C85A0EA85B387C561FC`; its 188,877-byte blockmap hashes to `9176D8C43513C8B638856190752C094381A08F1AA471936C6490205AA9911128`, and the checksum manifest hashes to `CF14548ABC3B5A4F61FEB1F915B1DAA95E32082F9B23096316DE10AA3F0C8FAE`. V0.5.19 to V0.5.20 reuses 182,988,030 bytes (99.4432%), leaving 1,024,584 differential bytes. The installer remains unsigned and automatic update remains disabled.
-- Silent overwrite exits 0 and registers V0.5.20. Backup `backups/pre-v0.5.20-20260826-000034` contains 27 credential-free semantic files and the V0.5.19 release assets with no hash mismatch or reparse point. The semantic manifest SHA-256 remains exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after the installed smoke matrix. CI and remote Pre-release asset verification remain required before publication.
+- Silent overwrite exits 0 and registers V0.5.20. Backup `backups/pre-v0.5.20-20260826-000034` contains 27 credential-free semantic files and the V0.5.19 release assets with no hash mismatch or reparse point. The semantic manifest SHA-256 remains exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after the installed smoke matrix.
+- Implementation PR [#32](https://github.com/hejiahang0001-oss/dsh-desktop/pull/32) passed all three jobs in run [32872710785](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32872710785) and merged as `1917277853d73e7b5b7be886735b83ab541867af`. Main CI run [32872841947](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32872841947) passed the same three jobs.
+- [V0.5.20](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.20) is non-draft, marked Pre-release, and targets the exact merge commit. All three remote asset sizes and GitHub digests match local evidence; the public installer returns HTTP 200, and a clean download reproduces all three SHA-256 values with 2/2 checksum-manifest entries. GitHub formal Latest remains V0.5.4.
 
 ## V0.5.19 extension-center evidence (published)
 
