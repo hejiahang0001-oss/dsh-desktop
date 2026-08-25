@@ -11,7 +11,7 @@
 <body>
   <header class="toolbar">
     <div class="identity">
-      <div class="title-row"><h1>扩展健康</h1><span class="mode">只读诊断</span></div>
+      <div class="title-row"><h1>扩展健康</h1><span class="mode">受控管理</span></div>
       <p id="profiles-root" class="root-path">正在核对 Harness Profile 与扩展依赖…</p>
     </div>
     <button id="refresh" type="button">刷新</button>
@@ -23,11 +23,15 @@
       <article id="runtime" class="runtime-card" aria-live="polite"></article>
       <div id="issues" class="issue-list"></div>
     </section>
+    <section aria-labelledby="catalog-title">
+      <div class="section-heading"><div><h2 id="catalog-title">已验证安装目录</h2><p>只提供软件固定的包、版本、registry 和完整性摘要；不接受任意 pnpm 命令。</p></div></div>
+      <div id="catalog" class="catalog-list" aria-live="polite"></div>
+    </section>
     <section aria-labelledby="profiles-title">
       <div class="section-heading"><div><h2 id="profiles-title">本机 Profile</h2><p id="profiles-summary">正在检查已初始化的 Profile…</p></div></div>
       <div id="profiles" class="profile-list"></div>
     </section>
   </main>
-  <footer><span id="status" role="status">本窗口不会读取插件配置、补丁正文、凭据或会话内容。</span><span>安装、启用和停用仍由 Harness Profile 管理。</span></footer>
+  <footer><span id="status" role="status">本窗口不会读取插件配置、补丁正文、凭据或会话内容。</span><span>安装使用软件随附 pnpm；启用和停用仍由 Harness Profile 管理。</span></footer>
 </body>
 </html>

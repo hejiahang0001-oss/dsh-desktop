@@ -4,6 +4,7 @@
   const root = document.getElementById('profiles-root');
   const runtime = document.getElementById('runtime');
   const issues = document.getElementById('issues');
+  const catalog = document.getElementById('catalog');
   const profiles = document.getElementById('profiles');
   const summary = document.getElementById('profiles-summary');
   const status = document.getElementById('status');
@@ -11,7 +12,7 @@
   const closeButton = document.getElementById('close');
 
   const empty = (node) => { while (node.firstChild) node.firstChild.remove(); };
-  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '不可用', ready: '可解析', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', verified: '兼容已验证', review: '需要审查', 'not-bundle': '不是扩展层' }[value] || '未知');
+  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '不可用', ready: '可解析', installed: '已安装', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', verified: '兼容已验证', review: '需要审查', 'not-bundle': '不是扩展层' }[value] || '未知');
   const makeBadge = (value) => {
     const node = document.createElement('span');
     node.className = `badge ${value || ''}`;
@@ -73,9 +74,59 @@
     return row;
   };
 
+  const catalogCard = (item, pnpm) => {
+    const card = document.createElement('article');
+    card.className = 'catalog-card';
+    const header = document.createElement('div');
+    header.className = 'catalog-header';
+    const identity = document.createElement('div');
+    const name = document.createElement('h3');
+    name.textContent = item.displayName || item.name || '未命名扩展';
+    const packageName = document.createElement('code');
+    packageName.textContent = `${item.name || ''}@${item.version || ''}`;
+    identity.append(name, packageName);
+    header.append(identity, makeBadge(pnpm.status));
+    const detail = document.createElement('p');
+    detail.textContent = `固定 ${item.registry || 'registry'} · pnpm ${pnpm.version || '不可用'} · ${item.scriptsIgnored ? '安装脚本已禁止' : '安装策略未知'}`;
+    card.append(header, detail);
+    const targets = document.createElement('div');
+    targets.className = 'catalog-targets';
+    for (const target of item.targets || []) {
+      const row = document.createElement('div');
+      const text = document.createElement('span');
+      text.textContent = target.available ? `Profile：${target.profileName}` : `Profile：${target.profileName}（尚未初始化）`;
+      row.append(text);
+      if (target.installed) {
+        row.append(makeBadge('installed'));
+      } else if (target.canInstall) {
+        const install = document.createElement('button');
+        install.type = 'button';
+        install.className = 'install-button';
+        install.textContent = `安装到 ${target.profileName}`;
+        install.addEventListener('click', async () => {
+          install.disabled = true;
+          status.textContent = `正在安装 ${item.name}@${item.version}；请勿关闭软件…`;
+          try {
+            const result = await api.install(target.profileId, item.id);
+            if (result?.state) render(result.state);
+            status.textContent = result?.message || (result?.ok ? '插件安装完成。' : '插件未安装。');
+          } catch {
+            status.textContent = '受控插件安装失败；Profile 保持或恢复为安装前状态。';
+          } finally { install.disabled = false; }
+        });
+        row.append(install);
+      } else {
+        row.append(makeBadge(target.available ? 'blocked' : 'unavailable'));
+      }
+      targets.append(row);
+    }
+    card.append(targets);
+    return card;
+  };
+
   const render = (state = {}) => {
     root.textContent = state.profilesRoot || '$DSH_HOME/profiles';
-    empty(runtime); empty(issues); empty(profiles);
+    empty(runtime); empty(issues); empty(catalog); empty(profiles);
     const rt = state.runtime || {};
     const title = document.createElement('div');
     title.className = 'runtime-title';
@@ -98,6 +149,12 @@
       row.className = 'issue-row';
       const name = document.createElement('code'); name.textContent = issue.name || '未知包';
       row.append(name, makeBadge(issue.status)); issues.append(row);
+    }
+    const pnpm = state.pnpm || { status: 'unavailable', version: '' };
+    const catalogItems = state.catalog || [];
+    for (const item of catalogItems) catalog.append(catalogCard(item, pnpm));
+    if (catalogItems.length === 0) {
+      const node = document.createElement('p'); node.className = 'empty-state'; node.textContent = '当前版本没有可安装的已验证扩展。'; catalog.append(node);
     }
 
     const profileList = state.profiles || [];
@@ -145,7 +202,11 @@
       : recovery.find((item) => ['failed', 'conflict'].includes(item.status))
         ? '检测到无法自动处理的扩展变更，请先检查 Profile 备份。'
         : '';
-    status.textContent = recoveryMessage || (state.available === false ? (state.message || '扩展健康暂时不可用。') : (state.message || '扩展健康检查完成。'));
+    status.textContent = recoveryMessage || (state.available === false
+      ? (state.message || '扩展健康暂时不可用。')
+      : pnpm.status !== 'ready'
+        ? '扩展健康检查完成；软件随附 pnpm 暂不可用，安装入口已关闭。'
+        : (state.message || '扩展健康检查完成。'));
   };
 
   const refresh = async () => {

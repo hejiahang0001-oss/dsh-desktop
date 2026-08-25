@@ -7,6 +7,9 @@ node_modules/
 # Generated runtimes, Electron archives, smoke data, and caches.
 /build/*
 !/build/icon.ico
+!/build/pnpm/
+!/build/pnpm/pnpm.cmd
+!/build/pnpm/empty.npmrc
 
 # Local application/runtime data and credentials.
 **/.credentials.yaml

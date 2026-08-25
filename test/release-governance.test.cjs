@@ -93,6 +93,32 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.deepEqual(report.redundantAppRuntime, { files: 2, bytes: 13 });
   assert.deepEqual(report.terminalRuntime, { files: 2, bytes: 10, foreignPlatformFiles: 0, pdbFiles: 0 });
   assert.equal(report.reparsePoints, 0);
+  assert.equal(report.requiredPnpmFilesReady, false);
+  assert.equal(report.requiredPnpmVersionReady, false);
+  assert.equal(report.pnpmRuntime.wrapperValid, false);
+});
+
+test('package layout requires the fixed bundled pnpm files, version, and offline wrapper', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-pnpm-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const relative of [
+    'resources/pnpm/empty.npmrc',
+    'resources/pnpm/package/bin/pnpm.mjs',
+    'resources/pnpm/package/dist/pnpm.mjs',
+    'resources/pnpm/package/LICENSE'
+  ]) writeFile(path.join(root, relative));
+  writeFile(path.join(root, 'resources/pnpm/package/package.json'), JSON.stringify({ name: 'pnpm', version: '11.19.0' }));
+  writeFile(path.join(root, 'resources/pnpm/pnpm.cmd'), '@ECHO OFF\r\n"%~dp0..\\runtime\\node.exe" "%~dp0package\\bin\\pnpm.mjs" %*\r\n');
+
+  const ready = await inspectPackageLayout(root);
+  assert.equal(ready.requiredPnpmFilesReady, true);
+  assert.equal(ready.requiredPnpmVersionReady, true);
+  assert.equal(ready.pnpmRuntime.version, '11.19.0');
+  assert.equal(ready.pnpmRuntime.wrapperValid, true);
+
+  writeFile(path.join(root, 'resources/pnpm/package/package.json'), JSON.stringify({ name: 'pnpm', version: '11.20.0' }));
+  const drifted = await inspectPackageLayout(root);
+  assert.equal(drifted.requiredPnpmVersionReady, false);
 });
 
 test('package manifest excludes the duplicate app PTY and unused xterm development surfaces', () => {

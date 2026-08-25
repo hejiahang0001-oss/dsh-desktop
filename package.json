@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -13,6 +13,7 @@
     "runtime:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-node-runtime.ps1",
     "runtime:deploy": "pnpm --filter dsh-harness-runtime deploy vendor/harness-hoisted-0.1.1-rc.2 --prod --legacy --config.node-linker=hoisted",
     "validate:third-party-plugin": "node scripts/validate-third-party-plugin.cjs",
+    "validate:controlled-plugin-install": "node scripts/validate-controlled-plugin-install.cjs",
     "release:governance": "node scripts/release-governance.cjs",
     "smoke:packaged-terminal": "node scripts/smoke-packaged-terminal.cjs",
     "pack:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --dir --win --x64",
@@ -20,7 +21,8 @@
   },
   "devDependencies": {
     "electron": "43.4.1",
-    "electron-builder": "26.8.1"
+    "electron-builder": "26.8.1",
+    "pnpm": "11.19.0"
   },
   "build": {
     "appId": "com.dsh.desktop",
@@ -92,6 +94,24 @@
       {
         "from": "electron/terminal-pty-host.cjs",
         "to": "terminal/terminal-pty-host.cjs"
+      },
+      {
+        "from": "node_modules/pnpm",
+        "to": "pnpm/package",
+        "filter": [
+          "bin/**/*",
+          "dist/**/*",
+          "package.json",
+          "LICENSE"
+        ]
+      },
+      {
+        "from": "build/pnpm",
+        "to": "pnpm",
+        "filter": [
+          "pnpm.cmd",
+          "empty.npmrc"
+        ]
       },
       {
         "from": "node_modules/node-pty",
