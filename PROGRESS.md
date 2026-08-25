@@ -1,8 +1,25 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.5.22 产品 Latest（PowerPoint PPTX）
-> 状态：V0.5.7–V0.5.22 已发布为 Pre-release；V0.5.22 的源码、真实 Agent、PowerPoint、打包、覆盖安装、数据保留、CI 和远端三资产门禁均已通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.0 产品 Latest 候选版（统一 Office 交付与集成验收）
+> 状态：V0.5.7–V0.5.22 已发布为 Pre-release；V0.6.0 已完成 Office 交付中心、251/251 完整源码回归与真实界面视觉检查，正在进入正式打包、覆盖安装、数据保留和发布门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.6.0 本轮进展
+
+1. 新增本机隔离的 Office 交付中心，统一展示 Word、Excel、PowerPoint 三项能力的组件就绪度、可编辑结构、严格边界和固定调用入口。
+2. 三个按钮只调用现有 Harness 主输入框中的 `/word-docx`、`/excel-xlsx`、`/powerpoint-pptx`，不接收任意命令、路径、包名或可执行输入，不复制 Agent loop。
+3. 同屏标出隔离 worktree、Tasks/Subagents 和扩展/pnpm 集成链，强调并行工作、扩展状态和 Office 输出都绑定当前工作区。
+4. Office 状态检查仅核对软件随附的六个固定 Skill/工具文件，拒绝缺失、空文件和符号链接；不读取 Skill 正文、API Key、会话内容或用户文件。
+
+### V0.6.0 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| Office 交付中心专项 | 13/13 通过；本机窗口、固定 IPC、三项 Skill 保持、缺失即关闭与任意标识拒绝均有测试 |
+| 完整源码与生产审计 | 251/251 通过；生产依赖审计无已知漏洞；主进程语法与 `git diff --check` 通过 |
+| 真实界面与集成矩阵 | 解包 Office 中心 smoke 为 `ok: true`；2 项固定 API、3 张 Office 卡片、3 个集成节点、3 个可用按钮；1524×1085 顶部视觉检查无裁切或重叠 |
+| 打包、覆盖与数据保留 | 待执行 |
+| PR/CI 与远端资产 | 待执行 |
 
 ## V0.5.22 本轮进展
 

@@ -63,6 +63,7 @@
     { id: 'session.new', title: '新建会话', detail: '使用官方 Harness 新建会话入口', shortcut: 'Ctrl+N', run: clickNewSession },
     { id: 'side-chat.open', title: '打开 Side Chat', detail: '在当前工作区建立独立 Harness 会话窗口', shortcut: 'Ctrl+Shift+S', run: () => api.sideChat.openWindow() },
     { id: 'extensions.open', title: '打开扩展中心', detail: '查看 Skills、Plugins、Hooks 与 MCP 的来源、范围和实时状态', shortcut: '', run: () => api.extensions.openWindow() },
+    { id: 'office-center.open', title: '打开 Office 交付中心', detail: '统一查看并调用 Word、Excel 和 PowerPoint 可编辑文件能力', shortcut: '', run: () => api.office.openWindow() },
     { id: 'word-docx.invoke', title: '创建或修改 Word 文档', detail: '加载内置 /word-docx Skill，在当前工作区生成可编辑 DOCX', shortcut: '', run: () => invokeSkill('word-docx') },
     { id: 'excel-xlsx.invoke', title: '创建或修改 Excel 工作簿', detail: '加载内置 /excel-xlsx Skill，在当前工作区生成可编辑 XLSX', shortcut: '', run: () => invokeSkill('excel-xlsx') },
     { id: 'powerpoint-pptx.invoke', title: '创建或修改 PowerPoint 演示文稿', detail: '加载内置 /powerpoint-pptx Skill，在当前工作区生成可编辑 PPTX', shortcut: '', run: () => invokeSkill('powerpoint-pptx') },

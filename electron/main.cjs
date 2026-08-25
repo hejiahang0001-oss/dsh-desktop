@@ -16,6 +16,7 @@ const {
 } = require('./controlled-plugin-installer.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
 const { buildExtensionCenter, callHarnessRemote } = require('./extension-center.cjs');
+const { inspectOfficeCenter, isOfficeSkillId } = require('./office-center.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
   captureHarnessCheckpointLink,
@@ -69,6 +70,7 @@ let mainWindow;
 let terminalWindow;
 let contextSourcesWindow;
 let pluginHealthWindow;
+let officeCenterWindow;
 let worktreesWindow;
 let tasksSubagentsWindow;
 let sideChatWindow;
@@ -187,6 +189,7 @@ const statusPage = path.join(rootDir, 'harness-status.html');
 const terminalPage = path.join(rootDir, 'terminal.html');
 const contextSourcesPage = path.join(rootDir, 'context-sources.html');
 const pluginHealthPage = path.join(rootDir, 'plugin-health.html');
+const officeCenterPage = path.join(rootDir, 'office-center.html');
 const worktreesPage = path.join(rootDir, 'worktrees.html');
 const tasksSubagentsPage = path.join(rootDir, 'tasks-subagents.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
@@ -221,6 +224,7 @@ const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWi
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
 const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
 const pluginHealthSmokeTarget = process.argv.find((argument) => argument.startsWith('--plugin-health-smoke-file='));
+const officeCenterSmokeTarget = process.argv.find((argument) => argument.startsWith('--office-center-smoke-file='));
 const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith('--worktrees-smoke-file='));
 const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.startsWith('--tasks-subagents-smoke-file='));
 const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith('--side-chat-smoke-file='));
@@ -232,6 +236,7 @@ const isolatedSmokeTarget = [
   pdfSmokeTarget,
   contextSourcesSmokeTarget,
   pluginHealthSmokeTarget,
+  officeCenterSmokeTarget,
   worktreesSmokeTarget,
   tasksSubagentsSmokeTarget,
   sideChatSmokeTarget
@@ -323,6 +328,7 @@ const localFileUrlMatches = (value, target) => {
 const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
 const contextSourcesUrlAllowed = (value) => localFileUrlMatches(value, contextSourcesPage);
 const pluginHealthUrlAllowed = (value) => localFileUrlMatches(value, pluginHealthPage);
+const officeCenterUrlAllowed = (value) => localFileUrlMatches(value, officeCenterPage);
 const worktreesUrlAllowed = (value) => localFileUrlMatches(value, worktreesPage);
 const tasksSubagentsUrlAllowed = (value) => localFileUrlMatches(value, tasksSubagentsPage);
 
@@ -1060,6 +1066,11 @@ const pluginHealthIpcAllowed = (event) => isTrustedMainFrameEvent(
   pluginHealthWindow?.webContents,
   pluginHealthUrlAllowed
 );
+const officeCenterIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  officeCenterWindow?.webContents,
+  officeCenterUrlAllowed
+);
 const worktreesIpcAllowed = (event) => isTrustedMainFrameEvent(
   event,
   worktreesWindow?.webContents,
@@ -1483,6 +1494,63 @@ const openPluginHealthWindow = async () => {
     return { ok: true, reused: true };
   }
   await createPluginHealthWindow();
+  return { ok: true, reused: false };
+};
+
+const getOfficeCenterState = () => inspectOfficeCenter({
+  rootDir,
+  resourcesPath: process.resourcesPath,
+  isPackaged: app.isPackaged,
+  harnessReady: Boolean(officeCenterSmokeTarget) || harnessUiReady(),
+  workspaceSynced: workspaceSyncDiagnostics.status === 'synced',
+  workspaceName: workspaceStore?.getState()?.displayName || '当前工作区'
+});
+
+const createOfficeCenterWindow = async () => {
+  const created = new BrowserWindow({
+    width: 1030,
+    height: 760,
+    minWidth: 720,
+    minHeight: 560,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#151618',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH Office 交付中心',
+    webPreferences: {
+      preload: path.join(__dirname, 'office-center-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  officeCenterWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!officeCenterUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => {
+    if (!officeCenterSmokeTarget) created.show();
+  });
+  created.on('closed', () => {
+    if (officeCenterWindow === created) officeCenterWindow = undefined;
+  });
+  await created.loadFile(officeCenterPage);
+  return created;
+};
+
+const openOfficeCenterWindow = async () => {
+  if (officeCenterWindow && !officeCenterWindow.isDestroyed()) {
+    if (officeCenterWindow.isMinimized()) officeCenterWindow.restore();
+    officeCenterWindow.show();
+    officeCenterWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createOfficeCenterWindow();
   return { ok: true, reused: false };
 };
 
@@ -2629,6 +2697,29 @@ const invokePowerPointPptxSkill = async () => {
   return false;
 };
 
+const invokeOfficeCenterSkill = async (id) => {
+  if (!isOfficeSkillId(id)) return { ok: false, message: '交付类型不在固定清单中。' };
+  if (!harnessUiReady() || workspaceSyncDiagnostics.status !== 'synced') {
+    return { ok: false, message: '请等待 Harness 与当前工作区同步后再使用。' };
+  }
+  const invokers = {
+    word: invokeWordDocxSkill,
+    excel: invokeExcelXlsxSkill,
+    powerpoint: invokePowerPointPptxSkill
+  };
+  if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  const invoked = await invokers[id]();
+  return {
+    ok: invoked,
+    message: invoked ? '已写入固定 Skill 命令，请继续描述要生成或修改的文件。' : '未找到当前 Harness 输入框；请在对话中手动输入对应 Skill 命令。'
+  };
+};
+
 const showPermissionCenter = async () => {
   await refreshAgentDiagnostics({ rebuildMenu: false });
   const model = buildPermissionCenterDialog({
@@ -2694,6 +2785,7 @@ const activateWorkspace = async (workspacePath) => {
     const workspace = await workspaceStore.activate(workspacePath);
     if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) contextSourcesWindow.close();
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
+    if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
     contextSourceCatalog?.setWorkspace(workspace.activePath);
     await workspaceFiles.activate(workspace.activePath);
     await previewManager.activate(workspace.activePath);
@@ -2934,6 +3026,11 @@ function installApplicationMenu() {
           label: '扩展中心…',
           click: () => { void openPluginHealthWindow(); }
         },
+        {
+          label: 'Office 交付中心…',
+          click: () => { void openOfficeCenterWindow(); }
+        },
+        { label: 'Word / Excel / PowerPoint：可编辑文件统一入口', enabled: false },
         {
           label: '创建或修改 Word 文档…',
           enabled: harnessReady,
@@ -3508,6 +3605,17 @@ ipcMain.handle('plugin-health:lifecycle', (event, profileId, catalogId, action) 
     .finally(() => { pluginInstallPromise = null; });
   return pluginInstallPromise;
 });
+ipcMain.handle('office-center:get-state', (event) => (
+  officeCenterIpcAllowed(event)
+    ? getOfficeCenterState()
+    : { available: false, readyCount: 0, total: 3, harness: { status: 'waiting' }, workspace: { status: 'waiting' }, office: [], integrations: [] }
+));
+ipcMain.handle('office-center:invoke', (event, id) => {
+  if (!officeCenterIpcAllowed(event) || typeof id !== 'string') {
+    return { ok: false, message: 'Office 交付请求未通过安全校验。' };
+  }
+  return invokeOfficeCenterSkill(id);
+});
 ipcMain.handle('worktrees:get-state', (event) => (
   worktreesIpcAllowed(event) ? getWorktreeState() : unavailableWorktreeState('请求来源未通过安全校验。')
 ));
@@ -3578,6 +3686,11 @@ ipcMain.handle('extensions:open-window', (event) => (
   harnessIpcAllowed(event)
     ? openPluginHealthWindow()
     : { ok: false, message: '扩展中心请求未通过安全校验。' }
+));
+ipcMain.handle('office-center:open-window', (event) => (
+  harnessIpcAllowed(event)
+    ? openOfficeCenterWindow()
+    : { ok: false, message: 'Office 交付中心请求未通过安全校验。' }
 ));
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
@@ -3657,6 +3770,7 @@ const createWindow = async () => {
     if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
     if (worktreesWindow && !worktreesWindow.isDestroyed()) worktreesWindow.close();
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
+    if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
     mainWindow = undefined;
   });
 
@@ -4170,6 +4284,91 @@ const runPluginHealthSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runOfficeCenterSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  let result;
+  try {
+    workspaceStore = {
+      getState: () => ({ activePath: rootDir, displayName: 'V0.6 集成工作区', isFallback: false, recentPaths: [rootDir] })
+    };
+    workspaceSyncDiagnostics = Object.freeze({
+      ...unavailableWorkspaceSync(),
+      status: 'synced',
+      workspacePath: rootDir,
+      workspaceTitle: 'V0.6 集成工作区',
+      sessionId: 'session-33333333-3333-4333-8333-333333333333'
+    });
+    await createOfficeCenterWindow();
+    const renderedInTime = await officeCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        if (document.querySelectorAll('.office-card').length === 3 && document.querySelectorAll('.integration-card').length === 3) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!renderedInTime) throw new Error('office-center-smoke-timeout');
+    const rendered = await officeCenterWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.officeCenterAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      officeRows: document.querySelectorAll('.office-card').length,
+      integrationRows: document.querySelectorAll('.integration-card').length,
+      buttons: document.querySelectorAll('.invoke').length,
+      enabledButtons: document.querySelectorAll('.invoke:not(:disabled)').length,
+      text: document.body.innerText
+    })`, true);
+    const screenshot = await officeCenterWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    await officeCenterWindow.webContents.executeJavaScript('window.scrollTo(0, document.documentElement.scrollHeight)', true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const integrationScreenshot = await officeCenterWindow.webContents.capturePage();
+    const integrationScreenshotPath = `${resolvedTarget}.integration.png`;
+    const integrationScreenshotSize = integrationScreenshot.getSize();
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'invoke'])
+        && rendered.title === 'Office 交付中心'
+        && rendered.officeRows === 3
+        && rendered.integrationRows === 3
+        && rendered.buttons === 3
+        && rendered.enabledButtons === 3
+        && rendered.text.includes('Word')
+        && rendered.text.includes('Excel')
+        && rendered.text.includes('PowerPoint')
+        && rendered.text.includes('Tasks / Subagents')
+        && rendered.text.includes('扩展与 pnpm')
+        && !rendered.text.includes('hidden-office-secret-marker')
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0
+        && integrationScreenshotSize.width > 0
+        && integrationScreenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      title: rendered.title,
+      officeRows: rendered.officeRows,
+      integrationRows: rendered.integrationRows,
+      buttons: rendered.buttons,
+      enabledButtons: rendered.enabledButtons,
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height },
+      integrationScreenshot: { path: integrationScreenshotPath, width: integrationScreenshotSize.width, height: integrationScreenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+    await fsp.writeFile(integrationScreenshotPath, integrationScreenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    officeCenterWindow?.destroy();
+    officeCenterWindow = undefined;
+    workspaceStore = undefined;
+    workspaceSyncDiagnostics = unavailableWorkspaceSync();
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 const runWorktreesSmoke = async (target) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = path.join(path.dirname(resolvedTarget), `worktrees-smoke-data-${process.pid}-${Date.now()}`);
@@ -4555,6 +4754,12 @@ app.whenReady().then(async () => {
   }
   if (pluginHealthSmokeTarget) {
     await runPluginHealthSmoke(pluginHealthSmokeTarget.slice('--plugin-health-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (officeCenterSmokeTarget) {
+    await runOfficeCenterSmoke(officeCenterSmokeTarget.slice('--office-center-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;

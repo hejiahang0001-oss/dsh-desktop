@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH 交付中心</title>
+  <link rel="stylesheet" href="assets/office-center.css">
+  <script defer src="assets/office-center.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="identity">
+      <div class="eyebrow">DSH Desktop 0.6</div>
+      <h1>Office 交付中心</h1>
+      <p>从同一入口生成可继续编辑的 Word、Excel 和 PowerPoint 文件。</p>
+    </div>
+    <button id="close" type="button" aria-label="关闭交付中心">关闭</button>
+  </header>
+  <main>
+    <section class="readiness" aria-labelledby="readiness-title">
+      <div>
+        <span class="section-label">交付就绪度</span>
+        <h2 id="readiness-title"><strong id="ready-count">0</strong> / <span id="total-count">3</span> 文件能力可用</h2>
+      </div>
+      <div class="signals" aria-live="polite">
+        <span id="harness-signal" class="signal waiting">Harness 连接中</span>
+        <span id="workspace-signal" class="signal waiting">工作区同步中</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="office-title">
+      <div class="section-heading">
+        <div><span class="section-label">可编辑文件</span><h2 id="office-title">选择交付类型</h2></div>
+        <p>按钮只把固定的官方 Harness Skill 命令写入当前对话，不建立第二套 Agent。</p>
+      </div>
+      <div id="office-grid" class="office-grid" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="integration-title">
+      <div class="section-heading">
+        <div><span class="section-label">V0.6 集成链</span><h2 id="integration-title">并行、扩展与交付保持同一工作区</h2></div>
+      </div>
+      <div id="integration-grid" class="integration-grid"></div>
+    </section>
+  </main>
+  <footer><span id="status" role="status">正在检查软件随附的三个 Office Skill…</span><span>现有文件默认不覆盖；显式覆盖会先保留同目录回退副本。</span></footer>
+</body>
+</html>
