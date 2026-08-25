@@ -27,7 +27,8 @@ V0.5.14 adds the first controlled third-party extension installation path. Stabl
 - The installer exits with code 0 and registers `DSH Desktop 0.5.14`. The installed raw file set contains all 29,787 unpacked files plus only the normal uninstaller; installed and unpacked `app.asar` match SHA-256 `051254B7703B767EEC7FAB494A96AE362460B3C25A02573D35FD686F7AD00DE4`.
 - All seven installed smoke classes pass, including one visible catalog install action, real Harness HTTP 200, real PTY credential isolation, and a second real controlled install/rollback using the installed pnpm resource.
 - The overwrite preserves all 25 semantic files and fourteen sessions exactly. The canonical path-and-content aggregate is `0C473FC78E8801581734BDCD37B0A4F04B5750F526593DE58528497A46897233` before and after. The rollback snapshot is `backups/pre-v0.5.14-20260825-105431`, with zero credential-named files, zero reparse points, and all three V0.5.13 release assets.
-- CI and remote-release evidence is recorded after publication. V0.5.4 remains the formal Stable and GitHub Latest release.
+- [PR #20](https://github.com/hejiahang0001-oss/dsh-desktop/pull/20) and [main CI run 32803918073](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32803918073) pass all three Windows jobs. [v0.5.14](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.14) is a non-draft Pre-release targeting `e6e96ee82f6ebef33d18409e3dd53f385e93b3aa`; its installer, blockmap, and checksum manifest match the local sizes and SHA-256 values, and the installer endpoint returns HTTP 200 with the exact content length. V0.5.4 remains the formal Stable and GitHub Latest release.
+- The backed-up V0.5.13 release assets were hash-checked and their local `dist` copies were moved to the Windows Recycle Bin. They can still be recovered from the Recycle Bin or `backups/pre-v0.5.14-20260825-105431`.
 
 ## Deferred to V0.5.15
 

@@ -67,7 +67,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.14 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, bundles pnpm `11.19.0`, and adds a native-confirmed, fixed-catalog installation path for the verified `@nonamelego/dsh-catppuccin@0.3.1` Web extension. `DSH-Desktop-Setup-0.5.14.exe` is published as a Pre-release only after package, overwrite, installed-smoke, CI, and remote-asset gates pass. The front-page download remains Stable.
+**V0.5.14 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2` and Electron `43.4.1`, bundles pnpm `11.19.0`, and adds a native-confirmed, fixed-catalog installation path for the verified `@nonamelego/dsh-catppuccin@0.3.1` Web extension. `DSH-Desktop-Setup-0.5.14.exe` passed package, overwrite, installed-smoke, CI, and remote-asset gates and is published as a [Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.14). The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -138,7 +138,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.14 产品 Latest 继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，内置 pnpm `11.19.0`，并为已验证的 `@nonamelego/dsh-catppuccin@0.3.1` Web 扩展提供原生确认、固定目录、固定版本、禁止安装脚本、Key 隔离、健康复核和失败回退。`DSH-Desktop-Setup-0.5.14.exe` 只有在通过打包、覆盖安装、安装版 smoke、CI 和远端资产门禁后才作为 Pre-release 发布。V0.5.4 继续保持 Stable：
+V0.5.14 产品 Latest 继续固定官方 Harness `0.1.1-rc.2` 和 Electron `43.4.1`，内置 pnpm `11.19.0`，并为已验证的 `@nonamelego/dsh-catppuccin@0.3.1` Web 扩展提供原生确认、固定目录、固定版本、禁止安装脚本、Key 隔离、健康复核和失败回退。`DSH-Desktop-Setup-0.5.14.exe` 已通过打包、覆盖安装、安装版 smoke、CI 和远端资产门禁，并发布为 [Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.14)。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
