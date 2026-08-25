@@ -24,6 +24,7 @@ test('plugin health window is local-only, metadata-only, and packaged', () => {
   assert.match(main, /Date\.now\(\) \+ 15000/);
   assert.match(main, /plugin-health-smoke-timeout/);
   assert.match(main, /!rendered\.text\.includes\('hidden-plugin-config-marker'\)/);
+  assert.match(main, /rendered\.text\.includes\('兼容已验证'\)/);
   assert.match(preload, /plugin-health:get-state/);
   assert.match(preload, /plugin-health:refresh/);
   assert.match(preload, /plugin-health:reveal/);
@@ -31,6 +32,9 @@ test('plugin health window is local-only, metadata-only, and packaged', () => {
   assert.doesNotMatch(preload, /readFile|writeFile|shell|ipcRenderer\.send/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /pnpm 只管理 Profile 自己声明的外部依赖/);
+  assert.match(renderer, /固定 registry/);
+  assert.match(renderer, /compatibilityText\(item\.compatibility\)/);
+  assert.match(renderer, /makeBadge\(item\.compatibility\.status\)/);
   assert.match(renderer, /api\.toggle\(profile\.id, item\.name, !item\.enabled\)/);
   assert.doesNotMatch(renderer, /innerHTML|eval\(/);
   assert.doesNotMatch(catalog, /cordis\.patch\.yml.*readFile|\.credentials/);
