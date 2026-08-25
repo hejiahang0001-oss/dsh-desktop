@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-25 V0.5.7–V0.5.14 已完成并发布为 Pre-release；V0.5.15 插件生命周期已通过本机源码、打包、覆盖安装、语义数据和安装版真实 pnpm 门禁，待 GitHub PR/CI 与 Pre-release；V0.5.4 继续固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-25 V0.5.7–V0.5.15 已完成并发布为 Pre-release；V0.5.15 插件生命周期已通过本机、CI、覆盖安装、远端三资产和公开下载门禁；当前继续推进 V0.5.16 Git worktree；V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -313,7 +313,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 10. V0.5.12（已发布）：用实际第三方扩展验证安装、启停、运行时重载、Profile 数据迁移和跨版本回退；兼容目录只展示固定来源、平台、Patch、Peer 和安装钩子等有界结论。
 11. V0.5.13（已发布）：基于包体分类和闭包证据移除重复的应用内 PTY/开发表面；量化 blockmap 差分复用，并将未签名、签名验证关闭、可信链/Publisher 未验证和 Stable/Pre-release 通道分离列为自动更新阻断项。
 12. V0.5.14（已发布）：内置 pnpm `11.19.0`，首个目录只开放 `@nonamelego/dsh-catppuccin@0.3.1`；固定 registry/版本/完整性摘要，忽略安装脚本，使用原生默认取消确认，隔离 Key、Node 劫持变量与系统 pnpm，并在兼容检查失败时 remove、prune、逐字节恢复 Profile 清单。不提供任意包名或 pnpm 参数输入。
-13. V0.5.15（本机发布门禁已通过）：增加插件升级、卸载、启停和 last-known-good 回滚；把 V0.5.14 真实发现的崩溃窗口、残留目录、store 清理和锁文件/Profile/Patch 一致性纳入持久事务与启动恢复。源码 174/174、解包/安装版 smoke、覆盖数据和安装版真实 `0.3.0`→`0.3.1`、卸载、双向回退及中断恢复均已通过，待 GitHub PR/CI 与 Pre-release。
+13. V0.5.15（已完成，产品 Latest）：增加插件升级、卸载、启停和 last-known-good 回滚；把 V0.5.14 真实发现的崩溃窗口、残留目录、store 清理和锁文件/Profile/Patch 一致性纳入持久事务与启动恢复。源码 174/174、解包/安装版 smoke、覆盖数据、安装版真实生命周期、PR/CI 和 Pre-release 远端三资产门禁均通过。
 14. V0.5.16：为修改型并行任务创建和回收 Git worktree；删除前检查分支、未提交修改和可恢复点。
 15. V0.5.17：增加 Tasks/Subagents 面板，展示主任务、子任务、后台命令、等待确认和终止状态，并支持受控补充消息。
 16. V0.5.18：增加 Side Chat 与多会话并排查看；临时追问不改变主任务工作目录、计划或审批状态。
