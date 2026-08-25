@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.15 产品 Latest 候选（本机打包、覆盖安装、语义数据与安装版真实 pnpm 生命周期门禁已通过，待 GitHub PR/CI 和 Pre-release）
-> 状态：V0.5.7–V0.5.14 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.15 产品 Latest（插件生命周期已发布并完成远端资产核验）
+> 状态：V0.5.7–V0.5.15 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.15 本轮进展
 
@@ -13,7 +13,7 @@
 5. 修复真实 pnpm 演练发现的边界：`dsh plugin remove` 在最后一个依赖被移除时会删除整个 `dependencies` 字段；生命周期读取现在把缺失字段安全视为空依赖，而不是误报 Profile 无效。
 6. 覆盖安装语义数据门禁新增 Profile 的三份 pnpm 清单、启停事务和生命周期事务/最近可用记录，但继续排除 `node_modules`、凭据和瞬态日志。
 
-### V0.5.15 当前门禁
+### V0.5.15 最终门禁
 
 | 验证项 | 当前结果 |
 |---|---|
@@ -30,7 +30,14 @@
 | 安装版运行 | 桌面、Harness、IPC、PDF、上下文、扩展健康和真实 PTY 七类 smoke 全部通过；安装版资源再次完成完整真实插件生命周期 |
 | 覆盖数据 | 覆盖前、覆盖后及安装版 smoke 后均为 27 个语义文件、14 个会话、2 个插件 Profile 文件；逐项完全一致，聚合摘要均为 `5770CFD30539FDDAAB931FB715EE114570385F984A0E73E5706E89BF3BFAF30D` |
 | 回滚点 | `backups/pre-v0.5.15-20260825-122152`；27 个语义文件、14 个会话、2 个插件 Profile 文件逐项一致，0 个凭据命名文件、0 reparse point，并保留 V0.5.14 三件发布资产 |
-| 待完成 | GitHub PR/CI、Pre-release 及远端三资产核验；V0.5.4 继续保持 Stable |
+| 发布状态 | [PR #22](https://github.com/hejiahang0001-oss/dsh-desktop/pull/22) 三项检查和[主分支 CI 32809740429](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32809740429) 均通过；[v0.5.15](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.15) 为非 Draft 的 Pre-release，目标提交 `b938107b4865a054b71f087630b5172a45485ee7`；三项远端资产大小/摘要一致，安装包直链 HTTP 200 且 `Content-Length` 为 183,973,500；V0.5.4 仍为正式 Latest |
+| 本地清理 | V0.5.14 安装包、blockmap 和摘要清单与回滚点逐项哈希一致后送入 Windows 回收站；本地 `dist` 只保留 Stable V0.5.4 和产品 Latest V0.5.15 发布资产，可从回收站或回滚点恢复 V0.5.14 |
+
+### V0.5.15 后计划调整
+
+1. V0.5.16 进入 Git worktree：先交付软件创建、列出、切换和安全回收隔离工作树的闭环，不提前混入 Tasks/Subagents。
+2. worktree 必须绑定仓库、分支、目录、所有者和状态；删除前检查未提交变更，默认进入回收站或保留可恢复点。
+3. V0.5.17 再把任务和 Subagent 绑定到经过验证的 worktree，避免多个 Agent 串用同一工作目录。
 
 ## V0.5.14 本轮进展
 
