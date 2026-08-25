@@ -20,7 +20,8 @@ V0.6.0 closes the first integrated parallel-work, extension, and editable Office
 - The focused Office-center and three Office-preservation suite passes 13/13. The complete source suite passes 251/251, the production dependency audit reports no known vulnerability, and the unpacked real-window smoke renders three Office cards, three integration nodes, and three enabled fixed actions without clipping or overlap.
 - Unpacked and installed ten-part GUI matrices plus terminal smokes pass. Source, unpacked, and installed Harness discovery finds all three Office Skills as model-invocable. Microsoft Word, Excel, and PowerPoint 16 each start the maintained acceptance file in an isolated process and remain responsive.
 - Silent overwrite registers V0.6.0 and preserves all 27 credential-free semantic files byte-for-byte. The installed tree contains every unpacked file at equal length plus only the normal uninstaller; both trees have zero reparse points and matching `app.asar` SHA-256 `53F51881A682B043CD4193360217D761CE5F079D4B53FB10A64D64EF10BC2D3A`.
-- Implementation PR [#38](https://github.com/hejiahang0001-oss/dsh-desktop/pull/38) and its main follow-up CI pass all three jobs. The remote three-asset publication check is the only remaining release gate.
+- Implementation PR [#38](https://github.com/hejiahang0001-oss/dsh-desktop/pull/38), release-evidence PR [#39](https://github.com/hejiahang0001-oss/dsh-desktop/pull/39), and their main follow-up CI runs all pass three jobs.
+- The non-draft [V0.6.0 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.0) targets exact merge `80e9be76476f312b2baf427221c0c9174e5a18a0`. GitHub reports 3/3 asset sizes and digests equal to local evidence; a public clean download returns HTTP 200 and matches all three SHA-256 values, while the downloaded checksum manifest passes 2/2 entries. GitHub formal Latest remains V0.5.4.
 
 ## Current limits
 

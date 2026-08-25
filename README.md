@@ -74,7 +74,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.0 product Latest release candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds a local-only Office delivery center for the trusted Word, Excel, and PowerPoint Skills and makes the V0.6 worktree, Tasks/Subagents, extension/pnpm, and editable-file integration chain visible in one place. Source, package, overwrite-install, semantic-data, complete runtime, real Microsoft Office, and implementation PR/CI gates have passed. The final installer is `DSH-Desktop-Setup-0.6.0.exe`; only the remote three-asset publication gate remains. The published [V0.5.22 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.22) remains available until V0.6.0 is published, while Stable and the front-page download remain V0.5.4.
+**[V0.6.0 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.0)** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds a local-only Office delivery center for the trusted Word, Excel, and PowerPoint Skills and makes the V0.6 worktree, Tasks/Subagents, extension/pnpm, and editable-file integration chain visible in one place. Source, package, overwrite-install, semantic-data, complete runtime, real Microsoft Office, PR/CI, and remote three-asset gates have all passed. The final installer is `DSH-Desktop-Setup-0.6.0.exe`; Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -153,7 +153,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.0 产品 Latest 发布候选版继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增本机隔离的 Office 交付中心，把 Word、Excel、PowerPoint 三项可编辑文件能力的就绪状态、支持范围、安全边界与固定调用入口统一展示，并明确串联 worktree、Tasks/Subagents、扩展中心与 pnpm。全量源码、打包、覆盖安装、数据保留、完整运行时、真实 Microsoft Office 与实现 PR/CI 门禁均已通过；最终安装包为 `DSH-Desktop-Setup-0.6.0.exe`，只剩 GitHub 远端三资产发布核验。V0.6.0 发布前，[V0.5.22 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.22) 继续可用，V0.5.4 保持 Stable：
+[V0.6.0 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.0)继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增本机隔离的 Office 交付中心，把 Word、Excel、PowerPoint 三项可编辑文件能力的就绪状态、支持范围、安全边界与固定调用入口统一展示，并明确串联 worktree、Tasks/Subagents、扩展中心与 pnpm。全量源码、打包、覆盖安装、数据保留、完整运行时、真实 Microsoft Office、PR/CI 与 GitHub 远端三资产门禁均已通过；最终安装包为 `DSH-Desktop-Setup-0.6.0.exe`，V0.5.4 保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
