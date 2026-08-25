@@ -27,7 +27,8 @@ V0.5.18 adds Side Chat as a second, isolated official DeepSeek Harness session s
 - `DSH-Desktop-Setup-0.5.18.exe` is 183,995,185 bytes with SHA-256 `605DF28C7149D8AF535CACA9BDD6817C2163BE51270686E255B53EBB0876F33D`. Its 188,939-byte blockmap has SHA-256 `989D0A696A26264BF9EEF93573F492DDFFAF3C1E317FB702D963A03C62012EA6`; the 199-byte checksum manifest has SHA-256 `0ACAB1E7B5B9E41DCDEA70955B832FDD54D1C6FF1FCABBC16AD23915D2212D2A`.
 - V0.5.17 to V0.5.18 reuses 183,106,241 of 183,995,185 installer bytes (99.5169%), leaving an estimated 888,944-byte differential. The installer remains unsigned, so automatic update remains disabled.
 - Silent overwrite exits with code 0 and registers V0.5.18. The final rollback snapshot `backups/pre-v0.5.18-final-20260825-201721` copies 27 credential-free semantic files with zero hash mismatch or reparse point and retains the V0.5.17 release assets. Its manifest SHA-256 remains exactly `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D` before overwrite, after overwrite, and after installed smoke.
-- CI, merge-commit, remote-asset, public-download, and GitHub Pre-release evidence is added after publication. Stable remains V0.5.4.
+- Implementation PR [#28](https://github.com/hejiahang0001-oss/dsh-desktop/pull/28) passed all three CI jobs and merged as `aca28b52719ee221912a6d90075c6c87733cf67b`. Main CI run [32848268778](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32848268778) also passed all three jobs.
+- [V0.5.18](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.18) is a non-draft GitHub Pre-release targeting that exact merge commit. All three remote sizes and GitHub digests match local evidence; the public installer returns HTTP 200, and a clean re-download of every asset reproduces all three SHA-256 values and passes both checksum-manifest entries. Stable remains V0.5.4 and the formal GitHub Latest release.
 
 ## Deferred to V0.5.19
 
