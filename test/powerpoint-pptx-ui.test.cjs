@@ -6,9 +6,9 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-test('V0.5.22 packages the trusted PowerPoint skill and fixed offline tool', () => {
+test('V0.6.0 preserves the trusted PowerPoint skill and fixed offline tool', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.equal(manifest.version, '0.5.22');
+  assert.equal(manifest.version, '0.6.0');
   assert.ok(manifest.build.extraResources.some((entry) => entry.from === 'resources/skills' && entry.to === 'skills'));
   const skill = read('resources/skills/powerpoint-pptx/SKILL.md');
   assert.match(skill, /^---\nname: powerpoint-pptx\n/m);

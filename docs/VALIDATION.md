@@ -2,6 +2,15 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V0.6.0 integrated delivery evidence (candidate)
+
+- The local-only Office delivery center exposes only `getState` and a fixed `invoke` action. Its exact page is sandboxed, context-isolated, Node-free, navigation-blocked, and protected by expected-WebContents/main-frame IPC checks.
+- The state reader checks only six fixed non-empty regular files for the bundled Word, Excel, and PowerPoint Skill/tool pairs. Missing or linked components fail closed; no Skill prose, credential, session content, arbitrary path, package name, or command reaches the renderer.
+- Three cards present DOCX, XLSX, and PPTX editable scope and explicit unsupported content. Fixed actions reuse the authoritative Harness composer and existing `/word-docx`, `/excel-xlsx`, and `/powerpoint-pptx` commands rather than creating another Agent loop.
+- The same window makes the isolated-worktree, Harness-native Tasks/Subagents, and extension/pnpm chain visible. Focused Office-center and three Office-preservation tests pass 13/13.
+- The complete source suite passes 251/251, the production dependency audit reports no known vulnerability, main-process syntax and `git diff --check` pass. The unpacked Office-center smoke exposes exactly `getState` and `invoke`, renders 3 Office cards, 3 integration cards, and 3 enabled fixed actions, and exits 0. Its 1524×1085 initial view is visually free of clipping and overlap.
+- Final package, overwrite-install, semantic-data, complete runtime matrices, CI, and remote-release evidence will be appended only after those gates pass.
+
 ## V0.5.22 PowerPoint PPTX evidence (published)
 
 - The pinned source Harness starts on a random IPv4 loopback origin and `skill.list` returns bundled `powerpoint-pptx` with `modelInvocable: true`.

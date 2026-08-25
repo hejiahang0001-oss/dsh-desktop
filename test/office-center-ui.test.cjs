@@ -1,0 +1,38 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const root = path.resolve(__dirname, '..');
+const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
+
+test('V0.6 Office center is local-only, narrow, accessible, and packaged', () => {
+  const main = read('electron/main.cjs');
+  const preload = read('electron/office-center-preload.cjs');
+  const renderer = read('assets/office-center.js');
+  const page = read('office-center.html');
+  const desktopPreload = read('electron/preload.cjs');
+  const command = read('assets/workbench-command.js');
+  const manifest = JSON.parse(read('package.json'));
+  assert.match(main, /officeCenterIpcAllowed/);
+  assert.match(main, /isTrustedMainFrameEvent\(\s*event,\s*officeCenterWindow\?\.webContents,\s*officeCenterUrlAllowed\s*\)/);
+  assert.match(main, /ipcMain\.handle\('office-center:get-state'/);
+  assert.match(main, /ipcMain\.handle\('office-center:invoke'/);
+  assert.match(main, /ipcMain\.handle\('office-center:open-window'/);
+  assert.match(main, /label: 'Office 交付中心…'/);
+  assert.match(main, /--office-center-smoke-file=/);
+  assert.match(main, /if \(!isOfficeSkillId\(id\)\)/);
+  assert.match(main, /word: invokeWordDocxSkill,\s*excel: invokeExcelXlsxSkill,\s*powerpoint: invokePowerPointPptxSkill/);
+  assert.match(preload, /office-center:get-state/);
+  assert.match(preload, /office-center:invoke/);
+  assert.doesNotMatch(preload, /readFile|writeFile|shell|ipcRenderer\.send/);
+  assert.match(renderer, /textContent/);
+  assert.match(renderer, /api\.invoke\(item\.id\)/);
+  assert.doesNotMatch(renderer, /innerHTML|eval\(|createElement\(['"]input['"]\)/);
+  assert.match(page, /Office 交付中心/);
+  assert.match(page, /并行、扩展与交付保持同一工作区/);
+  assert.match(desktopPreload, /office: Object\.freeze/);
+  assert.match(desktopPreload, /office-center:open-window/);
+  assert.match(command, /id: 'office-center\.open'/);
+  for (const asset of ['office-center.html', 'assets/office-center.css', 'assets/office-center.js']) assert.ok(manifest.build.files.includes(asset), asset);
+});
