@@ -70,7 +70,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.5.18 product Latest candidate** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds an isolated Side Chat over official session create/fork, rename, prompt, history, and permission projections. The main and side windows use separate session storage, and the side renderer receives no desktop command bridge. `DSH-Desktop-Setup-0.5.18.exe` is published only after its package, overwrite-installation, installed-runtime, visual, security, semantic-data, CI, and remote-asset gates pass. The front-page download remains Stable.
+**V0.5.18 product Latest** keeps official DeepSeek Harness `0.1.1-rc.2`, Electron `43.4.1`, and bundled pnpm `11.19.0`. It adds an isolated Side Chat over official session create/fork, rename, prompt, history, and permission projections. The main and side windows use separate session storage, and the side renderer receives no desktop command bridge. `DSH-Desktop-Setup-0.5.18.exe` passed its package, overwrite-installation, installed-runtime, visual, security, semantic-data, CI, and remote-asset gates and is published as a [GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.18). The front-page download remains Stable.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -142,7 +142,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.5.18 产品 Latest 候选继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增隔离 Side Chat：从当前已完成普通会话调用官方 create/fork、rename、prompt、history 与权限投影，主窗口和 Side Chat 使用不同临时会话存储，Side Chat 不获得桌面命令桥接。安装包 `DSH-Desktop-Setup-0.5.18.exe` 只有通过源码、打包、覆盖安装、安装版运行、视觉、安全、数据保留、CI 与远端三资产门禁后才发布为 GitHub Pre-release。V0.5.4 继续保持 Stable：
+V0.5.18 产品 Latest 继续固定官方 Harness `0.1.1-rc.2`、Electron `43.4.1` 和 pnpm `11.19.0`。本版新增隔离 Side Chat：从当前已完成普通会话调用官方 create/fork、rename、prompt、history 与权限投影，主窗口和 Side Chat 使用不同临时会话存储，Side Chat 不获得桌面命令桥接。安装包 `DSH-Desktop-Setup-0.5.18.exe` 已通过源码、打包、覆盖安装、安装版运行、视觉、安全、数据保留、CI 与远端三资产门禁，并发布为 [GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.18)。V0.5.4 继续保持 Stable：
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

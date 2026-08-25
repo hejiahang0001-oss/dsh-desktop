@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-25
-> 当前构建：V0.5.18 产品 Latest 候选（本地发布门禁已完成）
-> 状态：V0.5.7–V0.5.17 已发布为 Pre-release；V0.5.18 等待 PR/CI、合并与远端三资产核验；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.5.18 产品 Latest（已发布为 Pre-release）
+> 状态：V0.5.7–V0.5.18 已发布为 Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.5.18 本轮进展
 
@@ -31,7 +31,8 @@
 | 差分与签名 | V0.5.17→V0.5.18 复用 183,106,241 / 183,995,185 字节，99.5169%，预计下载 888,944 字节；unsigned，自动更新继续关闭 |
 | 覆盖安装 | 最终安装器退出码 0，注册 `DSH Desktop 0.5.18`；安装版含解包版 29,787 个文件并只多卸载器，0 缺失/大小差异/链接；安装/解包 `app.asar` 摘要均为 `6BAB9C0A346AEBCAD50259F697481895FF73D001E06C4E8B5E1CF1BBE773AF3D` |
 | 覆盖数据与回滚 | 最终覆盖前、覆盖后及隔离安装版 smoke 后 27 个语义文件、14 个会话、2 个 Profile 文件逐项一致，清单 SHA-256 均为 `D4DC1C46139CE2237846FFE28AA40D4F13E915CF11CD8AB7E6EA73F30C61F35D`；回滚点 `backups/pre-v0.5.18-final-20260825-201721` 为 0 哈希差异、0 凭据命名文件、0 reparse point，并保留 V0.5.17 三资产 |
-| 待完成 | PR 三项 CI、合并后主分支 CI、GitHub Pre-release、远端三资产大小/摘要和公开下载核验 |
+| PR 与发布 | 实现 PR [#28](https://github.com/hejiahang0001-oss/dsh-desktop/pull/28) 三项 CI 通过并以 `aca28b52719ee221912a6d90075c6c87733cf67b` 合并；主分支 CI [32848268778](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32848268778) 三项通过；[V0.5.18 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.5.18) 非草稿并准确指向该合并提交 |
+| 远端资产 | 三项资产的远端大小和 GitHub SHA-256 digest 与本地一致；公开安装链接 HTTP 200；回下载三资产逐文件复算摘要全部匹配，校验清单 2/2 通过；GitHub 正式 Latest 仍为 V0.5.4 |
 
 ## V0.5.17 本轮进展
 
