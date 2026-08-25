@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.6.0 产品 Latest 发布候选版（统一 Office 交付与集成验收）
-> 状态：V0.5.7–V0.5.22 已发布为 Pre-release；V0.6.0 源码、打包、覆盖安装、用户数据保留、完整运行时、真实 Office 和实现 PR/CI 门禁均已通过，等待 GitHub 远端三资产发布核验；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.0 产品 Latest（统一 Office 交付与集成验收完成）
+> 状态：V0.5.7–V0.6.0 已发布为 Pre-release；V0.6.0 源码、打包、覆盖安装、用户数据保留、完整运行时、真实 Office、PR/CI 和 GitHub 远端三资产门禁全部通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.6.0 本轮进展
 
@@ -21,7 +21,8 @@
 | Office 真实打开 | Word、Excel、PowerPoint 16.0.19127.20302 均以独立进程启动对应 DOCX/XLSX/PPTX 并保持响应；只关闭本轮新建进程，原有 Office 进程保持不变 |
 | 打包与完整性 | 安装包 184,045,391 字节，SHA-256 `863A10686ABBB317E2AD564CB4F1E9E07848ED930721626459945D7062F0BEAF`；blockmap 188,843 字节，SHA-256 `6177FEF8701C0F14BD038B3ED210A641D5C805D99DE27C5C1F1CB76A2C28EB4C`；清单 2/2 本地一致 |
 | 覆盖安装与数据保留 | 静默覆盖退出码 0，Windows 注册 V0.6.0；安装版包含解包版全部等长文件且仅多正常卸载器，二者零重解析点、`app.asar` 哈希一致；27 份无凭据语义文件覆盖前后及安装版完整 smoke 后逐字节一致 |
-| PR/CI 与远端资产 | 实现 PR [#38](https://github.com/hejiahang0001-oss/dsh-desktop/pull/38) 三项 CI 全通过并合并为 `195e7cbf44c8ef320b32e7517a7554ddfc094747`；main CI 三项全通过；远端三资产待发布核验 |
+| PR/CI 与远端资产 | 实现 PR [#38](https://github.com/hejiahang0001-oss/dsh-desktop/pull/38) 与证据 PR [#39](https://github.com/hejiahang0001-oss/dsh-desktop/pull/39) 的 CI 均三项通过；[#39](https://github.com/hejiahang0001-oss/dsh-desktop/pull/39) 合并为 `80e9be76476f312b2baf427221c0c9174e5a18a0`，main CI [32897953354](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32897953354) 三项通过；[V0.6.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.0) 非草稿 Pre-release 精确指向该提交，远端 3/3 摘要、公开 HTTP 200 与清单 2/2 均通过，V0.5.4 仍为正式 Latest |
+| 本地版本保留 | V0.5.22 三份旧发布资产在与覆盖前备份逐项等长同哈希后移入回收站；本地保留 V0.5.4 Stable 与 V0.6.0 Latest，旧资产仍可从回收站、备份或 GitHub 恢复 |
 
 ## V0.5.22 本轮进展
 
