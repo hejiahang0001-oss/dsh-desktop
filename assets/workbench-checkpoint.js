@@ -124,7 +124,7 @@
       show(selected ? '当前代码和 Git 索引已与所选检查点一致。' : '代码未变化，沿用最近检查点。');
     } else if (state?.error) {
       show(state.error, 'error');
-    } else if (state && !state.available) {
+    } else if (state && !state.available && state.requestSource !== 'automatic') {
       show(state.reason === 'workspace-is-subdirectory' ? '请打开 Git 仓库根目录以启用检查点。' : '当前工作区暂不可建立 Git 检查点。', 'warning');
     }
     return state;

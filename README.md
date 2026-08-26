@@ -75,7 +75,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**[V0.6.1 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.1)** makes interruption reliable while an Agent reply is running. `Ctrl+Enter` on a plain-text correction now asks the official Harness session to cancel the current turn before submitting the correction; the visible queued-message interrupt action promotes the complete authoritative queued text rather than a shortened UI preview. Source, real DeepSeek, package, overwrite-install, semantic-data, installed-runtime, PR/CI, and public three-asset gates pass. The installer is `DSH-Desktop-Setup-0.6.1.exe`; Stable and the front-page download remain V0.5.4.
+**V0.6.2 product Latest candidate** keeps automatic Git checkpoints best-effort. If Git or a repository root is unavailable, clicking or typing in the Harness composer no longer shows a blocking-style warning; normal chat and Office commands continue unchanged. Manual checkpoint actions still report unavailable Git state. The candidate installer is `DSH-Desktop-Setup-0.6.2.exe`; Stable and the front-page download remain V0.5.4 until the release gates finish.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -112,7 +112,7 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.1 release notes](docs/RELEASE_NOTES_v0.6.1.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.2 release notes](docs/RELEASE_NOTES_v0.6.2.md).
 
 ## Security and current limits
 
@@ -155,7 +155,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-[V0.6.1 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.1)优先修复运行中插话：纯文本补充要求可用 `Ctrl+Enter` 先请求官方 Harness 中断当前回合，再提交补充内容；已排队消息点击“插话发送”时，软件读取并转交 Harness 保存的完整正文，不依赖界面中的截断预览。源码、真实 DeepSeek、打包、覆盖安装、数据保留、已安装版、PR/CI 与公开三资产门禁均已通过；安装包为 `DSH-Desktop-Setup-0.6.1.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
+V0.6.2 产品 Latest 候选版把自动 Git 检查点改为静默降级：电脑未安装 Git、目录不是仓库根目录时，点击或输入聊天框不再弹出干扰提示，正常聊天和 Office 命令保持不变；只有用户手动调用检查点功能时才反馈 Git 不可用。候选安装包为 `DSH-Desktop-Setup-0.6.2.exe`，V0.5.4 继续保持 Stable 和首页下载版本，直到本轮发布门禁完成。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

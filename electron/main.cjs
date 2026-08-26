@@ -791,7 +791,7 @@ const createCodeCheckpoint = async (source = 'manual') => {
   if (checkpointRestorePromise || checkpointForkPromise) return getCheckpointState();
   if (checkpointCreatePromise) return checkpointCreatePromise;
   checkpointCreatePromise = (async () => {
-    publishCheckpointState({ ...checkpointManager.getState(), status: 'creating' });
+    publishCheckpointState({ ...checkpointManager.getState(), status: 'creating', requestSource: source });
     let sessionLink = null;
     try {
       if (harnessUiReady()) {
@@ -805,8 +805,8 @@ const createCodeCheckpoint = async (source = 'manual') => {
       // Conversation linkage is fail-soft; it must never prevent the code checkpoint or prompt.
     }
     const pending = checkpointManager.create({ source, sessionLink });
-    publishCheckpointState(checkpointManager.getState());
-    return publishCheckpointState(await pending);
+    publishCheckpointState({ ...checkpointManager.getState(), requestSource: source });
+    return publishCheckpointState({ ...(await pending), requestSource: source });
   })().finally(() => { checkpointCreatePromise = null; });
   return checkpointCreatePromise;
 };
