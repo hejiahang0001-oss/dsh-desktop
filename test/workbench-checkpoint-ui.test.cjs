@@ -20,6 +20,8 @@ test('automatic checkpoint UI ignores page autofocus, arms on user composer inte
   assert.match(source, /agentWasBusy/);
   assert.match(source, /aria-live/);
   assert.match(source, /toLocaleTimeString\('zh-CN'/);
+  assert.match(source, /state\.requestSource !== 'automatic'/);
+  assert.match(read('electron/main.cjs'), /requestSource:\s*source/);
   assert.doesNotMatch(source, /innerHTML|eval\(|ipcRenderer|child_process|shell\./);
 });
 
