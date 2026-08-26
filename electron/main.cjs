@@ -31,6 +31,10 @@ const {
   waitForHarnessSessionSelection
 } = require('./harness-workspace-sync.cjs');
 const {
+  ReliableInterruptController,
+  ReliableInterruptError
+} = require('./harness-reliable-interrupt.cjs');
+const {
   invokeHarnessCommandAction,
   invokeHarnessUiAction,
   isAgentActionSettled,
@@ -91,6 +95,7 @@ let controlledPluginInstaller;
 let worktreeManager;
 let tasksSubagentsController;
 let sideChatController;
+let reliableInterruptController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
 let pluginInstallPromise = null;
@@ -205,6 +210,7 @@ const workbenchCheckpointScriptPath = path.join(rootDir, 'assets', 'workbench-ch
 const workbenchNetworkCssPath = path.join(rootDir, 'assets', 'workbench-network.css');
 const workbenchNetworkScriptPath = path.join(rootDir, 'assets', 'workbench-network.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
+const harnessReliableInterruptScriptPath = path.join(rootDir, 'assets', 'harness-reliable-interrupt.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
 let workbenchFilesCss = '';
@@ -218,6 +224,7 @@ let workbenchCheckpointScript = '';
 let workbenchNetworkCss = '';
 let workbenchNetworkScript = '';
 let harnessLocalizationScript = '';
+let harnessReliableInterruptScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
@@ -636,6 +643,7 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchNetworkCss) workbenchNetworkCss = await fsp.readFile(workbenchNetworkCssPath, 'utf8');
   if (!workbenchNetworkScript) workbenchNetworkScript = await fsp.readFile(workbenchNetworkScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
+  if (!harnessReliableInterruptScript) harnessReliableInterruptScript = await fsp.readFile(harnessReliableInterruptScriptPath, 'utf8');
   return {
     css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}`,
     reviewScript: workbenchPanelScript,
@@ -644,9 +652,14 @@ const loadWorkbenchPanelAssets = async () => {
     checkpointScript: workbenchCheckpointScript,
     networkScript: workbenchNetworkScript,
     commandScript: workbenchCommandScript,
-    localizationScript: harnessLocalizationScript
+    localizationScript: harnessLocalizationScript,
+    reliableInterruptScript: harnessReliableInterruptScript
   };
 };
+
+const installReliableInterrupt = async (assets) => Boolean(
+  await mainWindow.webContents.executeJavaScript(assets.reliableInterruptScript, true)
+);
 
 const installWorkbenchPanel = async () => {
   if (!harnessUiReady()) return false;
@@ -661,7 +674,9 @@ const installWorkbenchPanel = async () => {
     const checkpointInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.checkpointScript, true));
     const networkInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.networkScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
-    return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled && networkInstalled && commandInstalled;
+    const reliableInterruptInstalled = await installReliableInterrupt(assets);
+    return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled
+      && networkInstalled && commandInstalled && reliableInterruptInstalled;
   } catch {
     return false;
   }
@@ -2997,7 +3012,7 @@ function installApplicationMenu() {
           click: () => { void runHarnessUiAction('focus-pending'); }
         },
         { type: 'separator' },
-        { label: '运行中：Enter 排队；Ctrl+Enter 插话', enabled: false },
+        { label: '运行中：Enter 排队；Ctrl+Enter 立即中断并发送纯文本', enabled: false },
         {
           label: '刷新 Agent 状态',
           enabled: harnessReady,
@@ -3695,6 +3710,40 @@ ipcMain.handle('office-center:open-window', (event) => (
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
+ipcMain.handle('harness:interrupt-queued', async (event) => {
+  if (!harnessIpcAllowed(event) || !reliableInterruptController) {
+    return { ok: false, accepted: false, message: '排队插话请求未通过安全校验。' };
+  }
+  try {
+    const receipt = await reliableInterruptController.interruptQueued();
+    setTimeout(() => { void refreshAgentDiagnostics(); }, 120);
+    return receipt;
+  } catch (error) {
+    return {
+      ok: false,
+      accepted: false,
+      reason: error instanceof ReliableInterruptError ? error.code : 'interrupt-failed',
+      message: error?.message || '排队插话失败，消息仍保留。'
+    };
+  }
+});
+ipcMain.handle('harness:interrupt-and-prompt', async (event, text) => {
+  if (!harnessIpcAllowed(event) || !reliableInterruptController || typeof text !== 'string') {
+    return { ok: false, accepted: false, message: '插话请求未通过安全校验。' };
+  }
+  try {
+    const receipt = await reliableInterruptController.interruptAndPrompt(text);
+    setTimeout(() => { void refreshAgentDiagnostics(); }, 120);
+    return receipt;
+  } catch (error) {
+    return {
+      ok: false,
+      accepted: false,
+      reason: error instanceof ReliableInterruptError ? error.code : 'interrupt-failed',
+      message: error?.message || '插话发送失败，草稿已保留。'
+    };
+  }
+});
 ipcMain.handle('harness:restart', (event) => (
   desktopIpcAllowed(event) ? startHarnessForWindow({ restart: true }) : { ok: false, reason: 'untrusted' }
 ));
@@ -4853,6 +4902,11 @@ app.whenReady().then(async () => {
   tasksSubagentsController = new TasksSubagentsController({
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined)
+  });
+  reliableInterruptController = new ReliableInterruptController({
+    getOrigin: () => harnessOrigin,
+    getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
+    getWorkspacePath: () => getWorkspaceState().activePath
   });
   sideChatController = new SideChatController({ getOrigin: () => harnessOrigin });
   await refreshDesktopDiagnostics({ rebuildMenu: false });

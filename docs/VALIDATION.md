@@ -2,6 +2,19 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V0.6.1 reliable interruption evidence (candidate)
+
+- Upstream source inspection confirms Harness `steer` places a message at the next step boundary and cannot interrupt a model or tool operation already in progress. DSH therefore keeps the official session as the sole Agent loop but gives plain-text `Ctrl+Enter` an explicit cancel-then-prompt path.
+- The main process re-reads the selected session from the authoritative Harness page, verifies the ordinary session belongs to the exact active workspace, calls the official `session.cancel`, waits for an idle boundary, and then submits the correction with the official `session.prompt` API. The renderer cannot supply a session id.
+- The visible queued-message interrupt action reads one bounded authoritative `/api/events.mux` WebSocket queue snapshot, promotes only a bounded all-text queued item, and never trusts the shortened visible button label as message content. Attachments, slash commands, references, invalid sessions, workspace races, and oversized content fail closed or stay on the native Harness path.
+- The focused reliable-interrupt suite passes 10/10 and the complete source suite passes 261/261. Syntax validation passes for the main controller, renderer hook, and real-Agent smoke.
+- The isolated real DeepSeek smoke copies the software-managed credential only into a temporary Harness home, never emits the value, and deletes the copy on exit. Its result is `ok: true`: the direct path records an aborted original turn and returns `RELIABLE_INTERRUPT_VERIFIED`; the queued path returns `QUEUED_INTERRUPT_VERIFIED`, including the valid race where the current model step finishes immediately before cancellation.
+- The final unpacked tree contains 29,793 files and 692,839,587 bytes. The installed tree contains every unpacked relative path at equal length plus only the normal uninstaller: 29,794 files and 693,282,433 bytes. Both have zero reparse points and matching `app.asar` SHA-256 `AF703CDEA7BC608B6DFFFEA686CF72BD1FB5D7F372A82DEFEDD8EF445650E956`.
+- The unpacked and installed ten-part GUI matrices plus both packaged-terminal smokes pass. On two installed Office screenshot attempts the local GPU capture path returned Electron `UnknownVizError`; rerunning the same installed artifact with Electron software rendering produced both 1524×1085 screenshots and the expected 3 Office cards, 3 integration cards, and 3 enabled actions. This is recorded as a smoke-environment rendering fallback, not hidden as an application pass.
+- Silent overwrite exits 0 and Windows registers V0.6.1. Backup `backups/pre-v0.6.1-20260826-140553` contains all 27 credential-free semantic files and all three V0.6.0 release assets with exact sizes/hashes and zero reparse points. All 27 semantic files remain byte-identical before overwrite, after install, and after the installed smoke matrix.
+- The installer is 184,048,445 bytes with SHA-256 `8B344A63EDB18ED955A3826E7A12AC8EC3DEE8C09945B16E4B81818EFEF523CB`; its 188,952-byte blockmap hashes to `2EB7872D030AFB277257A9CD263284FAE26E2DCA82BEA34294A28879DFBA8F74`. Differential reuse from V0.6.0 is 183,032,145 bytes (99.4478%), leaving 1,016,300 bytes. The installer remains unsigned and automatic update remains fail-closed.
+- PR/CI and remote-asset gates remain pending. V0.5.4 remains Stable and GitHub's formal Latest release.
+
 ## V0.6.0 integrated delivery evidence (published)
 
 - The local-only Office delivery center exposes only `getState` and a fixed `invoke` action. Its exact page is sandboxed, context-isolated, Node-free, navigation-blocked, and protected by expected-WebContents/main-frame IPC checks.

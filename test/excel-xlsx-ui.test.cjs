@@ -6,9 +6,8 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-test('V0.6.0 preserves the trusted Excel skill and its fixed offline tool', () => {
+test('the current release preserves the trusted Excel skill and its fixed offline tool', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.equal(manifest.version, '0.6.0');
   assert.ok(manifest.build.extraResources.some((entry) => entry.from === 'resources/skills' && entry.to === 'skills'));
   const skill = read('resources/skills/excel-xlsx/SKILL.md');
   assert.match(skill, /^---\nname: excel-xlsx\n/m);
