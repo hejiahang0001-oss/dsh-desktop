@@ -241,3 +241,16 @@ html[data-dsh-review-open="true"] #dsh-workbench-review {
   html[data-dsh-review-open="true"] #root,
   #dsh-workbench-review { transition: none; }
 }
+
+.dsh-reliable-interrupt-status {
+  min-height: 18px;
+  margin: 0 4px 6px;
+  color: var(--dsh-panel-muted);
+  font: 11px/1.45 system-ui, sans-serif;
+}
+
+.dsh-reliable-interrupt-status:empty { display: none; }
+.dsh-reliable-interrupt-status[data-state="pending"] { color: var(--dsh-panel-warning); }
+.dsh-reliable-interrupt-status[data-state="success"] { color: var(--dsh-panel-success); }
+.dsh-reliable-interrupt-status[data-state="error"] { color: var(--dsh-panel-danger); }
+[data-composer-card][data-dsh-interrupt-pending="true"] { opacity: .78; }

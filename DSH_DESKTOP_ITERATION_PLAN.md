@@ -5,7 +5,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-26 V0.5.7–V0.6.0 已发布为 Pre-release；V0.6.0 Office 交付中心、251/251 完整源码、打包、覆盖安装、数据保留、完整运行时、真实 Microsoft Office、PR/CI 与 GitHub 远端三资产门禁全部通过；V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`。
+> 执行状态：2026-08-26 V0.6.1 已完成运行中插话可靠性实现、261/261 源码、真实 DeepSeek、打包、覆盖安装、数据保留和已安装版门禁，等待 PR/CI 与 GitHub Pre-release；V0.5.7–V0.6.0 已发布为 Pre-release，V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -234,7 +234,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 | V0.3 | 第 2–9 天，已完成 Daily Build | 建立 Agent 编程 MVP | 打开/记忆仓库、Workspace/会话同路径映射、软件 Key 最高优先级、真实模型连接、Stop & steer、工具生命周期、失败诊断、官方 Plan 门禁，以及真实多文件逐项/批量接受拒绝 | 已完成“仓库—Plan—确认—修改—测试/工具证据—多文件 Diff—确认”主闭环 |
 | V0.4 | 第 2 周，进行中 Daily Build | 形成桌面开发工作台 | V0.4.0 常驻 Git Diff；V0.4.1 同工作区受控 PowerShell；V0.4.2 文件树与只读查看；V0.4.3 中文过程；V0.4.4 持久 PTY；V0.4.5 HTML/本机服务器预览；V0.4.6 图片/PDF；V0.4.7 命令面板 | 关键面板无裁切；文件/终端/预览与 Harness 使用相同工作目录；软件 Key 不进入子进程 |
 | V0.5 | 第 2 周 | 建立安全和恢复能力 | 自动 Checkpoint；代码/会话 Rewind；会话继续、分支；权限规则；越界写入确认；项目规则与记忆 | 任何 Agent 文件编辑都有恢复点；高风险操作可解释、可拒绝 |
-| V0.6 | 当前连续迭代目标 | 并行、扩展与 Office 交付闭环 | V0.5.12–V0.5.22 依次完成真实插件兼容、包体治理、受控 pnpm、插件生命周期、worktree、Tasks/Subagents、Side Chat、扩展中心、Word、Excel、PPT；V0.6.0 统一验收 | 用户无需安装 Node.js/pnpm；并行任务不串工作目录；扩展状态和回滚点可见；DOCX/XLSX/PPTX 均可编辑并通过实际打开/渲染校验 |
+| V0.6 | 当前连续迭代目标 | 并行、扩展、Office 与交互可靠性闭环 | V0.5.12–V0.6.0 完成插件、并行任务、Office 与统一验收；V0.6.1 修复运行中插话只排队、不及时响应的问题 | 用户无需安装 Node.js/pnpm；并行任务不串工作目录；DOCX/XLSX/PPTX 可编辑；运行中纯文本补充要求能可靠中断并继续 |
 | V0.7 | 第 3 周 | 形成受控试点版本 | Git 状态/分支/提交；PR 状态入口；托盘通知；安装版/便携版；备份恢复；诊断；自动更新回滚 | P0=0；安装、升级、覆盖安装、卸载和 packaged smoke 通过 |
 | V1.0 | 第 3 周末 | 个人稳定版 | 修复 P0/P1；稳定本地编码主闭环；版本说明、支持边界和回滚预案 | 个人真实仓库连续使用通过；核心异常状态可恢复 |
 
@@ -322,6 +322,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 19. V0.5.21（已发布）：增加 Excel 能力；官方 Harness bundled `/excel-xlsx` 支持生成和修改可编辑 XLSX、多 Sheet、公式、样式、筛选、冻结、CSV 导入、勾稽与严格风险检查；源码发现、真实 Key Agent、Microsoft Excel 实际打开/重算/视觉、233/233 源码、打包、覆盖安装、安装版十类 smoke、用户数据保留、PR/CI 与 Pre-release 三资产远端核验均已通过。
 20. V0.5.22（已发布）：增加 PPT 能力；官方 Harness bundled `/powerpoint-pptx` 支持生成和精确修改可编辑 PPTX，包含原生文本、形状、表格、图表、内嵌 Excel 数据、PNG/JPEG、真实母版、两套版式和逐页演讲者备注；源码发现、真实 Key Agent、Microsoft PowerPoint、7/7 页视觉、打包、覆盖安装、数据保留、PR/CI 与 Pre-release 三资产远端核验均已通过。
 21. V0.6.0（已发布）：新增本机 Office 交付中心，统一展示并固定调用 Word、Excel、PowerPoint，同时可见 worktree、Tasks/Subagents 与扩展/pnpm 集成链；全量回归、真实界面、打包、覆盖安装、数据保留、完整运行时、真实 Office、PR/CI 与 GitHub Pre-release 三资产核验全部通过。
+22. V0.6.1（进行中）：把运行中的纯文本 `Ctrl+Enter` 从 Harness 的“下一步排队”提升为“请求取消当前官方回合，再由同一官方会话处理补充内容”；同时接管官方“插话发送”动作，读取 Harness 保存的完整排队正文，避免界面截断和消息丢失。附件、斜杠命令和引用继续使用 Harness 原生队列语义，不复制 Agent loop。
 
 用户能够：
 
@@ -340,7 +341,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 
 ### V0.6：并行 Agent 与扩展
 
-执行顺序固定为 V0.5.14–V0.5.19；Office 文件能力随后按 V0.5.20 Word、V0.5.21 Excel、V0.5.22 PPT 交付，最后由 V0.6.0 集成验收。Stable 仍由用户单独下令晋升。
+V0.5.14–V0.6.0 已完成插件、并行任务和 Office 集成；V0.6.1 作为真实使用反馈触发的可靠性插入版本，先收敛运行中插话，再进入 V0.7 试点与开发交付。Stable 仍由用户单独下令晋升。
 
 用户能够：
 
@@ -348,6 +349,7 @@ DSH Desktop 是一个基于 DeepSeek Harness 的本地 Agent 编程桌面工作�
 - 为修改型任务自动创建 Git worktree，实现代码隔离。
 - 在 Tasks 面板查看主 Agent、Subagents 和后台命令。
 - 向运行中的 Agent 发送补充消息或停止任务。
+- 对纯文本补充要求使用 `Ctrl+Enter`，请求中断当前回合后立即继续；排队插话保持完整正文，不依赖界面截断预览。
 - 打开 Side Chat 进行临时追问，不污染主会话。
 - 浏览、启停和配置 Skills、Plugins、Hooks 与 MCP。
 - 查看扩展来源、作用域、权限和加载错误。

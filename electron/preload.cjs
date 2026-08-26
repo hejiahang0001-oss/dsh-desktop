@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   }),
   harness: Object.freeze({
     getState: () => ipcRenderer.invoke('harness:get-state'),
+    interruptAndPrompt: (text) => ipcRenderer.invoke('harness:interrupt-and-prompt', text),
+    interruptQueued: () => ipcRenderer.invoke('harness:interrupt-queued'),
     restart: () => ipcRenderer.invoke('harness:restart'),
     openLog: () => ipcRenderer.invoke('harness:open-log'),
     onState: (listener) => {
