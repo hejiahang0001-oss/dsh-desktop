@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.6.2 产品 Latest 候选版（自动 Git 提示静默降级）
-> 状态：V0.6.2 已完成实现、261/261 源码、打包、覆盖安装、无 Git 实机、已安装版和数据保留门禁；PR/CI 与 GitHub Pre-release 发布正在执行；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.2 产品 Latest（自动 Git 提示静默降级）
+> 状态：V0.6.2 已发布为 Pre-release；实现、261/261 源码、打包、覆盖安装、无 Git 实机、已安装版、数据保留、PR/CI 与 GitHub 公开三资产门禁全部通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.6.2 本轮进展
 
@@ -20,7 +20,7 @@
 | 完整运行时 | unpacked 10/10、已安装版 10/10 与真实两命令终端通过；发布治理 `packageReady: true`，零重解析点，pnpm 11.19.0 与 Word/Excel/PPT Skill 齐备 |
 | 无 Git 已安装版 | 使用正常 Windows PATH 启动安装版并确认 `git.exe` 不可解析；点击聊天框、输入 `/excel-xlsx` 并延迟复核均无黄色 Git 提示，命令候选正常出现且未发送消息 |
 | 覆盖安装与数据 | 安装前、安装后和完整 smoke 后 27 份无凭据语义文件逐字节一致；回滚备份 `backups/pre-v0.6.2-20260826-213117` 已建立 |
-| PR、CI 与 GitHub | 待执行；V0.5.4 Stable 不变 |
+| PR、CI 与 GitHub | 实现 PR [#43](https://github.com/hejiahang0001-oss/dsh-desktop/pull/43) 三项 CI 通过并合并为 `3af68ef9d39eaf489164394855b57e73b1604829`；主分支 CI [32977360705](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32977360705) 三项通过；[V0.6.2](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.2) 为指向该提交的非 Draft Pre-release，远端 3/3 大小/摘要和公开重下载哈希一致，清单 2/2 通过；V0.5.4 仍为正式 Latest |
 
 ## V0.6.1 本轮进展
 

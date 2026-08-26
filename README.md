@@ -75,7 +75,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.2 product Latest candidate** keeps automatic Git checkpoints best-effort. If Git or a repository root is unavailable, clicking or typing in the Harness composer no longer shows a blocking-style warning; normal chat and Office commands continue unchanged. Manual checkpoint actions still report unavailable Git state. The candidate installer is `DSH-Desktop-Setup-0.6.2.exe`; Stable and the front-page download remain V0.5.4 until the release gates finish.
+**[V0.6.2 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.2)** keeps automatic Git checkpoints best-effort. If Git or a repository root is unavailable, clicking or typing in the Harness composer no longer shows a blocking-style warning; normal chat and Office commands continue unchanged. Manual checkpoint actions still report unavailable Git state. Source, package, overwrite-install, no-Git UI, installed-runtime, semantic-data, PR/CI, and public three-asset gates pass. The installer is `DSH-Desktop-Setup-0.6.2.exe`; Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -155,7 +155,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.2 产品 Latest 候选版把自动 Git 检查点改为静默降级：电脑未安装 Git、目录不是仓库根目录时，点击或输入聊天框不再弹出干扰提示，正常聊天和 Office 命令保持不变；只有用户手动调用检查点功能时才反馈 Git 不可用。候选安装包为 `DSH-Desktop-Setup-0.6.2.exe`，V0.5.4 继续保持 Stable 和首页下载版本，直到本轮发布门禁完成。
+[V0.6.2 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.2)把自动 Git 检查点改为静默降级：电脑未安装 Git、目录不是仓库根目录时，点击或输入聊天框不再弹出干扰提示，正常聊天和 Office 命令保持不变；只有用户手动调用检查点功能时才反馈 Git 不可用。源码、打包、覆盖安装、无 Git 界面、已安装运行时、数据保留、PR/CI 与公开三资产门禁均已通过；安装包为 `DSH-Desktop-Setup-0.6.2.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
