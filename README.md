@@ -75,7 +75,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.1 product Latest candidate** makes interruption reliable while an Agent reply is running. `Ctrl+Enter` on a plain-text correction now asks the official Harness session to cancel the current turn before submitting the correction; the visible queued-message interrupt action promotes the complete authoritative queued text rather than a shortened UI preview. A real DeepSeek session recorded an aborted turn and returned both direct and queued correction markers. The candidate installer name is `DSH-Desktop-Setup-0.6.1.exe`; Stable and the front-page download remain V0.5.4 until V0.6.1 completes its release gates.
+**[V0.6.1 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.1)** makes interruption reliable while an Agent reply is running. `Ctrl+Enter` on a plain-text correction now asks the official Harness session to cancel the current turn before submitting the correction; the visible queued-message interrupt action promotes the complete authoritative queued text rather than a shortened UI preview. Source, real DeepSeek, package, overwrite-install, semantic-data, installed-runtime, PR/CI, and public three-asset gates pass. The installer is `DSH-Desktop-Setup-0.6.1.exe`; Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -155,7 +155,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.1 产品 Latest 候选版优先修复运行中插话：纯文本补充要求可用 `Ctrl+Enter` 先请求官方 Harness 中断当前回合，再提交补充内容；已排队消息点击“插话发送”时，软件读取并转交 Harness 保存的完整正文，不依赖界面中的截断预览。真实 DeepSeek 会话已记录被中断回合，并分别收到直接插话和排队插话的指定回复。候选安装包名为 `DSH-Desktop-Setup-0.6.1.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
+[V0.6.1 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.1)优先修复运行中插话：纯文本补充要求可用 `Ctrl+Enter` 先请求官方 Harness 中断当前回合，再提交补充内容；已排队消息点击“插话发送”时，软件读取并转交 Harness 保存的完整正文，不依赖界面中的截断预览。源码、真实 DeepSeek、打包、覆盖安装、数据保留、已安装版、PR/CI 与公开三资产门禁均已通过；安装包为 `DSH-Desktop-Setup-0.6.1.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
