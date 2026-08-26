@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-26
-> 当前构建：V0.6.1 产品 Latest 候选版（运行中插话可靠性）
-> 状态：V0.6.1 已完成实现、261/261 源码、真实 DeepSeek、打包、覆盖安装、数据保留和已安装版门禁，等待 PR/CI 与 GitHub Pre-release；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.1 产品 Latest（运行中插话可靠性）
+> 状态：V0.6.1 已发布为 Pre-release；实现、261/261 源码、真实 DeepSeek、打包、覆盖安装、数据保留、已安装版、PR/CI 和 GitHub 远端三资产门禁全部通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.6.1 本轮进展
 
@@ -21,7 +21,7 @@
 | 打包与包体 | 安装包 184,048,445 字节，SHA-256 `8B344A63EDB18ED955A3826E7A12AC8EC3DEE8C09945B16E4B81818EFEF523CB`；blockmap 188,952 字节；固定终端、pnpm 11.19.0 和三项 Office Skill 完整；0 重解析点；相对 V0.6.0 可复用 99.4478% |
 | 覆盖安装与数据 | 静默覆盖退出码 0，Windows 登记 V0.6.1；27 份无凭据语义文件在安装前、安装后和完整 smoke 后逐字节一致；回滚备份 `backups/pre-v0.6.1-20260826-140553` 已逐文件复核 |
 | 已安装版 | 10 项 GUI、终端 smoke 均通过；Office 截图在本机 GPU 捕获返回 `UnknownVizError` 后以 Electron 软件渲染重跑通过，3 张 Office 卡、3 个集成节点和 3 个按钮完整；安装树只比解包树多正常卸载器，`app.asar` 摘要一致 |
-| PR、CI 与 GitHub | 待执行；完成前不宣称 V0.6.1 已发布，Stable 保持 V0.5.4 |
+| PR、CI 与 GitHub | 实现 PR [#41](https://github.com/hejiahang0001-oss/dsh-desktop/pull/41) 三项 CI 通过并合并为 `4d7a3fa33b80522c488d12fc8308d9165d3e5f08`；主分支 CI [32937889326](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32937889326) 三项通过；[V0.6.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.1) 为指向该提交的非 Draft Pre-release，远端 3/3 大小/摘要和公开重下载哈希一致，清单 2/2 通过；V0.5.4 仍为正式 Latest |
 
 ## V0.6.0 本轮进展
 
