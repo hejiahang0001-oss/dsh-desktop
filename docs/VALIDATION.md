@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.6.2 silent automatic-checkpoint evidence (local candidate)
+## V0.6.2 silent automatic-checkpoint evidence
 
 - The reported toast is traced to the best-effort automatic checkpoint path that runs on composer pointer/input intent. The active workspace is the exact repository root, while a normal Explorer-launched Windows environment cannot resolve `git.exe`; the installed DSH tree contains no bundled Git. This separates checkpoint availability from Harness chat and `/excel-xlsx` execution.
 - Automatic checkpoint state now carries a fixed `requestSource`. Unavailable state from an `automatic` request is silent in both the IPC result and pushed-state paths. Manual checkpoint creation still renders the existing unavailable-state guidance.
@@ -11,7 +11,8 @@ This page records versioned local engineering evidence without making the README
 - The signed-off installer candidate is 184,048,484 bytes with SHA-256 `B4E5364F081E748A754647CA5FCD1833C8F215434EE855DB86B9D041F4A9A1CF`. Its blockmap is 188,963 bytes with SHA-256 `ECDB3F890CBD2BFA46903B8B4E8CAFD46994B89BBE495EA831BA938A4AE73B32`; the two-entry manifest SHA-256 is `F5DC76A85F793B5A4E2422AE130F06AD3FFB9F30EF4FF348272F5DC2B407F6A6`.
 - Release governance reports `packageReady: true`, zero reparse points, pnpm 11.19.0, complete Word/Excel/PPT Skill payloads, and 99.5758% block reuse versus V0.6.1. Signing and automatic updates remain intentionally unavailable under the existing unsigned-build boundary.
 - Silent overwrite exits 0 and Windows registers V0.6.2. All 27 credential-free semantic files remain byte-identical before install, after install, and after installed smoke; rollback backup is `backups/pre-v0.6.2-20260826-213117`.
-- An isolated installed-app run used the normal machine and user PATH where `git.exe` is not resolvable. Clicking the composer and typing `/excel-xlsx` produced the expected Skill candidate but no Git-unavailable toast, including after a delayed refresh; the draft was not sent. PR/CI and public release gates remain pending.
+- An isolated installed-app run used the normal machine and user PATH where `git.exe` is not resolvable. Clicking the composer and typing `/excel-xlsx` produced the expected Skill candidate but no Git-unavailable toast, including after a delayed refresh; the draft was not sent.
+- Implementation PR [#43](https://github.com/hejiahang0001-oss/dsh-desktop/pull/43) and main CI run [32977360705](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/32977360705) pass all three Windows jobs. [V0.6.2](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.2) is non-draft, marked Pre-release, and targets exact merge `3af68ef9d39eaf489164394855b57e73b1604829`. GitHub's three asset sizes and digests match local evidence; a public clean download reproduces all three SHA-256 values and passes both manifest entries. GitHub formal Latest remains V0.5.4.
 
 ## V0.6.1 reliable interruption evidence (candidate)
 
