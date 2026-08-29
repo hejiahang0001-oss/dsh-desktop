@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.6.4 发布候选（项目知识增量同步）
-> 状态：V0.6.4 已通过源码、真实模型、打包、覆盖安装、数据保留和安装版回归，正在执行 PR/CI 和 GitHub Pre-release 门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.4 产品 Latest（项目知识增量同步）
+> 状态：V0.6.4 已完成源码、真实模型、打包、覆盖安装、数据保留、PR/CI、GitHub Pre-release 与公开资产回下载门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.6.4 本轮进展
 
@@ -24,9 +24,9 @@
 | 包体与更新边界 | 解包版与安装版均 `packageReady: true`、零重解析点；相对 V0.6.3 复用 99.4482%；安装包未签名，自动更新继续关闭 |
 | 已安装回归与数据 | 11/11 GUI、固定终端、Wiki 基础和真实模型同步均通过；安装目录 `app.asar` 与解包目录同哈希；28 份无凭据语义文件在安装前、安装后和全部回归后逐字节一致 |
 | 上游 Harness | 2026-08-30 再核对 npm：`latest`/`next` 均为 `0.1.1-rc.2`，因此本版无需替换；GitHub 的 `0.1.2-alpha.1` 作为 V0.7 前兼容性候选单独验证，不直接越过 npm 正式分发标签 |
-| PR / CI / GitHub | 进行中；公开资产未完成复核前不把 V0.6.4 标记为已发布 |
+| PR / CI / GitHub | 实现 PR [#47](https://github.com/hejiahang0001-oss/dsh-desktop/pull/47) 与主分支 CI [33267481828](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33267481828) 三项均通过；[V0.6.4](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4) 为非草稿 Pre-release，精确指向 `6fdb27cc5db67195c291a86d562ca60335c60110`；GitHub 3/3 资产大小与摘要、公开回下载 3/3 哈希和清单 2/2 均通过，V0.5.4 仍为正式 Latest/Stable |
 
-下一步先完成 V0.6.4 全部门禁和产品 Latest Pre-release 发布，再进入 V0.6.5 DSH 历史批量导入。Stable V0.5.4 不变。
+下一步进入 V0.6.5 DSH 历史批量导入。Stable V0.5.4 不变。
 
 ## V0.6.3 本轮进展
 

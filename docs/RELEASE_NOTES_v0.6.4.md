@@ -20,7 +20,7 @@ V0.6.4 adds bounded active-project knowledge synchronization to the native Wiki 
 ## Current limits
 
 - V0.6.4 synchronizes only the active project's bounded text/code inventory. It does not batch-import DSH history, crawl the web, install QMD, or control Obsidian UI.
-- Stable remains V0.5.4. V0.6.4 has passed every local source, package, overwrite-install, installed-runtime, real-model, and data-retention gate; it remains a product Latest candidate until CI and public-asset verification finish.
+- Stable remains V0.5.4. V0.6.4 is the published product Latest Pre-release after passing every local source, package, overwrite-install, installed-runtime, real-model, data-retention, CI, and public-asset gate.
 
 ## Validation
 
@@ -31,3 +31,4 @@ V0.6.4 adds bounded active-project knowledge synchronization to the native Wiki 
 - Silent overwrite exits 0 and Windows registers V0.6.4. The installed eleven-part GUI matrix, packaged terminal, Wiki basics, and real-model project sync pass. Installed and unpacked `app.asar` both hash to `4B427E8CFFB74804653BA519AE7BE4CB85FB5C448FECA3061383BE7EA8BA4924`.
 - All 28 credential-free semantic files, including 15 sessions, remain byte-identical before install, after install, and after the full installed regression matrix.
 - A final 2026-08-30 registry check confirms npm `latest` and `next` both remain `@deepseek-ai/dsh@0.1.1-rc.2`. The GitHub-only `dsh-v0.1.2-alpha.1` tag is tracked as a separate pre-V0.7 compatibility candidate rather than silently replacing the npm-distributed runtime.
+- Implementation PR [#47](https://github.com/hejiahang0001-oss/dsh-desktop/pull/47) and main CI run [33267481828](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33267481828) pass all three Windows jobs. [V0.6.4](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4) is a non-draft Pre-release targeting exact merge `6fdb27cc5db67195c291a86d562ca60335c60110`; GitHub's 3/3 asset sizes and digests match local evidence, and a clean public download reproduces all three SHA-256 values with 2/2 checksum-manifest entries. GitHub formal Latest/Stable remains V0.5.4.
