@@ -55,6 +55,9 @@ test('every previously unguarded desktop handler now validates its sender', () =
   assert.match(main, /workspace:choose', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /diagnostics:get-state', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /diagnostics:refresh', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
+  assert.match(main, /support:export-diagnostics', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
+  assert.match(main, /support:create-backup', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
+  assert.match(main, /support:validate-backup', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /harness:get-state', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /harness:restart', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /harness:open-log', async \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
