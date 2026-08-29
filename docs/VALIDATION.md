@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.6.3 Wiki foundation evidence (local candidate)
+## V0.6.3 Wiki foundation evidence
 
 - The native Wiki center is sandboxed, context-isolated, Node-free, navigation-blocked, and protected by exact-window/main-frame IPC checks. Its seven renderer actions are fixed to state, directory selection, initialization, query, current-session candidate loading, capture preview, and capture save.
 - A user-selected ordinary directory is retained in `wiki-settings.json`, including while temporarily unavailable. Initialization creates only missing category/core files and never creates Git or overwrites an existing page/configuration. Query bounds input, files, page size, and results; excludes raw/staging/archive/Obsidian/Git paths; and returns page/source locations.
@@ -13,7 +13,7 @@ This page records versioned local engineering evidence without making the README
 - The final installer is 184,066,457 bytes with SHA-256 `8F622125D6B3989B742EFF886769213F93F0AF2570C636A877FE008F84050132`; its 188,962-byte blockmap hashes to `4BE0314158EC4D93B9B757825CD60682A9413977B5B506E5013BF93A12FEB948`. The two-entry checksum manifest hashes to `2ABFE78321CFDF20FAEC93CA6D6311C3DBD658A3999BB3DFBBEE18C5FCDA7640`.
 - Silent overwrite exits 0 and Windows registers V0.6.3. The unpacked tree has 29,798 files; the installed tree matches every relative path/size and adds only the normal uninstaller. Final `app.asar` SHA-256 is `9A53254FC075D75F816AAA30CFC967A3A8F0523ADA4751BA30BF4793C9AD021E`.
 - All 28 credential-free semantic files, including 15 sessions, remain byte-identical before install, after install, after regression smoke, and after the final rebuilt overwrite. Backup `backups/pre-v0.6.3-20260829-195636` also retains the V0.6.2 release assets and contains zero reparse points.
-- PR/CI and public GitHub assets have not been created in this local-candidate step. Public product Latest remains V0.6.2; formal GitHub Latest/Stable remains V0.5.4.
+- Implementation PR [#45](https://github.com/hejiahang0001-oss/dsh-desktop/pull/45) and main CI run [33253419641](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33253419641) pass all three Windows jobs. [V0.6.3](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3) is non-draft, marked Pre-release, and targets exact merge `b8db00ae48d630344bf3f641608e33ad062c553c`. GitHub reports all three asset sizes and digests equal to local evidence; a clean public download reproduces all three SHA-256 values and passes both checksum-manifest entries. Formal GitHub Latest/Stable remains V0.5.4.
 
 ## V0.6.2 silent automatic-checkpoint evidence
 
