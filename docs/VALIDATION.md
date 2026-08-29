@@ -2,6 +2,18 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V0.8.0 Git delivery evidence (published)
+
+- The sandboxed Git delivery center shows bounded local repository status and recent history, performs staged-only local commits after native confirmation and full state recheck, never stages or pushes, and treats Git/GitHub unavailability as isolated from chat, Office, Excel, and Wiki.
+- Four real temporary-repository core tests and seven window/IPC/command tests pass. The complete source suite passes 299/299, production dependency audit reports no known vulnerabilities, and a live public GitHub status read succeeds.
+- The first unpacked candidate exposed a smoke-only packaged-root assumption after the twelve existing GUI checks passed. That candidate was neither installed nor published. The final smoke creates an isolated temporary repository with a space-containing path; final unpacked and installed GUI matrices pass 13/13, with the documented software-rendering fallback for the host `UnknownVizError` screenshot condition.
+- Packaged terminal isolation, Wiki basics, and a real installed DeepSeek Wiki history-import agent run pass. Sensitive input is redacted before Agent access, the short-lived source is cleared, and temporary credentials are removed.
+- Silent overwrite exits 0 and Windows registers V0.8.0. The unpacked tree has 29,802 files and 693,130,903 bytes; the installed tree has the same payload plus the normal uninstaller, for 29,803 files and 693,573,749 bytes. Both use app.asar SHA-256 `EEC1264BB307AAF3E606788094692929F110DCA5C2046EE3083899FFCBB84B1A`.
+- All 28 semantic files—7 state, 15 session, 2 Profile, and 4 Local Storage files—remain byte-identical before overwrite, after overwrite, and after all installed regressions. Their snapshot SHA-256 is `45F741934C8251F8576AF52123E75B093B4EC0B7000BB2B2DC6F4CC085A6C994`; `backups/pre-v0.8.0-20260830-065000` preserves the exact V0.7.0 rollback assets.
+- The final installer is 184,103,790 bytes with SHA-256 `05722B960A022B96CD4737F83E9CC914ACEEC5275C3BB29ABC0D166CDF4B5716`; its 189,055-byte blockmap hashes to `63D823EB60BBCA1ADFF1A2E495048B83BCFC1AEA6BE2C679C26C22AD5AB7227D`. The 197-byte manifest hashes to `479AC2185C53248877DF6136297F3D9BEAB03A048A43C4367D0C4832ACC69A0F` and passes 2/2 entries.
+- Release governance reports `packageReady: true`, zero reparse points, 99.4698% differential reuse, and complete fixed pnpm/Office/Wiki payloads. Signing and automatic update remain intentionally unavailable.
+- Implementation PR [#53](https://github.com/hejiahang0001-oss/dsh-desktop/pull/53), packaged-smoke fix PR [#54](https://github.com/hejiahang0001-oss/dsh-desktop/pull/54), and main CI run [33278583044](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33278583044) pass all three Windows jobs. [V0.8.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.8.0) is non-draft, marked Pre-release, and targets exact merge `955d915245f5f2ff5dec28bf191da8f216448fd4`. GitHub and a clean unauthenticated public download reproduce all three asset hashes and both manifest entries. Formal GitHub Latest/Stable remains V0.5.4.
+
 ## V0.7.0 redacted diagnostics and verified backup evidence (published)
 
 - Help and the fixed command palette expose three native actions: export a redacted diagnostic JSON, create a DSH data backup, and validate a selected backup. Renderer IPC carries no arbitrary path or file content.
