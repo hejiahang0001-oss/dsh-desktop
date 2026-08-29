@@ -27,6 +27,7 @@ const fixture = async () => {
   ]);
   await Promise.all([
     fs.writeFile(path.join(dataRoot, 'desktop-state.json'), '{"workspace":"C:/secret/repo"}\n'),
+    fs.writeFile(path.join(dataRoot, 'update-state.json'), '{"version":1,"skippedVersion":"0.9.0"}\n'),
     fs.writeFile(path.join(dataRoot, 'network-state.json'), '{"proxyUrl":"https://user:pass@proxy.example"}\n'),
     fs.writeFile(path.join(dataRoot, 'harness', '.credentials.yaml'), 'apiKey: sk-real-secret-value-123456\n'),
     fs.writeFile(path.join(dataRoot, 'harness', 'sessions', 'workspace', 'session-one', 'session.jsonl.zstd'), 'session bytes with sk-user-entered-secret-123456'),
@@ -44,6 +45,7 @@ test('support backup copies only verified semantic data and excludes credential 
   assert.equal(snapshot.counts.sessions, 1);
   assert.equal(snapshot.files.some((file) => file.path.includes('.credentials')), false);
   assert.equal(snapshot.files.some((file) => file.path === 'network-state.json'), false);
+  assert.equal(snapshot.files.some((file) => file.path === 'update-state.json'), true);
   assert.equal(snapshot.files.some((file) => file.path.endsWith('/LOG')), false);
 
   const created = await createSupportBackup({
