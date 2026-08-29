@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.6.4 active-project Wiki synchronization evidence (candidate)
+## V0.6.4 active-project Wiki synchronization evidence (published)
 
 - `/wiki-update` fixes the active desktop workspace as the source and supports Git-backed evidence or a bounded content inventory when Git is absent. Credential-like files, dependencies, build output, binary/oversized files, and `.dsh-wiki-*` specifications are excluded.
 - Preview returns a fresh source fingerprint and allowed page set. Validation requires exact current-page SHA-256 values, source paths, and extracted/inferred/ambiguous provenance; untracked human pages cannot be overwritten. File and directory traversal are independently bounded, Windows alternate-stream/reserved page paths are rejected, and confirmed save serializes cross-process writers before transactionally updating pages, manifest, index, log, and hot cache with rollback copies.
@@ -14,6 +14,7 @@ This page records versioned local engineering evidence without making the README
 - Silent overwrite exits 0 and Windows registers V0.6.4. The unpacked tree has 29,801 files and 692,966,271 bytes; the installed tree contains all unpacked files plus the normal uninstaller, for 29,802 files and 693,409,117 bytes. Both are link-free under governance and share `app.asar` SHA-256 `4B427E8CFFB74804653BA519AE7BE4CB85FB5C448FECA3061383BE7EA8BA4924`.
 - All 28 credential-free semantic files—7 state, 15 session, 2 Profile, and 4 Local Storage files—remain byte-identical before install, after install, and after every installed regression. Backup `backups/pre-v0.6.4-20260830-004111` preserves the three V0.6.3 release assets.
 - A live 2026-08-30 registry check reports npm `latest` and `next` as `@deepseek-ai/dsh@0.1.1-rc.2`; no npm runtime replacement is needed for V0.6.4. GitHub's newer `dsh-v0.1.2-alpha.1` tag stays a V0.7 compatibility candidate until separately verified instead of bypassing the npm distribution channel.
+- Implementation PR [#47](https://github.com/hejiahang0001-oss/dsh-desktop/pull/47) and main CI run [33267481828](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33267481828) pass all three Windows jobs. [V0.6.4](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4) is non-draft, marked Pre-release, and targets exact merge `6fdb27cc5db67195c291a86d562ca60335c60110`. GitHub reports all three asset sizes and digests equal to local evidence; a clean unauthenticated public download reproduces all three SHA-256 values and passes both checksum-manifest entries. Formal GitHub Latest/Stable remains V0.5.4.
 
 ## V0.6.3 Wiki foundation evidence
 

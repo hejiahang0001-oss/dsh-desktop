@@ -75,7 +75,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.4 product Latest candidate** extends the native Wiki center with bounded active-project synchronization. It detects source changes with Git when available and falls back to a content inventory without Git, merges existing project pages by hash, records provenance, and keeps a transactional recovery copy. Its installer is `DSH-Desktop-Setup-0.6.4.exe`; after release it remains a GitHub Pre-release, while Stable and the front-page download remain V0.5.4.
+**V0.6.4 product Latest** extends the native Wiki center with bounded active-project synchronization. It detects source changes with Git when available and falls back to a content inventory without Git, merges existing project pages by hash, records provenance, and keeps a transactional recovery copy. Its installer is available from the [V0.6.4 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4); Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -156,7 +156,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.4 产品 Latest 候选版在原生 Wiki 中心新增当前项目知识增量同步：有 Git 时补充提交证据，无 Git 时使用受限内容清单；更新已有页面前校验哈希，保留来源、推断标记和事务恢复副本。源码、真实模型、覆盖安装、安装版回归和数据保留门禁均已通过；安装包为 `DSH-Desktop-Setup-0.6.4.exe`。发布后仍属于 GitHub Pre-release，V0.5.4 继续保持 Stable 和首页下载版本。
+V0.6.4 产品 Latest 在原生 Wiki 中心新增当前项目知识增量同步：有 Git 时补充提交证据，无 Git 时使用受限内容清单；更新已有页面前校验哈希，保留来源、推断标记和事务恢复副本。源码、真实模型、覆盖安装、安装版回归、PR/CI 和公开回下载门禁均已通过；安装包可从 [V0.6.4 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4) 获取，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
