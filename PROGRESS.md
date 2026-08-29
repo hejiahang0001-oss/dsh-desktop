@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.8.0 产品 Latest 候选（Git 分支、提交与 PR 交付入口）
-> 状态：V0.8.0 已完成核心实现、专项自动化和真实桌面渲染，正在进行完整回归、打包、覆盖安装、PR/CI 与 GitHub Pre-release 门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.8.0 产品 Latest（Git 分支、提交与 PR 交付入口）
+> 状态：V0.8.0 已完成实现、回归、覆盖安装、PR/CI 和 GitHub Pre-release 全部门禁；下一步推进 V0.9.0 托盘通知与更新回退准备，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.8.0 本轮进展
 
@@ -12,7 +12,7 @@
 4. 对受支持的 GitHub origin 读取当前分支公开 PR 和 checks/status；网络内容有大小、数量和超时上限，Renderer 只收到文本与不透明链接编号，外部检查地址不会被直接开放。
 5. 没有 Git、不是 Git 仓库、私有仓库需要认证或 GitHub 暂不可用时，只将交付中心标为不可用；聊天、Office、Excel 和 Wiki 继续正常使用。
 6. 已通过完整源码回归 299/299、生产依赖审计（0 个已知漏洞）、真实 GitHub 公共状态读取及真实 Electron 渲染检查；截图中 6 个状态卡、最近 8 次提交和禁用的无暂存提交按钮均正确。
-7. 首个解包候选的前 12 项 smoke 通过，但 Git 窗口 smoke 错把打包后的 `app.asar` 当作仓库而超时；产品功能未报错、候选未安装/发布。现已改为每次建立独立临时 Git 仓库并验证含空格路径，源码 smoke 与专项 6/6 通过，待重新打包执行 13/13。
+7. 首个解包候选的前 12 项 smoke 通过，但 Git 窗口 smoke 错把打包后的 `app.asar` 当作仓库而超时；产品功能未报错、该候选未安装/发布。修复后每次建立独立临时 Git 仓库并验证含空格路径，最终解包版和已安装版均完成 13/13。
 
 ### V0.8.0 当前门禁
 
@@ -20,8 +20,8 @@
 |---|---|
 | 核心与安全测试 | 完整源码回归 299/299；生产依赖审计 0 个已知漏洞；索引对象哈希变化回归通过 |
 | 真实窗口 | 1539×1085 物理像素截图可读，无裁切；无暂存内容时提交按钮禁用 |
-| 打包与覆盖安装 | 首个候选包体门禁通过、12/13 smoke；已修复仅影响打包自检的仓库路径，待重新构建完整 13/13 后覆盖 |
-| PR / CI / GitHub | GitHub 公共状态读取正常；PR/CI/发布待执行，发布后仍保持 V0.5.4 为正式 Latest/Stable |
+| 打包与覆盖安装 | 最终安装包 184,103,790 字节；静默覆盖退出 0 并注册 V0.8.0；解包/已安装 13/13、终端隔离、Wiki 基础和真实 DeepSeek 历史导入均通过；28 个语义数据文件始终逐字节一致 |
+| PR / CI / GitHub | 实现 PR [#53](https://github.com/hejiahang0001-oss/dsh-desktop/pull/53) 与 smoke 修复 PR [#54](https://github.com/hejiahang0001-oss/dsh-desktop/pull/54) 均合并，主分支 CI [33278583044](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33278583044) 三项通过；[V0.8.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.8.0) 为非草稿 Pre-release，远端与匿名公开回下载 3/3 摘要、清单 2/2 均通过；V0.5.4 仍为正式 Latest/Stable |
 
 ## V0.7.0 本轮进展
 
