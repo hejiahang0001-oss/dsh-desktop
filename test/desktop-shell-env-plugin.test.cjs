@@ -27,6 +27,7 @@ test('desktop shell environment plugin forwards only fixed non-secret runtime fa
       DSH_DESKTOP_PPTX_TOOL: 'C:\\App\\skills\\powerpoint.cjs',
       DSH_DESKTOP_WIKI_TOOL: 'C:\\App\\skills\\wiki.cjs',
       DSH_DESKTOP_WIKI_CONFIG: 'C:\\Data\\wiki-settings.json',
+      DSH_DESKTOP_WIKI_HISTORY_SOURCE: 'C:\\Data\\wiki-history-source.json',
       DEEPSEEK_API_KEY: 'must-not-forward',
       DSH_UNREVIEWED_VALUE: 'must-not-forward'
     });
@@ -39,6 +40,7 @@ test('desktop shell environment plugin forwards only fixed non-secret runtime fa
       'DSH_DESKTOP_NODE',
       'DSH_DESKTOP_PPTX_TOOL',
       'DSH_DESKTOP_WIKI_CONFIG',
+      'DSH_DESKTOP_WIKI_HISTORY_SOURCE',
       'DSH_DESKTOP_WIKI_TOOL',
       'DSH_DESKTOP_XLSX_TOOL'
     ]);

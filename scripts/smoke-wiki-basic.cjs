@@ -47,24 +47,24 @@ const main = async () => {
   try {
     const origin = await supervisor.start();
     const probe = await probeHarness(origin);
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.4 Wiki Basic Smoke' });
+    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.5 Wiki Basic Smoke' });
     const catalog = await callHarnessApi(origin, 'skill.list', { sessionId: workspace.sessionId });
     const entries = Array.isArray(catalog?.skills) ? catalog.skills : [];
-    const expectedSkills = ['wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update'];
+    const expectedSkills = ['wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest'];
     const discovered = expectedSkills.map((name) => entries.find((entry) => entry?.name === name));
-    if (discovered.some((entry) => !entry || entry.modelInvocable !== true)) throw new Error('Harness skill.list 没有确认四个 Wiki 用户 Skill。');
+    if (discovered.some((entry) => !entry || entry.modelInvocable !== true)) throw new Error('Harness skill.list 没有确认五个 Wiki 用户 Skill。');
 
     await wiki.initializeWikiVault(vaultPath);
     await fs.writeFile(path.join(vaultPath, 'concepts', 'release-boundary.md'), [
       '---',
-      'title: "V0.6.4 发布边界"',
-      'summary: "Stable 保持 V0.5.4，Wiki 基础版作为 Latest 候选。"',
+      'title: "V0.6.5 发布边界"',
+      'summary: "Stable 保持 V0.5.4，Wiki 历史导入作为 Latest 候选。"',
       'sources:',
       '  - "DSH_DESKTOP_ITERATION_PLAN.md"',
       'lifecycle: verified',
       '---',
       '',
-      '# V0.6.4 发布边界',
+      '# V0.6.5 发布边界',
       '',
       '无 Git 时仍可查询与保存知识。',
       ''

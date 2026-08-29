@@ -7,7 +7,7 @@ const path = require('node:path');
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
-const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_NODE']);
+const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE']);
 const HARNESS_VERSION = '0.1.1-rc.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
@@ -341,6 +341,9 @@ class HarnessSupervisor extends EventEmitter {
       environment.DSH_DESKTOP_WIKI_TOOL = wikiToolPath;
       environment.DSH_DESKTOP_WIKI_CONFIG = path.resolve(
         this.options.wikiConfigPath || path.join(path.dirname(this.options.homeDir), 'wiki-settings.json')
+      );
+      environment.DSH_DESKTOP_WIKI_HISTORY_SOURCE = path.resolve(
+        this.options.wikiHistorySourcePath || path.join(path.dirname(this.options.homeDir), 'wiki-history-source.json')
       );
       environment.DSH_DESKTOP_NODE = nodePath;
       this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {

@@ -4,7 +4,7 @@ description: Select or initialize the user-authorized DSH Desktop Markdown Wiki 
 user-invocable: true
 disable-model-invocation: false
 metadata:
-  version: 0.6.4
+  version: 0.6.5
 ---
 
 # Wiki setup

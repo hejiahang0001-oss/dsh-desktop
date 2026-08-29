@@ -26,6 +26,16 @@ const MAX_PROJECT_TOTAL_ENTRIES = 10000;
 const MAX_PROJECT_PAGES = 12;
 const MAX_PROJECT_PAGE_CHARS = 30000;
 const MAX_PROJECT_TOTAL_PAGE_CHARS = 150000;
+const HISTORY_SOURCE_VERSION = 1;
+const MAX_HISTORY_SOURCE_BYTES = 2 * 1024 * 1024;
+const MAX_HISTORY_SESSIONS = 8;
+const MAX_HISTORY_MESSAGES_PER_SESSION = 80;
+const MAX_HISTORY_MESSAGE_CHARS = 8000;
+const MAX_HISTORY_TOTAL_MESSAGES = 320;
+const MAX_HISTORY_TOTAL_CHARS = 400000;
+const MAX_HISTORY_PAGES = 10;
+const MAX_HISTORY_PAGE_CHARS = 30000;
+const MAX_HISTORY_TOTAL_PAGE_CHARS = 150000;
 const WIKI_DIRECTORIES = Object.freeze([
   'concepts',
   'entities',
@@ -664,7 +674,10 @@ const readManifestStrict = async (vaultPath) => {
     if (manifest.projects !== undefined && (!manifest.projects || typeof manifest.projects !== 'object' || Array.isArray(manifest.projects))) {
       throw new Error('invalid-projects');
     }
-    return { ...manifest, projects: manifest.projects || {} };
+    if (manifest.history !== undefined && (!manifest.history || typeof manifest.history !== 'object' || Array.isArray(manifest.history))) {
+      throw new Error('invalid-history');
+    }
+    return { ...manifest, projects: manifest.projects || {}, history: manifest.history || {} };
   } catch (error) {
     if (error?.code === 'ENOENT') throw new WikiBasicError('vault-not-ready', '知识库缺少清单文件。');
     throw new WikiBasicError('invalid-manifest', '知识库清单文件损坏，已停止项目同步。');
@@ -1116,6 +1129,563 @@ const saveProjectSync = async (vaultPath, workspacePath, spec, options = {}) => 
   return result;
 };
 
+const historySessionFingerprint = (session) => sha256Text(JSON.stringify({
+  sourceId: session.sourceId,
+  updatedAt: session.updatedAt,
+  messages: session.messages
+}));
+
+const normalizeHistoryRedactions = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).map((finding) => ({
+    id: oneLine(finding?.id, 40),
+    label: oneLine(finding?.label, 80),
+    count: Number.isInteger(finding?.count) && finding.count > 0 && finding.count <= 10000 ? finding.count : 0
+  })).filter((finding) => finding.id && finding.label && finding.count > 0);
+};
+
+const readDshHistorySource = async (sourcePath, workspacePath, { clock = () => new Date() } = {}) => {
+  const resolvedSource = normalizeAbsolutePath(sourcePath, 'DSH 历史导入源路径');
+  const workspace = normalizeAbsolutePath(workspacePath, '工作区路径');
+  let info;
+  try {
+    info = await fsp.lstat(resolvedSource);
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new WikiBasicError('history-source-missing', '请先在 Wiki 中心选择并准备 DSH 历史。');
+    throw error;
+  }
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_HISTORY_SOURCE_BYTES) {
+    throw new WikiBasicError('unsafe-history-source', 'DSH 历史导入源不是受支持的普通文件。');
+  }
+  const opened = await readBoundedRegularFile(resolvedSource, MAX_HISTORY_SOURCE_BYTES);
+  if (!opened) throw new WikiBasicError('unsafe-history-source', 'DSH 历史导入源超出安全上限。');
+  let raw;
+  try {
+    raw = JSON.parse(opened.bytes.toString('utf8'));
+  } catch {
+    throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源格式无效。');
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.version !== HISTORY_SOURCE_VERSION
+    || typeof raw.sourceToken !== 'string' || !/^[a-f0-9]{32}$/u.test(raw.sourceToken)
+    || typeof raw.workspacePath !== 'string' || normalizedPathKey(raw.workspacePath) !== normalizedPathKey(workspace)) {
+    throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源与当前工作区不匹配。');
+  }
+  const expiresAt = Date.parse(raw.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= clock().getTime()) {
+    throw new WikiBasicError('history-source-expired', 'DSH 历史导入源已过期，请回到 Wiki 中心重新准备。');
+  }
+  if (!Array.isArray(raw.sessions) || raw.sessions.length < 1 || raw.sessions.length > MAX_HISTORY_SESSIONS) {
+    throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源中的会话数量无效。');
+  }
+  const sessions = [];
+  const sourceIds = new Set();
+  let totalMessages = 0;
+  let totalChars = 0;
+  for (const candidate of raw.sessions) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)
+      || typeof candidate.sourceId !== 'string' || !/^[a-f0-9]{24}$/u.test(candidate.sourceId)
+      || sourceIds.has(candidate.sourceId)
+      || typeof candidate.fingerprint !== 'string' || !/^[a-f0-9]{64}$/u.test(candidate.fingerprint)
+      || !Number.isInteger(candidate.lastSeq) || candidate.lastSeq < 0
+      || !Array.isArray(candidate.messages) || candidate.messages.length < 1 || candidate.messages.length > MAX_HISTORY_MESSAGES_PER_SESSION) {
+      throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源包含无效会话。');
+    }
+    sourceIds.add(candidate.sourceId);
+    const messages = [];
+    let previousSeq = -1;
+    for (const item of candidate.messages) {
+      const text = normalizeText(item?.text, MAX_HISTORY_MESSAGE_CHARS);
+      if (!item || !Number.isInteger(item.seq) || item.seq < 0 || item.seq <= previousSeq
+        || !['user', 'assistant'].includes(item.role) || !text
+        || String(item.text || '').length > MAX_HISTORY_MESSAGE_CHARS) {
+        throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源包含无效消息。');
+      }
+      previousSeq = item.seq;
+      messages.push({ seq: item.seq, time: Number.isFinite(item.time) ? item.time : null, role: item.role, text });
+      totalMessages += 1;
+      totalChars += text.length;
+      if (totalMessages > MAX_HISTORY_TOTAL_MESSAGES || totalChars > MAX_HISTORY_TOTAL_CHARS) {
+        throw new WikiBasicError('history-source-too-large', 'DSH 历史导入源超出本次导入上限。');
+      }
+    }
+    const session = {
+      sourceId: candidate.sourceId,
+      title: oneLine(candidate.title, MAX_TITLE_CHARS) || '未命名 DSH 会话',
+      updatedAt: Number.isFinite(candidate.updatedAt) ? candidate.updatedAt : null,
+      lastSeq: candidate.lastSeq,
+      fingerprint: candidate.fingerprint,
+      messages,
+      redactions: normalizeHistoryRedactions(candidate.redactions),
+      limited: candidate.limited === true
+    };
+    if (historySessionFingerprint(session) !== session.fingerprint || session.lastSeq !== messages[messages.length - 1].seq) {
+      throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源会话指纹校验失败。');
+    }
+    sessions.push(session);
+  }
+  if (raw.totalMessages !== undefined && Number(raw.totalMessages) !== totalMessages) throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源消息计数不一致。');
+  if (raw.totalChars !== undefined && Number(raw.totalChars) !== totalChars) throw new WikiBasicError('invalid-history-source', 'DSH 历史导入源文本计数不一致。');
+  return {
+    sourcePath: resolvedSource,
+    sourceFileSha256: sha256Text(opened.bytes),
+    sourceToken: raw.sourceToken,
+    expiresAt: raw.expiresAt,
+    workspacePath: workspace,
+    workspaceName: oneLine(raw.workspaceName, MAX_TITLE_CHARS) || path.basename(workspace),
+    limited: raw.limited === true,
+    totalMessages,
+    totalChars,
+    redactions: normalizeHistoryRedactions(raw.redactions),
+    sessions
+  };
+};
+
+const previousDshHistoryProject = (manifest, project) => {
+  const dsh = manifest.history?.dsh;
+  if (dsh !== undefined && (!dsh || typeof dsh !== 'object' || Array.isArray(dsh))) {
+    throw new WikiBasicError('invalid-manifest', '知识库历史导入清单损坏。');
+  }
+  const entry = dsh?.[project.id] || null;
+  if (entry?.source_cwd && normalizedPathKey(entry.source_cwd) !== normalizedPathKey(project.sourceCwd)) {
+    throw new WikiBasicError('history-project-conflict', '历史导入项目标识与知识库中的来源路径冲突。');
+  }
+  if (entry?.sessions !== undefined && (!entry.sessions || typeof entry.sessions !== 'object' || Array.isArray(entry.sessions))) {
+    throw new WikiBasicError('invalid-manifest', '知识库历史会话清单损坏。');
+  }
+  return entry;
+};
+
+const historyPagePath = (project, value) => {
+  if (typeof value !== 'string' || value.length > 260 || value.includes('\\')) return '';
+  const relative = value.replace(/^\/+/, '');
+  const segments = relative.split('/');
+  if (!relative.endsWith('.md') || relative.includes('..') || relative.includes('//')
+    || /[\u0000-\u001f<>:"|?*]/u.test(relative)
+    || segments.some((segment) => !segment || /[. ]$/u.test(segment) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment))) return '';
+  return relative.startsWith(`${project.rootPath}/history/`) ? relative : '';
+};
+
+const listDshHistoryPages = async (vaultPath, project, entry) => {
+  const configured = Array.isArray(entry?.pages_in_vault) ? entry.pages_in_vault.slice(0, 100) : [];
+  const pages = [];
+  for (const relative of new Set(configured)) {
+    if (!historyPagePath(project, relative)) continue;
+    const absolute = path.join(vaultPath, relative);
+    if (!pathInside(vaultPath, absolute)) continue;
+    try {
+      const info = await fsp.lstat(absolute);
+      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) continue;
+      const opened = await readBoundedRegularFile(absolute, MAX_MARKDOWN_BYTES);
+      if (!opened) continue;
+      pages.push({ path: relative, sha256: sha256Text(opened.bytes), size: opened.size });
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+  pages.sort((left, right) => left.path.localeCompare(right.path));
+  return pages;
+};
+
+const previewDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, { clock = () => new Date() } = {}) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  const state = await inspectWikiVault(vault);
+  if (state.status !== 'ready') throw new WikiBasicError('vault-not-ready', '知识库尚未初始化，不能导入 DSH 历史。');
+  const source = await readDshHistorySource(sourcePath, workspacePath, { clock });
+  const project = projectIdentity(source.workspacePath);
+  const manifest = await readManifestStrict(vault);
+  const previous = previousDshHistoryProject(manifest, project);
+  const previousSessions = previous?.sessions || {};
+  const sessions = source.sessions.map((session) => {
+    const before = previousSessions[session.sourceId];
+    const status = !before ? 'added' : before.fingerprint === session.fingerprint ? 'unchanged' : 'modified';
+    return {
+      sourceId: session.sourceId,
+      title: session.title,
+      updatedAt: session.updatedAt,
+      lastSeq: session.lastSeq,
+      fingerprint: session.fingerprint,
+      messageCount: session.messages.length,
+      redactions: session.redactions,
+      limited: session.limited,
+      status
+    };
+  });
+  const existingPages = await listDshHistoryPages(vault, project, previous);
+  const delta = {
+    added: sessions.filter((session) => session.status === 'added'),
+    modified: sessions.filter((session) => session.status === 'modified'),
+    unchanged: sessions.filter((session) => session.status === 'unchanged')
+  };
+  const tokenPayload = {
+    projectId: project.id,
+    sourceToken: source.sourceToken,
+    sourceFileSha256: source.sourceFileSha256,
+    sessions: sessions.map(({ sourceId, fingerprint }) => ({ sourceId, fingerprint })),
+    pages: existingPages.map(({ path: pagePath, sha256 }) => ({ path: pagePath, sha256 }))
+  };
+  return {
+    ok: true,
+    generatedAt: isoNow(clock),
+    project,
+    sourceToken: source.sourceToken,
+    expiresAt: source.expiresAt,
+    sourceFileSha256: source.sourceFileSha256,
+    limited: source.limited,
+    totalMessages: source.totalMessages,
+    totalChars: source.totalChars,
+    redactions: source.redactions,
+    sessions,
+    delta,
+    existingPages,
+    unchanged: delta.added.length === 0 && delta.modified.length === 0,
+    previewToken: sha256Text(JSON.stringify(tokenPayload))
+  };
+};
+
+const readDshHistorySession = async (sourcePath, workspacePath, sourceToken, sourceId, options = {}) => {
+  const source = await readDshHistorySource(sourcePath, workspacePath, options);
+  if (source.sourceToken !== sourceToken) throw new WikiBasicError('stale-history-source', 'DSH 历史导入源已变化，请重新预览。');
+  const session = source.sessions.find((item) => item.sourceId === sourceId);
+  if (!session) throw new WikiBasicError('history-session-not-found', '所选 DSH 历史会话不在当前导入源中。');
+  return {
+    ok: true,
+    sourceId: session.sourceId,
+    title: session.title,
+    updatedAt: session.updatedAt,
+    lastSeq: session.lastSeq,
+    fingerprint: session.fingerprint,
+    limited: session.limited,
+    redactions: session.redactions,
+    messages: session.messages
+  };
+};
+
+const dshHistoryPageText = (page, project, timestamp, existingText = '') => {
+  const trust = preservedPageTrust(existingText, timestamp);
+  const sources = page.sources.map((source) => `  - ${yamlString(`dsh-session:${source}`)}`).join('\n');
+  return `---\ntitle: ${yamlString(page.title)}\ncategory: project-history\ntags: [dsh, history-ingest]\nsources:\n${sources}\nsummary: ${yamlString(page.summary)}\nprovenance:\n  extracted: ${page.provenance.extracted.toFixed(2)}\n  inferred: ${page.provenance.inferred.toFixed(2)}\n  ambiguous: ${page.provenance.ambiguous.toFixed(2)}\nbase_confidence: 0.42\nlifecycle: ${trust.lifecycle}\nlifecycle_changed: ${trust.lifecycleChanged}\ntier: ${trust.tier}\nsource_cwd: ${yamlString(project.sourceCwd)}\ncreated: ${trust.created}\nupdated: ${timestamp}\n---\n\n${page.content.trim()}\n\n## 来源\n\n${page.sources.map((source) => `- DSH 会话：${source}`).join('\n')}\n- 说明：仅使用用户选中会话的用户/助手文本；原始历史只读，固定凭据模式已在进入 Agent 前遮蔽。\n`;
+};
+
+const buildDshHistoryIngestPlan = async (vaultPath, workspacePath, sourcePath, spec, options = {}) => {
+  const preview = await previewDshHistoryIngest(vaultPath, workspacePath, sourcePath, options);
+  if (preview.unchanged) throw new WikiBasicError('history-unchanged', '选中的 DSH 历史自上次导入后没有变化。');
+  if (!spec || spec.previewToken !== preview.previewToken || spec.sourceToken !== preview.sourceToken) {
+    throw new WikiBasicError('stale-history-preview', 'DSH 历史、选择或知识库页面已变化，请重新预览。');
+  }
+  if (!Array.isArray(spec.pages) || spec.pages.length < 1 || spec.pages.length > MAX_HISTORY_PAGES) {
+    throw new WikiBasicError('invalid-history-pages', `每次历史导入必须包含 1 到 ${MAX_HISTORY_PAGES} 个页面。`);
+  }
+  const sourceIds = new Set(preview.sessions.map((session) => session.sourceId));
+  const changedSourceIds = new Set([...preview.delta.added, ...preview.delta.modified].map((session) => session.sourceId));
+  const existingPages = new Map(preview.existingPages.map((page) => [page.path, page]));
+  const writes = [];
+  const seen = new Set();
+  let totalChars = 0;
+  for (const candidate of spec.pages) {
+    const relative = historyPagePath(preview.project, candidate?.path);
+    if (!relative || seen.has(relative)) throw new WikiBasicError('invalid-history-page-path', '历史知识页面必须位于当前项目的 history 目录中。');
+    seen.add(relative);
+    const title = oneLine(candidate?.title, MAX_TITLE_CHARS);
+    const summary = oneLine(candidate?.summary, 240);
+    const content = normalizeText(candidate?.content, MAX_HISTORY_PAGE_CHARS);
+    if (!title || !summary || !content || String(candidate?.content || '').length > MAX_HISTORY_PAGE_CHARS) {
+      throw new WikiBasicError('invalid-history-page', '历史知识页面必须包含有效标题、摘要和受限正文。');
+    }
+    totalChars += content.length;
+    if (totalChars > MAX_HISTORY_TOTAL_PAGE_CHARS) throw new WikiBasicError('history-pages-too-large', '本次历史导入页面总量超出限制。');
+    const sources = Array.isArray(candidate?.sources)
+      ? [...new Set(candidate.sources.filter((item) => typeof item === 'string' && sourceIds.has(item)))].slice(0, MAX_HISTORY_SESSIONS)
+      : [];
+    if (!sources.length || !sources.some((source) => changedSourceIds.has(source))) {
+      throw new WikiBasicError('invalid-history-sources', '每个页面至少需要一个本次新增或变化的 DSH 会话来源。');
+    }
+    const existing = existingPages.get(relative);
+    if (existing && candidate.expectedSha256 !== existing.sha256) throw new WikiBasicError('stale-history-page', `知识页面 ${relative} 已变化，请重新读取后合并。`);
+    if (!existing && candidate.expectedSha256 !== null && candidate.expectedSha256 !== undefined) throw new WikiBasicError('unexpected-history-page', `知识页面 ${relative} 尚不存在，不能按更新处理。`);
+    const absolute = path.join(path.resolve(vaultPath), relative);
+    if (!pathInside(vaultPath, absolute)) throw new WikiBasicError('path-escape', '历史知识页面越过知识库目录。');
+    await assertSafeDirectoryChain(vaultPath, path.dirname(absolute));
+    if (!existing) {
+      try {
+        const info = await fsp.lstat(absolute);
+        if (info) throw new WikiBasicError('untracked-history-page', `知识库中已有未纳入历史清单的页面 ${relative}，已停止覆盖。`);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+    const existingText = existing ? await fsp.readFile(absolute, 'utf8') : '';
+    const page = { path: relative, title, summary, content, sources, provenance: normalizeProvenance(candidate.provenance) };
+    const text = dshHistoryPageText(page, preview.project, isoNow(options.clock || (() => new Date())), existingText);
+    writes.push({ ...page, absolute, exists: Boolean(existing), expectedSha256: existing?.sha256 || null, text, sensitive: sensitiveFindings(text) });
+  }
+  return {
+    ok: true,
+    preview,
+    writes,
+    pagesCreated: writes.filter((item) => !item.exists).length,
+    pagesUpdated: writes.filter((item) => item.exists).length,
+    sensitive: writes.flatMap((item) => item.sensitive.map((finding) => ({ ...finding, path: item.path })))
+  };
+};
+
+const readDshHistoryWikiPage = async (vaultPath, workspacePath, sourcePath, relativePath, options = {}) => {
+  const preview = await previewDshHistoryIngest(vaultPath, workspacePath, sourcePath, options);
+  const expected = preview.existingPages.find((item) => item.path === relativePath);
+  if (!expected || !historyPagePath(preview.project, relativePath)) throw new WikiBasicError('history-page-not-found', '该页面不属于当前项目的 DSH 历史导入清单。');
+  const absolute = path.join(path.resolve(vaultPath), relativePath);
+  await assertSafeDirectoryChain(vaultPath, path.dirname(absolute));
+  const info = await fsp.lstat(absolute);
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) throw new WikiBasicError('unsafe-history-page', '历史知识页面不是受支持的普通 Markdown 文件。');
+  const opened = await readBoundedRegularFile(absolute, MAX_MARKDOWN_BYTES);
+  if (!opened) throw new WikiBasicError('unsafe-history-page', '历史知识页面不是受支持的普通 Markdown 文件。');
+  const content = opened.bytes.toString('utf8');
+  const digest = sha256Text(content);
+  if (digest !== expected.sha256) throw new WikiBasicError('stale-history-page', '历史知识页面在读取期间发生变化，请重试。');
+  return { ok: true, path: relativePath, sha256: digest, content };
+};
+
+const acquireHistoryIngestLock = async (vaultPath, allowReclaim = true) => {
+  const stagingDir = path.join(vaultPath, '_staging');
+  await assertSafeDirectoryChain(vaultPath, stagingDir);
+  await fsp.mkdir(stagingDir, { recursive: true });
+  await assertSafeDirectoryChain(vaultPath, stagingDir);
+  const lockPath = path.join(stagingDir, '.dsh-wiki-history-ingest.lock');
+  let handle;
+  try {
+    handle = await fsp.open(lockPath, 'wx', 0o600);
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+    const info = await fsp.lstat(lockPath);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 1024) throw new WikiBasicError('unsafe-history-lock', '历史导入锁不是安全的普通文件。');
+    let opened;
+    try {
+      opened = await readBoundedRegularFile(lockPath, 1024);
+    } catch (readError) {
+      if (allowReclaim && readError?.code === 'ENOENT') return acquireHistoryIngestLock(vaultPath, false);
+      throw readError;
+    }
+    let ownerPid = 0;
+    try { ownerPid = Number(JSON.parse(opened?.bytes.toString('utf8') || '{}').pid) || 0; } catch {}
+    let ownerActive = false;
+    if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
+      try {
+        process.kill(ownerPid, 0);
+        ownerActive = true;
+      } catch (probeError) {
+        ownerActive = probeError?.code !== 'ESRCH';
+      }
+    }
+    const recent = Date.now() - info.mtimeMs < 5 * 60 * 1000;
+    if (allowReclaim && !ownerActive && !recent) {
+      await fsp.unlink(lockPath);
+      return acquireHistoryIngestLock(vaultPath, false);
+    }
+    throw new WikiBasicError('history-ingest-busy', '另一个 DSH 历史导入正在写入该知识库，请稍后重试。');
+  }
+  try {
+    await handle.writeFile(`${JSON.stringify({ pid: process.pid, started: isoNow() })}\n`, 'utf8');
+    await handle.sync();
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    await fsp.unlink(lockPath).catch(() => undefined);
+    throw error;
+  }
+  return async () => {
+    await handle.close();
+    await fsp.unlink(lockPath);
+  };
+};
+
+const updateDshHistoryIndexText = (text, writes, timestamp) => {
+  let next = text.replace(/\*此索引由 DSH Desktop 维护。最后更新：[^*]+\*/u, `*此索引由 DSH Desktop 维护。最后更新：${timestamp}*`);
+  const entries = writes.filter((write) => {
+    const link = write.path.replace(/\.md$/iu, '');
+    return !next.includes(`[[${link}|`) && !next.includes(`[[${link}]]`);
+  }).map((write) => `- [[${write.path.replace(/\.md$/iu, '')}|${write.title}]] — ${write.summary} ( #dsh #history-ingest)`);
+  if (!entries.length) return next;
+  const marker = '## Projects';
+  return next.includes(marker)
+    ? next.replace(marker, `${marker}\n\n${entries.join('\n')}`)
+    : `${next.trimEnd()}\n\n${marker}\n\n${entries.join('\n')}\n`;
+};
+
+const updateDshHistoryHotText = (text, project, timestamp, sessionCount, pageCount) => {
+  const entry = `- [${timestamp}] DSH_HISTORY_INGEST — ${project.name}，导入 ${sessionCount} 个会话，更新 ${pageCount} 个页面`;
+  const marker = '## Recent Activity';
+  if (!text.includes(marker)) return `${text.trimEnd()}\n\n${marker}\n\n${entry}\n`;
+  return text.replace(marker, `${marker}\n\n${entry}`);
+};
+
+const clearDshHistorySource = async (sourcePath, sourceToken) => {
+  const resolved = normalizeAbsolutePath(sourcePath, 'DSH 历史导入源路径');
+  let info;
+  try {
+    info = await fsp.lstat(resolved);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { ok: true, cleared: false };
+    throw error;
+  }
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_HISTORY_SOURCE_BYTES) throw new WikiBasicError('unsafe-history-source', 'DSH 历史导入源不安全，未执行清理。');
+  const opened = await readBoundedRegularFile(resolved, MAX_HISTORY_SOURCE_BYTES);
+  let parsed;
+  try { parsed = JSON.parse(opened?.bytes.toString('utf8') || '{}'); } catch {}
+  if (!parsed || parsed.sourceToken !== sourceToken) throw new WikiBasicError('stale-history-source', 'DSH 历史导入源已变化，未执行清理。');
+  await fsp.unlink(resolved);
+  return { ok: true, cleared: true };
+};
+
+const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, spec, {
+  confirmed = false,
+  confirmedSensitive = false,
+  clock = () => new Date(),
+  afterPageWrites = async () => undefined
+} = {}) => {
+  if (!confirmed) throw new WikiBasicError('history-confirmation-required', '导入 DSH 历史前需要用户明确确认。');
+  const vault = await assertPlainDirectory(vaultPath);
+  const plan = await buildDshHistoryIngestPlan(vault, workspacePath, sourcePath, spec, { clock });
+  const sourceRedactions = plan.preview.redactions.length > 0 || plan.preview.sessions.some((session) => session.redactions.length > 0);
+  if ((sourceRedactions || plan.sensitive.length > 0) && !confirmedSensitive) {
+    throw new WikiBasicError('sensitive-confirmation-required', '历史源曾命中凭据遮蔽或页面仍含敏感字段，需要再次确认。');
+  }
+  const timestamp = isoNow(clock);
+  const manifestPath = path.join(vault, '.manifest.json');
+  const indexPath = path.join(vault, 'index.md');
+  const logPath = path.join(vault, 'log.md');
+  const hotPath = path.join(vault, 'hot.md');
+  const [originalManifestText, originalIndex, originalLog, originalHot] = await Promise.all([
+    fsp.readFile(manifestPath, 'utf8'), fsp.readFile(indexPath, 'utf8'), fsp.readFile(logPath, 'utf8'), fsp.readFile(hotPath, 'utf8')
+  ]);
+  const originalManifest = JSON.parse(originalManifestText);
+  const previous = previousDshHistoryProject({ history: originalManifest.history || {} }, plan.preview.project);
+  const transactionId = `${timestamp.replace(/[:.]/g, '-')}-${randomUUID()}`;
+  const archiveRoot = path.join(vault, '_archives', 'dsh-history-ingest', transactionId);
+  await assertSafeDirectoryChain(vault, path.dirname(archiveRoot));
+  await fsp.mkdir(archiveRoot, { recursive: true });
+  await assertSafeDirectoryChain(vault, archiveRoot);
+  const originals = new Map();
+  for (const write of plan.writes) {
+    if (!write.exists) continue;
+    const original = await fsp.readFile(write.absolute, 'utf8');
+    originals.set(write.path, original);
+    const backup = path.join(archiveRoot, write.path);
+    await fsp.mkdir(path.dirname(backup), { recursive: true });
+    await atomicWriteText(backup, original);
+  }
+  for (const [name, value] of [['.manifest.json', originalManifestText], ['index.md', originalIndex], ['log.md', originalLog], ['hot.md', originalHot]]) {
+    await atomicWriteText(path.join(archiveRoot, name), value);
+  }
+
+  const pageSet = new Set([...(previous?.pages_in_vault || []), ...plan.writes.map((write) => write.path)]);
+  const nextSessions = { ...(previous?.sessions || {}) };
+  for (const session of plan.preview.sessions) {
+    const usedPages = plan.writes.filter((write) => write.sources.includes(session.sourceId)).map((write) => write.path);
+    const existing = nextSessions[session.sourceId] || {};
+    nextSessions[session.sourceId] = {
+      source_id: session.sourceId,
+      title: session.title,
+      fingerprint: session.fingerprint,
+      last_seq: session.lastSeq,
+      updated_at: session.updatedAt,
+      pages_in_vault: [...new Set([...(existing.pages_in_vault || []), ...usedPages])].sort(),
+      ingested_at: session.status === 'unchanged' && existing.ingested_at ? existing.ingested_at : timestamp
+    };
+  }
+  const project = plan.preview.project;
+  const nextManifest = {
+    ...originalManifest,
+    version: WIKI_SCHEMA_VERSION,
+    history: {
+      ...(originalManifest.history || {}),
+      dsh: {
+        ...(originalManifest.history?.dsh || {}),
+        [project.id]: {
+          id: project.id,
+          name: project.name,
+          source_cwd: project.sourceCwd,
+          sessions: nextSessions,
+          pages_in_vault: [...pageSet].filter((item) => historyPagePath(project, item)).sort(),
+          updated: timestamp
+        }
+      }
+    }
+  };
+  const nextManifestText = `${JSON.stringify(nextManifest, null, 2)}\n`;
+  const nextIndex = updateDshHistoryIndexText(originalIndex, plan.writes, timestamp);
+  const changedSessions = plan.preview.delta.added.length + plan.preview.delta.modified.length;
+  const nextHot = updateDshHistoryHotText(originalHot, project, timestamp, changedSessions, plan.writes.length);
+  const nextLog = `${originalLog.trimEnd()}\n- [${timestamp}] DSH_HISTORY_INGEST project=${yamlString(project.id)} sessions=${changedSessions} added=${plan.preview.delta.added.length} modified=${plan.preview.delta.modified.length} pages=${plan.writes.length} archive=${yamlString(path.relative(vault, archiveRoot).replace(/\\/g, '/'))}\n`;
+  try {
+    for (const write of plan.writes) {
+      await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
+      await fsp.mkdir(path.dirname(write.absolute), { recursive: true });
+      await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
+      await atomicWriteText(write.absolute, write.text);
+    }
+    await afterPageWrites();
+    await atomicWriteText(manifestPath, nextManifestText);
+    await atomicWriteText(indexPath, nextIndex);
+    await atomicWriteText(logPath, nextLog);
+    await atomicWriteText(hotPath, nextHot);
+    for (const write of plan.writes) {
+      if (await fsp.readFile(write.absolute, 'utf8') !== write.text) throw new WikiBasicError('write-verification-failed', `历史知识页面 ${write.path} 写入后校验失败。`);
+    }
+    const [verifiedManifest, verifiedIndex, verifiedLog, verifiedHot] = await Promise.all([
+      fsp.readFile(manifestPath, 'utf8'), fsp.readFile(indexPath, 'utf8'), fsp.readFile(logPath, 'utf8'), fsp.readFile(hotPath, 'utf8')
+    ]);
+    if (verifiedManifest !== nextManifestText || verifiedIndex !== nextIndex || verifiedLog !== nextLog || verifiedHot !== nextHot) {
+      throw new WikiBasicError('write-verification-failed', '历史清单、索引、日志或热点页写入后校验失败。');
+    }
+  } catch (error) {
+    for (const write of plan.writes) {
+      if (originals.has(write.path)) await atomicWriteText(write.absolute, originals.get(write.path)).catch(() => undefined);
+      else await fsp.unlink(write.absolute).catch(() => undefined);
+    }
+    await Promise.all([
+      atomicWriteText(manifestPath, originalManifestText), atomicWriteText(indexPath, originalIndex),
+      atomicWriteText(logPath, originalLog), atomicWriteText(hotPath, originalHot)
+    ]).catch(() => undefined);
+    throw error;
+  }
+  let sourceCleared = false;
+  try {
+    sourceCleared = (await clearDshHistorySource(sourcePath, plan.preview.sourceToken)).cleared;
+  } catch {}
+  return {
+    ok: true,
+    project,
+    sessionsAdded: plan.preview.delta.added.map((session) => session.sourceId),
+    sessionsModified: plan.preview.delta.modified.map((session) => session.sourceId),
+    pagesCreated: plan.writes.filter((write) => !write.exists).map((write) => write.path),
+    pagesUpdated: plan.writes.filter((write) => write.exists).map((write) => write.path),
+    archive: path.relative(vault, archiveRoot).replace(/\\/g, '/'),
+    sourceCleared,
+    message: 'DSH 历史已增量导入，清单、索引、日志和恢复副本均已更新；原始会话保持只读。'
+  };
+};
+
+const saveDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, spec, options = {}) => {
+  if (!options.confirmed) return saveDshHistoryIngestLocked(vaultPath, workspacePath, sourcePath, spec, options);
+  const vault = await assertPlainDirectory(vaultPath);
+  const release = await acquireHistoryIngestLock(vault);
+  let result;
+  let primaryError;
+  try {
+    result = await saveDshHistoryIngestLocked(vault, workspacePath, sourcePath, spec, options);
+  } catch (error) {
+    primaryError = error;
+  }
+  let releaseError;
+  try {
+    await release();
+  } catch (error) {
+    releaseError = error;
+  }
+  if (primaryError && releaseError) throw new AggregateError([primaryError, releaseError], 'DSH 历史导入失败，且写入锁清理未完成。');
+  if (primaryError) throw primaryError;
+  if (releaseError) throw releaseError;
+  return result;
+};
+
 const readConfiguredVault = async (configPath) => {
   const resolved = normalizeAbsolutePath(configPath, 'Wiki 配置文件路径');
   const settings = normalizeSettings(await readJsonFile(resolved, {}));
@@ -1203,7 +1773,49 @@ const runCli = async (argv = process.argv.slice(2)) => {
       confirmedSensitive: args['confirm-sensitive'] === true
     });
   }
-  throw new WikiBasicError('unknown-command', 'Wiki 工具仅支持 status、query、preview、save、project-preview、project-page、project-validate 和 project-save。');
+  if (command === 'history-preview') {
+    const workspace = normalizeAbsolutePath(args.workspace || process.env.DSH_CWD, '工作区路径');
+    const sourcePath = normalizeAbsolutePath(process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, 'DSH 历史导入源路径');
+    return previewDshHistoryIngest(vaultPath, workspace, sourcePath);
+  }
+  if (command === 'history-session') {
+    const workspace = normalizeAbsolutePath(args.workspace || process.env.DSH_CWD, '工作区路径');
+    const sourcePath = normalizeAbsolutePath(process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, 'DSH 历史导入源路径');
+    return readDshHistorySession(sourcePath, workspace, args['source-token'] || '', args['source-id'] || '');
+  }
+  if (command === 'history-page') {
+    const workspace = normalizeAbsolutePath(args.workspace || process.env.DSH_CWD, '工作区路径');
+    const sourcePath = normalizeAbsolutePath(process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, 'DSH 历史导入源路径');
+    return readDshHistoryWikiPage(vaultPath, workspace, sourcePath, args.path || '');
+  }
+  if (command === 'history-validate') {
+    const { workspace, spec } = await readWorkspaceSpec(args);
+    const sourcePath = normalizeAbsolutePath(process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, 'DSH 历史导入源路径');
+    const plan = await buildDshHistoryIngestPlan(vaultPath, workspace, sourcePath, spec);
+    return {
+      ok: true,
+      project: plan.preview.project,
+      sessionsAdded: plan.preview.delta.added.length,
+      sessionsModified: plan.preview.delta.modified.length,
+      pagesCreated: plan.pagesCreated,
+      pagesUpdated: plan.pagesUpdated,
+      sourceRedactions: plan.preview.redactions,
+      sensitive: plan.sensitive
+    };
+  }
+  if (command === 'history-save') {
+    const { workspace, spec } = await readWorkspaceSpec(args);
+    const sourcePath = normalizeAbsolutePath(process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, 'DSH 历史导入源路径');
+    return saveDshHistoryIngest(vaultPath, workspace, sourcePath, spec, {
+      confirmed: args['confirm-history-ingest'] === true,
+      confirmedSensitive: args['confirm-sensitive'] === true
+    });
+  }
+  if (command === 'history-clear') {
+    const sourcePath = normalizeAbsolutePath(process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, 'DSH 历史导入源路径');
+    return clearDshHistorySource(sourcePath, args['source-token'] || '');
+  }
+  throw new WikiBasicError('unknown-command', 'Wiki 工具仅支持 status、query、preview、save、project-* 和 history-* 固定命令。');
 };
 
 if (require.main === module) {
@@ -1217,6 +1829,12 @@ if (require.main === module) {
 
 module.exports = {
   MAX_CAPTURE_CHARS,
+  MAX_HISTORY_MESSAGE_CHARS,
+  MAX_HISTORY_MESSAGES_PER_SESSION,
+  MAX_HISTORY_SESSIONS,
+  MAX_HISTORY_SOURCE_BYTES,
+  MAX_HISTORY_TOTAL_CHARS,
+  MAX_HISTORY_TOTAL_MESSAGES,
   MAX_MARKDOWN_BYTES,
   MAX_PROJECT_FILES,
   MAX_PROJECT_FILE_BYTES,
@@ -1230,19 +1848,26 @@ module.exports = {
   WikiBasicError,
   WikiSettingsStore,
   buildCapturePreview,
+  buildDshHistoryIngestPlan,
   buildProjectSyncPlan,
   initializeWikiVault,
   inspectProjectGit,
   inspectWikiVault,
   parseFrontmatter,
+  previewDshHistoryIngest,
   queryWiki,
   readConfiguredVault,
+  readDshHistorySession,
+  readDshHistorySource,
+  readDshHistoryWikiPage,
   readProjectWikiPage,
   runCli,
   saveCapture,
+  saveDshHistoryIngest,
   saveProjectSync,
   sensitiveFindings,
   slugify,
   previewProjectSync,
+  clearDshHistorySource,
   walkProjectSources
 };

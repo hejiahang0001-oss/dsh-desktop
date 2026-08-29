@@ -10,7 +10,8 @@ const VARIABLES = Object.freeze({
   DSH_DESKTOP_XLSX_TOOL: 'Absolute path to the fixed DSH Desktop Excel tool.',
   DSH_DESKTOP_PPTX_TOOL: 'Absolute path to the fixed DSH Desktop PowerPoint tool.',
   DSH_DESKTOP_WIKI_TOOL: 'Absolute path to the fixed DSH Desktop Wiki tool.',
-  DSH_DESKTOP_WIKI_CONFIG: 'Absolute path to the desktop-owned Wiki settings file.'
+  DSH_DESKTOP_WIKI_CONFIG: 'Absolute path to the desktop-owned Wiki settings file.',
+  DSH_DESKTOP_WIKI_HISTORY_SOURCE: 'Absolute path to the short-lived desktop-owned DSH history source.'
 });
 
 export function apply(ctx) {

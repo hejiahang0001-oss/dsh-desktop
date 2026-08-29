@@ -4,7 +4,7 @@ description: Incrementally distill the active DSH Desktop project into the confi
 user-invocable: true
 disable-model-invocation: false
 metadata:
-  version: 0.6.4
+  version: 0.6.5
 ---
 
 # Wiki project update

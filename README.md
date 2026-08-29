@@ -51,6 +51,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Editable Excel delivery** — invoke the bundled `/excel-xlsx` Skill to create, import, edit, and strictly inspect editable XLSX workbooks with typed cells, multi-sheet formulas, styles, filters, frozen panes, and explicit reconciliation checks without an online Office service.
 - **Editable PowerPoint delivery** — invoke the bundled `/powerpoint-pptx` Skill to create and strictly inspect editable widescreen PPTX presentations with native text, shapes, tables, charts backed by embedded Excel data, workspace PNG/JPEG images, a real slide master, two layouts, and speaker notes, or perform exact rollback-backed text replacement.
 - **Unified Office delivery center** — see Word, Excel, and PowerPoint readiness, supported editable structures, safety boundaries, and fixed invocation actions in one local-only window alongside the worktree, Tasks/Subagents, and extension integration chain.
+- **Selected DSH history to Wiki** — choose up to eight completed ordinary sessions from the active workspace, inspect change and redaction counts, and let `/wiki-history-ingest dsh` distill only user/assistant text after a separate preview, validation, and confirmation flow.
 - **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **Isolated Git worktrees** — create a generated DSH-owned branch and worktree, switch the active Harness workspace, and safely reclaim only DSH-owned worktree directories. External worktrees stay read-only; dirty removal creates a private recovery checkpoint and retains the branch.
 - **Harness-native tasks and subagents** — inspect the authoritative subagent tree, live background-job mirror, approval count, and working-directory sharing risk; open the exact child transcript, queue a bounded follow-up to a continuable child, or request interruption without treating acknowledgement as completion.
@@ -75,7 +76,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.4 product Latest** extends the native Wiki center with bounded active-project synchronization. It detects source changes with Git when available and falls back to a content inventory without Git, merges existing project pages by hash, records provenance, and keeps a transactional recovery copy. Its installer, `DSH-Desktop-Setup-0.6.4.exe`, is available from the [V0.6.4 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4); Stable and the front-page download remain V0.5.4.
+**V0.6.5 product Latest candidate** adds selected DSH history ingestion to the native Wiki center. It uses pinned Harness session APIs, exposes only opaque UI selections, excludes non-text/tool/system content, redacts fixed credential patterns before Agent access, and requires a later explicit confirmation before transactional Wiki writes. The candidate installer is named `DSH-Desktop-Setup-0.6.5.exe`; Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -102,7 +103,7 @@ Open repository → run or approve the agent in Harness
 → open Tools → Context sources to inspect the effective rule and session layers
 → open Tools → Extension center to inspect Skills, Plugins, Hooks, MCP, fixed closure, and Profile lifecycle
 → open Tools → Office delivery center to see Word, Excel, PowerPoint, and the V0.6 integration chain together
-→ open Tools → Wiki center to query local knowledge, capture one completed conclusion, or preview the active project's knowledge delta
+→ open Tools → Wiki center to query local knowledge, capture one completed conclusion, preview the active project's knowledge delta, or select DSH history for controlled ingestion
 → open Tools → Create or edit Word document to invoke the bundled /word-docx Skill
 → open Tools → Create or edit Excel workbook to invoke the bundled /excel-xlsx Skill
 → open Tools → Create or edit PowerPoint presentation to invoke the bundled /powerpoint-pptx Skill
@@ -113,7 +114,7 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.4 release notes](docs/RELEASE_NOTES_v0.6.4.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.5 release notes](docs/RELEASE_NOTES_v0.6.5.md).
 
 ## Security and current limits
 
@@ -156,7 +157,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.4 产品 Latest 在原生 Wiki 中心新增当前项目知识增量同步：有 Git 时补充提交证据，无 Git 时使用受限内容清单；更新已有页面前校验哈希，保留来源、推断标记和事务恢复副本。源码、真实模型、覆盖安装、安装版回归、PR/CI 和公开回下载门禁均已通过；安装包 `DSH-Desktop-Setup-0.6.4.exe` 可从 [V0.6.4 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.4) 获取，V0.5.4 继续保持 Stable 和首页下载版本。
+V0.6.5 产品 Latest 候选在原生 Wiki 中心新增 DSH 历史批量导入：只列出当前工作区普通会话，使用不透明选择标识；只让 Agent 读取用户/助手文本，固定凭据模式在进入 Agent 前遮蔽；Agent 必须先预览和校验，并在后续回合得到明确确认后才能事务写入。候选安装包名为 `DSH-Desktop-Setup-0.6.5.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

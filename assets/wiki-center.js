@@ -16,6 +16,12 @@
     previewProjectSync: document.getElementById('preview-project-sync'),
     invokeProjectSync: document.getElementById('invoke-project-sync'),
     projectPreview: document.getElementById('project-sync-preview'),
+    historyStatus: document.getElementById('history-status'),
+    loadHistorySessions: document.getElementById('load-history-sessions'),
+    historySessionList: document.getElementById('history-session-list'),
+    prepareHistory: document.getElementById('prepare-history'),
+    invokeHistory: document.getElementById('invoke-history'),
+    historyPreview: document.getElementById('history-preview'),
     queryForm: document.getElementById('query-form'),
     queryInput: document.getElementById('query-input'),
     querySubmit: document.getElementById('query-submit'),
@@ -33,6 +39,9 @@
   let currentState = {};
   let selectedCandidate = null;
   let previewReady = false;
+  const selectedHistory = new Set();
+  let historyPrepared = false;
+  let historyLimit = 8;
 
   const element = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -42,6 +51,16 @@
   };
   const empty = (node) => node.replaceChildren();
   const setStatus = (text) => { nodes.globalStatus.textContent = text; };
+
+  const setHistoryDirty = () => {
+    historyPrepared = false;
+    nodes.invokeHistory.disabled = true;
+    nodes.prepareHistory.disabled = selectedHistory.size < 1 || !currentState.history?.available;
+    nodes.historyPreview.className = 'preview';
+    nodes.historyPreview.textContent = selectedHistory.size > 0
+      ? `已选择 ${selectedHistory.size} 个会话。请先检查范围。`
+      : '尚未准备历史范围。Agent 完成预览和校验后，仍会在后续对话中等待你的明确确认再保存。';
+  };
 
   const setPreviewDirty = () => {
     previewReady = false;
@@ -79,6 +98,14 @@
     nodes.invokeProjectSync.disabled = !project.available || state.harness?.status !== 'ready';
     nodes.projectPreview.className = 'preview';
     nodes.projectPreview.textContent = '尚未检查项目增量；保存前仍会再次校验并要求确认。';
+    const history = state.history || {};
+    nodes.historyStatus.className = `status ${history.available ? 'ready' : 'waiting'}`;
+    nodes.historyStatus.textContent = history.available ? '可选择' : '待工作区';
+    nodes.loadHistorySessions.disabled = !history.available;
+    selectedHistory.clear();
+    empty(nodes.historySessionList);
+    nodes.historySessionList.append(element('p', 'empty', '每次最多选择 8 个已完成会话；原始历史保持只读。'));
+    setHistoryDirty();
     renderCapabilities(state.skills || []);
     setPreviewDirty();
     setStatus(vault.status === 'ready'
@@ -142,6 +169,44 @@
       nodes.candidateList.append(label);
     }
     setPreviewDirty();
+  };
+
+  const renderHistorySessions = (response = {}) => {
+    empty(nodes.historySessionList);
+    selectedHistory.clear();
+    historyLimit = Number.isInteger(response.limit) ? response.limit : 8;
+    const items = Array.isArray(response.items) ? response.items : [];
+    if (items.length === 0) {
+      nodes.historySessionList.append(element('p', 'empty', response.message || '当前工作区没有可导入的普通会话。'));
+      setHistoryDirty();
+      return;
+    }
+    for (const item of items) {
+      const label = element('label', `candidate${item.ready ? '' : ' is-disabled'}`);
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = item.id || '';
+      checkbox.disabled = !item.ready;
+      const copy = element('div', '');
+      const date = item.updatedAt ? new Date(item.updatedAt).toLocaleString('zh-CN') : '时间未知';
+      copy.append(
+        element('h3', '', item.title || '未命名 DSH 会话'),
+        element('div', 'meta', `${date}${item.ready ? ' · 可导入' : ' · 正在运行'}`)
+      );
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked && selectedHistory.size >= historyLimit) {
+          checkbox.checked = false;
+          setStatus(`每次最多选择 ${historyLimit} 个会话。`);
+          return;
+        }
+        if (checkbox.checked) selectedHistory.add(item.id);
+        else selectedHistory.delete(item.id);
+        setHistoryDirty();
+      });
+      label.append(checkbox, copy);
+      nodes.historySessionList.append(label);
+    }
+    setHistoryDirty();
   };
 
   nodes.choose.addEventListener('click', async () => {
@@ -225,6 +290,66 @@
     } catch {
       setStatus('未能加载项目同步 Skill；可在对话中手动输入 /wiki-update。');
       nodes.invokeProjectSync.disabled = false;
+    }
+  });
+
+  nodes.loadHistorySessions.addEventListener('click', async () => {
+    nodes.loadHistorySessions.disabled = true;
+    setStatus('正在读取当前工作区的普通 DSH 会话目录…');
+    try {
+      const response = await api.listHistorySessions();
+      renderHistorySessions(response);
+      setStatus(response?.message || `已读取 ${(response.items || []).length} 个会话。`);
+    } catch {
+      renderHistorySessions({ message: 'DSH 历史列表读取失败；原始会话没有改变。' });
+      setStatus('DSH 历史列表读取失败；原始会话没有改变。');
+    } finally {
+      nodes.loadHistorySessions.disabled = !currentState.history?.available;
+    }
+  });
+
+  nodes.prepareHistory.addEventListener('click', async () => {
+    if (selectedHistory.size < 1) return;
+    nodes.prepareHistory.disabled = true;
+    nodes.invokeHistory.disabled = true;
+    setStatus('正在读取所选用户/助手文本，并在交给 Agent 前遮蔽固定凭据模式…');
+    try {
+      const response = await api.prepareHistory({ ids: [...selectedHistory] });
+      if (!response?.ok) throw new Error(response?.message || 'history-prepare-failed');
+      const warnings = (response.redactions || []).map((item) => `${item.label} ${item.count} 处`).join('、');
+      const rows = (response.sessions || []).map((item) => `${item.title}：${item.messageCount} 条 · ${{ added: '新增', modified: '有变化', unchanged: '已导入' }[item.status] || item.status}${item.limited ? ' · 已按上限截取' : ''}`);
+      nodes.historyStatus.className = `status ${response.unchanged ? 'ready' : 'needs-init'}`;
+      nodes.historyStatus.textContent = response.unchanged ? '无需更新' : '待整理';
+      nodes.historyPreview.className = `preview ${warnings || response.limited ? 'warning' : 'success'}`;
+      nodes.historyPreview.textContent = `项目：${response.project?.name || ''}\n会话：${response.sessionCount || 0} 个（新增 ${response.addedCount || 0}，有变化 ${response.modifiedCount || 0}，未变化 ${response.unchangedCount || 0}）\n可用文本：${response.totalMessages || 0} 条${response.limited ? '（部分会话已按安全上限截取）' : ''}\n凭据遮蔽：${warnings || '未命中固定模式'}\n\n${rows.join('\n')}\n\n${response.message || ''}`;
+      historyPrepared = !response.unchanged;
+      nodes.invokeHistory.disabled = !historyPrepared;
+      setStatus(response.message || (response.unchanged ? '所选会话无需重复导入。' : '历史范围已准备。'));
+    } catch (error) {
+      historyPrepared = false;
+      nodes.historyStatus.className = 'status unavailable';
+      nodes.historyStatus.textContent = '准备失败';
+      nodes.historyPreview.className = 'preview warning';
+      nodes.historyPreview.textContent = error?.message && error.message !== 'history-prepare-failed' ? error.message : '历史范围准备失败；知识库没有被修改。';
+      setStatus('历史范围准备失败；请重新加载会话后再试。');
+    } finally {
+      nodes.prepareHistory.disabled = selectedHistory.size < 1 || !currentState.history?.available;
+    }
+  });
+
+  nodes.invokeHistory.addEventListener('click', async () => {
+    if (!historyPrepared) return;
+    nodes.invokeHistory.disabled = true;
+    setStatus('正在返回当前对话并加载 /wiki-history-ingest dsh…');
+    try {
+      const response = await api.invokeHistory();
+      if (!response?.ok) {
+        setStatus(response?.message || '未能加载 DSH 历史导入 Skill。');
+        nodes.invokeHistory.disabled = false;
+      }
+    } catch {
+      setStatus('未能加载 DSH 历史导入 Skill；请重新准备历史。');
+      nodes.invokeHistory.disabled = false;
     }
   });
 
