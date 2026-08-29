@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.6.5 产品 Latest 候选（DSH 历史批量导入）
-> 状态：V0.6.5 已通过源码、打包、覆盖安装、安装版真实模型与数据保留门禁，正在执行 PR/CI 和 GitHub Pre-release 发布；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.5 产品 Latest（DSH 历史批量导入）
+> 状态：V0.6.5 已完成源码、真实模型、打包、覆盖安装、数据保留、PR/CI、GitHub Pre-release 和公开回下载门禁；下一步进入 V0.7，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.6.5 本轮进展
 
@@ -24,9 +24,9 @@
 | 打包与覆盖安装 | 安装包 184,089,462 字节，SHA-256 `5B89D3B43F15E46D2EA38B6FBFDDDBE99FE7D66EA90B29BAEBB74E82D806382E`；静默覆盖退出码 0，Windows 登记 V0.6.5 |
 | 包体与更新边界 | 解包版与安装版均 `packageReady: true`、零重解析点；相对 V0.6.4 复用 99.3904%；安装包未签名，自动更新继续关闭 |
 | 已安装回归与数据 | 11/11 GUI、固定终端、Wiki 基础和真实模型历史导入均通过；安装目录 `app.asar` 与解包目录同哈希；28 份无凭据语义文件在安装前、安装后和全部回归后逐字节一致 |
-| 待完成 | PR/CI、GitHub Pre-release 与公开回下载 |
+| PR / CI / GitHub | 实现 PR [#49](https://github.com/hejiahang0001-oss/dsh-desktop/pull/49) 与主分支 CI [33272267115](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33272267115) 三项均通过；[V0.6.5](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.5) 为非草稿 Pre-release，精确指向 `6726f29847f564a5657dcfdfda013be129f2f75e`；GitHub 3/3 资产大小与摘要、公开回下载 3/3 哈希和清单 2/2 均通过，V0.5.4 仍为正式 Latest/Stable |
 
-完成 V0.6.5 发布门禁后进入 V0.7 试点与开发交付。Stable V0.5.4 不变。
+V0.6.5 发布门禁已完成，下一步进入 V0.7 试点与开发交付。Stable V0.5.4 不变。
 
 ## V0.6.4 本轮进展
 
