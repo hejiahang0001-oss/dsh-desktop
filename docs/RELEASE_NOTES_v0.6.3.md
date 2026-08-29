@@ -15,6 +15,6 @@ V0.6.3 adds the first native Wiki workflow while keeping V0.5.4 as Stable. DeepS
 - V0.6.3 does not yet synchronize a whole project or batch-import DSH history. Those remain V0.6.4 and V0.6.5 work.
 - A vault path is selected separately on each computer and retained if the directory is temporarily unavailable.
 - Initialization never overwrites an existing Wiki page or configuration file. Capture never overwrites an existing page with the same slug.
-- Stable remains V0.5.4. Local package, overwrite-install, installed-runtime, real-model, and data-retention gates pass; V0.6.3 remains a local Latest candidate until PR/CI and public-asset gates are recorded.
+- Stable remains V0.5.4. V0.6.3 passed local package, overwrite-install, installed-runtime, real-model, data-retention, PR/CI, and public-asset gates and is published as the product Latest Pre-release.
 
-Local installer target: `DSH-Desktop-Setup-0.6.3.exe`.
+Public release: [DSH Desktop V0.6.3](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3).

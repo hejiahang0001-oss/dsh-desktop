@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-29
-> 当前构建：V0.6.3 产品 Latest 本地候选（Wiki 基础接入）
-> 状态：V0.6.3 已完成实现、271/271 源码、真实模型、打包、覆盖安装、无 Git、已安装版和数据保留门禁；待 PR/CI 与 GitHub Pre-release。公开产品 Latest 仍为 V0.6.2；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.3 产品 Latest（Wiki 基础接入，已发布）
+> 状态：V0.6.3 已完成实现、271/271 源码、真实模型、打包、覆盖安装、无 Git、已安装版、数据保留、PR/CI 和 GitHub Pre-release 门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.6.3 本轮进展
 
@@ -23,7 +23,7 @@
 | 包体与更新边界 | `packageReady: true`，零重解析点，固定 pnpm 11.19.0、Word/Excel/PPT 和 5 个 Wiki 必需文件完整；相对 V0.6.2 复用 99.4657%。安装包仍未签名，自动更新继续关闭 |
 | 已安装回归 | 10/10 既有 GUI smoke、固定终端两命令与凭据隔离通过；最终安装目录 `app.asar` 和 Wiki Skill 均与解包目录哈希一致，最终已安装 Wiki/Harness 查询与保存再次通过 |
 | 覆盖安装与数据 | 安装前、安装后、回归后和最终重建覆盖后 28 份无凭据语义文件逐字节一致，含 15 份会话；回滚备份 `backups/pre-v0.6.3-20260829-195636` 含上一版三项资产且无重解析点 |
-| PR、CI 与 GitHub | 尚未执行；V0.6.3 只完成本地候选，未上传或公开发布。V0.6.2 仍为公开产品 Latest，V0.5.4 仍为正式 Latest/Stable |
+| PR、CI 与 GitHub | 实现 PR [#45](https://github.com/hejiahang0001-oss/dsh-desktop/pull/45) 与主分支 CI [33253419641](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33253419641) 三项均通过；[V0.6.3](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3) 为非草稿 Pre-release，精确指向 `b8db00ae48d630344bf3f641608e33ad062c553c`；远端 3/3 资产摘要和公网重下载哈希一致，清单 2/2 通过。V0.5.4 仍为正式 Latest/Stable |
 
 接下来按 V0.6.4 项目知识增量同步、V0.6.5 DSH 历史批量导入顺序推进，再进入 V0.7 试点；安全和上游兼容性阻断仍优先。网页研究、复杂文档、QMD 和 Obsidian 界面控制保留为后续扩展候选。
 

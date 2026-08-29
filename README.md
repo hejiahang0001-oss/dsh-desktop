@@ -75,7 +75,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.3 product Latest candidate** adds a native Wiki center for local vault selection/initialization, source-aware query, and selected current-session conclusion capture. The foundation works without Git, Python, QMD, Obsidian, or Codex installation. Its local installer target is `DSH-Desktop-Setup-0.6.3.exe`; public Latest remains [V0.6.2](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.2) until the V0.6.3 release gates pass, while Stable and the front-page download remain V0.5.4.
+**[V0.6.3 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3)** adds a native Wiki center for local vault selection/initialization, source-aware query, and selected current-session conclusion capture. The foundation works without Git, Python, QMD, Obsidian, or Codex installation. Its public installer is `DSH-Desktop-Setup-0.6.3.exe`; V0.6.3 is published as a GitHub Pre-release, while Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -155,7 +155,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.3 产品 Latest 候选新增原生 Wiki 中心：可选择/初始化本地 Markdown 知识库、按页面路径与来源查询，并从当前会话选择一条助手结论，经预览和确认后保存。基础能力不依赖 Git、Python、QMD、Obsidian 或 Codex 安装。本地安装包目标为 `DSH-Desktop-Setup-0.6.3.exe`；公开 Latest 在 V0.6.3 门禁完成前仍为 [V0.6.2](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.2)，V0.5.4 继续保持 Stable 和首页下载版本。
+[V0.6.3 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3) 新增原生 Wiki 中心：可选择/初始化本地 Markdown 知识库、按页面路径与来源查询，并从当前会话选择一条助手结论，经预览和确认后保存。基础能力不依赖 Git、Python、QMD、Obsidian 或 Codex 安装。公开安装包为 `DSH-Desktop-Setup-0.6.3.exe`；V0.6.3 已作为 GitHub Pre-release 发布，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
