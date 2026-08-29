@@ -69,6 +69,7 @@
     { id: 'wiki-capture.invoke', title: '保存会话结论到 Wiki', detail: '加载内置 /wiki-capture Skill，先预览再保存结论', shortcut: '', run: () => invokeSkill('wiki-capture') },
     { id: 'wiki-update.invoke', title: '同步当前项目知识到 Wiki', detail: '加载内置 /wiki-update Skill，增量整理架构、边界和决策', shortcut: '', run: () => invokeSkill('wiki-update') },
     { id: 'wiki-history-ingest.open', title: '导入 DSH 历史到 Wiki', detail: '打开 Wiki 中心选择当前工作区的普通会话', shortcut: '', run: () => api.wiki.openWindow() },
+    { id: 'delivery.center', title: '打开 Git 交付中心', detail: '查看本地状态、只提交已暂存内容并读取当前分支 GitHub PR', shortcut: 'Ctrl+Shift+G', run: () => api.delivery.openWindow() },
     { id: 'support.diagnostics', title: '导出脱敏诊断报告', detail: '生成不含 Key、代理地址、完整路径、会话正文和日志正文的 JSON', shortcut: '', run: () => api.support.exportDiagnostics() },
     { id: 'support.backup', title: '备份 DSH 数据', detail: '短暂停止 Harness，备份会话和设置并逐文件校验，不复制软件 Key', shortcut: '', run: () => api.support.createBackup() },
     { id: 'support.validate-backup', title: '验证 DSH 备份', detail: '逐文件核对备份清单、大小和 SHA-256', shortcut: '', run: () => api.support.validateBackup() },

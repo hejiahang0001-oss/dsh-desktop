@@ -78,6 +78,7 @@ const {
 } = require('./workbench-panel.cjs');
 const { WorkbenchStore, normalizeWorkbenchState } = require('./workbench-store.cjs');
 const { GitWorktreeManager, runGitCommand } = require('./worktree-manager.cjs');
+const { GitDeliveryError, GitDeliveryManager, normalizeCommitMessage } = require('./git-delivery.cjs');
 const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 const { SideChatController, SideChatError } = require('./side-chat.cjs');
@@ -94,6 +95,7 @@ let wikiCenterWindow;
 let worktreesWindow;
 let tasksSubagentsWindow;
 let sideChatWindow;
+let gitDeliveryWindow;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -111,6 +113,7 @@ let controlledPluginInstaller;
 let worktreeManager;
 let tasksSubagentsController;
 let sideChatController;
+let gitDeliveryManager;
 let reliableInterruptController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
@@ -119,6 +122,7 @@ let worktreeOperationPromise = null;
 let tasksSubagentsOperationPromise = null;
 let sideChatOperationPromise = null;
 let supportBackupOperationPromise = null;
+let gitDeliveryOperationPromise = null;
 let sideChatSelectionTimer;
 let sideChatPartitionSession;
 let sideChatMainLayout;
@@ -220,6 +224,7 @@ const officeCenterPage = path.join(rootDir, 'office-center.html');
 const wikiCenterPage = path.join(rootDir, 'wiki-center.html');
 const worktreesPage = path.join(rootDir, 'worktrees.html');
 const tasksSubagentsPage = path.join(rootDir, 'tasks-subagents.html');
+const gitDeliveryPage = path.join(rootDir, 'git-delivery.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
 const workbenchPanelScriptPath = path.join(rootDir, 'assets', 'workbench-panel.js');
 const workbenchFilesCssPath = path.join(rootDir, 'assets', 'workbench-files.css');
@@ -260,6 +265,7 @@ const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith
 const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.startsWith('--tasks-subagents-smoke-file='));
 const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith('--side-chat-smoke-file='));
 const supportSmokeTarget = process.argv.find((argument) => argument.startsWith('--support-smoke-file='));
+const gitDeliverySmokeTarget = process.argv.find((argument) => argument.startsWith('--git-delivery-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 const isolatedSmokeTarget = [
   desktopSmokeTarget,
@@ -273,7 +279,8 @@ const isolatedSmokeTarget = [
   worktreesSmokeTarget,
   tasksSubagentsSmokeTarget,
   sideChatSmokeTarget,
-  supportSmokeTarget
+  supportSmokeTarget,
+  gitDeliverySmokeTarget
 ].find(Boolean);
 if (isolatedSmokeTarget) {
   const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
@@ -368,6 +375,7 @@ const officeCenterUrlAllowed = (value) => localFileUrlMatches(value, officeCente
 const wikiCenterUrlAllowed = (value) => localFileUrlMatches(value, wikiCenterPage);
 const worktreesUrlAllowed = (value) => localFileUrlMatches(value, worktreesPage);
 const tasksSubagentsUrlAllowed = (value) => localFileUrlMatches(value, tasksSubagentsPage);
+const gitDeliveryUrlAllowed = (value) => localFileUrlMatches(value, gitDeliveryPage);
 
 const showStatusPage = async () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -1130,6 +1138,11 @@ const tasksSubagentsIpcAllowed = (event) => isTrustedMainFrameEvent(
   event,
   tasksSubagentsWindow?.webContents,
   tasksSubagentsUrlAllowed
+);
+const gitDeliveryIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  gitDeliveryWindow?.webContents,
+  gitDeliveryUrlAllowed
 );
 
 const sameStringArray = (left = [], right = []) => (
@@ -2081,6 +2094,141 @@ const openWorktreesWindow = async () => {
     return { ok: true, reused: true };
   }
   await createWorktreesWindow();
+  return { ok: true, reused: false };
+};
+
+const unavailableGitDeliveryState = (message = 'Git 交付中心尚未初始化。') => Object.freeze({
+  available: false,
+  reason: 'unavailable',
+  message,
+  repository: Object.freeze({ root: getWorkspaceState().activePath, branch: '', head: '', headShort: '' }),
+  status: Object.freeze({ changed: 0, staged: 0, unstaged: 0, untracked: 0, conflicted: 0, clean: true, fingerprint: '' }),
+  recentCommits: Object.freeze([]),
+  remote: Object.freeze({ available: false, status: 'unavailable', message: 'Git 仓库不可用。', pullRequests: Object.freeze([]), canCreate: false })
+});
+
+const getGitDeliveryState = async ({ includeRemote = false } = {}) => {
+  if (!gitDeliveryManager) return unavailableGitDeliveryState();
+  try {
+    return await gitDeliveryManager.inspect({ includeRemote: includeRemote === true });
+  } catch (error) {
+    return unavailableGitDeliveryState(error?.message || 'Git 交付状态读取失败。');
+  }
+};
+
+const publishGitDeliveryState = async (options = {}) => {
+  const state = await getGitDeliveryState(options);
+  if (gitDeliveryWindow && !gitDeliveryWindow.isDestroyed()) {
+    gitDeliveryWindow.webContents.send('git-delivery:state', state);
+  }
+  return state;
+};
+
+const gitDeliveryBusyReason = async () => {
+  await refreshAgentDiagnostics({ rebuildMenu: false });
+  if (terminalRunner?.isActive()) return '请先停止正在运行的安全终端。';
+  if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
+  if (sideChatOperationPromise) return '请等待 Side Chat 操作完成。';
+  if (agentDiagnostics.status === 'running' || agentDiagnostics.status === 'waiting'
+    || agentDiagnostics.pendingCount > 0 || agentDiagnostics.queuedCount > 0) return '请先结束当前 Agent 回合，并处理待确认与排队消息。';
+  if (checkpointCreatePromise || checkpointRestorePromise || checkpointForkPromise
+    || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)) return '请等待代码检查点操作完成。';
+  if (worktreeOperationPromise) return '请等待 Git 工作树操作完成。';
+  if (supportBackupOperationPromise) return '请等待 DSH 数据备份完成。';
+  return '';
+};
+
+const performGitDeliveryCommit = async (message, fingerprint) => {
+  let normalized;
+  try { normalized = normalizeCommitMessage(message); }
+  catch (error) {
+    return { ok: false, message: error?.message || '提交说明无效。', state: await getGitDeliveryState() };
+  }
+  const busyReason = await gitDeliveryBusyReason();
+  if (busyReason) return { ok: false, message: busyReason, state: await getGitDeliveryState() };
+  const before = await getGitDeliveryState();
+  if (!before.available) return { ok: false, message: before.message, state: before };
+  if (before.status.conflicted > 0) return { ok: false, message: '存在未解决冲突，不能创建提交。', state: before };
+  if (before.status.staged < 1) return { ok: false, message: '没有已暂存改动；本窗口不会自动暂存文件。', state: before };
+  if (before.status.fingerprint !== fingerprint) return { ok: false, message: '暂存区在确认前已变化，请刷新后重试。', state: before };
+  const options = {
+    type: 'question',
+    title: '创建本地 Git 提交',
+    message: `提交 ${before.status.staged} 项已暂存改动？`,
+    detail: `分支：${before.repository.branch || 'detached HEAD'}\n提交说明：${normalized}\n\n不会自动暂存、不会推送，也不会包含未暂存或未跟踪文件。`,
+    buttons: ['取消', '创建本地提交'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  };
+  const parent = gitDeliveryWindow && !gitDeliveryWindow.isDestroyed() ? gitDeliveryWindow : mainWindow;
+  const confirmation = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，没有创建提交。', state: before };
+  const result = await gitDeliveryManager.commit(normalized, fingerprint);
+  if (gitDeliveryWindow && !gitDeliveryWindow.isDestroyed()) gitDeliveryWindow.webContents.send('git-delivery:state', result.state);
+  await refreshChangeReviewDiagnostics({ rebuildMenu: false });
+  installApplicationMenu();
+  return result;
+};
+
+const queueGitDeliveryCommit = (message, fingerprint) => {
+  if (gitDeliveryOperationPromise) return Promise.resolve({ ok: false, message: '另一个 Git 提交操作仍在进行。' });
+  gitDeliveryOperationPromise = Promise.resolve()
+    .then(() => performGitDeliveryCommit(message, fingerprint))
+    .catch(async (error) => ({
+      ok: false,
+      message: error instanceof GitDeliveryError ? error.message : '没有创建 Git 提交。',
+      state: await getGitDeliveryState()
+    }))
+    .finally(() => { gitDeliveryOperationPromise = null; });
+  return gitDeliveryOperationPromise;
+};
+
+const createGitDeliveryWindow = async () => {
+  const created = new BrowserWindow({
+    width: 1040,
+    height: 760,
+    minWidth: 720,
+    minHeight: 520,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#141516',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH Git 交付中心',
+    webPreferences: {
+      preload: path.join(__dirname, 'git-delivery-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  gitDeliveryWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!gitDeliveryUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => {
+    if (!gitDeliverySmokeTarget) created.show();
+  });
+  created.on('closed', () => {
+    if (gitDeliveryWindow === created) gitDeliveryWindow = undefined;
+  });
+  await created.loadFile(gitDeliveryPage);
+  return created;
+};
+
+const openGitDeliveryWindow = async () => {
+  if (gitDeliveryWindow && !gitDeliveryWindow.isDestroyed()) {
+    if (gitDeliveryWindow.isMinimized()) gitDeliveryWindow.restore();
+    gitDeliveryWindow.show();
+    gitDeliveryWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createGitDeliveryWindow();
   return { ok: true, reused: false };
 };
 
@@ -3460,10 +3608,12 @@ const activateWorkspace = async (workspacePath) => {
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
     if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
     if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
+    if (gitDeliveryWindow && !gitDeliveryWindow.isDestroyed()) gitDeliveryWindow.close();
     contextSourceCatalog?.setWorkspace(workspace.activePath);
     await workspaceFiles.activate(workspace.activePath);
     await previewManager.activate(workspace.activePath);
     await changeReviewer.activate(workspace.activePath);
+    gitDeliveryManager?.activate(workspace.activePath);
     checkpointDiagnostics = await checkpointManager.activate(workspace.activePath);
     changeReviewDiagnostics = emptyChangeReviewDiagnostics();
     terminalRunner?.setWorkspace(workspace.activePath);
@@ -3550,6 +3700,11 @@ function installApplicationMenu() {
           accelerator: 'CmdOrCtrl+Shift+W',
           enabled: !workspace.isFallback,
           click: () => { void openWorktreesWindow(); }
+        },
+        {
+          label: 'Git 交付中心…',
+          accelerator: 'CmdOrCtrl+Shift+G',
+          click: () => { void openGitDeliveryWindow(); }
         },
         { type: 'separator' },
         { label: `当前：${workspace.displayName}`, enabled: false },
@@ -4373,6 +4528,31 @@ ipcMain.handle('wiki-center:preview-capture', (event, capture) => (
 ipcMain.handle('wiki-center:save-capture', (event, capture) => (
   wikiCenterIpcAllowed(event) ? saveWikiCapture(capture) : { ok: false, message: 'Wiki 保存请求未通过安全校验。' }
 ));
+ipcMain.handle('git-delivery:get-state', (event) => (
+  gitDeliveryIpcAllowed(event) ? getGitDeliveryState() : unavailableGitDeliveryState('Git 交付请求来源未通过安全校验。')
+));
+ipcMain.handle('git-delivery:refresh', (event, includeRemote) => (
+  gitDeliveryIpcAllowed(event) && typeof includeRemote === 'boolean'
+    ? publishGitDeliveryState({ includeRemote })
+    : unavailableGitDeliveryState('Git 交付刷新请求未通过安全校验。')
+));
+ipcMain.handle('git-delivery:commit', (event, message, fingerprint) => {
+  if (!gitDeliveryIpcAllowed(event) || typeof message !== 'string' || typeof fingerprint !== 'string' || !/^[0-9a-f]{64}$/u.test(fingerprint)) {
+    return { ok: false, message: 'Git 提交请求未通过安全校验。' };
+  }
+  return queueGitDeliveryCommit(message, fingerprint);
+});
+ipcMain.handle('git-delivery:open-link', async (event, id) => {
+  if (!gitDeliveryIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/u.test(id) || !gitDeliveryManager) {
+    return { ok: false, message: 'Git 交付链接请求未通过安全校验。' };
+  }
+  try {
+    await shell.openExternal(gitDeliveryManager.openLink(id));
+    return { ok: true, message: '已在默认浏览器中打开 GitHub。' };
+  } catch (error) {
+    return { ok: false, message: error instanceof GitDeliveryError ? error.message : '未能打开 GitHub 链接。' };
+  }
+});
 ipcMain.handle('worktrees:get-state', (event) => (
   worktreesIpcAllowed(event) ? getWorktreeState() : unavailableWorktreeState('请求来源未通过安全校验。')
 ));
@@ -4453,6 +4633,11 @@ ipcMain.handle('wiki-center:open-window', (event) => (
   harnessIpcAllowed(event)
     ? openWikiCenterWindow()
     : { ok: false, message: 'Wiki 中心请求未通过安全校验。' }
+));
+ipcMain.handle('git-delivery:open-window', (event) => (
+  desktopIpcAllowed(event)
+    ? openGitDeliveryWindow()
+    : { ok: false, message: 'Git 交付中心请求来源未通过安全校验。' }
 ));
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
@@ -5626,6 +5811,67 @@ const runSideChatSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runGitDeliverySmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  let result;
+  try {
+    gitDeliveryManager = new GitDeliveryManager();
+    gitDeliveryManager.activate(rootDir);
+    await createGitDeliveryWindow();
+    const renderedInTime = await gitDeliveryWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        if (document.querySelectorAll('.summary article').length === 6 && document.querySelectorAll('.history-row').length > 0) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!renderedInTime) throw new Error('git-delivery-smoke-timeout');
+    const rendered = await gitDeliveryWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.gitDeliveryAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      summaryCards: document.querySelectorAll('.summary article').length,
+      historyRows: document.querySelectorAll('.history-row').length,
+      commitMaxLength: document.querySelector('#commit-message')?.maxLength || 0,
+      commitDisabled: document.querySelector('#commit')?.disabled,
+      bodyText: document.body.innerText
+    })`, true);
+    const screenshot = await gitDeliveryWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['commit', 'getState', 'onState', 'openLink', 'refresh'])
+        && rendered.title === 'Git 交付中心'
+        && rendered.summaryCards === 6
+        && rendered.historyRows > 0
+        && rendered.commitMaxLength === 200
+        && rendered.commitDisabled === true
+        && rendered.bodyText.includes('只提交已经暂存的文件')
+        && rendered.bodyText.includes('当前分支 PR')
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      title: rendered.title,
+      summaryCards: rendered.summaryCards,
+      historyRows: rendered.historyRows,
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    gitDeliveryWindow?.destroy();
+    gitDeliveryWindow = undefined;
+    gitDeliveryManager = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 const runSupportSmoke = async (target) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = path.join(path.dirname(resolvedTarget), `support-smoke-data-${process.pid}-${Date.now()}`);
@@ -5753,6 +5999,12 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  if (gitDeliverySmokeTarget) {
+    await runGitDeliverySmoke(gitDeliverySmokeTarget.slice('--git-delivery-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
   if (supportSmokeTarget) {
     await runSupportSmoke(supportSmokeTarget.slice('--support-smoke-file='.length));
     allowQuit = true;
@@ -5778,6 +6030,8 @@ app.whenReady().then(async () => {
   await workbenchStore.init();
   await proxyStore.init();
   const workspace = await workspaceStore.init();
+  gitDeliveryManager = new GitDeliveryManager();
+  gitDeliveryManager.activate(workspace.activePath);
   workspaceFiles = new WorkspaceFiles();
   await workspaceFiles.activate(workspace.activePath);
   contextSourceCatalog = new ContextSourceCatalog({
@@ -5855,10 +6109,11 @@ app.whenReady().then(async () => {
 app.on('before-quit', (event) => {
   stopAgentPolling();
   stopSideChatSelectionMonitor();
-  if (allowQuit || (!supportBackupOperationPromise && !supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
+  if (allowQuit || (!supportBackupOperationPromise && !gitDeliveryOperationPromise && !supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
   event.preventDefault();
   const stopAfterBackup = async () => {
     if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);
+    if (gitDeliveryOperationPromise) await Promise.allSettled([gitDeliveryOperationPromise]);
     const stops = [];
     if (terminalRunner?.isActive()) stops.push(terminalRunner.stop());
     if (previewManager?.isActive()) stops.push(previewManager.stop());

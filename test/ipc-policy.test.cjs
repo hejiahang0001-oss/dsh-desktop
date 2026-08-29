@@ -58,6 +58,11 @@ test('every previously unguarded desktop handler now validates its sender', () =
   assert.match(main, /support:export-diagnostics', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /support:create-backup', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /support:validate-backup', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
+  assert.match(main, /git-delivery:open-window', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
+  assert.match(main, /git-delivery:get-state', \(event\)[\s\S]*?gitDeliveryIpcAllowed\(event\)/);
+  assert.match(main, /git-delivery:refresh', \(event, includeRemote\)[\s\S]*?gitDeliveryIpcAllowed\(event\)/);
+  assert.match(main, /git-delivery:commit', \(event, message, fingerprint\)[\s\S]*?gitDeliveryIpcAllowed\(event\)/);
+  assert.match(main, /git-delivery:open-link', async \(event, id\)[\s\S]*?gitDeliveryIpcAllowed\(event\)/);
   assert.match(main, /harness:get-state', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /harness:restart', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /harness:open-log', async \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);

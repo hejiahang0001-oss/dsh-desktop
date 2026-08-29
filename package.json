@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -59,6 +59,9 @@
       "worktrees.html",
       "assets/worktrees.css",
       "assets/worktrees.js",
+      "git-delivery.html",
+      "assets/git-delivery.css",
+      "assets/git-delivery.js",
       "tasks-subagents.html",
       "assets/tasks-subagents.css",
       "assets/tasks-subagents.js",
