@@ -93,6 +93,9 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
   wiki: Object.freeze({
     openWindow: () => ipcRenderer.invoke('wiki-center:open-window')
   }),
+  delivery: Object.freeze({
+    openWindow: () => ipcRenderer.invoke('git-delivery:open-window')
+  }),
   harness: Object.freeze({
     getState: () => ipcRenderer.invoke('harness:get-state'),
     interruptAndPrompt: (text) => ipcRenderer.invoke('harness:interrupt-and-prompt', text),

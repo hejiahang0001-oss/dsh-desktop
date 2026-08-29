@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Git 交付中心</title>
+  <link rel="stylesheet" href="assets/git-delivery.css">
+  <script defer src="assets/git-delivery.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="identity">
+      <span class="eyebrow">DSH Desktop V0.8</span>
+      <h1>Git 交付中心</h1>
+      <p id="repository-path">正在读取当前工作区…</p>
+    </div>
+    <div class="toolbar-actions">
+      <button id="refresh" type="button">刷新</button>
+      <button id="close" type="button" aria-label="关闭 Git 交付中心">关闭</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="unavailable" class="notice" aria-labelledby="unavailable-title" hidden>
+      <span class="notice-icon" aria-hidden="true">G</span>
+      <div>
+        <h2 id="unavailable-title">当前工作区未启用 Git 交付</h2>
+        <p id="unavailable-message">这不会影响聊天、Office、Excel 或 Wiki。</p>
+      </div>
+    </section>
+
+    <div id="delivery-content">
+      <section class="summary" aria-label="Git 仓库摘要">
+        <article><span>分支</span><strong id="branch">—</strong><small id="upstream">未设置上游</small></article>
+        <article><span>提交</span><strong id="head">—</strong><small>当前 HEAD</small></article>
+        <article><span>已暂存</span><strong id="staged">0</strong><small>可进入本次提交</small></article>
+        <article><span>未暂存</span><strong id="unstaged">0</strong><small>不会进入本次提交</small></article>
+        <article><span>未跟踪</span><strong id="untracked">0</strong><small>不会自动添加</small></article>
+        <article><span>同步</span><strong id="sync">0 / 0</strong><small>领先 / 落后</small></article>
+      </section>
+
+      <section class="workspace-grid">
+        <article class="panel commit-panel" aria-labelledby="commit-title">
+          <div class="panel-heading">
+            <div><span class="section-label">本地提交</span><h2 id="commit-title">提交已暂存内容</h2></div>
+            <span id="conflict-badge" class="badge danger" hidden>存在冲突</span>
+          </div>
+          <label for="commit-message">提交说明</label>
+          <textarea id="commit-message" maxlength="200" rows="3" placeholder="例如：feat: add Git delivery center"></textarea>
+          <div class="commit-footer">
+            <p>只提交已经暂存的文件，不自动暂存、不推送；确认前会再次核对暂存区。</p>
+            <span id="message-count">0 / 200</span>
+          </div>
+          <button id="commit" class="primary" type="button" disabled>确认并创建提交</button>
+        </article>
+
+        <article class="panel remote-panel" aria-labelledby="remote-title">
+          <div class="panel-heading">
+            <div><span class="section-label">GitHub</span><h2 id="remote-title">当前分支 PR</h2></div>
+            <button id="refresh-remote" class="quiet" type="button">刷新 PR</button>
+          </div>
+          <p id="remote-message" class="muted">尚未读取 GitHub 公共状态。</p>
+          <div id="pull-requests" class="pull-requests" aria-live="polite"></div>
+          <button id="create-pr" class="secondary" type="button" hidden>在 GitHub 新建 PR</button>
+        </article>
+      </section>
+
+      <section class="panel history-panel" aria-labelledby="history-title">
+        <div class="panel-heading">
+          <div><span class="section-label">最近记录</span><h2 id="history-title">最近 8 次提交</h2></div>
+          <span id="change-total" class="badge">工作区干净</span>
+        </div>
+        <ol id="commit-history" class="commit-history" aria-live="polite"></ol>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <span id="status" role="status" aria-live="polite">正在读取 Git 状态…</span>
+    <span>Ctrl+Enter 提交 · F5 刷新 · Esc 关闭</span>
+  </footer>
+</body>
+</html>
