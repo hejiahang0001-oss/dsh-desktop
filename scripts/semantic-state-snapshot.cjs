@@ -7,6 +7,7 @@ const { isRestrictedPath } = require('../electron/sensitive-path-policy.cjs');
 const FIXED_STATE_FILES = Object.freeze([
   'desktop-state.json',
   'network-state.json',
+  'wiki-settings.json',
   'Preferences',
   'workbench-state.json',
   'worktrees/ownership.json',

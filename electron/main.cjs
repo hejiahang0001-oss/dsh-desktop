@@ -17,6 +17,7 @@ const {
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
 const { buildExtensionCenter, callHarnessRemote } = require('./extension-center.cjs');
 const { inspectOfficeCenter, isOfficeSkillId } = require('./office-center.cjs');
+const { extractWikiSessionCandidates, selectCaptureCandidate } = require('./wiki-center.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
   captureHarnessCheckpointLink,
@@ -25,7 +26,10 @@ const {
 const { HarnessSupervisor, isSafeHarnessUrl, probeHarness, resolveHarnessRuntimePaths } = require('./harness-supervisor.cjs');
 const { captureFrameOwner, isFrameOwner, isTrustedMainFrameEvent } = require('./ipc-policy.cjs');
 const {
+  callHarnessApi,
   readHarnessSessionSelection,
+  isSessionId,
+  pathKey,
   selectHarnessSession,
   synchronizeHarnessWorkspace,
   waitForHarnessSessionSelection
@@ -75,6 +79,7 @@ let terminalWindow;
 let contextSourcesWindow;
 let pluginHealthWindow;
 let officeCenterWindow;
+let wikiCenterWindow;
 let worktreesWindow;
 let tasksSubagentsWindow;
 let sideChatWindow;
@@ -106,6 +111,9 @@ let sideChatSelectionTimer;
 let sideChatPartitionSession;
 let sideChatMainLayout;
 let dataRoot;
+let harnessRuntimePaths;
+let wikiRuntime;
+let wikiSettingsStore;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
@@ -195,6 +203,7 @@ const terminalPage = path.join(rootDir, 'terminal.html');
 const contextSourcesPage = path.join(rootDir, 'context-sources.html');
 const pluginHealthPage = path.join(rootDir, 'plugin-health.html');
 const officeCenterPage = path.join(rootDir, 'office-center.html');
+const wikiCenterPage = path.join(rootDir, 'wiki-center.html');
 const worktreesPage = path.join(rootDir, 'worktrees.html');
 const tasksSubagentsPage = path.join(rootDir, 'tasks-subagents.html');
 const workbenchPanelCssPath = path.join(rootDir, 'assets', 'workbench-panel.css');
@@ -232,6 +241,7 @@ const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pd
 const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
 const pluginHealthSmokeTarget = process.argv.find((argument) => argument.startsWith('--plugin-health-smoke-file='));
 const officeCenterSmokeTarget = process.argv.find((argument) => argument.startsWith('--office-center-smoke-file='));
+const wikiCenterSmokeTarget = process.argv.find((argument) => argument.startsWith('--wiki-center-smoke-file='));
 const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith('--worktrees-smoke-file='));
 const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.startsWith('--tasks-subagents-smoke-file='));
 const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith('--side-chat-smoke-file='));
@@ -244,6 +254,7 @@ const isolatedSmokeTarget = [
   contextSourcesSmokeTarget,
   pluginHealthSmokeTarget,
   officeCenterSmokeTarget,
+  wikiCenterSmokeTarget,
   worktreesSmokeTarget,
   tasksSubagentsSmokeTarget,
   sideChatSmokeTarget
@@ -269,6 +280,7 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
     resourcesPath: process.resourcesPath,
     isPackaged: app.isPackaged,
     homeDir: path.join(dataRoot, 'harness'),
+    wikiConfigPath: path.join(dataRoot, 'wiki-settings.json'),
     launchDir,
     logFile: path.join(dataRoot, 'logs', 'harness.log'),
     env: harnessProxyEnvironment
@@ -336,6 +348,7 @@ const terminalUrlAllowed = (value) => localFileUrlMatches(value, terminalPage);
 const contextSourcesUrlAllowed = (value) => localFileUrlMatches(value, contextSourcesPage);
 const pluginHealthUrlAllowed = (value) => localFileUrlMatches(value, pluginHealthPage);
 const officeCenterUrlAllowed = (value) => localFileUrlMatches(value, officeCenterPage);
+const wikiCenterUrlAllowed = (value) => localFileUrlMatches(value, wikiCenterPage);
 const worktreesUrlAllowed = (value) => localFileUrlMatches(value, worktreesPage);
 const tasksSubagentsUrlAllowed = (value) => localFileUrlMatches(value, tasksSubagentsPage);
 
@@ -1086,6 +1099,11 @@ const officeCenterIpcAllowed = (event) => isTrustedMainFrameEvent(
   officeCenterWindow?.webContents,
   officeCenterUrlAllowed
 );
+const wikiCenterIpcAllowed = (event) => isTrustedMainFrameEvent(
+  event,
+  wikiCenterWindow?.webContents,
+  wikiCenterUrlAllowed
+);
 const worktreesIpcAllowed = (event) => isTrustedMainFrameEvent(
   event,
   worktreesWindow?.webContents,
@@ -1567,6 +1585,259 @@ const openOfficeCenterWindow = async () => {
   }
   await createOfficeCenterWindow();
   return { ok: true, reused: false };
+};
+
+const WIKI_SKILLS = Object.freeze([
+  Object.freeze({ id: 'llm-wiki', name: 'Wiki 基础结构' }),
+  Object.freeze({ id: 'wiki-setup', name: '知识库初始化' }),
+  Object.freeze({ id: 'wiki-query', name: '知识查询' }),
+  Object.freeze({ id: 'wiki-capture', name: '会话结论保存' })
+]);
+
+const inspectWikiSkills = async () => Promise.all(WIKI_SKILLS.map(async (skill) => {
+  const skillFile = harnessRuntimePaths?.bundledSkillDir
+    ? path.join(harnessRuntimePaths.bundledSkillDir, skill.id, 'SKILL.md')
+    : '';
+  try {
+    const info = await fsp.lstat(skillFile);
+    return { ...skill, status: info.isFile() && !info.isSymbolicLink() ? 'ready' : 'missing' };
+  } catch {
+    return { ...skill, status: 'missing' };
+  }
+}));
+
+const unavailableWikiCenterState = (message = 'Wiki 中心尚未完成初始化。') => ({
+  available: false,
+  vault: { configured: false, ready: false, status: 'unconfigured', vaultPath: '', missing: [], pageCount: 0, message },
+  skills: WIKI_SKILLS.map((skill) => ({ ...skill, status: 'missing' })),
+  harness: { status: 'waiting' },
+  session: { available: false }
+});
+
+const getWikiCenterState = async () => {
+  if (!wikiRuntime || !wikiSettingsStore) return unavailableWikiCenterState();
+  const settings = wikiSettingsStore.getState();
+  const [vaultState, skills] = await Promise.all([
+    wikiRuntime.inspectWikiVault(settings.vaultPath),
+    inspectWikiSkills()
+  ]);
+  const vault = { ...vaultState, ready: vaultState.status === 'ready' };
+  const harnessReady = Boolean(wikiCenterSmokeTarget) || harnessUiReady();
+  const sessionAvailable = harnessReady
+    && workspaceSyncDiagnostics.status === 'synced'
+    && isSessionId(workspaceSyncDiagnostics.sessionId)
+    && agentDiagnostics.status === 'ready'
+    && !agentDiagnostics.canStop
+    && agentDiagnostics.pendingCount === 0
+    && agentDiagnostics.queuedCount === 0;
+  return {
+    available: vault.ready && skills.every((skill) => skill.status === 'ready'),
+    vault,
+    skills,
+    harness: { status: harnessReady ? 'ready' : 'waiting' },
+    session: { available: sessionAvailable }
+  };
+};
+
+const createWikiCenterWindow = async () => {
+  const created = new BrowserWindow({
+    width: 1080,
+    height: 820,
+    minWidth: 760,
+    minHeight: 620,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#151618',
+    icon: path.join(rootDir, 'build', 'icon.ico'),
+    title: 'DSH Wiki 中心',
+    webPreferences: {
+      preload: path.join(__dirname, 'wiki-center-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      webSecurity: true
+    }
+  });
+  wikiCenterWindow = created;
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!wikiCenterUrlAllowed(url)) event.preventDefault();
+  });
+  created.webContents.on('will-redirect', (event) => event.preventDefault());
+  created.once('ready-to-show', () => {
+    if (!wikiCenterSmokeTarget) created.show();
+  });
+  created.on('closed', () => {
+    if (wikiCenterWindow === created) wikiCenterWindow = undefined;
+  });
+  await created.loadFile(wikiCenterPage);
+  return created;
+};
+
+const openWikiCenterWindow = async () => {
+  if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) {
+    if (wikiCenterWindow.isMinimized()) wikiCenterWindow.restore();
+    wikiCenterWindow.show();
+    wikiCenterWindow.focus();
+    return { ok: true, reused: true };
+  }
+  await createWikiCenterWindow();
+  return { ok: true, reused: false };
+};
+
+const chooseWikiVault = async () => {
+  if (!wikiSettingsStore) return { ok: false, message: 'Wiki 设置存储不可用。' };
+  const selected = await dialog.showOpenDialog(wikiCenterWindow, {
+    title: '选择本地 Wiki 知识库目录',
+    buttonLabel: '使用此目录',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (selected.canceled || !selected.filePaths[0]) return { ok: false, canceled: true, message: '未更改知识库。' };
+  try {
+    await wikiSettingsStore.setVault(selected.filePaths[0]);
+    return { ok: true, state: await getWikiCenterState(), message: '已选择知识库；如结构不完整，请执行初始化。' };
+  } catch (error) {
+    return { ok: false, message: error?.message || '无法使用所选目录。', state: await getWikiCenterState() };
+  }
+};
+
+const initializeSelectedWikiVault = async () => {
+  const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
+  if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先选择知识库目录。', state: await getWikiCenterState() };
+  const confirmation = await dialog.showMessageBox(wikiCenterWindow, {
+    type: 'question',
+    title: '初始化 Wiki 知识库',
+    message: '只创建缺失的基础目录和文件，继续吗？',
+    detail: `目标：${vaultPath}\n\n不会覆盖已有页面，不要求 Git，也不会读取或复制其他会话历史。`,
+    buttons: ['初始化缺失结构', '取消'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  });
+  if (confirmation.response !== 0) return { ok: false, canceled: true, message: '知识库未改变。', state: await getWikiCenterState() };
+  try {
+    const initialized = await wikiRuntime.initializeWikiVault(vaultPath);
+    return {
+      ok: true,
+      message: `初始化完成：新建 ${initialized.created.length} 项，保留 ${initialized.preserved.length} 项。`,
+      state: await getWikiCenterState()
+    };
+  } catch (error) {
+    return { ok: false, message: error?.message || '知识库初始化失败。', state: await getWikiCenterState() };
+  }
+};
+
+const querySelectedWiki = async (query) => {
+  if (typeof query !== 'string' || query.length > 300) return { ok: false, message: 'Wiki 查询内容无效。', results: [] };
+  const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
+  if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先配置并初始化知识库。', results: [] };
+  try {
+    return await wikiRuntime.queryWiki(vaultPath, query, { limit: 8 });
+  } catch (error) {
+    return { ok: false, message: error?.message || 'Wiki 查询失败。', results: [] };
+  }
+};
+
+const loadCurrentWikiCandidates = async ({ includeSessionId = false } = {}) => {
+  if (!harnessUiReady() || workspaceSyncDiagnostics.status !== 'synced' || !isSessionId(workspaceSyncDiagnostics.sessionId)) {
+    return { ok: false, message: '请等待当前 Harness 会话与工作区同步。', items: [] };
+  }
+  if (agentDiagnostics.status !== 'ready' || agentDiagnostics.canStop || agentDiagnostics.pendingCount > 0 || agentDiagnostics.queuedCount > 0) {
+    return { ok: false, message: '当前会话仍在运行或等待确认，请完成后再读取结论。', items: [] };
+  }
+  try {
+    const selected = await readHarnessSessionSelection(mainWindow?.webContents);
+    if (!isSessionId(selected)) return { ok: false, message: '当前界面没有可读取的普通 Harness 会话。', items: [] };
+    const sessionList = await callHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
+    const selectedSummary = Array.isArray(sessionList?.items)
+      ? sessionList.items.find((item) => item?.sessionId === selected)
+      : undefined;
+    if (!selectedSummary
+      || selectedSummary.origin === 'subagent'
+      || typeof selectedSummary.cwd !== 'string'
+      || pathKey(selectedSummary.cwd) !== pathKey(getWorkspaceState().activePath)) {
+      return { ok: false, message: '当前会话不是这个工作区的普通 Harness 会话。', items: [] };
+    }
+    if (selectedSummary.running === true) return { ok: false, message: '当前会话仍在运行，请完成后再读取结论。', items: [] };
+    const history = await callHarnessApi(harnessOrigin, 'session.history', {
+      sessionId: selected,
+      maxMessages: 40
+    }, { timeoutMs: 5000 });
+    const items = extractWikiSessionCandidates(history);
+    return {
+      ok: true,
+      items,
+      message: items.length > 0 ? `已读取 ${items.length} 个候选结论。` : '当前会话没有可保存的助手结论。',
+      ...(includeSessionId ? { sessionId: selected } : {})
+    };
+  } catch (error) {
+    return { ok: false, message: error?.message || '当前会话读取失败。', items: [] };
+  }
+};
+
+const resolveWikiCapture = async (payload) => {
+  const candidates = await loadCurrentWikiCandidates({ includeSessionId: true });
+  if (!candidates.ok) return { ok: false, message: candidates.message };
+  const selected = selectCaptureCandidate(payload, candidates.items);
+  if (!selected) return { ok: false, message: '保存内容与当前会话候选不匹配，请重新加载并选择。' };
+  return {
+    ok: true,
+    vaultPath: wikiSettingsStore?.getState()?.vaultPath || '',
+    capture: {
+      title: selected.title,
+      content: selected.content,
+      sourceSessionId: candidates.sessionId,
+      sourceSeq: selected.candidate.seq,
+      sourceTime: selected.candidate.sourceTime
+    }
+  };
+};
+
+const previewWikiCapture = async (payload) => {
+  if (!wikiRuntime) return { ok: false, message: 'Wiki 保存能力不可用。' };
+  const resolved = await resolveWikiCapture(payload);
+  if (!resolved.ok || !resolved.vaultPath) return { ok: false, message: resolved.message || '请先配置知识库。' };
+  try {
+    const preview = wikiRuntime.buildCapturePreview(resolved.vaultPath, resolved.capture);
+    return {
+      ok: true,
+      path: preview.relativePath,
+      summary: preview.summary,
+      sensitive: preview.sensitive,
+      source: `当前会话事件 ${preview.sourceSeq}`
+    };
+  } catch (error) {
+    return { ok: false, message: error?.message || '保存预览失败。' };
+  }
+};
+
+const saveWikiCapture = async (payload) => {
+  if (!wikiRuntime) return { ok: false, message: 'Wiki 保存能力不可用。' };
+  const resolved = await resolveWikiCapture(payload);
+  if (!resolved.ok || !resolved.vaultPath) return { ok: false, message: resolved.message || '请先配置知识库。' };
+  try {
+    const preview = wikiRuntime.buildCapturePreview(resolved.vaultPath, resolved.capture);
+    const sensitive = preview.sensitive.map((item) => item.label).join('、');
+    const confirmation = await dialog.showMessageBox(wikiCenterWindow, {
+      type: sensitive ? 'warning' : 'question',
+      title: sensitive ? '确认保存可能敏感的结论' : '确认保存 Wiki 结论',
+      message: `保存“${preview.title}”到当前知识库？`,
+      detail: `目标：${preview.relativePath}\n来源：当前会话事件 ${preview.sourceSeq}\n\n将新增一个页面并更新 index.md 与 log.md；不会修改原始会话，也不会执行 Git 操作。${sensitive ? `\n\n敏感检查：${sensitive}` : ''}`,
+      buttons: ['保存到 Wiki', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    });
+    if (confirmation.response !== 0) return { ok: false, canceled: true, message: '结论未保存。' };
+    return await wikiRuntime.saveCapture(resolved.vaultPath, resolved.capture, {
+      confirmedSensitive: preview.sensitive.length > 0,
+      workspaceName: workspaceStore?.getState()?.displayName || '当前工作区'
+    });
+  } catch (error) {
+    return { ok: false, message: error?.message || '结论保存失败。' };
+  }
 };
 
 const createWorktreesWindow = async () => {
@@ -2712,6 +2983,22 @@ const invokePowerPointPptxSkill = async () => {
   return false;
 };
 
+const invokeWikiSkill = async (id) => {
+  if (!harnessUiReady() || !['wiki-query', 'wiki-capture'].includes(id)) return false;
+  const method = id === 'wiki-query' ? 'invokeWikiQuery' : 'invokeWikiCapture';
+  const invoked = await mainWindow.webContents.executeJavaScript(`Boolean(window.__DSH_COMMAND_PALETTE__?.${method}?.())`, true).catch(() => false);
+  if (invoked) return true;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: id === 'wiki-query' ? 'Wiki 知识查询' : 'Wiki 会话结论保存',
+    message: `在对话输入框中输入 /${id} 后继续描述。`,
+    detail: '请先从“工具 → Wiki 中心”选择并初始化知识库。基础版不要求 Git、Python、QMD 或 Obsidian。',
+    buttons: ['确定'],
+    defaultId: 0
+  });
+  return false;
+};
+
 const invokeOfficeCenterSkill = async (id) => {
   if (!isOfficeSkillId(id)) return { ok: false, message: '交付类型不在固定清单中。' };
   if (!harnessUiReady() || workspaceSyncDiagnostics.status !== 'synced') {
@@ -2801,6 +3088,7 @@ const activateWorkspace = async (workspacePath) => {
     if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) contextSourcesWindow.close();
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
     if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
+    if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
     contextSourceCatalog?.setWorkspace(workspace.activePath);
     await workspaceFiles.activate(workspace.activePath);
     await previewManager.activate(workspace.activePath);
@@ -3046,6 +3334,21 @@ function installApplicationMenu() {
           click: () => { void openOfficeCenterWindow(); }
         },
         { label: 'Word / Excel / PowerPoint：可编辑文件统一入口', enabled: false },
+        {
+          label: 'Wiki 中心…',
+          click: () => { void openWikiCenterWindow(); }
+        },
+        { label: 'Wiki：本地知识查询与会话结论保存 · 不依赖 Git', enabled: false },
+        {
+          label: '查询 Wiki 知识…',
+          enabled: harnessReady,
+          click: () => { void invokeWikiSkill('wiki-query'); }
+        },
+        {
+          label: '保存会话结论到 Wiki…',
+          enabled: harnessReady,
+          click: () => { void invokeWikiSkill('wiki-capture'); }
+        },
         {
           label: '创建或修改 Word 文档…',
           enabled: harnessReady,
@@ -3631,6 +3934,27 @@ ipcMain.handle('office-center:invoke', (event, id) => {
   }
   return invokeOfficeCenterSkill(id);
 });
+ipcMain.handle('wiki-center:get-state', (event) => (
+  wikiCenterIpcAllowed(event) ? getWikiCenterState() : unavailableWikiCenterState('请求来源未通过安全校验。')
+));
+ipcMain.handle('wiki-center:choose-vault', (event) => (
+  wikiCenterIpcAllowed(event) ? chooseWikiVault() : { ok: false, message: '知识库选择请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:initialize-vault', (event) => (
+  wikiCenterIpcAllowed(event) ? initializeSelectedWikiVault() : { ok: false, message: '知识库初始化请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:query', (event, query) => (
+  wikiCenterIpcAllowed(event) ? querySelectedWiki(query) : { ok: false, message: 'Wiki 查询请求未通过安全校验。', results: [] }
+));
+ipcMain.handle('wiki-center:get-session-candidates', (event) => (
+  wikiCenterIpcAllowed(event) ? loadCurrentWikiCandidates() : { ok: false, message: '会话读取请求未通过安全校验。', items: [] }
+));
+ipcMain.handle('wiki-center:preview-capture', (event, capture) => (
+  wikiCenterIpcAllowed(event) ? previewWikiCapture(capture) : { ok: false, message: 'Wiki 保存预览请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:save-capture', (event, capture) => (
+  wikiCenterIpcAllowed(event) ? saveWikiCapture(capture) : { ok: false, message: 'Wiki 保存请求未通过安全校验。' }
+));
 ipcMain.handle('worktrees:get-state', (event) => (
   worktreesIpcAllowed(event) ? getWorktreeState() : unavailableWorktreeState('请求来源未通过安全校验。')
 ));
@@ -3706,6 +4030,11 @@ ipcMain.handle('office-center:open-window', (event) => (
   harnessIpcAllowed(event)
     ? openOfficeCenterWindow()
     : { ok: false, message: 'Office 交付中心请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:open-window', (event) => (
+  harnessIpcAllowed(event)
+    ? openWikiCenterWindow()
+    : { ok: false, message: 'Wiki 中心请求未通过安全校验。' }
 ));
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
@@ -3820,6 +4149,7 @@ const createWindow = async () => {
     if (worktreesWindow && !worktreesWindow.isDestroyed()) worktreesWindow.close();
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
     if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
+    if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
     mainWindow = undefined;
   });
 
@@ -4418,6 +4748,108 @@ const runOfficeCenterSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runWikiCenterSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeVault = `${resolvedTarget}.vault-${process.pid}-${Date.now()}`;
+  const smokeConfig = `${resolvedTarget}.settings-${process.pid}.json`;
+  let result;
+  try {
+    harnessRuntimePaths = resolveHarnessRuntimePaths({
+      rootDir,
+      resourcesPath: process.resourcesPath,
+      isPackaged: app.isPackaged
+    });
+    wikiRuntime = require(harnessRuntimePaths.wikiToolPath);
+    wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: smokeConfig });
+    await fsp.mkdir(smokeVault, { recursive: true });
+    await wikiSettingsStore.init();
+    await wikiSettingsStore.setVault(smokeVault);
+    await wikiRuntime.initializeWikiVault(smokeVault);
+    await fsp.writeFile(path.join(smokeVault, 'concepts', 'wiki-basic.md'), [
+      '---',
+      'title: "无 Git Wiki 基础能力"',
+      'summary: "DSH Desktop 可在没有 Git 的普通目录初始化并查询 Wiki。"',
+      'sources:',
+      '  - "dsh-smoke:v0.6.3"',
+      'lifecycle: verified',
+      '---',
+      '',
+      '# 无 Git Wiki 基础能力',
+      '',
+      '知识查询必须返回页面路径和来源。',
+      ''
+    ].join('\n'), 'utf8');
+    await createWikiCenterWindow();
+    const renderedInTime = await wikiCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        if (document.querySelectorAll('.capability').length === 4 && document.querySelector('#vault-status')?.textContent === '已就绪') return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!renderedInTime) throw new Error('wiki-center-smoke-timeout');
+    const queryRendered = await wikiCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const input = document.querySelector('#query-input');
+      input.value = '无 Git Wiki';
+      document.querySelector('#query-form').requestSubmit();
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        if (document.querySelectorAll('.result').length > 0) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!queryRendered) throw new Error('wiki-center-query-smoke-timeout');
+    const rendered = await wikiCenterWindow.webContents.executeJavaScript(`({
+      apiKeys: Object.keys(window.wikiCenterAPI || {}).sort(),
+      title: document.querySelector('h1')?.textContent || '',
+      capabilityRows: document.querySelectorAll('.capability').length,
+      resultRows: document.querySelectorAll('.result').length,
+      text: document.body.innerText
+    })`, true);
+    wikiCenterWindow.showInactive();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const screenshot = await wikiCenterWindow.webContents.capturePage();
+    const screenshotPath = `${resolvedTarget}.png`;
+    const screenshotSize = screenshot.getSize();
+    result = {
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'previewCapture', 'query', 'saveCapture'])
+        && rendered.title === 'Wiki 中心'
+        && rendered.capabilityRows === 4
+        && rendered.resultRows >= 1
+        && rendered.text.includes('无 Git Wiki 基础能力')
+        && rendered.text.includes('页面：concepts/wiki-basic.md')
+        && rendered.text.includes('来源：dsh-smoke:v0.6.3')
+        && rendered.text.includes('无 Git、Python、QMD 或 Obsidian也可使用基础能力。'.replace('Obsidian也', 'Obsidian 也'))
+        && screenshotSize.width > 0
+        && screenshotSize.height > 0,
+      version: app.getVersion(),
+      apiKeys: rendered.apiKeys,
+      title: rendered.title,
+      capabilityRows: rendered.capabilityRows,
+      resultRows: rendered.resultRows,
+      vaultPath: smokeVault,
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+    };
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(screenshotPath, screenshot.toPNG());
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    wikiCenterWindow?.destroy();
+    wikiCenterWindow = undefined;
+    wikiSettingsStore = undefined;
+    wikiRuntime = undefined;
+    harnessRuntimePaths = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 const runWorktreesSmoke = async (target) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = path.join(path.dirname(resolvedTarget), `worktrees-smoke-data-${process.pid}-${Date.now()}`);
@@ -4813,6 +5245,12 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  if (wikiCenterSmokeTarget) {
+    await runWikiCenterSmoke(wikiCenterSmokeTarget.slice('--wiki-center-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
   if (worktreesSmokeTarget) {
     await runWorktreesSmoke(worktreesSmokeTarget.slice('--worktrees-smoke-file='.length));
     allowQuit = true;
@@ -4855,11 +5293,17 @@ app.whenReady().then(async () => {
     workspacePath: workspace.activePath,
     harnessHome: path.join(dataRoot, 'harness')
   });
-  const harnessRuntime = resolveHarnessRuntimePaths({
+  harnessRuntimePaths = resolveHarnessRuntimePaths({
     rootDir,
     resourcesPath: process.resourcesPath,
     isPackaged: app.isPackaged
   });
+  const harnessRuntime = harnessRuntimePaths;
+  wikiRuntime = require(harnessRuntime.wikiToolPath);
+  wikiSettingsStore = new wikiRuntime.WikiSettingsStore({
+    filePath: path.join(dataRoot, 'wiki-settings.json')
+  });
+  await wikiSettingsStore.init();
   const dshPackageDir = path.resolve(path.dirname(harnessRuntime.dshBinPath), '..');
   pluginHealthCatalog = new PluginHealthCatalog({
     harnessHome: path.join(dataRoot, 'harness'),

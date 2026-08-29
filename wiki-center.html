@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSH Wiki 中心</title>
+  <link rel="stylesheet" href="assets/wiki-center.css">
+  <script defer src="assets/wiki-center.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div>
+      <span class="eyebrow">DSH Desktop 0.6.3</span>
+      <h1>Wiki 中心</h1>
+      <p>把当前会话结论沉淀为可查询、可追溯的本地 Markdown 知识。</p>
+    </div>
+    <button id="close" class="ghost" type="button">关闭</button>
+  </header>
+
+  <main>
+    <section class="panel vault-panel" aria-labelledby="vault-title">
+      <div class="section-heading">
+        <div><span class="section-label">授权范围</span><h2 id="vault-title">用户选择的知识库</h2></div>
+        <span id="vault-status" class="status waiting">未配置</span>
+      </div>
+      <p id="vault-path" class="path">尚未选择知识库目录。</p>
+      <p id="vault-detail" class="detail">目录由本机用户选择；不复制个人 Vault、历史或凭据。</p>
+      <div class="actions">
+        <button id="choose-vault" type="button">选择知识库</button>
+        <button id="initialize-vault" class="secondary" type="button" disabled>初始化缺失结构</button>
+      </div>
+      <div id="capability-list" class="capability-list" aria-label="已内置的 Wiki 能力"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="query-title">
+      <div class="section-heading">
+        <div><span class="section-label">只读查询</span><h2 id="query-title">查询已有知识</h2></div>
+        <span class="boundary">返回页面路径与来源</span>
+      </div>
+      <form id="query-form" class="query-form">
+        <label for="query-input">要查找的主题</label>
+        <div class="query-row">
+          <input id="query-input" type="search" maxlength="300" autocomplete="off" placeholder="例如：无 Git 自动检查点边界">
+          <button id="query-submit" type="submit" disabled>查询</button>
+        </div>
+      </form>
+      <div id="query-results" class="results" aria-live="polite"><p class="empty">配置知识库后可查询编译后的 Markdown 页面。</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="capture-title-heading">
+      <div class="section-heading">
+        <div><span class="section-label">会话结论</span><h2 id="capture-title-heading">选择、预览并保存</h2></div>
+        <span class="boundary">原始会话只读</span>
+      </div>
+      <button id="load-candidates" class="secondary" type="button" disabled>加载当前会话结论</button>
+      <div id="candidate-list" class="candidate-list" aria-live="polite"><p class="empty">只读取当前已完成会话中的最近助手消息。</p></div>
+      <div class="editor-grid">
+        <label for="capture-title">页面标题</label>
+        <input id="capture-title" type="text" maxlength="120" autocomplete="off" placeholder="为结论填写一个清晰标题">
+        <label for="capture-content">保存内容</label>
+        <textarea id="capture-content" maxlength="20000" rows="8" placeholder="选择候选结论后，可在保存前编辑。"></textarea>
+      </div>
+      <div class="actions">
+        <button id="preview-capture" class="secondary" type="button" disabled>预览保存范围</button>
+        <button id="save-capture" type="button" disabled>确认并保存</button>
+      </div>
+      <div id="capture-preview" class="preview" aria-live="polite">尚未生成保存预览。</div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="global-status" role="status">正在检查 Wiki 能力…</span>
+    <span>无 Git、Python、QMD 或 Obsidian 也可使用基础能力。</span>
+  </footer>
+</body>
+</html>
