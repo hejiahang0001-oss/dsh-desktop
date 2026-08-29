@@ -22,12 +22,19 @@ const {
   DshHistorySelectionCatalog,
   prepareDshHistorySource
 } = require('./wiki-history-ingest.cjs');
+const {
+  MANIFEST_NAME: SUPPORT_BACKUP_MANIFEST,
+  collectSupportBackupFiles,
+  createRedactedDiagnosticReport,
+  createSupportBackup,
+  validateSupportBackup
+} = require('./support-backup.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
 } = require('./harness-checkpoint-link.cjs');
-const { HarnessSupervisor, isSafeHarnessUrl, probeHarness, resolveHarnessRuntimePaths } = require('./harness-supervisor.cjs');
+const { HARNESS_VERSION, HarnessSupervisor, isSafeHarnessUrl, probeHarness, resolveHarnessRuntimePaths } = require('./harness-supervisor.cjs');
 const { captureFrameOwner, isFrameOwner, isTrustedMainFrameEvent } = require('./ipc-policy.cjs');
 const {
   callHarnessApi,
@@ -111,6 +118,7 @@ let pluginInstallPromise = null;
 let worktreeOperationPromise = null;
 let tasksSubagentsOperationPromise = null;
 let sideChatOperationPromise = null;
+let supportBackupOperationPromise = null;
 let sideChatSelectionTimer;
 let sideChatPartitionSession;
 let sideChatMainLayout;
@@ -251,6 +259,7 @@ const wikiCenterSmokeTarget = process.argv.find((argument) => argument.startsWit
 const worktreesSmokeTarget = process.argv.find((argument) => argument.startsWith('--worktrees-smoke-file='));
 const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.startsWith('--tasks-subagents-smoke-file='));
 const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith('--side-chat-smoke-file='));
+const supportSmokeTarget = process.argv.find((argument) => argument.startsWith('--support-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 const isolatedSmokeTarget = [
   desktopSmokeTarget,
@@ -263,7 +272,8 @@ const isolatedSmokeTarget = [
   wikiCenterSmokeTarget,
   worktreesSmokeTarget,
   tasksSubagentsSmokeTarget,
-  sideChatSmokeTarget
+  sideChatSmokeTarget,
+  supportSmokeTarget
 ].find(Boolean);
 if (isolatedSmokeTarget) {
   const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
@@ -3256,6 +3266,175 @@ const showCredentialDiagnostics = async () => {
   if (canOpenSettings && result.response === 0) await runHarnessUiAction('models-settings');
 };
 
+const supportTimestamp = () => new Date().toISOString().replace(/[-:]/gu, '').replace(/\.\d{3}Z$/u, 'Z').replace('T', '-');
+
+const writePrivateJson = async (targetPath, value) => {
+  const target = path.resolve(targetPath);
+  const parent = path.dirname(target);
+  const parentInfo = await fsp.lstat(parent);
+  if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink()) throw new Error('所选诊断报告目录不可用。');
+  const existing = await fsp.lstat(target).catch((error) => (error?.code === 'ENOENT' ? null : Promise.reject(error)));
+  if (existing && (!existing.isFile() || existing.isSymbolicLink())) throw new Error('诊断报告目标不是安全的普通文件。');
+  const temp = `${target}.${process.pid}-${randomBytes(8).toString('hex')}.tmp`;
+  let handle;
+  try {
+    handle = await fsp.open(temp, 'wx', 0o600);
+    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    await fsp.rename(temp, target);
+  } finally {
+    await handle?.close().catch(() => undefined);
+    await fsp.unlink(temp).catch((error) => { if (error?.code !== 'ENOENT') throw error; });
+  }
+};
+
+const exportRedactedDiagnostics = async () => {
+  try {
+    const semantic = await collectSupportBackupFiles(dataRoot);
+    const report = createRedactedDiagnosticReport({
+      appInfo: { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged },
+      runtime: { electron: process.versions.electron, node: process.versions.node, harness: HARNESS_VERSION, pnpm: '11.19.0' },
+      workspace: getWorkspaceState(),
+      diagnostics: { ...getDiagnosticsState(), harnessStatus: supervisor?.getState().status || 'stopped' },
+      network: getNetworkState(),
+      backup: { fileCount: semantic.files.length, totalBytes: semantic.totalBytes, counts: semantic.counts }
+    });
+    const selection = await dialog.showSaveDialog(mainWindow, {
+      title: '导出脱敏诊断报告',
+      defaultPath: path.join(app.getPath('downloads'), `DSH-Desktop-Diagnostics-v${app.getVersion()}-${supportTimestamp()}.json`),
+      filters: [{ name: 'JSON 诊断报告', extensions: ['json'] }]
+    });
+    if (selection.canceled || !selection.filePath) return { ok: false, canceled: true, message: '未导出诊断报告。' };
+    await writePrivateJson(selection.filePath, report);
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '脱敏诊断已导出',
+      message: '诊断报告已生成，不包含 Key、代理地址、工作区完整路径、会话正文或日志正文。',
+      detail: '你可以在提交 Issue 或反馈问题时附上此 JSON 文件。',
+      buttons: ['在文件夹中显示', '确定'],
+      defaultId: 1,
+      cancelId: 1
+    });
+    if (result.response === 0) shell.showItemInFolder(selection.filePath);
+    return { ok: true, canceled: false, message: '脱敏诊断已导出。' };
+  } catch (error) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'error', title: '诊断导出失败', message: '未能生成脱敏诊断报告。', detail: error?.message || String(error), buttons: ['确定']
+    });
+    return { ok: false, canceled: false, message: '诊断导出失败。' };
+  }
+};
+
+const supportBackupBusyReason = () => {
+  if (terminalRunner?.isActive()) return '请先停止正在运行的终端命令。';
+  if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
+  if (sideChatOperationPromise) return '请等待 Side Chat 操作完成。';
+  if (agentDiagnostics.status === 'running' || agentDiagnostics.pendingCount > 0 || agentDiagnostics.queuedCount > 0) return '请先等待或停止当前 Agent 回合，并处理待确认与排队消息。';
+  return '';
+};
+
+const runSupportBackupFromDialog = async () => {
+  await refreshAgentDiagnostics({ rebuildMenu: false });
+  const busyReason = supportBackupBusyReason();
+  if (busyReason) {
+    await dialog.showMessageBox(mainWindow, { type: 'warning', title: '暂时不能备份', message: busyReason, detail: '备份需要短暂停止 Harness，原始数据不会被删除。', buttons: ['确定'] });
+    return { ok: false, canceled: false, message: busyReason };
+  }
+  const selection = await dialog.showOpenDialog(mainWindow, {
+    title: '选择 DSH 备份存放位置',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (selection.canceled || !selection.filePaths[0]) return { ok: false, canceled: true, message: '未创建备份。' };
+  const confirmation = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '创建 DSH 数据备份',
+    message: '将短暂停止并重新启动 Harness，然后复制会话、工作区/Wiki 设置、插件状态和界面状态。',
+    detail: '软件 Key 文件、代理设置、缓存、日志和运行时依赖不会进入备份；会话正文按原样保存，可能包含你曾输入的敏感内容。备份完成后会逐文件校验 SHA-256，请妥善保管。',
+    buttons: ['取消', '开始备份'],
+    defaultId: 0,
+    cancelId: 0
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '未创建备份。' };
+  await refreshAgentDiagnostics({ rebuildMenu: false });
+  const finalBusyReason = supportBackupBusyReason();
+  if (finalBusyReason) {
+    await dialog.showMessageBox(mainWindow, { type: 'warning', title: '备份已取消', message: finalBusyReason, detail: '等待当前操作结束后再重新创建备份。', buttons: ['确定'] });
+    return { ok: false, canceled: true, message: finalBusyReason };
+  }
+
+  const restartNeeded = Boolean(supervisor?.isActive());
+  let created;
+  let primaryError;
+  let restartResult = { ok: true };
+  try {
+    if (restartNeeded) {
+      stopAgentPolling();
+      await showStatusPage();
+      await supervisor.stop();
+      harnessOrigin = null;
+    }
+    await session.defaultSession.flushStorageData();
+    created = await createSupportBackup({
+      dataRoot,
+      destinationRoot: selection.filePaths[0],
+      appVersion: app.getVersion()
+    });
+  } catch (error) {
+    primaryError = error;
+  } finally {
+    if (restartNeeded) restartResult = await startHarnessForWindow().catch((error) => ({ ok: false, error: error?.message || String(error) }));
+  }
+  if (primaryError) {
+    await dialog.showMessageBox(mainWindow, { type: 'error', title: '备份失败', message: '没有保留未完成的备份目录。', detail: primaryError?.message || String(primaryError), buttons: ['确定'] });
+    return { ok: false, canceled: false, message: '备份失败。' };
+  }
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: restartResult.ok ? 'info' : 'warning',
+    title: 'DSH 数据备份已完成',
+    message: `已校验 ${created.fileCount} 个文件，其中 ${created.counts.sessions} 个会话文件。`,
+    detail: restartResult.ok ? '软件 Key 文件和代理设置未进入备份；会话正文按原样保存。Harness 已恢复运行。' : `备份有效，但 Harness 未能自动恢复：${restartResult.error || '未知原因'}`,
+    buttons: ['打开备份目录', '确定'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  if (result.response === 0) shell.showItemInFolder(path.join(created.backupRoot, SUPPORT_BACKUP_MANIFEST));
+  return { ok: true, canceled: false, fileCount: created.fileCount, sessionCount: created.counts.sessions, restartOk: restartResult.ok, message: 'DSH 数据备份已完成。' };
+};
+
+const createSupportBackupFromDialog = () => {
+  if (supportBackupOperationPromise) {
+    void dialog.showMessageBox(mainWindow, { type: 'info', title: '备份正在进行', message: '已有一个 DSH 数据备份任务正在进行。', buttons: ['确定'] });
+    return Promise.resolve({ ok: false, canceled: false, message: '已有备份任务正在进行。' });
+  }
+  supportBackupOperationPromise = Promise.resolve()
+    .then(runSupportBackupFromDialog)
+    .catch(async (error) => {
+      const options = { type: 'error', title: '备份失败', message: '未能启动 DSH 数据备份。', detail: error?.message || String(error), buttons: ['确定'] };
+      if (mainWindow && !mainWindow.isDestroyed()) await dialog.showMessageBox(mainWindow, options);
+      else await dialog.showMessageBox(options);
+      return { ok: false, canceled: false, message: '备份失败。' };
+    })
+    .finally(() => { supportBackupOperationPromise = null; });
+  return supportBackupOperationPromise;
+};
+
+const validateSupportBackupFromDialog = async () => {
+  const selection = await dialog.showOpenDialog(mainWindow, { title: '选择要验证的 DSH 备份目录', properties: ['openDirectory'] });
+  if (selection.canceled || !selection.filePaths[0]) return { ok: false, canceled: true, message: '未验证备份。' };
+  try {
+    const verified = await validateSupportBackup(selection.filePaths[0]);
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info', title: 'DSH 备份有效', message: `已逐文件验证 ${verified.fileCount} 个文件，其中 ${verified.counts.sessions} 个会话文件。`, detail: `备份版本：V${verified.appVersion || '未知'}\n软件 Key 文件：未包含\n会话正文：按原样保存，未脱敏`, buttons: ['确定']
+    });
+    return { ok: true, canceled: false, fileCount: verified.fileCount, sessionCount: verified.counts.sessions, message: 'DSH 备份验证通过。' };
+  } catch (error) {
+    await dialog.showMessageBox(mainWindow, { type: 'error', title: 'DSH 备份无效', message: '备份文件缺失、被修改或格式不受支持。', detail: error?.message || String(error), buttons: ['确定'] });
+    return { ok: false, canceled: false, message: 'DSH 备份验证失败。' };
+  }
+};
+
 const showWorkspaceError = async (error) => {
   await dialog.showMessageBox(mainWindow, {
     type: 'error',
@@ -3827,6 +4006,19 @@ function installApplicationMenu() {
       label: '帮助',
       submenu: [
         {
+          label: '导出脱敏诊断报告…',
+          click: () => { void exportRedactedDiagnostics(); }
+        },
+        {
+          label: '备份 DSH 数据…',
+          click: () => { void createSupportBackupFromDialog(); }
+        },
+        {
+          label: '验证 DSH 备份…',
+          click: () => { void validateSupportBackupFromDialog(); }
+        },
+        { type: 'separator' },
+        {
           label: '打开运行日志',
           click: async () => {
             const logFile = supervisor?.getState().logFile;
@@ -3870,6 +4062,15 @@ ipcMain.handle('diagnostics:get-state', (event) => (
 ));
 ipcMain.handle('diagnostics:refresh', (event) => (
   desktopIpcAllowed(event) ? refreshDesktopDiagnostics() : { status: 'unavailable', reason: 'untrusted' }
+));
+ipcMain.handle('support:export-diagnostics', (event) => (
+  desktopIpcAllowed(event) ? exportRedactedDiagnostics() : { ok: false, canceled: false, message: '诊断导出请求未通过安全校验。' }
+));
+ipcMain.handle('support:create-backup', (event) => (
+  desktopIpcAllowed(event) ? createSupportBackupFromDialog() : { ok: false, canceled: false, message: '备份请求未通过安全校验。' }
+));
+ipcMain.handle('support:validate-backup', (event) => (
+  desktopIpcAllowed(event) ? validateSupportBackupFromDialog() : { ok: false, canceled: false, message: '备份验证请求未通过安全校验。' }
 ));
 ipcMain.handle('changes:get-diff', async (event, reportedPath) => {
   if (!harnessIpcAllowed(event) || !changeReviewer) {
@@ -5425,6 +5626,63 @@ const runSideChatSmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
+const runSupportSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), `support-smoke-data-${process.pid}-${Date.now()}`);
+  const supportData = path.join(smokeRoot, 'user-data');
+  const backups = path.join(smokeRoot, 'backups');
+  let result;
+  try {
+    await Promise.all([
+      fsp.mkdir(path.join(supportData, 'harness', 'sessions', '中文 工作区', 'session-fixture'), { recursive: true }),
+      fsp.mkdir(path.join(supportData, 'harness', 'profiles', 'web'), { recursive: true }),
+      fsp.mkdir(path.join(supportData, 'Local Storage', 'leveldb'), { recursive: true }),
+      fsp.mkdir(backups, { recursive: true })
+    ]);
+    await Promise.all([
+      fsp.writeFile(path.join(supportData, 'desktop-state.json'), '{"workspace":"C:/private/repository"}\n', 'utf8'),
+      fsp.writeFile(path.join(supportData, 'harness', '.credentials.yaml'), 'apiKey: sk-support-smoke-secret-123456\n', 'utf8'),
+      fsp.writeFile(path.join(supportData, 'harness', 'sessions', '中文 工作区', 'session-fixture', 'session.jsonl.zstd'), 'bounded session fixture', 'utf8'),
+      fsp.writeFile(path.join(supportData, 'harness', 'profiles', 'web', 'package.json'), '{"name":"web"}\n', 'utf8'),
+      fsp.writeFile(path.join(supportData, 'Local Storage', 'leveldb', 'CURRENT'), 'MANIFEST-000001\n', 'utf8')
+    ]);
+    const created = await createSupportBackup({ dataRoot: supportData, destinationRoot: backups, appVersion: app.getVersion() });
+    const verified = await validateSupportBackup(created.backupRoot);
+    const report = createRedactedDiagnosticReport({
+      appInfo: { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged },
+      runtime: { electron: process.versions.electron, node: process.versions.node, harness: HARNESS_VERSION, pnpm: '11.19.0' },
+      workspace: { displayName: '中文 工作区', activePath: 'C:/private/repository', isFallback: false },
+      diagnostics: { harnessStatus: 'running', sessions: { available: true, count: 1 }, credential: { status: 'configured', value: 'sk-support-smoke-secret-123456' }, agent: { status: 'ready', pendingCount: 0, queuedCount: 0 }, workspaceSync: { status: 'synced' } },
+      network: { mode: 'custom', status: 'proxied', proxyUrl: 'https://user:pass@proxy.invalid' },
+      backup: { fileCount: verified.fileCount, totalBytes: verified.totalBytes, counts: verified.counts }
+    });
+    const reportText = JSON.stringify(report);
+    const backupText = await fsp.readFile(path.join(created.backupRoot, SUPPORT_BACKUP_MANIFEST), 'utf8');
+    result = {
+      ok: verified.valid === true
+        && verified.counts.sessions === 1
+        && !backupText.includes('.credentials.yaml')
+        && !backupText.includes('sk-support-smoke-secret-123456')
+        && !reportText.includes('C:/private/repository')
+        && !reportText.includes('user:pass')
+        && !reportText.includes('sk-support-smoke-secret-123456'),
+      version: app.getVersion(),
+      fileCount: verified.fileCount,
+      sessionCount: verified.counts.sessions,
+      credentialFilesIncluded: false,
+      contentRedacted: false,
+      diagnosticPrivacy: report.privacy
+    };
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    await fsp.rm(smokeRoot, { recursive: true, force: true }).catch(() => undefined);
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   configureHarnessSessionPermissions(session.defaultSession, () => mainWindow?.webContents);
@@ -5491,6 +5749,12 @@ app.whenReady().then(async () => {
   }
   if (sideChatSmokeTarget) {
     await runSideChatSmoke(sideChatSmokeTarget.slice('--side-chat-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (supportSmokeTarget) {
+    await runSupportSmoke(supportSmokeTarget.slice('--support-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;
@@ -5591,13 +5855,18 @@ app.whenReady().then(async () => {
 app.on('before-quit', (event) => {
   stopAgentPolling();
   stopSideChatSelectionMonitor();
-  if (allowQuit || (!supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
+  if (allowQuit || (!supportBackupOperationPromise && !supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
   event.preventDefault();
-  const stops = [];
-  if (terminalRunner?.isActive()) stops.push(terminalRunner.stop());
-  if (previewManager?.isActive()) stops.push(previewManager.stop());
-  if (supervisor?.isActive()) stops.push(supervisor.stop());
-  void Promise.allSettled(stops).then(() => terminalSettlePromise).finally(() => {
+  const stopAfterBackup = async () => {
+    if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);
+    const stops = [];
+    if (terminalRunner?.isActive()) stops.push(terminalRunner.stop());
+    if (previewManager?.isActive()) stops.push(previewManager.stop());
+    if (supervisor?.isActive()) stops.push(supervisor.stop());
+    await Promise.allSettled(stops);
+    await terminalSettlePromise;
+  };
+  void stopAfterBackup().finally(() => {
     allowQuit = true;
     app.quit();
   });

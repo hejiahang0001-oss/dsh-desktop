@@ -428,6 +428,7 @@ class HarnessSupervisor extends EventEmitter {
 }
 
 module.exports = {
+  HARNESS_VERSION,
   HarnessSupervisor,
   buildHarnessEnvironment,
   isSafeHarnessUrl,

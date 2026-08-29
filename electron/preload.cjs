@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
       return () => ipcRenderer.removeListener('diagnostics:state', handler);
     }
   }),
+  support: Object.freeze({
+    exportDiagnostics: () => ipcRenderer.invoke('support:export-diagnostics'),
+    createBackup: () => ipcRenderer.invoke('support:create-backup'),
+    validateBackup: () => ipcRenderer.invoke('support:validate-backup')
+  }),
   changes: Object.freeze({
     getDiff: (filePath) => ipcRenderer.invoke('changes:get-diff', filePath),
     refresh: () => ipcRenderer.invoke('changes:refresh'),
