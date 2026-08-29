@@ -36,6 +36,14 @@ const REQUIRED_POWERPOINT_SKILL_FILES = Object.freeze([
   'SKILL.md',
   'scripts/powerpoint-pptx.cjs'
 ]);
+const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
+  'llm-wiki/SKILL.md',
+  'llm-wiki/scripts/wiki-basic.cjs',
+  'wiki-setup/SKILL.md',
+  'wiki-query/SKILL.md',
+  'wiki-capture/SKILL.md'
+]);
+const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -183,6 +191,7 @@ const inspectPackageLayout = async (rootPath) => {
   const wordSkillPrefix = normalize(path.join('resources', 'skills', 'word-docx'));
   const excelSkillPrefix = normalize(path.join('resources', 'skills', 'excel-xlsx'));
   const powerpointSkillPrefix = normalize(path.join('resources', 'skills', 'powerpoint-pptx'));
+  const bundledSkillsPrefix = normalize(path.join('resources', 'skills'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
@@ -197,6 +206,8 @@ const inspectPackageLayout = async (rootPath) => {
   const excelSkillPaths = new Set();
   const powerpointSkillRuntime = { files: 0, bytes: 0 };
   const powerpointSkillPaths = new Set();
+  const wikiSkillRuntime = { files: 0, bytes: 0 };
+  const wikiSkillPaths = new Set();
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -252,6 +263,15 @@ const inspectPackageLayout = async (rootPath) => {
         powerpointSkillRuntime.files += 1;
         powerpointSkillRuntime.bytes += info.size;
       }
+      if (relative.startsWith(`${bundledSkillsPrefix}/`)) {
+        const skillRelative = relative.slice(bundledSkillsPrefix.length + 1);
+        const skillId = skillRelative.split('/')[0];
+        if (WIKI_SKILL_IDS.has(skillId)) {
+          wikiSkillPaths.add(skillRelative);
+          wikiSkillRuntime.files += 1;
+          wikiSkillRuntime.bytes += info.size;
+        }
+      }
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
@@ -282,6 +302,8 @@ const inspectPackageLayout = async (rootPath) => {
     requiredExcelSkillFilesReady: REQUIRED_EXCEL_SKILL_FILES.every((name) => excelSkillPaths.has(name)),
     powerpointSkillRuntime,
     requiredPowerpointSkillFilesReady: REQUIRED_POWERPOINT_SKILL_FILES.every((name) => powerpointSkillPaths.has(name)),
+    wikiSkillRuntime,
+    requiredWikiSkillFilesReady: REQUIRED_WIKI_SKILL_FILES.every((name) => wikiSkillPaths.has(name)),
     reparsePoints
   };
 };
@@ -321,6 +343,7 @@ const main = async () => {
     && packageLayout.requiredWordSkillFilesReady
     && packageLayout.requiredExcelSkillFilesReady
     && packageLayout.requiredPowerpointSkillFilesReady
+    && packageLayout.requiredWikiSkillFilesReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
@@ -358,6 +381,7 @@ module.exports = {
   REQUIRED_PNPM_FILES,
   REQUIRED_PNPM_VERSION,
   REQUIRED_TERMINAL_FILES,
+  REQUIRED_WIKI_SKILL_FILES,
   REQUIRED_EXCEL_SKILL_FILES,
   REQUIRED_WORD_SKILL_FILES,
   assessAutomaticUpdate,

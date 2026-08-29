@@ -7,7 +7,7 @@ const path = require('node:path');
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
-const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_NODE']);
+const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_NODE']);
 const HARNESS_VERSION = '0.1.1-rc.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
@@ -113,6 +113,9 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
   const pptxToolPath = bundledSkillDir && firstExistingFile([
     path.join(bundledSkillDir, 'powerpoint-pptx', 'scripts', 'powerpoint-pptx.cjs')
   ]);
+  const wikiToolPath = bundledSkillDir && firstExistingFile([
+    path.join(bundledSkillDir, 'llm-wiki', 'scripts', 'wiki-basic.cjs')
+  ]);
 
   if (!nodePath) {
     const error = new Error('找不到 DSH Desktop 固定的 Node 运行时。请先执行 pnpm runtime:fetch。');
@@ -144,7 +147,12 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'BUNDLED_POWERPOINT_SKILL_MISSING';
     throw error;
   }
-  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath };
+  if (!wikiToolPath) {
+    const error = new Error('找不到 DSH Desktop 内置的 Wiki Skill 工具。请重新安装应用。');
+    error.code = 'BUNDLED_WIKI_SKILL_MISSING';
+    throw error;
+  }
+  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath };
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -255,7 +263,7 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(this.options.homeDir, { recursive: true });
     await fsp.mkdir(this.options.launchDir, { recursive: true });
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath } = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath } = resolveHarnessRuntimePaths(this.options);
 
     this.stopRequested = false;
     this.outputBuffer = '';
@@ -275,6 +283,10 @@ class HarnessSupervisor extends EventEmitter {
       environment.DSH_DESKTOP_DOCX_TOOL = docxToolPath;
       environment.DSH_DESKTOP_XLSX_TOOL = xlsxToolPath;
       environment.DSH_DESKTOP_PPTX_TOOL = pptxToolPath;
+      environment.DSH_DESKTOP_WIKI_TOOL = wikiToolPath;
+      environment.DSH_DESKTOP_WIKI_CONFIG = path.resolve(
+        this.options.wikiConfigPath || path.join(path.dirname(this.options.homeDir), 'wiki-settings.json')
+      );
       environment.DSH_DESKTOP_NODE = nodePath;
       this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,

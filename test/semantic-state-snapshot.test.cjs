@@ -14,6 +14,7 @@ test('semantic user-data snapshot ignores transient logs and credential files', 
     fs.writeFileSync(target, value);
   };
   write('desktop-state.json', '{"active":"repo"}');
+  write('wiki-settings.json', '{"version":1,"vaultPath":"C:\\\\Wiki"}');
   write('harness/sessions/project/session.jsonl', '{"type":"message"}\n');
   write('Local Storage/leveldb/000003.ldb', 'semantic-db');
   write('Local Storage/leveldb/CURRENT', 'MANIFEST-000001');
@@ -34,6 +35,7 @@ test('semantic user-data snapshot ignores transient logs and credential files', 
   assert.equal(before.files.some((file) => /node_modules/i.test(file.path)), false);
   assert.equal(before.files.some((file) => file.path === 'worktrees/ownership.json'), true);
   assert.equal(before.files.some((file) => /pending\.txt$/i.test(file.path)), false);
+  assert.equal(before.files.some((file) => file.path === 'wiki-settings.json'), true);
   assert.equal(before.counts.pluginProfiles, 2);
 
   write('harness/sessions/project/session.jsonl', '{"type":"changed"}\n');

@@ -1,8 +1,33 @@
 # DSH Desktop 执行进度
 
-> 日期：2026-08-26
-> 当前构建：V0.6.2 产品 Latest（自动 Git 提示静默降级）
-> 状态：V0.6.2 已发布为 Pre-release；实现、261/261 源码、打包、覆盖安装、无 Git 实机、已安装版、数据保留、PR/CI 与 GitHub 公开三资产门禁全部通过；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 日期：2026-08-29
+> 当前构建：V0.6.3 产品 Latest 本地候选（Wiki 基础接入）
+> 状态：V0.6.3 已完成实现、271/271 源码、真实模型、打包、覆盖安装、无 Git、已安装版和数据保留门禁；待 PR/CI 与 GitHub Pre-release。公开产品 Latest 仍为 V0.6.2；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.6.3 本轮进展
+
+1. 新增原生 Wiki 中心：每台电脑由用户选择本地 Markdown 知识库；可只创建缺失结构，不覆盖已有页面、索引或配置。
+2. 新增来源可追溯查询：固定离线工具限制查询长度、扫描文件数和单页大小，排除 `_raw`、`_staging`、`_archives`、`.obsidian` 与 Git 元数据，并返回页面路径和记录来源。
+3. 新增当前会话结论保存：只读取当前已完成 Harness 会话中的助手文本，用户选择并可编辑一条结论；保存前展示目标、来源和敏感检查，经原生默认取消确认后新增 `synthesis` 页面，并校验页面、`index.md` 和 `log.md` 三项事务结果。原始会话保持只读，同名页面不覆盖。
+4. 内置 `llm-wiki`、`wiki-setup`、`wiki-query`、`wiki-capture` 必要子集，固定 Wiki 工具/配置路径由桌面进程注入，软件 Key 不传给 Wiki 工具；基础能力不依赖 Git、Python、QMD、Obsidian 或 Codex 安装。
+
+### V0.6.3 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| 完整源码 | 271/271 通过；生产依赖审计为 0 个已知漏洞；语法和差异空白检查通过 |
+| 固定 Harness / 真实模型 | source、packaged、installed 三层 `skill.list` 均发现 `wiki-setup`、`wiki-query`、`wiki-capture` 且可由模型调用；真实 DeepSeek `/wiki-query` 实际调用固定工具并返回页面路径与来源，临时凭据副本已删除 |
+| 无 Git / 路径 / 保存 | 中文与空格路径在无 Git 环境完成初始化、查询和保存；已有核心文件保留；同名页不覆盖；敏感内容需再次确认；临时不可用知识库路径不会被清空 |
+| 原生界面 | 源码、打包态和最终已安装版 Wiki smoke 均为 `ok: true`，4 个能力组件、1 条来源查询结果和 7 个窄 IPC 动作齐全；已安装截图的 GPU 路径出现 `UnknownVizError` 后以软件渲染重跑通过 |
+| 打包与覆盖安装 | `DSH-Desktop-Setup-0.6.3.exe` 为 184,066,457 字节，SHA-256 `8F622125D6B3989B742EFF886769213F93F0AF2570C636A877FE008F84050132`；静默覆盖退出码 0，Windows 登记 V0.6.3 |
+| 包体与更新边界 | `packageReady: true`，零重解析点，固定 pnpm 11.19.0、Word/Excel/PPT 和 5 个 Wiki 必需文件完整；相对 V0.6.2 复用 99.4657%。安装包仍未签名，自动更新继续关闭 |
+| 已安装回归 | 10/10 既有 GUI smoke、固定终端两命令与凭据隔离通过；最终安装目录 `app.asar` 和 Wiki Skill 均与解包目录哈希一致，最终已安装 Wiki/Harness 查询与保存再次通过 |
+| 覆盖安装与数据 | 安装前、安装后、回归后和最终重建覆盖后 28 份无凭据语义文件逐字节一致，含 15 份会话；回滚备份 `backups/pre-v0.6.3-20260829-195636` 含上一版三项资产且无重解析点 |
+| PR、CI 与 GitHub | 尚未执行；V0.6.3 只完成本地候选，未上传或公开发布。V0.6.2 仍为公开产品 Latest，V0.5.4 仍为正式 Latest/Stable |
+
+接下来按 V0.6.4 项目知识增量同步、V0.6.5 DSH 历史批量导入顺序推进，再进入 V0.7 试点；安全和上游兼容性阻断仍优先。网页研究、复杂文档、QMD 和 Obsidian 界面控制保留为后续扩展候选。
+
+完整范围与验收要求见 [桌面版迭代计划](DSH_DESKTOP_ITERATION_PLAN.md) 的“V0.6.3–V0.6.5：Wiki 适配计划”。V0.5.4 Stable 保持不变。
 
 ## V0.6.2 本轮进展
 

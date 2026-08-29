@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -53,6 +53,9 @@
       "office-center.html",
       "assets/office-center.css",
       "assets/office-center.js",
+      "wiki-center.html",
+      "assets/wiki-center.css",
+      "assets/wiki-center.js",
       "worktrees.html",
       "assets/worktrees.css",
       "assets/worktrees.js",
