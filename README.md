@@ -75,7 +75,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**[V0.6.3 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3)** adds a native Wiki center for local vault selection/initialization, source-aware query, and selected current-session conclusion capture. The foundation works without Git, Python, QMD, Obsidian, or Codex installation. Its public installer is `DSH-Desktop-Setup-0.6.3.exe`; V0.6.3 is published as a GitHub Pre-release, while Stable and the front-page download remain V0.5.4.
+**V0.6.4 product Latest candidate** extends the native Wiki center with bounded active-project synchronization. It detects source changes with Git when available and falls back to a content inventory without Git, merges existing project pages by hash, records provenance, and keeps a transactional recovery copy. Its installer is `DSH-Desktop-Setup-0.6.4.exe`; after release it remains a GitHub Pre-release, while Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -102,6 +102,7 @@ Open repository → run or approve the agent in Harness
 → open Tools → Context sources to inspect the effective rule and session layers
 → open Tools → Extension center to inspect Skills, Plugins, Hooks, MCP, fixed closure, and Profile lifecycle
 → open Tools → Office delivery center to see Word, Excel, PowerPoint, and the V0.6 integration chain together
+→ open Tools → Wiki center to query local knowledge, capture one completed conclusion, or preview the active project's knowledge delta
 → open Tools → Create or edit Word document to invoke the bundled /word-docx Skill
 → open Tools → Create or edit Excel workbook to invoke the bundled /excel-xlsx Skill
 → open Tools → Create or edit PowerPoint presentation to invoke the bundled /powerpoint-pptx Skill
@@ -112,7 +113,7 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.3 release notes](docs/RELEASE_NOTES_v0.6.3.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.4 release notes](docs/RELEASE_NOTES_v0.6.4.md).
 
 ## Security and current limits
 
@@ -155,7 +156,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-[V0.6.3 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.3) 新增原生 Wiki 中心：可选择/初始化本地 Markdown 知识库、按页面路径与来源查询，并从当前会话选择一条助手结论，经预览和确认后保存。基础能力不依赖 Git、Python、QMD、Obsidian 或 Codex 安装。公开安装包为 `DSH-Desktop-Setup-0.6.3.exe`；V0.6.3 已作为 GitHub Pre-release 发布，V0.5.4 继续保持 Stable 和首页下载版本。
+V0.6.4 产品 Latest 候选版在原生 Wiki 中心新增当前项目知识增量同步：有 Git 时补充提交证据，无 Git 时使用受限内容清单；更新已有页面前校验哈希，保留来源、推断标记和事务恢复副本。源码、真实模型、覆盖安装、安装版回归和数据保留门禁均已通过；安装包为 `DSH-Desktop-Setup-0.6.4.exe`。发布后仍属于 GitHub Pre-release，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

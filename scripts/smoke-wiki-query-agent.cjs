@@ -78,7 +78,7 @@ const main = async () => {
     'title: "WIKI_REAL_QUERY_VERIFIED"',
     'summary: "真实 Harness Agent 已调用固定 Wiki 查询工具。"',
     'sources:',
-    '  - "dsh-real-agent:v0.6.3"',
+    '  - "dsh-real-agent:v0.6.4"',
     'lifecycle: verified',
     '---',
     '',
@@ -101,7 +101,7 @@ const main = async () => {
   let result;
   try {
     const origin = await supervisor.start();
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.3 Real Wiki Agent Acceptance' });
+    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.4 Real Wiki Agent Acceptance' });
     const permission = await callHarnessApi(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
@@ -114,7 +114,7 @@ const main = async () => {
       mode: 'queue',
       content: [{
         type: 'text',
-        text: '/wiki-query 查询 WIKI_REAL_QUERY_VERIFIED。必须调用 Skill 指定的固定离线 Wiki 工具；回答必须包含页面路径 concepts/real-agent.md 和来源 dsh-real-agent:v0.6.3，不要调用网络或修改知识页面。'
+        text: '/wiki-query 查询 WIKI_REAL_QUERY_VERIFIED。必须调用 Skill 指定的固定离线 Wiki 工具；回答必须包含页面路径 concepts/real-agent.md 和来源 dsh-real-agent:v0.6.4，不要调用网络或修改知识页面。'
       }],
       clientTimeZone: 'Asia/Shanghai'
     });
@@ -124,7 +124,7 @@ const main = async () => {
     const reply = assistantTexts(history).join('\n');
     const log = await fs.readFile(path.join(vaultPath, 'log.md'), 'utf8');
     const toolCalled = /QUERY query=.*WIKI_REAL_QUERY_VERIFIED/i.test(log);
-    if (!toolCalled || !reply.includes('concepts/real-agent.md') || !reply.includes('dsh-real-agent:v0.6.3')) {
+    if (!toolCalled || !reply.includes('concepts/real-agent.md') || !reply.includes('dsh-real-agent:v0.6.4')) {
       throw new Error('真实 Agent 没有完成固定 Wiki 工具查询或没有返回来源。');
     }
     result = {

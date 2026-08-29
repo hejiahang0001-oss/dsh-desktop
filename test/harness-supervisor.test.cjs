@@ -9,6 +9,7 @@ const {
   isSafeHarnessUrl,
   parseHarnessUrl,
   probeHarness,
+  provisionDesktopShellEnvPlugin,
   resolvePnpmDshBin,
   resolveHarnessRuntimePaths,
   stripAnsi
@@ -20,15 +21,19 @@ const writeBundledOfficeSkills = (root) => {
   const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
   const pptxToolPath = path.join(bundledSkillDir, 'powerpoint-pptx', 'scripts', 'powerpoint-pptx.cjs');
   const wikiToolPath = path.join(bundledSkillDir, 'llm-wiki', 'scripts', 'wiki-basic.cjs');
+  const shellEnvPluginDir = path.join(root, 'runtime', 'dsh-desktop-shell-env');
   fs.mkdirSync(path.dirname(docxToolPath), { recursive: true });
   fs.mkdirSync(path.dirname(xlsxToolPath), { recursive: true });
   fs.mkdirSync(path.dirname(pptxToolPath), { recursive: true });
   fs.mkdirSync(path.dirname(wikiToolPath), { recursive: true });
+  fs.mkdirSync(shellEnvPluginDir, { recursive: true });
   fs.writeFileSync(docxToolPath, '// test');
   fs.writeFileSync(xlsxToolPath, '// test');
   fs.writeFileSync(pptxToolPath, '// test');
   fs.writeFileSync(wikiToolPath, '// test');
-  return { bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath };
+  fs.writeFileSync(path.join(shellEnvPluginDir, 'package.json'), JSON.stringify({ name: 'dsh-desktop-shell-env', exports: './index.mjs' }));
+  fs.writeFileSync(path.join(shellEnvPluginDir, 'index.mjs'), '// test');
+  return { bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir };
 };
 
 test('software-managed credential policy removes inherited DeepSeek keys case-insensitively', () => {
@@ -127,6 +132,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   const linkedBin = path.join(nodeModules, '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   const pnpmBin = path.join(packageDir, 'bin.js');
   const patchPath = path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml');
+  const shellEnvPluginDir = path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-shell-env');
   fs.mkdirSync(path.dirname(nodePath), { recursive: true });
   fs.mkdirSync(path.dirname(linkedBin), { recursive: true });
   fs.mkdirSync(packageDir, { recursive: true });
@@ -135,6 +141,9 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   fs.writeFileSync(pnpmBin, 'real package');
   fs.mkdirSync(path.dirname(patchPath), { recursive: true });
   fs.writeFileSync(patchPath, '[]');
+  fs.mkdirSync(shellEnvPluginDir, { recursive: true });
+  fs.writeFileSync(path.join(shellEnvPluginDir, 'package.json'), JSON.stringify({ name: 'dsh-desktop-shell-env', exports: './index.mjs' }));
+  fs.writeFileSync(path.join(shellEnvPluginDir, 'index.mjs'), '// test');
   const bundledSkillDir = path.join(resourcesPath, 'skills');
   const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
   const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
@@ -156,7 +165,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
     isPackaged: true,
     env: {}
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir });
 });
 
 test('runtime resolver fails closed when the desktop language patch is missing', () => {
@@ -172,6 +181,28 @@ test('runtime resolver fails closed when the desktop language patch is missing',
     isPackaged: false,
     env: { DSH_DESKTOP_NODE: nodePath, DSH_DESKTOP_DSH_BIN: dshPath }
   }), (error) => error?.code === 'HARNESS_PATCH_MISSING');
+});
+
+test('desktop shell environment plugin is provisioned into the Harness profile fallback', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-shell-plugin-provision-test-'));
+  const sourceDir = path.join(root, 'source');
+  const homeDir = path.join(root, 'home');
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, 'package.json'), JSON.stringify({
+    name: 'dsh-desktop-shell-env',
+    version: '0.6.4',
+    type: 'module',
+    exports: './index.mjs'
+  }));
+  fs.writeFileSync(path.join(sourceDir, 'index.mjs'), 'export const name = "dsh-desktop-shell-env";');
+  try {
+    const targetDir = await provisionDesktopShellEnvPlugin({ homeDir, sourceDir });
+    assert.equal(targetDir, path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env'));
+    assert.match(fs.readFileSync(path.join(targetDir, 'index.mjs'), 'utf8'), /dsh-desktop-shell-env/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(targetDir, 'package.json'), 'utf8')).name, 'dsh-desktop-shell-env');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('probeHarness verifies a successful HTML response', async () => {

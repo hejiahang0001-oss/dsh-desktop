@@ -31,7 +31,7 @@ main { display: grid; gap: 18px; padding: 24px 34px 80px; }
 .path { margin: 0 0 6px; color: #f5f7fa; word-break: break-all; }
 .detail, .empty { margin: 0; color: #9fa8b4; line-height: 1.6; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-.capability-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.capability-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
 .capability { padding: 11px 12px; border-radius: 11px; background: #20242a; border: 1px solid #343a43; }
 .capability strong { display: block; font-size: 13px; }
 .capability small { display: block; color: #919aa6; margin-top: 4px; }

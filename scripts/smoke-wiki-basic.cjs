@@ -47,24 +47,24 @@ const main = async () => {
   try {
     const origin = await supervisor.start();
     const probe = await probeHarness(origin);
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.3 Wiki Basic Smoke' });
+    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.4 Wiki Basic Smoke' });
     const catalog = await callHarnessApi(origin, 'skill.list', { sessionId: workspace.sessionId });
     const entries = Array.isArray(catalog?.skills) ? catalog.skills : [];
-    const expectedSkills = ['wiki-setup', 'wiki-query', 'wiki-capture'];
+    const expectedSkills = ['wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update'];
     const discovered = expectedSkills.map((name) => entries.find((entry) => entry?.name === name));
-    if (discovered.some((entry) => !entry || entry.modelInvocable !== true)) throw new Error('Harness skill.list 没有确认三个 Wiki 用户 Skill。');
+    if (discovered.some((entry) => !entry || entry.modelInvocable !== true)) throw new Error('Harness skill.list 没有确认四个 Wiki 用户 Skill。');
 
     await wiki.initializeWikiVault(vaultPath);
     await fs.writeFile(path.join(vaultPath, 'concepts', 'release-boundary.md'), [
       '---',
-      'title: "V0.6.3 发布边界"',
+      'title: "V0.6.4 发布边界"',
       'summary: "Stable 保持 V0.5.4，Wiki 基础版作为 Latest 候选。"',
       'sources:',
       '  - "DSH_DESKTOP_ITERATION_PLAN.md"',
       'lifecycle: verified',
       '---',
       '',
-      '# V0.6.3 发布边界',
+      '# V0.6.4 发布边界',
       '',
       '无 Git 时仍可查询与保存知识。',
       ''
@@ -87,6 +87,25 @@ const main = async () => {
     if (!page.includes(`#seq=1`) || !index.includes('Wiki 基础验收结论') || !log.includes('CAPTURE type=synthesis') || !gitMissing) {
       throw new Error('Wiki 查询/保存闭环或无 Git 边界未通过。');
     }
+    await fs.writeFile(path.join(workspacePath, 'README.md'), '# Wiki Sync Smoke\n\nProject knowledge source.\n', 'utf8');
+    const projectPreview = await wiki.previewProjectSync(vaultPath, workspacePath);
+    const projectSpec = {
+      previewToken: projectPreview.previewToken,
+      pages: [{
+        path: projectPreview.project.overviewPath,
+        expectedSha256: null,
+        title: 'Wiki Sync Smoke',
+        summary: 'Packaged project sync smoke.',
+        content: '# Wiki Sync Smoke\n\nProject knowledge source.',
+        sources: ['README.md'],
+        provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+      }]
+    };
+    const projectSave = await wiki.saveProjectSync(vaultPath, workspacePath, projectSpec, { confirmed: true });
+    const projectUnchanged = await wiki.previewProjectSync(vaultPath, workspacePath);
+    if (!projectUnchanged.unchanged || projectSave.pagesCreated[0] !== projectPreview.project.overviewPath) {
+      throw new Error('Wiki 项目增量同步或幂等检查未通过。');
+    }
     result = {
       ok: true,
       mode: isPackaged ? 'packaged' : 'source',
@@ -96,6 +115,7 @@ const main = async () => {
       catalogSize: entries.length,
       query: { results: query.results.length, path: query.results[0].path, sources: query.results[0].sources },
       capture: { path: capture.path, pageIndexed: true, logged: true },
+      projectSync: { mode: projectPreview.mode, path: projectSave.pagesCreated[0], unchangedAfterSave: projectUnchanged.unchanged },
       noGit: gitMissing,
       pathCase: 'Chinese and spaces'
     };

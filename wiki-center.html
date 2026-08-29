@@ -11,9 +11,9 @@
 <body>
   <header class="toolbar">
     <div>
-      <span class="eyebrow">DSH Desktop 0.6.3</span>
+      <span class="eyebrow">DSH Desktop 0.6.4</span>
       <h1>Wiki 中心</h1>
-      <p>把当前会话结论沉淀为可查询、可追溯的本地 Markdown 知识。</p>
+      <p>把会话结论和当前项目增量沉淀为可查询、可追溯的本地 Markdown 知识。</p>
     </div>
     <button id="close" class="ghost" type="button">关闭</button>
   </header>
@@ -31,6 +31,20 @@
         <button id="initialize-vault" class="secondary" type="button" disabled>初始化缺失结构</button>
       </div>
       <div id="capability-list" class="capability-list" aria-label="已内置的 Wiki 能力"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="project-sync-title">
+      <div class="section-heading">
+        <div><span class="section-label">当前工作区</span><h2 id="project-sync-title">项目知识增量同步</h2></div>
+        <span id="project-sync-status" class="status waiting">待检查</span>
+      </div>
+      <p id="project-name" class="path">尚未读取当前项目。</p>
+      <p id="project-path" class="detail">只扫描受支持的源码与说明文件；外部知识库写入仍遵循 Harness 官方权限确认。</p>
+      <div class="actions">
+        <button id="preview-project-sync" class="secondary" type="button" disabled>检查当前项目增量</button>
+        <button id="invoke-project-sync" type="button" disabled>让 Agent 整理并同步</button>
+      </div>
+      <div id="project-sync-preview" class="preview" aria-live="polite">尚未检查项目增量；保存前仍会再次校验并要求确认。</div>
     </section>
 
     <section class="panel" aria-labelledby="query-title">

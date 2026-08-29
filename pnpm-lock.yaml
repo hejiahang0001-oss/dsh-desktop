@@ -28,6 +28,8 @@ importers:
         specifier: 11.19.0
         version: 11.19.0
 
+  runtime/dsh-desktop-shell-env: {}
+
   runtime/harness:
     dependencies:
       '@deepseek-ai/dsh':

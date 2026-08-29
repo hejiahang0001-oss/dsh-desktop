@@ -41,9 +41,10 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
   'llm-wiki/scripts/wiki-basic.cjs',
   'wiki-setup/SKILL.md',
   'wiki-query/SKILL.md',
-  'wiki-capture/SKILL.md'
+  'wiki-capture/SKILL.md',
+  'wiki-update/SKILL.md'
 ]);
-const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture']);
+const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 
 const normalize = (value) => value.replaceAll('\\', '/');
