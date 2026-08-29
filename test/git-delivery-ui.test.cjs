@@ -57,4 +57,7 @@ test('Git delivery UI is accessible, bounded, optional, and never injects remote
   assert.match(main, /buttons: \['取消', '创建本地提交'\][\s\S]*?defaultId: 0[\s\S]*?cancelId: 0/);
   assert.match(main, /不会自动暂存、不会推送/);
   assert.match(main, /--git-delivery-smoke-file=/);
+  assert.match(main, /git-delivery-smoke-data-/);
+  assert.match(main, /gitDeliveryManager\.activate\(repositoryPath\)/);
+  assert.doesNotMatch(main, /gitDeliveryManager\.activate\(rootDir\)/);
 });

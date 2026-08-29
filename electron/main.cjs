@@ -5813,10 +5813,22 @@ const runSideChatSmoke = async (target) => {
 
 const runGitDeliverySmoke = async (target) => {
   const resolvedTarget = path.resolve(target);
+  const smokeRoot = path.join(path.dirname(resolvedTarget), `git-delivery-smoke-data-${process.pid}-${Date.now()}`);
+  const repositoryPath = path.join(smokeRoot, 'repository with spaces');
   let result;
   try {
+    await fsp.mkdir(repositoryPath, { recursive: true });
+    const gitSmoke = (args) => runGitCommand('git', repositoryPath, args, {
+      baseEnv: { ...process.env, DEEPSEEK_API_KEY: 'hidden-git-delivery-smoke-key' }
+    });
+    await gitSmoke(['init', '-b', 'main']);
+    await gitSmoke(['config', 'user.name', 'DSH Git Delivery Smoke']);
+    await gitSmoke(['config', 'user.email', 'git-delivery-smoke@dsh-desktop.local']);
+    await fsp.writeFile(path.join(repositoryPath, 'README.md'), '# Git delivery smoke\n', 'utf8');
+    await gitSmoke(['add', 'README.md']);
+    await gitSmoke(['commit', '-m', 'smoke baseline']);
     gitDeliveryManager = new GitDeliveryManager();
-    gitDeliveryManager.activate(rootDir);
+    gitDeliveryManager.activate(repositoryPath);
     await createGitDeliveryWindow();
     const renderedInTime = await gitDeliveryWindow.webContents.executeJavaScript(`new Promise((resolve) => {
       const deadline = Date.now() + 10000;
@@ -5868,6 +5880,7 @@ const runGitDeliverySmoke = async (target) => {
     gitDeliveryWindow?.destroy();
     gitDeliveryWindow = undefined;
     gitDeliveryManager = undefined;
+    await fsp.rm(smokeRoot, { recursive: true, force: true }).catch(() => undefined);
   }
   if (!result.ok) process.exitCode = 1;
 };
