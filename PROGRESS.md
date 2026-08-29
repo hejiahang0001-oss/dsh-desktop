@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.7.0 产品 Latest 候选（脱敏诊断与可验证备份）
-> 状态：V0.7.0 已完成源码、打包、两次覆盖安装、安装版/真实模型和数据保留门禁，正在执行 PR/CI 与 GitHub Pre-release 发布；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.7.0 产品 Latest（脱敏诊断与可验证备份）
+> 状态：V0.7.0 已完成源码、打包、覆盖安装、安装版/真实模型、数据保留、PR/CI、GitHub Pre-release 和公开回下载门禁；当前进入 V0.8.0 Git/提交/PR 交付入口，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.7.0 本轮进展
 
@@ -23,7 +23,7 @@
 | 包体与更新边界 | 解包版/安装版均 `packageReady: true`、零重解析点；相对 V0.6.5 复用 99.4112%；安装包未签名，自动更新继续关闭 |
 | 最终运行回归 | 解包版和安装版 12/12、固定终端、Wiki 基础均通过；安装版真实 DeepSeek 两回合通过；GPU 截图环境错误由软件渲染原样复验通过 |
 | 数据保留 | 28 份语义文件在覆盖安装和全部最终回归前后逐字节一致；最终安装/解包 app.asar 哈希均为 `B898EC0E60BB3A5205547F0F313156F5BF01430402CD0E5CA8DDFA75B02F72B7` |
-| 待完成 | PR/CI、GitHub Pre-release、远端资产摘要和公开回下载；Stable V0.5.4 不变 |
+| PR / CI / GitHub | 实现 PR [#51](https://github.com/hejiahang0001-oss/dsh-desktop/pull/51) 与主分支 CI [33276406947](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33276406947) 三项均通过；[V0.7.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.7.0) 为非草稿 Pre-release，精确指向 `70e5644d271ba6c6bea849da825b4d2743ceeb2b`；GitHub 3/3 资产摘要与匿名公开回下载 3/3 哈希、清单 2/2 均通过，V0.5.4 仍为正式 Latest/Stable |
 
 ## V0.6.5 本轮进展
 

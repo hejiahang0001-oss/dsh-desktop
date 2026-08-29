@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.7.0 redacted diagnostics and verified backup evidence (publication pending)
+## V0.7.0 redacted diagnostics and verified backup evidence (published)
 
 - Help and the fixed command palette expose three native actions: export a redacted diagnostic JSON, create a DSH data backup, and validate a selected backup. Renderer IPC carries no arbitrary path or file content.
 - The diagnostic contains bounded runtime versions, state/count summaries, and privacy flags. Key/token patterns, proxy URLs, full workspace paths, session text, log text, and unbounded count objects are excluded or normalized before export.
@@ -16,7 +16,7 @@ This page records versioned local engineering evidence without making the README
 - Release governance reports `packageReady: true`, zero reparse points, fixed pnpm 11.19.0 and complete Office/Wiki payloads. V0.6.5 to V0.7.0 block reuse is 99.4112%; signing and automatic update remain intentionally unavailable.
 - Silent overwrite exits 0 and Windows registers V0.7.0. The unpacked tree contains 29,802 files and 693,077,840 bytes; the installed tree contains the same payload plus the normal uninstaller, for 29,803 files and 693,520,686 bytes. Both use app.asar SHA-256 `B898EC0E60BB3A5205547F0F313156F5BF01430402CD0E5CA8DDFA75B02F72B7`.
 - All 28 semantic files—7 state, 15 session, 2 Profile, and 4 Local Storage files—remain byte-identical before the first overwrite, after both overwrite installs, and after all final regressions. `backups/pre-v0.7.0-20260830-043707` preserves all three V0.6.5 release assets with verified hashes.
-- PR/CI, GitHub Pre-release, remote asset digest, and unauthenticated public re-download evidence are still required before V0.7.0 is marked published. Formal GitHub Latest/Stable remains V0.5.4.
+- Implementation PR [#51](https://github.com/hejiahang0001-oss/dsh-desktop/pull/51) and main CI run [33276406947](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33276406947) pass all three Windows jobs. [V0.7.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.7.0) is non-draft, marked Pre-release, and targets exact merge `70e5644d271ba6c6bea849da825b4d2743ceeb2b`. GitHub reports all three asset sizes and SHA-256 digests equal to local evidence; a clean unauthenticated public download reproduces all three hashes and passes both checksum-manifest entries. Formal GitHub Latest/Stable remains V0.5.4.
 
 ## V0.6.5 DSH conversation-history Wiki ingestion evidence (published)
 

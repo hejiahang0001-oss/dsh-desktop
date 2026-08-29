@@ -77,7 +77,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.7.0 product Latest candidate** adds redacted diagnostics plus native creation and validation of DSH data backups that exclude software credential files and proxy settings. Session content is preserved byte-for-byte and is not redacted. The candidate installer is named `DSH-Desktop-Setup-0.7.0.exe`; Stable and the front-page download remain V0.5.4.
+**V0.7.0 product Latest** adds redacted diagnostics plus native creation and validation of DSH data backups that exclude software credential files and proxy settings. Session content is preserved byte-for-byte and is not redacted. Its installer, `DSH-Desktop-Setup-0.7.0.exe`, is available from the [V0.7.0 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.7.0); Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -158,7 +158,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.7.0 产品 Latest 候选新增脱敏诊断和 DSH 数据备份/验证：诊断 JSON 不含 Key、代理地址、完整路径、会话正文或日志正文；备份只包含会话、工作区/Wiki 设置、插件状态和界面状态，不复制软件 Key 文件或代理设置，并逐文件校验 SHA-256。会话正文按原样备份，可能包含用户曾输入的敏感内容。候选安装包名为 `DSH-Desktop-Setup-0.7.0.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
+V0.7.0 产品 Latest 新增脱敏诊断和 DSH 数据备份/验证：诊断 JSON 不含 Key、代理地址、完整路径、会话正文或日志正文；备份只包含会话、工作区/Wiki 设置、插件状态和界面状态，不复制软件 Key 文件或代理设置，并逐文件校验 SHA-256。会话正文按原样备份，可能包含用户曾输入的敏感内容。安装包 `DSH-Desktop-Setup-0.7.0.exe` 可从 [V0.7.0 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.7.0) 获取，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
