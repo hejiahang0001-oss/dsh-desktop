@@ -1591,7 +1591,8 @@ const WIKI_SKILLS = Object.freeze([
   Object.freeze({ id: 'llm-wiki', name: 'Wiki 基础结构' }),
   Object.freeze({ id: 'wiki-setup', name: '知识库初始化' }),
   Object.freeze({ id: 'wiki-query', name: '知识查询' }),
-  Object.freeze({ id: 'wiki-capture', name: '会话结论保存' })
+  Object.freeze({ id: 'wiki-capture', name: '会话结论保存' }),
+  Object.freeze({ id: 'wiki-update', name: '项目增量同步' })
 ]);
 
 const inspectWikiSkills = async () => Promise.all(WIKI_SKILLS.map(async (skill) => {
@@ -1611,7 +1612,8 @@ const unavailableWikiCenterState = (message = 'Wiki 中心尚未完成初始化�
   vault: { configured: false, ready: false, status: 'unconfigured', vaultPath: '', missing: [], pageCount: 0, message },
   skills: WIKI_SKILLS.map((skill) => ({ ...skill, status: 'missing' })),
   harness: { status: 'waiting' },
-  session: { available: false }
+  session: { available: false },
+  project: { available: false, status: 'waiting', name: '', path: '' }
 });
 
 const getWikiCenterState = async () => {
@@ -1635,7 +1637,13 @@ const getWikiCenterState = async () => {
     vault,
     skills,
     harness: { status: harnessReady ? 'ready' : 'waiting' },
-    session: { available: sessionAvailable }
+    session: { available: sessionAvailable },
+    project: {
+      available: vault.ready && typeof getWorkspaceState().activePath === 'string' && path.isAbsolute(getWorkspaceState().activePath),
+      status: vault.ready ? 'ready' : 'waiting',
+      name: getWorkspaceState().displayName || '',
+      path: getWorkspaceState().activePath || ''
+    }
   };
 };
 
@@ -1738,6 +1746,49 @@ const querySelectedWiki = async (query) => {
   } catch (error) {
     return { ok: false, message: error?.message || 'Wiki 查询失败。', results: [] };
   }
+};
+
+const previewCurrentProjectWikiSync = async () => {
+  const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
+  const workspacePath = getWorkspaceState().activePath;
+  if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先配置并初始化知识库。' };
+  if (typeof workspacePath !== 'string' || !path.isAbsolute(workspacePath)) return { ok: false, message: '当前工作区路径不可用。' };
+  try {
+    const preview = await wikiRuntime.previewProjectSync(vaultPath, workspacePath);
+    return {
+      ok: true,
+      project: preview.project,
+      mode: preview.mode,
+      unchanged: preview.unchanged,
+      limited: preview.limited,
+      scannedFiles: preview.scannedFiles,
+      delta: {
+        added: preview.delta.added.length,
+        modified: preview.delta.modified.length,
+        removed: preview.delta.removed.length
+      },
+      existingPages: preview.existingPages.length,
+      message: preview.unchanged
+        ? '当前项目与上次同步清单一致。'
+        : `发现 ${preview.delta.added.length} 个新增、${preview.delta.modified.length} 个修改、${preview.delta.removed.length} 个移除文件。`
+    };
+  } catch (error) {
+    return { ok: false, message: error?.message || '当前项目增量检查失败。' };
+  }
+};
+
+const invokeCurrentProjectWikiSync = async () => {
+  const state = await getWikiCenterState();
+  if (!state.vault?.ready) return { ok: false, message: '请先配置并初始化知识库。' };
+  if (!state.project?.available) return { ok: false, message: '当前工作区不可用。' };
+  if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  const invoked = await invokeWikiSkill('wiki-update');
+  return { ok: invoked, message: invoked ? '已在当前对话中加载 /wiki-update。' : '请在对话输入框中输入 /wiki-update。' };
 };
 
 const loadCurrentWikiCandidates = async ({ includeSessionId = false } = {}) => {
@@ -2984,13 +3035,15 @@ const invokePowerPointPptxSkill = async () => {
 };
 
 const invokeWikiSkill = async (id) => {
-  if (!harnessUiReady() || !['wiki-query', 'wiki-capture'].includes(id)) return false;
-  const method = id === 'wiki-query' ? 'invokeWikiQuery' : 'invokeWikiCapture';
+  if (!harnessUiReady() || !['wiki-query', 'wiki-capture', 'wiki-update'].includes(id)) return false;
+  const methods = { 'wiki-query': 'invokeWikiQuery', 'wiki-capture': 'invokeWikiCapture', 'wiki-update': 'invokeWikiUpdate' };
+  const titles = { 'wiki-query': 'Wiki 知识查询', 'wiki-capture': 'Wiki 会话结论保存', 'wiki-update': 'Wiki 项目增量同步' };
+  const method = methods[id];
   const invoked = await mainWindow.webContents.executeJavaScript(`Boolean(window.__DSH_COMMAND_PALETTE__?.${method}?.())`, true).catch(() => false);
   if (invoked) return true;
   await dialog.showMessageBox(mainWindow, {
     type: 'info',
-    title: id === 'wiki-query' ? 'Wiki 知识查询' : 'Wiki 会话结论保存',
+    title: titles[id],
     message: `在对话输入框中输入 /${id} 后继续描述。`,
     detail: '请先从“工具 → Wiki 中心”选择并初始化知识库。基础版不要求 Git、Python、QMD 或 Obsidian。',
     buttons: ['确定'],
@@ -3338,7 +3391,7 @@ function installApplicationMenu() {
           label: 'Wiki 中心…',
           click: () => { void openWikiCenterWindow(); }
         },
-        { label: 'Wiki：本地知识查询与会话结论保存 · 不依赖 Git', enabled: false },
+        { label: 'Wiki：知识查询、会话结论与项目增量同步 · Git 可选', enabled: false },
         {
           label: '查询 Wiki 知识…',
           enabled: harnessReady,
@@ -3348,6 +3401,11 @@ function installApplicationMenu() {
           label: '保存会话结论到 Wiki…',
           enabled: harnessReady,
           click: () => { void invokeWikiSkill('wiki-capture'); }
+        },
+        {
+          label: '同步当前项目知识到 Wiki…',
+          enabled: harnessReady,
+          click: () => { void invokeWikiSkill('wiki-update'); }
         },
         {
           label: '创建或修改 Word 文档…',
@@ -3945,6 +4003,12 @@ ipcMain.handle('wiki-center:initialize-vault', (event) => (
 ));
 ipcMain.handle('wiki-center:query', (event, query) => (
   wikiCenterIpcAllowed(event) ? querySelectedWiki(query) : { ok: false, message: 'Wiki 查询请求未通过安全校验。', results: [] }
+));
+ipcMain.handle('wiki-center:preview-project-sync', (event) => (
+  wikiCenterIpcAllowed(event) ? previewCurrentProjectWikiSync() : { ok: false, message: '项目增量检查请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:invoke-project-sync', (event) => (
+  wikiCenterIpcAllowed(event) ? invokeCurrentProjectWikiSync() : { ok: false, message: '项目同步请求未通过安全校验。' }
 ));
 ipcMain.handle('wiki-center:get-session-candidates', (event) => (
   wikiCenterIpcAllowed(event) ? loadCurrentWikiCandidates() : { ok: false, message: '会话读取请求未通过安全校验。', items: [] }
@@ -4770,7 +4834,7 @@ const runWikiCenterSmoke = async (target) => {
       'title: "无 Git Wiki 基础能力"',
       'summary: "DSH Desktop 可在没有 Git 的普通目录初始化并查询 Wiki。"',
       'sources:',
-      '  - "dsh-smoke:v0.6.3"',
+      '  - "dsh-smoke:v0.6.4"',
       'lifecycle: verified',
       '---',
       '',
@@ -4783,7 +4847,7 @@ const runWikiCenterSmoke = async (target) => {
     const renderedInTime = await wikiCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
       const deadline = Date.now() + 10000;
       const check = () => {
-        if (document.querySelectorAll('.capability').length === 4 && document.querySelector('#vault-status')?.textContent === '已就绪') return resolve(true);
+        if (document.querySelectorAll('.capability').length === 5 && document.querySelector('#vault-status')?.textContent === '已就绪') return resolve(true);
         if (Date.now() >= deadline) return resolve(false);
         setTimeout(check, 50);
       };
@@ -4816,13 +4880,13 @@ const runWikiCenterSmoke = async (target) => {
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'previewCapture', 'query', 'saveCapture'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeProjectSync', 'previewCapture', 'previewProjectSync', 'query', 'saveCapture'])
         && rendered.title === 'Wiki 中心'
-        && rendered.capabilityRows === 4
+        && rendered.capabilityRows === 5
         && rendered.resultRows >= 1
         && rendered.text.includes('无 Git Wiki 基础能力')
         && rendered.text.includes('页面：concepts/wiki-basic.md')
-        && rendered.text.includes('来源：dsh-smoke:v0.6.3')
+        && rendered.text.includes('来源：dsh-smoke:v0.6.4')
         && rendered.text.includes('无 Git、Python、QMD 或 Obsidian也可使用基础能力。'.replace('Obsidian也', 'Obsidian 也'))
         && screenshotSize.width > 0
         && screenshotSize.height > 0,

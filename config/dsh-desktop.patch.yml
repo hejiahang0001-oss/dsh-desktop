@@ -2,6 +2,10 @@
 # Keep executable text and raw tool output intact while making every generated,
 # user-facing natural-language field follow the user's language.
 
+- insert:
+    - id: dsh-desktop-shell-env
+      name: dsh-desktop-shell-env
+
 - id: system-prompt
   config:
     persona: |-

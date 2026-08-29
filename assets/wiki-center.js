@@ -10,6 +10,12 @@
     choose: document.getElementById('choose-vault'),
     initialize: document.getElementById('initialize-vault'),
     capabilityList: document.getElementById('capability-list'),
+    projectStatus: document.getElementById('project-sync-status'),
+    projectName: document.getElementById('project-name'),
+    projectPath: document.getElementById('project-path'),
+    previewProjectSync: document.getElementById('preview-project-sync'),
+    invokeProjectSync: document.getElementById('invoke-project-sync'),
+    projectPreview: document.getElementById('project-sync-preview'),
     queryForm: document.getElementById('query-form'),
     queryInput: document.getElementById('query-input'),
     querySubmit: document.getElementById('query-submit'),
@@ -64,6 +70,15 @@
     nodes.initialize.disabled = !vault.configured || vault.status === 'ready';
     nodes.querySubmit.disabled = vault.status !== 'ready';
     nodes.loadCandidates.disabled = vault.status !== 'ready' || state.harness?.status !== 'ready' || !state.session?.available;
+    const project = state.project || {};
+    nodes.projectStatus.className = `status ${project.available ? 'ready' : 'waiting'}`;
+    nodes.projectStatus.textContent = project.available ? '可检查' : '待工作区';
+    nodes.projectName.textContent = project.name || '尚未读取当前项目。';
+    nodes.projectPath.textContent = project.path || '只扫描受支持的源码与说明文件；外部知识库写入仍遵循 Harness 官方权限确认。';
+    nodes.previewProjectSync.disabled = !project.available;
+    nodes.invokeProjectSync.disabled = !project.available || state.harness?.status !== 'ready';
+    nodes.projectPreview.className = 'preview';
+    nodes.projectPreview.textContent = '尚未检查项目增量；保存前仍会再次校验并要求确认。';
     renderCapabilities(state.skills || []);
     setPreviewDirty();
     setStatus(vault.status === 'ready'
@@ -170,6 +185,46 @@
       setStatus('查询失败；知识库页面没有被修改。');
     } finally {
       nodes.querySubmit.disabled = currentState.vault?.status !== 'ready';
+    }
+  });
+
+  nodes.previewProjectSync.addEventListener('click', async () => {
+    nodes.previewProjectSync.disabled = true;
+    nodes.invokeProjectSync.disabled = true;
+    setStatus('正在检查当前项目的受支持源文件和 Wiki 清单…');
+    try {
+      const response = await api.previewProjectSync();
+      if (!response?.ok) throw new Error(response?.message || 'project-preview-failed');
+      const mode = response.mode === 'git' ? 'Git 增量 + 内容清单' : '内容清单（无需 Git）';
+      nodes.projectStatus.className = `status ${response.unchanged ? 'ready' : 'needs-init'}`;
+      nodes.projectStatus.textContent = response.unchanged ? '已同步' : '有增量';
+      nodes.projectPreview.className = `preview ${response.limited ? 'warning' : ''}`;
+      nodes.projectPreview.textContent = `项目：${response.project?.name || ''}\n模式：${mode}\n扫描：${response.scannedFiles || 0} 个文件${response.limited ? '（已达到安全上限）' : ''}\n增量：新增 ${response.delta?.added || 0}，修改 ${response.delta?.modified || 0}，移除 ${response.delta?.removed || 0}\n已有 Wiki 页面：${response.existingPages || 0}\n${response.message || ''}`;
+      nodes.invokeProjectSync.disabled = response.unchanged || currentState.harness?.status !== 'ready';
+      setStatus(response.unchanged ? '当前项目知识已是最新。' : '已发现项目增量；可让 Agent 按来源整理并在确认后同步。');
+    } catch (error) {
+      nodes.projectStatus.className = 'status unavailable';
+      nodes.projectStatus.textContent = '检查失败';
+      nodes.projectPreview.className = 'preview warning';
+      nodes.projectPreview.textContent = error?.message && error.message !== 'project-preview-failed' ? error.message : '项目增量检查失败；知识库没有被修改。';
+      setStatus('项目增量检查失败；知识库没有被修改。');
+    } finally {
+      nodes.previewProjectSync.disabled = !currentState.project?.available;
+    }
+  });
+
+  nodes.invokeProjectSync.addEventListener('click', async () => {
+    nodes.invokeProjectSync.disabled = true;
+    setStatus('正在返回当前对话并加载 /wiki-update…');
+    try {
+      const response = await api.invokeProjectSync();
+      if (!response?.ok) {
+        setStatus(response?.message || '未能加载项目同步 Skill。');
+        nodes.invokeProjectSync.disabled = false;
+      }
+    } catch {
+      setStatus('未能加载项目同步 Skill；可在对话中手动输入 /wiki-update。');
+      nodes.invokeProjectSync.disabled = false;
     }
   });
 

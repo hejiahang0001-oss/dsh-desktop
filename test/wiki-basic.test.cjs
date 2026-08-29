@@ -10,10 +10,14 @@ const {
   WikiBasicError,
   WikiSettingsStore,
   buildCapturePreview,
+  buildProjectSyncPlan,
   initializeWikiVault,
   inspectWikiVault,
+  previewProjectSync,
   queryWiki,
-  saveCapture
+  readProjectWikiPage,
+  saveCapture,
+  saveProjectSync
 } = require('../resources/skills/llm-wiki/scripts/wiki-basic.cjs');
 
 const fixedClock = () => new Date('2026-08-29T08:00:00.000Z');
@@ -121,4 +125,252 @@ test('Wiki capture creates one page and updates index and log without overwritin
     (error) => error instanceof WikiBasicError && error.code === 'page-exists'
   );
   assert.equal((await inspectWikiVault(vault)).status, 'ready');
+});
+
+test('project sync preview is bounded, excludes credentials, and works without Git', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, '项目 源码');
+  await fsp.mkdir(path.join(workspace, 'src'), { recursive: true });
+  await fsp.mkdir(path.join(workspace, 'node_modules', 'ignored'), { recursive: true });
+  await fsp.mkdir(path.join(workspace, 'PRIVATE'), { recursive: true });
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# 项目\n\n面向 Windows 的桌面工具。\n', 'utf8');
+  await fsp.writeFile(path.join(workspace, 'src', 'app.js'), 'module.exports = { ready: true };\n', 'utf8');
+  await fsp.writeFile(path.join(workspace, '.env'), 'DEEPSEEK_API_KEY=must-not-appear\n', 'utf8');
+  await fsp.writeFile(path.join(workspace, '.dsh-wiki-update-test.json'), '{"temporary":"must-not-appear"}\n', 'utf8');
+  await fsp.writeFile(path.join(workspace, 'node_modules', 'ignored', 'index.js'), 'ignored\n', 'utf8');
+  await fsp.writeFile(path.join(workspace, 'PRIVATE', 'notes.md'), 'private-directory-marker\n', 'utf8');
+  await fsp.writeFile(path.join(workspace, 'oversized.md'), Buffer.alloc((256 * 1024) + 1, 0x61));
+  let deep = path.join(workspace, 'zz-depth');
+  for (let index = 0; index < 22; index += 1) deep = path.join(deep, `level-${index}`);
+  await fsp.mkdir(deep, { recursive: true });
+  await fsp.writeFile(path.join(deep, 'too-deep.md'), 'deep-marker\n', 'utf8');
+  await initializeWikiVault(vault, { clock: fixedClock });
+
+  const preview = await previewProjectSync(vault, workspace, {
+    clock: fixedClock,
+    inspectGit: async () => ({ status: 'unavailable', reason: 'git-not-found' })
+  });
+  assert.equal(preview.ok, true);
+  assert.equal(preview.mode, 'inventory');
+  assert.equal(preview.unchanged, false);
+  assert.equal(preview.limited, true);
+  assert.deepEqual(preview.delta.added.map((item) => item.path), ['README.md', 'src/app.js']);
+  assert.doesNotMatch(JSON.stringify(preview), /must-not-appear|private-directory-marker|deep-marker|\.env|node_modules|oversized\.md/i);
+  assert.match(preview.project.overviewPath, /^projects\/.+\/.+\.md$/);
+});
+
+test('project sync creates and incrementally updates pages without duplication', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'Wiki Product');
+  await fsp.mkdir(workspace, { recursive: true });
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Wiki Product\n\nLocal project knowledge.\n', 'utf8');
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const options = { clock: fixedClock, inspectGit: async () => ({ status: 'unavailable', reason: 'git-not-found' }) };
+  const preview = await previewProjectSync(vault, workspace, options);
+  const overviewPath = preview.project.overviewPath;
+  const spec = {
+    previewToken: preview.previewToken,
+    pages: [{
+      path: overviewPath,
+      expectedSha256: null,
+      title: 'Wiki Product',
+      summary: '记录项目架构、边界和关键决策。',
+      content: '# Wiki Product\n\n这是从 README 提取的项目事实。\n\n- 未来扩展需要保留来源。 ^[inferred]',
+      sources: ['README.md'],
+      provenance: { extracted: 0.8, inferred: 0.2, ambiguous: 0 }
+    }]
+  };
+  const plan = await buildProjectSyncPlan(vault, workspace, spec, options);
+  assert.equal(plan.pagesCreated, 1);
+  assert.equal(plan.pagesUpdated, 0);
+  const saved = await saveProjectSync(vault, workspace, spec, { ...options, confirmed: true });
+  assert.equal(saved.ok, true);
+  assert.deepEqual(saved.pagesCreated, [overviewPath]);
+  const page = await fsp.readFile(path.join(vault, overviewPath), 'utf8');
+  assert.match(page, /base_confidence: 0\.59/);
+  assert.match(page, /source_cwd:/);
+  assert.match(page, /\^\[inferred\]/);
+  const unchanged = await previewProjectSync(vault, workspace, options);
+  assert.equal(unchanged.unchanged, true);
+  assert.equal(unchanged.existingPages.length, 1);
+  await assert.rejects(
+    () => saveProjectSync(vault, workspace, { ...spec, previewToken: unchanged.previewToken }, { ...options, confirmed: true }),
+    (error) => error instanceof WikiBasicError && error.code === 'project-unchanged'
+  );
+
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Wiki Product\n\nLocal project knowledge with an incremental decision.\n', 'utf8');
+  const changed = await previewProjectSync(vault, workspace, options);
+  assert.equal(changed.delta.modified.length, 1);
+  const currentPage = await readProjectWikiPage(vault, workspace, overviewPath, options);
+  const updateSpec = {
+    previewToken: changed.previewToken,
+    pages: [{
+      ...spec.pages[0],
+      expectedSha256: currentPage.sha256,
+      content: '# Wiki Product\n\n增量合并后的事实和决策。'
+    }]
+  };
+  const updated = await saveProjectSync(vault, workspace, updateSpec, { ...options, confirmed: true });
+  assert.deepEqual(updated.pagesUpdated, [overviewPath]);
+  assert.equal((await previewProjectSync(vault, workspace, options)).unchanged, true);
+  const manifest = JSON.parse(await fsp.readFile(path.join(vault, '.manifest.json'), 'utf8'));
+  assert.equal(Object.keys(manifest.projects).length, 1);
+  assert.deepEqual(manifest.projects[changed.project.id].pages_in_vault, [overviewPath]);
+  assert.match(await fsp.readFile(path.join(vault, 'log.md'), 'utf8'), /WIKI_UPDATE project=/);
+});
+
+test('project sync rejects stale source previews and rolls back a failed transaction', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'rollback-project');
+  await fsp.mkdir(workspace, { recursive: true });
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Before\n', 'utf8');
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const options = { clock: fixedClock, inspectGit: async () => ({ status: 'unavailable', reason: 'git-not-found' }) };
+  const preview = await previewProjectSync(vault, workspace, options);
+  const spec = {
+    previewToken: preview.previewToken,
+    pages: [{
+      path: preview.project.overviewPath,
+      expectedSha256: null,
+      title: 'Rollback Project',
+      summary: '验证陈旧预览和事务回滚。',
+      content: '# Rollback Project\n\nBefore.',
+      sources: ['README.md'],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }]
+  };
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Changed after preview\n', 'utf8');
+  await assert.rejects(
+    () => saveProjectSync(vault, workspace, spec, { ...options, confirmed: true }),
+    (error) => error instanceof WikiBasicError && error.code === 'stale-project-preview'
+  );
+  assert.equal(fs.existsSync(path.join(vault, preview.project.overviewPath)), false);
+
+  const fresh = await previewProjectSync(vault, workspace, options);
+  const freshSpec = { ...spec, previewToken: fresh.previewToken };
+  const originalManifest = await fsp.readFile(path.join(vault, '.manifest.json'), 'utf8');
+  const originalIndex = await fsp.readFile(path.join(vault, 'index.md'), 'utf8');
+  await assert.rejects(
+    () => saveProjectSync(vault, workspace, freshSpec, {
+      ...options,
+      confirmed: true,
+      afterPageWrites: async () => { throw new Error('injected-transaction-failure'); }
+    }),
+    /injected-transaction-failure/
+  );
+  assert.equal(fs.existsSync(path.join(vault, fresh.project.overviewPath)), false);
+  assert.equal(await fsp.readFile(path.join(vault, '.manifest.json'), 'utf8'), originalManifest);
+  assert.equal(await fsp.readFile(path.join(vault, 'index.md'), 'utf8'), originalIndex);
+  assert.equal(fs.existsSync(path.join(vault, '_staging', '.dsh-wiki-project-sync.lock')), false);
+});
+
+test('project sync serializes concurrent writers and releases its lock', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'concurrent-project');
+  await fsp.mkdir(workspace, { recursive: true });
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Concurrent project\n', 'utf8');
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const options = { clock: fixedClock, inspectGit: async () => ({ status: 'unavailable', reason: 'git-not-found' }) };
+  const preview = await previewProjectSync(vault, workspace, options);
+  const spec = {
+    previewToken: preview.previewToken,
+    pages: [{
+      path: preview.project.overviewPath,
+      expectedSha256: null,
+      title: 'Concurrent project',
+      summary: 'Only one writer may commit at a time.',
+      content: '# Concurrent project',
+      sources: ['README.md'],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }]
+  };
+  let releaseFirst;
+  let signalFirst;
+  const firstPaused = new Promise((resolve) => { signalFirst = resolve; });
+  const continueFirst = new Promise((resolve) => { releaseFirst = resolve; });
+  const first = saveProjectSync(vault, workspace, spec, {
+    ...options,
+    confirmed: true,
+    afterPageWrites: async () => {
+      signalFirst();
+      await continueFirst;
+    }
+  });
+  await firstPaused;
+  await assert.rejects(
+    () => saveProjectSync(vault, workspace, spec, { ...options, confirmed: true }),
+    (error) => error instanceof WikiBasicError && error.code === 'project-sync-busy'
+  );
+  releaseFirst();
+  assert.equal((await first).ok, true);
+  assert.equal(fs.existsSync(path.join(vault, '_staging', '.dsh-wiki-project-sync.lock')), false);
+});
+
+test('project sync never overwrites an untracked Wiki page', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'existing-page-project');
+  await fsp.mkdir(workspace, { recursive: true });
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Existing page project\n', 'utf8');
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const options = { clock: fixedClock, inspectGit: async () => ({ status: 'unavailable', reason: 'git-not-found' }) };
+  const preview = await previewProjectSync(vault, workspace, options);
+  const relativeTarget = `${preview.project.rootPath}/concepts/manual.md`;
+  const target = path.join(vault, relativeTarget);
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  await fsp.writeFile(target, '# Human page\n\nDo not overwrite.\n', 'utf8');
+  const spec = {
+    previewToken: preview.previewToken,
+    pages: [{
+      path: preview.project.overviewPath,
+      expectedSha256: null,
+      title: 'Existing page project',
+      summary: 'Required first project overview.',
+      content: '# Existing page project',
+      sources: ['README.md'],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }, {
+      path: relativeTarget,
+      expectedSha256: null,
+      title: 'Existing page project',
+      summary: 'This should be rejected.',
+      content: '# Replacement',
+      sources: ['README.md'],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }]
+  };
+  await assert.rejects(
+    () => buildProjectSyncPlan(vault, workspace, spec, options),
+    (error) => error instanceof WikiBasicError && error.code === 'untracked-project-page'
+  );
+  assert.equal(await fsp.readFile(target, 'utf8'), '# Human page\n\nDo not overwrite.\n');
+});
+
+test('project sync rejects Windows alternate streams and reserved page names', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'safe-page-project');
+  await fsp.mkdir(workspace, { recursive: true });
+  await fsp.writeFile(path.join(workspace, 'README.md'), '# Safe page project\n', 'utf8');
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const options = { clock: fixedClock, inspectGit: async () => ({ status: 'unavailable', reason: 'git-not-found' }) };
+  const preview = await previewProjectSync(vault, workspace, options);
+  const page = {
+    expectedSha256: null,
+    title: 'Unsafe page name',
+    summary: 'This path must fail before writing.',
+    content: '# Unsafe page name',
+    sources: ['README.md'],
+    provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+  };
+  for (const relative of [
+    `${preview.project.rootPath}/concepts/note.md:alternate.md`,
+    `${preview.project.rootPath}/concepts/CON.md`
+  ]) {
+    await assert.rejects(
+      () => buildProjectSyncPlan(vault, workspace, {
+        previewToken: preview.previewToken,
+        pages: [{ ...page, path: preview.project.overviewPath }, { ...page, path: relative }]
+      }, options),
+      (error) => error instanceof WikiBasicError && error.code === 'invalid-project-page-path'
+    );
+  }
 });

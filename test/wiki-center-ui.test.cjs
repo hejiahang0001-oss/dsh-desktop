@@ -6,7 +6,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-test('V0.6.3 Wiki center is local-only, provenance-aware, and packaged', () => {
+test('V0.6.4 Wiki center is local-only, provenance-aware, project-aware, and packaged', () => {
   const main = read('electron/main.cjs');
   const preload = read('electron/wiki-center-preload.cjs');
   const renderer = read('assets/wiki-center.js');
@@ -17,7 +17,7 @@ test('V0.6.3 Wiki center is local-only, provenance-aware, and packaged', () => {
 
   assert.match(main, /wikiCenterIpcAllowed/);
   assert.match(main, /isTrustedMainFrameEvent\(\s*event,\s*wikiCenterWindow\?\.webContents,\s*wikiCenterUrlAllowed\s*\)/);
-  for (const channel of ['get-state', 'choose-vault', 'initialize-vault', 'query', 'get-session-candidates', 'preview-capture', 'save-capture', 'open-window']) {
+  for (const channel of ['get-state', 'choose-vault', 'initialize-vault', 'query', 'preview-project-sync', 'invoke-project-sync', 'get-session-candidates', 'preview-capture', 'save-capture', 'open-window']) {
     assert.match(main, new RegExp(`ipcMain\\.handle\\('wiki-center:${channel}'`));
   }
   assert.match(main, /label: 'Wiki 中心…'/);
@@ -27,19 +27,23 @@ test('V0.6.3 Wiki center is local-only, provenance-aware, and packaged', () => {
   assert.match(main, /pathKey\(selectedSummary\.cwd\) !== pathKey\(getWorkspaceState\(\)\.activePath\)/);
   assert.match(main, /defaultId: 1,\s*cancelId: 1/);
 
-  for (const channel of ['get-state', 'choose-vault', 'initialize-vault', 'query', 'get-session-candidates', 'preview-capture', 'save-capture']) {
+  for (const channel of ['get-state', 'choose-vault', 'initialize-vault', 'query', 'preview-project-sync', 'invoke-project-sync', 'get-session-candidates', 'preview-capture', 'save-capture']) {
     assert.match(preload, new RegExp(`wiki-center:${channel}`));
   }
   assert.doesNotMatch(preload, /readFile|writeFile|shell|ipcRenderer\.send/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /api\.previewCapture/);
   assert.match(renderer, /api\.saveCapture/);
+  assert.match(renderer, /api\.previewProjectSync/);
+  assert.match(renderer, /api\.invokeProjectSync/);
   assert.doesNotMatch(renderer, /innerHTML|eval\(/);
   assert.match(page, /原始会话只读/);
+  assert.match(page, /项目知识增量同步/);
   assert.match(page, /无 Git、Python、QMD 或 Obsidian 也可使用基础能力/);
   assert.match(desktopPreload, /wiki: Object\.freeze/);
   assert.match(command, /id: 'wiki-center\.open'/);
   assert.match(command, /id: 'wiki-query\.invoke'/);
   assert.match(command, /id: 'wiki-capture\.invoke'/);
+  assert.match(command, /id: 'wiki-update\.invoke'/);
   for (const asset of ['wiki-center.html', 'assets/wiki-center.css', 'assets/wiki-center.js']) assert.ok(manifest.build.files.includes(asset), asset);
 });

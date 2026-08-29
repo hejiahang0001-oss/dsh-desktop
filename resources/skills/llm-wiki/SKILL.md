@@ -4,7 +4,7 @@ description: Understand and preserve the DSH Desktop Wiki boundary: immutable ra
 user-invocable: false
 disable-model-invocation: false
 metadata:
-  version: 0.6.3
+  version: 0.6.4
 ---
 
 # LLM Wiki foundation
@@ -17,7 +17,7 @@ DSH Desktop treats the Wiki as a compiled Markdown knowledge base, not as a seco
 2. The user-selected Wiki directory is the only external write scope.
 3. Pages distinguish extracted statements from inference and keep a source locator.
 
-V0.6.3 provides only setup, query, and selected-conclusion capture. Project-wide synchronization, DSH history batch import, QMD, web research, and Obsidian UI control belong to later versions.
+V0.6.4 provides setup, query, selected-conclusion capture, and bounded incremental synchronization of the active project. DSH history batch import, QMD, web research, and Obsidian UI control belong to later versions.
 
 The desktop supplies trusted absolute paths in `DSH_DESKTOP_NODE`, `DSH_DESKTOP_WIKI_TOOL`, and `DSH_DESKTOP_WIKI_CONFIG`. Use only those paths. Do not read Codex or Claude vault configuration, copy a personal vault into the application, install packages, initialize Git, or pass the software-managed API Key to the Wiki tool.
 

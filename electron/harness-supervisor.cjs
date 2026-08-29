@@ -35,6 +35,49 @@ const isSafeHarnessUrl = (value) => {
 
 const firstExistingFile = (candidates) => candidates.find((candidate) => candidate && fs.existsSync(candidate));
 
+const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir }) => {
+  const sourceManifestPath = path.join(sourceDir, 'package.json');
+  const sourceModulePath = path.join(sourceDir, 'index.mjs');
+  const manifest = JSON.parse(await fsp.readFile(sourceManifestPath, 'utf8'));
+  if (manifest.name !== 'dsh-desktop-shell-env' || manifest.exports !== './index.mjs') {
+    const error = new Error('DSH Desktop 的固定工具环境桥接组件清单无效。请重新安装应用。');
+    error.code = 'HARNESS_SHELL_ENV_PLUGIN_INVALID';
+    throw error;
+  }
+
+  const targetDir = path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env');
+  try {
+    const stat = await fsp.lstat(targetDir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      const error = new Error('DSH Desktop 的固定工具环境桥接目录不安全。');
+      error.code = 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE';
+      throw error;
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    await fsp.mkdir(targetDir, { recursive: true });
+  }
+
+  const files = [
+    ['package.json', `${JSON.stringify(manifest, null, 2)}\n`],
+    ['index.mjs', await fsp.readFile(sourceModulePath, 'utf8')]
+  ];
+  for (const [name, content] of files) {
+    const targetPath = path.join(targetDir, name);
+    try {
+      if ((await fsp.lstat(targetPath)).isSymbolicLink()) {
+        const error = new Error(`DSH Desktop 的固定工具环境桥接文件不安全：${name}`);
+        error.code = 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE';
+        throw error;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    await fsp.writeFile(targetPath, content, 'utf8');
+  }
+  return targetDir;
+};
+
 const buildHarnessEnvironment = ({ baseEnv = process.env, overrides = {}, homeDir, workspaceDir }) => {
   const environment = { ...baseEnv };
   for (const name of Object.keys(environment)) {
@@ -100,6 +143,10 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     isPackaged && path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml'),
     path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]);
+  const shellEnvPluginDir = firstExistingFile([
+    isPackaged && path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-shell-env'),
+    path.join(rootDir, 'runtime', 'dsh-desktop-shell-env')
+  ]);
   const bundledSkillDir = firstExistingFile([
     isPackaged && path.join(resourcesPath, 'skills'),
     path.join(rootDir, 'resources', 'skills')
@@ -132,6 +179,13 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'HARNESS_PATCH_MISSING';
     throw error;
   }
+  if (!shellEnvPluginDir
+    || !fs.existsSync(path.join(shellEnvPluginDir, 'package.json'))
+    || !fs.existsSync(path.join(shellEnvPluginDir, 'index.mjs'))) {
+    const error = new Error('找不到 DSH Desktop 的固定工具环境桥接组件。请重新安装应用。');
+    error.code = 'HARNESS_SHELL_ENV_PLUGIN_MISSING';
+    throw error;
+  }
   if (!bundledSkillDir || !docxToolPath) {
     const error = new Error('找不到 DSH Desktop 内置的 Word DOCX Skill。请重新安装应用。');
     error.code = 'BUNDLED_WORD_SKILL_MISSING';
@@ -152,7 +206,7 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'BUNDLED_WIKI_SKILL_MISSING';
     throw error;
   }
-  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath };
+  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir };
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -263,7 +317,8 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(this.options.homeDir, { recursive: true });
     await fsp.mkdir(this.options.launchDir, { recursive: true });
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath } = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir } = resolveHarnessRuntimePaths(this.options);
+    await provisionDesktopShellEnvPlugin({ homeDir: this.options.homeDir, sourceDir: shellEnvPluginDir });
 
     this.stopRequested = false;
     this.outputBuffer = '';
@@ -377,5 +432,6 @@ module.exports = {
   probeHarness,
   resolvePnpmDshBin,
   resolveHarnessRuntimePaths,
+  provisionDesktopShellEnvPlugin,
   stripAnsi
 };

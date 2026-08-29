@@ -1,9 +1,13 @@
 'use strict';
 
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
+const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { promisify } = require('node:util');
+
+const execFileAsync = promisify(execFile);
 
 const WIKI_SCHEMA_VERSION = 1;
 const MAX_QUERY_LENGTH = 300;
@@ -12,6 +16,16 @@ const MAX_SCAN_FILES = 2000;
 const MAX_MARKDOWN_BYTES = 512 * 1024;
 const MAX_CAPTURE_CHARS = 20000;
 const MAX_TITLE_CHARS = 120;
+const MAX_PROJECT_FILES = 800;
+const MAX_PROJECT_FILE_BYTES = 256 * 1024;
+const MAX_PROJECT_TOTAL_BYTES = 8 * 1024 * 1024;
+const MAX_PROJECT_DEPTH = 20;
+const MAX_PROJECT_DIRECTORIES = 1000;
+const MAX_PROJECT_DIRECTORY_ENTRIES = 2000;
+const MAX_PROJECT_TOTAL_ENTRIES = 10000;
+const MAX_PROJECT_PAGES = 12;
+const MAX_PROJECT_PAGE_CHARS = 30000;
+const MAX_PROJECT_TOTAL_PAGE_CHARS = 150000;
 const WIKI_DIRECTORIES = Object.freeze([
   'concepts',
   'entities',
@@ -27,6 +41,21 @@ const WIKI_DIRECTORIES = Object.freeze([
 ]);
 const QUERY_EXCLUDED_DIRECTORIES = new Set(['_archives', '_raw', '_staging', '.obsidian', '.git']);
 const QUERY_EXCLUDED_FILES = new Set(['index.md', 'log.md', 'hot.md']);
+const PROJECT_EXCLUDED_DIRECTORIES = new Set([
+  '.git', '.hg', '.svn', '.idea', '.vscode', '.next', '.nuxt', '.output', '.turbo',
+  'node_modules', 'dist', 'build', 'coverage', 'out', 'release', 'releases', 'target',
+  'vendor', '__pycache__', '.venv', 'venv', 'tmp', 'temp', 'logs'
+]);
+const PROJECT_ALLOWED_EXTENSIONS = new Set([
+  '.c', '.cc', '.cjs', '.cpp', '.cs', '.css', '.csv', '.go', '.h', '.hpp', '.html',
+  '.ini', '.java', '.js', '.json', '.jsx', '.kt', '.kts', '.md', '.mjs', '.php',
+  '.properties', '.py', '.rb', '.rs', '.scss', '.sh', '.sql', '.swift', '.toml',
+  '.ts', '.tsx', '.txt', '.vue', '.xml', '.yaml', '.yml'
+]);
+const PROJECT_SENSITIVE_FILES = new Set([
+  '.env', '.env.local', '.env.production', '.env.development', '.npmrc', '.pypirc',
+  'credentials', 'credentials.json', 'secrets.json', 'id_rsa', 'id_ed25519'
+]);
 
 class WikiBasicError extends Error {
   constructor(code, message) {
@@ -63,20 +92,162 @@ const normalizeAbsolutePath = (value, label) => {
   return path.resolve(value);
 };
 
-const assertPlainDirectory = async (directory, { create = false } = {}) => {
-  const resolved = normalizeAbsolutePath(directory, '知识库路径');
+const assertPlainDirectory = async (directory, { create = false, label = '知识库路径' } = {}) => {
+  const resolved = normalizeAbsolutePath(directory, label);
   if (create) await fsp.mkdir(resolved, { recursive: true });
   let info;
   try {
     info = await fsp.lstat(resolved);
   } catch (error) {
-    if (error?.code === 'ENOENT') throw new WikiBasicError('vault-missing', '所选知识库目录不存在。');
+    if (error?.code === 'ENOENT') throw new WikiBasicError('directory-missing', `${label}不存在。`);
     throw error;
   }
   if (!info.isDirectory() || info.isSymbolicLink()) {
-    throw new WikiBasicError('unsafe-vault', '知识库必须是普通本地目录，不能是文件、符号链接或目录联接。');
+    throw new WikiBasicError('unsafe-directory', `${label}必须是普通本地目录，不能是文件、符号链接或目录联接。`);
   }
   return resolved;
+};
+
+const sha256Text = (value) => createHash('sha256').update(value).digest('hex');
+
+const readBoundedRegularFile = async (filePath, maxBytes) => {
+  const handle = await fsp.open(filePath, 'r');
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.size > maxBytes) return null;
+    const buffer = Buffer.alloc(Math.min(maxBytes + 1, Math.max(1, info.size + 1)));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > maxBytes) return null;
+    return { bytes: buffer.subarray(0, bytesRead), size: bytesRead };
+  } finally {
+    await handle.close();
+  }
+};
+
+const normalizedPathKey = (value) => path.resolve(value).replace(/\\/g, '/').toLowerCase();
+
+const isSensitiveProjectPath = (relativePath) => {
+  const normalized = String(relativePath || '').replace(/\\/g, '/').toLowerCase();
+  const basename = path.posix.basename(normalized);
+  return PROJECT_SENSITIVE_FILES.has(basename)
+    || basename.startsWith('.env.')
+    || basename.startsWith('.dsh-wiki-')
+    || /(?:^|\/)(?:secret|secrets|credential|credentials|private)(?:\/|$)/u.test(normalized)
+    || /\.(?:pem|key|p12|pfx)$/u.test(basename);
+};
+
+const isProjectSourceFile = (name) => {
+  const lower = name.toLowerCase();
+  return PROJECT_ALLOWED_EXTENSIONS.has(path.extname(lower))
+    || new Set(['dockerfile', 'makefile', 'license', 'readme', 'changelog']).has(lower);
+};
+
+const walkProjectSources = async (workspacePath) => {
+  const workspace = await assertPlainDirectory(workspacePath, { label: '工作区路径' });
+  const files = [];
+  let totalBytes = 0;
+  let directories = 0;
+  let totalEntries = 0;
+  let limited = false;
+
+  const visit = async (directory, depth = 0) => {
+    if (depth > MAX_PROJECT_DEPTH || directories >= MAX_PROJECT_DIRECTORIES || totalEntries >= MAX_PROJECT_TOTAL_ENTRIES) {
+      limited = true;
+      return;
+    }
+    if (files.length >= MAX_PROJECT_FILES || totalBytes >= MAX_PROJECT_TOTAL_BYTES) {
+      limited = true;
+      return;
+    }
+    directories += 1;
+    const entries = [];
+    for await (const entry of await fsp.opendir(directory)) {
+      entries.push(entry);
+      if (entries.length > MAX_PROJECT_DIRECTORY_ENTRIES) {
+        limited = true;
+        return;
+      }
+    }
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      totalEntries += 1;
+      if (totalEntries > MAX_PROJECT_TOTAL_ENTRIES) {
+        limited = true;
+        break;
+      }
+      if (files.length >= MAX_PROJECT_FILES || totalBytes >= MAX_PROJECT_TOTAL_BYTES) {
+        limited = true;
+        break;
+      }
+      const absolute = path.join(directory, entry.name);
+      const relative = path.relative(workspace, absolute).replace(/\\/g, '/');
+      if (!pathInside(workspace, absolute)) continue;
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        if (!PROJECT_EXCLUDED_DIRECTORIES.has(entry.name.toLowerCase())) await visit(absolute, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || isSensitiveProjectPath(relative) || !isProjectSourceFile(entry.name)) continue;
+      const opened = await readBoundedRegularFile(absolute, MAX_PROJECT_FILE_BYTES);
+      if (!opened || opened.bytes.includes(0)) continue;
+      if (totalBytes + opened.size > MAX_PROJECT_TOTAL_BYTES) {
+        limited = true;
+        continue;
+      }
+      totalBytes += opened.size;
+      files.push({ path: relative, size: opened.size, sha256: sha256Text(opened.bytes) });
+    }
+  };
+
+  await visit(workspace);
+  files.sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    workspace,
+    files,
+    totalBytes,
+    limited,
+    fingerprint: sha256Text(JSON.stringify(files))
+  };
+};
+
+const sanitizedGitEnvironment = () => {
+  const blocked = /(?:api[_-]?key|token|secret|password|credential|deepseek|openai|anthropic|git_(?:dir|work_tree|index_file|object_directory))/i;
+  return Object.fromEntries(Object.entries(process.env).filter(([name]) => !blocked.test(name)));
+};
+
+const inspectProjectGit = async (workspacePath, previousCommit = '') => {
+  const workspace = normalizeAbsolutePath(workspacePath, '工作区路径');
+  const run = async (...args) => oneLine((await execFileAsync('git', ['-C', workspace, ...args], {
+    cwd: workspace,
+    env: sanitizedGitEnvironment(),
+    windowsHide: true,
+    timeout: 10000,
+    maxBuffer: 1024 * 1024
+  })).stdout, 4096);
+  try {
+    const root = await run('rev-parse', '--show-toplevel');
+    if (normalizedPathKey(root) !== normalizedPathKey(workspace)) return { status: 'unavailable', reason: 'nested-workspace' };
+    const head = await run('rev-parse', 'HEAD');
+    if (!/^[a-f0-9]{40}$/i.test(head)) return { status: 'unavailable', reason: 'invalid-head' };
+    const branch = await run('branch', '--show-current').catch(() => '');
+    let ancestor = null;
+    if (/^[a-f0-9]{40}$/i.test(previousCommit)) {
+      try {
+        await execFileAsync('git', ['-C', workspace, 'merge-base', '--is-ancestor', previousCommit, head], {
+          cwd: workspace,
+          env: sanitizedGitEnvironment(),
+          windowsHide: true,
+          timeout: 10000
+        });
+        ancestor = true;
+      } catch {
+        ancestor = false;
+      }
+    }
+    return { status: 'ready', head, branch, previousCommit: previousCommit || '', previousCommitIsAncestor: ancestor };
+  } catch (error) {
+    return { status: 'unavailable', reason: error?.code === 'ENOENT' ? 'git-not-found' : 'not-a-repository' };
+  }
 };
 
 const readJsonFile = async (filePath, fallback = {}) => {
@@ -484,6 +655,467 @@ const saveCapture = async (vaultPath, capture, {
   };
 };
 
+const readManifestStrict = async (vaultPath) => {
+  const manifestPath = path.join(vaultPath, '.manifest.json');
+  try {
+    const raw = await fsp.readFile(manifestPath, 'utf8');
+    const manifest = JSON.parse(raw);
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('invalid-object');
+    if (manifest.projects !== undefined && (!manifest.projects || typeof manifest.projects !== 'object' || Array.isArray(manifest.projects))) {
+      throw new Error('invalid-projects');
+    }
+    return { ...manifest, projects: manifest.projects || {} };
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new WikiBasicError('vault-not-ready', '知识库缺少清单文件。');
+    throw new WikiBasicError('invalid-manifest', '知识库清单文件损坏，已停止项目同步。');
+  }
+};
+
+const projectSlug = (workspacePath) => slugify(path.basename(workspacePath)).slice(0, 48);
+
+const projectIdentity = (workspacePath) => {
+  const sourceCwd = path.resolve(workspacePath);
+  const slug = projectSlug(sourceCwd);
+  const id = `${slug}-${sha256Text(normalizedPathKey(sourceCwd)).slice(0, 10)}`;
+  return {
+    id,
+    name: oneLine(path.basename(sourceCwd), MAX_TITLE_CHARS),
+    sourceCwd,
+    rootPath: `projects/${id}`,
+    overviewPath: `projects/${id}/${id}.md`
+  };
+};
+
+const previousProjectFiles = (entry) => Array.isArray(entry?.files)
+  ? entry.files.filter((item) => item && typeof item.path === 'string' && /^[a-f0-9]{64}$/i.test(item.sha256 || ''))
+    .map((item) => ({ path: item.path.replace(/\\/g, '/'), size: Number(item.size) || 0, sha256: item.sha256 }))
+  : [];
+
+const projectFileDelta = (before, after) => {
+  const previous = new Map(before.map((item) => [item.path, item]));
+  const current = new Map(after.map((item) => [item.path, item]));
+  const added = after.filter((item) => !previous.has(item.path));
+  const modified = after.filter((item) => previous.has(item.path) && previous.get(item.path).sha256 !== item.sha256);
+  const removed = before.filter((item) => !current.has(item.path));
+  return { added, modified, removed };
+};
+
+const listCurrentProjectPages = async (vaultPath, project, entry) => {
+  const configured = Array.isArray(entry?.pages_in_vault) ? entry.pages_in_vault : [];
+  const candidates = new Set([...configured, project.overviewPath]);
+  const pages = [];
+  for (const relative of candidates) {
+    if (typeof relative !== 'string' || !relative.startsWith(`${project.rootPath}/`) || !relative.endsWith('.md')) continue;
+    const absolute = path.join(vaultPath, relative);
+    if (!pathInside(vaultPath, absolute)) continue;
+    try {
+      const info = await fsp.lstat(absolute);
+      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) continue;
+      const opened = await readBoundedRegularFile(absolute, MAX_MARKDOWN_BYTES);
+      if (!opened) continue;
+      const text = opened.bytes.toString('utf8');
+      pages.push({ path: relative.replace(/\\/g, '/'), sha256: sha256Text(text), size: opened.size });
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+  pages.sort((left, right) => left.path.localeCompare(right.path));
+  return pages;
+};
+
+const assertSafeDirectoryChain = async (rootPath, directoryPath) => {
+  const root = path.resolve(rootPath);
+  const directory = path.resolve(directoryPath);
+  if (!pathInside(root, directory)) throw new WikiBasicError('path-escape', '项目知识目录越过知识库范围。');
+  const relative = path.relative(root, directory);
+  let current = root;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    try {
+      const info = await fsp.lstat(current);
+      if (!info.isDirectory() || info.isSymbolicLink()) throw new WikiBasicError('unsafe-project-directory', '项目知识目录不能包含文件、符号链接或目录联接。');
+    } catch (error) {
+      if (error?.code === 'ENOENT') return;
+      throw error;
+    }
+  }
+};
+
+const acquireProjectSyncLock = async (vaultPath, allowReclaim = true) => {
+  const stagingDir = path.join(vaultPath, '_staging');
+  await assertSafeDirectoryChain(vaultPath, stagingDir);
+  await fsp.mkdir(stagingDir, { recursive: true });
+  await assertSafeDirectoryChain(vaultPath, stagingDir);
+  const lockPath = path.join(stagingDir, '.dsh-wiki-project-sync.lock');
+  let handle;
+  try {
+    handle = await fsp.open(lockPath, 'wx', 0o600);
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+    const info = await fsp.lstat(lockPath);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 1024) {
+      throw new WikiBasicError('unsafe-project-sync-lock', '项目同步锁不是安全的普通文件，已停止写入。');
+    }
+    let opened;
+    try {
+      opened = await readBoundedRegularFile(lockPath, 1024);
+    } catch (readError) {
+      if (allowReclaim && readError?.code === 'ENOENT') return acquireProjectSyncLock(vaultPath, false);
+      throw readError;
+    }
+    let ownerPid = 0;
+    try { ownerPid = Number(JSON.parse(opened?.bytes.toString('utf8') || '{}').pid) || 0; } catch {}
+    let ownerActive = false;
+    if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
+      try {
+        process.kill(ownerPid, 0);
+        ownerActive = true;
+      } catch (probeError) {
+        ownerActive = probeError?.code !== 'ESRCH';
+      }
+    }
+    const recent = Date.now() - info.mtimeMs < 5 * 60 * 1000;
+    if (allowReclaim && !ownerActive && !recent) {
+      await fsp.unlink(lockPath);
+      return acquireProjectSyncLock(vaultPath, false);
+    }
+    throw new WikiBasicError('project-sync-busy', '另一个项目知识同步正在写入该知识库，请稍后重试。');
+  }
+  try {
+    await handle.writeFile(`${JSON.stringify({ pid: process.pid, started: isoNow() })}\n`, 'utf8');
+    await handle.sync();
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    await fsp.unlink(lockPath).catch(() => undefined);
+    throw error;
+  }
+  return async () => {
+    await handle.close();
+    await fsp.unlink(lockPath);
+  };
+};
+
+const previewProjectSync = async (vaultPath, workspacePath, {
+  clock = () => new Date(),
+  inspectGit = inspectProjectGit
+} = {}) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  const state = await inspectWikiVault(vault);
+  if (state.status !== 'ready') throw new WikiBasicError('vault-not-ready', '知识库尚未初始化，不能同步项目。');
+  const inventory = await walkProjectSources(workspacePath);
+  const project = projectIdentity(inventory.workspace);
+  const manifest = await readManifestStrict(vault);
+  const previous = manifest.projects[project.id] || null;
+  if (previous?.source_cwd && normalizedPathKey(previous.source_cwd) !== normalizedPathKey(project.sourceCwd)) {
+    throw new WikiBasicError('project-identity-conflict', '项目标识与知识库中的来源路径冲突。');
+  }
+  const previousFiles = previousProjectFiles(previous);
+  const delta = projectFileDelta(previousFiles, inventory.files);
+  const git = await inspectGit(inventory.workspace, previous?.last_git_commit || '');
+  const existingPages = await listCurrentProjectPages(vault, project, previous);
+  const unchanged = Boolean(previous && previous.source_fingerprint === inventory.fingerprint);
+  const mode = git?.status === 'ready' ? 'git' : 'inventory';
+  const tokenPayload = {
+    projectId: project.id,
+    sourceCwd: normalizedPathKey(project.sourceCwd),
+    sourceFingerprint: inventory.fingerprint,
+    previousFingerprint: previous?.source_fingerprint || '',
+    pages: existingPages.map(({ path: pagePath, sha256 }) => ({ path: pagePath, sha256 })),
+    gitHead: git?.head || ''
+  };
+  return {
+    ok: true,
+    generatedAt: isoNow(clock),
+    mode,
+    unchanged,
+    limited: inventory.limited,
+    project,
+    sourceFingerprint: inventory.fingerprint,
+    sourceFiles: inventory.files,
+    scannedFiles: inventory.files.length,
+    scannedBytes: inventory.totalBytes,
+    delta,
+    git,
+    existingPages,
+    previewToken: sha256Text(JSON.stringify(tokenPayload))
+  };
+};
+
+const allowedProjectPagePath = (project, value) => {
+  if (typeof value !== 'string' || value.length > 260 || value.includes('\\')) return '';
+  const relative = value.replace(/^\/+/, '');
+  const segments = relative.split('/');
+  if (!relative.endsWith('.md')
+    || relative.includes('..')
+    || relative.includes('//')
+    || /[\u0000-\u001f<>:"|?*]/u.test(relative)
+    || segments.some((segment) => !segment || /[. ]$/u.test(segment) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment))) return '';
+  if (relative === project.overviewPath) return relative;
+  const allowed = ['concepts', 'skills', 'references'];
+  return allowed.some((section) => relative.startsWith(`${project.rootPath}/${section}/`)) ? relative : '';
+};
+
+const normalizeProvenance = (value) => {
+  const result = {
+    extracted: Number(value?.extracted),
+    inferred: Number(value?.inferred),
+    ambiguous: Number(value?.ambiguous)
+  };
+  if (Object.values(result).some((item) => !Number.isFinite(item) || item < 0 || item > 1)) {
+    throw new WikiBasicError('invalid-provenance', '每个页面都必须提供 0 到 1 之间的来源、推断和存疑比例。');
+  }
+  const total = result.extracted + result.inferred + result.ambiguous;
+  if (Math.abs(total - 1) > 0.011) throw new WikiBasicError('invalid-provenance', '页面来源、推断和存疑比例之和必须为 1。');
+  return result;
+};
+
+const preservedPageTrust = (existingText, timestamp) => {
+  const metadata = parseFrontmatter(existingText || '').metadata;
+  const lifecycle = ['reviewed', 'verified', 'disputed'].includes(metadata.lifecycle) ? metadata.lifecycle : 'draft';
+  const created = (existingText || '').match(/^created:\s*(.+)$/m)?.[1]?.trim() || timestamp;
+  const lifecycleChanged = (existingText || '').match(/^lifecycle_changed:\s*(.+)$/m)?.[1]?.trim() || timestamp.slice(0, 10);
+  const tier = (existingText || '').match(/^tier:\s*(.+)$/m)?.[1]?.trim() || 'supporting';
+  return { lifecycle, created, lifecycleChanged, tier };
+};
+
+const projectPageText = (page, project, timestamp, existingText = '') => {
+  const trust = preservedPageTrust(existingText, timestamp);
+  const sources = page.sources.map((source) => `  - ${yamlString(`project-file:${source}`)}`).join('\n');
+  return `---\ntitle: ${yamlString(page.title)}\ncategory: ${page.path === project.overviewPath ? 'project' : 'project-knowledge'}\ntags: [dsh, project-sync]\nsources:\n${sources}\nsummary: ${yamlString(page.summary)}\nprovenance:\n  extracted: ${page.provenance.extracted.toFixed(2)}\n  inferred: ${page.provenance.inferred.toFixed(2)}\n  ambiguous: ${page.provenance.ambiguous.toFixed(2)}\nbase_confidence: 0.59\nlifecycle: ${trust.lifecycle}\nlifecycle_changed: ${trust.lifecycleChanged}\ntier: ${trust.tier}\nsource_cwd: ${yamlString(project.sourceCwd)}\ncreated: ${trust.created}\nupdated: ${timestamp}\n---\n\n${page.content.trim()}\n`;
+};
+
+const buildProjectSyncPlan = async (vaultPath, workspacePath, spec, options = {}) => {
+  const preview = await previewProjectSync(vaultPath, workspacePath, options);
+  if (preview.unchanged) throw new WikiBasicError('project-unchanged', '当前项目自上次同步后没有可识别的源文件变化。');
+  if (!spec || spec.previewToken !== preview.previewToken) throw new WikiBasicError('stale-project-preview', '项目内容或知识库页面已变化，请重新检查增量。');
+  if (!Array.isArray(spec.pages) || spec.pages.length === 0 || spec.pages.length > MAX_PROJECT_PAGES) {
+    throw new WikiBasicError('invalid-project-pages', `每次项目同步必须包含 1 到 ${MAX_PROJECT_PAGES} 个页面。`);
+  }
+  if (!preview.existingPages.length && !spec.pages.some((page) => page?.path === preview.project.overviewPath)) {
+    throw new WikiBasicError('overview-required', '首次同步必须创建项目总览页面。');
+  }
+  const sourcePaths = new Set(preview.sourceFiles.map((item) => item.path));
+  const existingPages = new Map(preview.existingPages.map((item) => [item.path, item]));
+  const seen = new Set();
+  const writes = [];
+  let totalChars = 0;
+  for (const candidate of spec.pages) {
+    const relative = allowedProjectPagePath(preview.project, candidate?.path);
+    if (!relative || seen.has(relative)) throw new WikiBasicError('invalid-project-page-path', '项目页面必须位于当前项目的总览、concepts、skills 或 references 目录中。');
+    seen.add(relative);
+    const title = oneLine(candidate?.title, MAX_TITLE_CHARS);
+    const summary = oneLine(candidate?.summary, 240);
+    const content = normalizeText(candidate?.content, MAX_PROJECT_PAGE_CHARS);
+    if (!title || !summary || !content || String(candidate?.content || '').length > MAX_PROJECT_PAGE_CHARS) {
+      throw new WikiBasicError('invalid-project-page', '项目页面必须包含有效标题、摘要和受限正文。');
+    }
+    totalChars += content.length;
+    if (totalChars > MAX_PROJECT_TOTAL_PAGE_CHARS) throw new WikiBasicError('project-pages-too-large', '本次项目同步页面总量超出限制。');
+    const sources = Array.isArray(candidate?.sources)
+      ? [...new Set(candidate.sources.filter((item) => typeof item === 'string' && sourcePaths.has(item)))].slice(0, 24)
+      : [];
+    if (!sources.length) throw new WikiBasicError('invalid-project-sources', '每个项目页面至少需要一个本次扫描到的源文件。');
+    const existing = existingPages.get(relative);
+    if (existing && candidate.expectedSha256 !== existing.sha256) throw new WikiBasicError('stale-project-page', `知识页面 ${relative} 已变化，请重新读取后合并。`);
+    if (!existing && candidate.expectedSha256 !== null && candidate.expectedSha256 !== undefined) throw new WikiBasicError('unexpected-project-page', `知识页面 ${relative} 尚不存在，不能按更新处理。`);
+    const absolute = path.join(path.resolve(vaultPath), relative);
+    if (!pathInside(vaultPath, absolute)) throw new WikiBasicError('path-escape', '项目页面路径越过知识库目录。');
+    await assertSafeDirectoryChain(vaultPath, path.dirname(absolute));
+    if (!existing) {
+      try {
+        const info = await fsp.lstat(absolute);
+        if (info) throw new WikiBasicError('untracked-project-page', `知识库中已有未纳入项目清单的页面 ${relative}，已停止覆盖。`);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+    const existingText = existing ? await fsp.readFile(absolute, 'utf8') : '';
+    const page = { path: relative, title, summary, content, sources, provenance: normalizeProvenance(candidate.provenance) };
+    const text = projectPageText(page, preview.project, isoNow(options.clock || (() => new Date())), existingText);
+    writes.push({ ...page, absolute, exists: Boolean(existing), expectedSha256: existing?.sha256 || null, text, sensitive: sensitiveFindings(text) });
+  }
+  return {
+    ok: true,
+    preview,
+    writes,
+    pagesCreated: writes.filter((item) => !item.exists).length,
+    pagesUpdated: writes.filter((item) => item.exists).length,
+    sensitive: writes.flatMap((item) => item.sensitive.map((finding) => ({ ...finding, path: item.path })))
+  };
+};
+
+const readProjectWikiPage = async (vaultPath, workspacePath, relativePath, options = {}) => {
+  const preview = await previewProjectSync(vaultPath, workspacePath, options);
+  const expected = preview.existingPages.find((item) => item.path === relativePath);
+  if (!expected || !allowedProjectPagePath(preview.project, relativePath)) throw new WikiBasicError('project-page-not-found', '该页面不属于当前项目或尚不存在。');
+  const absolute = path.join(path.resolve(vaultPath), relativePath);
+  await assertSafeDirectoryChain(vaultPath, path.dirname(absolute));
+  const info = await fsp.lstat(absolute);
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) throw new WikiBasicError('unsafe-project-page', '项目知识页面不是受支持的普通 Markdown 文件。');
+  const opened = await readBoundedRegularFile(absolute, MAX_MARKDOWN_BYTES);
+  if (!opened) throw new WikiBasicError('unsafe-project-page', '项目知识页面不是受支持的普通 Markdown 文件。');
+  const content = opened.bytes.toString('utf8');
+  const sha256 = sha256Text(content);
+  if (sha256 !== expected.sha256) throw new WikiBasicError('stale-project-page', '知识页面在读取期间发生变化，请重试。');
+  return { ok: true, path: relativePath, sha256, content };
+};
+
+const updateProjectIndexText = (text, project, summary, timestamp) => {
+  const link = project.overviewPath.replace(/\.md$/i, '');
+  const entry = `- [[${link}|${project.name}]] — ${summary} ( #dsh #project-sync)`;
+  let next = text.replace(/\*此索引由 DSH Desktop 维护。最后更新：[^*]+\*/u, `*此索引由 DSH Desktop 维护。最后更新：${timestamp}*`);
+  if (next.includes(`[[${link}|`) || next.includes(`[[${link}]]`)) return next;
+  const marker = '## Projects';
+  return next.includes(marker)
+    ? next.replace(marker, `${marker}\n\n${entry}`)
+    : `${next.trimEnd()}\n\n${marker}\n\n${entry}\n`;
+};
+
+const updateProjectHotText = (text, project, timestamp, changedPages) => {
+  const entry = `- [${timestamp}] WIKI_UPDATE — ${project.name}，更新 ${changedPages} 个页面`;
+  const marker = '## Recent Activity';
+  if (!text.includes(marker)) return `${text.trimEnd()}\n\n${marker}\n\n${entry}\n`;
+  return text.replace(marker, `${marker}\n\n${entry}`);
+};
+
+const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
+  confirmed = false,
+  confirmedSensitive = false,
+  clock = () => new Date(),
+  inspectGit = inspectProjectGit,
+  afterPageWrites = async () => undefined
+} = {}) => {
+  if (!confirmed) throw new WikiBasicError('project-confirmation-required', '同步项目知识前需要用户明确确认。');
+  const vault = await assertPlainDirectory(vaultPath);
+  const plan = await buildProjectSyncPlan(vault, workspacePath, spec, { clock, inspectGit });
+  if (plan.sensitive.length && !confirmedSensitive) throw new WikiBasicError('sensitive-confirmation-required', '项目页面可能包含凭据或敏感字段，需要再次确认。');
+  const timestamp = isoNow(clock);
+  const manifestPath = path.join(vault, '.manifest.json');
+  const indexPath = path.join(vault, 'index.md');
+  const logPath = path.join(vault, 'log.md');
+  const hotPath = path.join(vault, 'hot.md');
+  const [originalManifestText, originalIndex, originalLog, originalHot] = await Promise.all([
+    fsp.readFile(manifestPath, 'utf8'),
+    fsp.readFile(indexPath, 'utf8'),
+    fsp.readFile(logPath, 'utf8'),
+    fsp.readFile(hotPath, 'utf8')
+  ]);
+  const originalManifest = JSON.parse(originalManifestText);
+  const transactionId = `${timestamp.replace(/[:.]/g, '-')}-${randomUUID()}`;
+  const archiveRoot = path.join(vault, '_archives', 'dsh-project-sync', transactionId);
+  await assertSafeDirectoryChain(vault, path.dirname(archiveRoot));
+  await fsp.mkdir(archiveRoot, { recursive: true });
+  await assertSafeDirectoryChain(vault, archiveRoot);
+  const originals = new Map();
+  for (const write of plan.writes) {
+    if (!write.exists) continue;
+    const original = await fsp.readFile(write.absolute, 'utf8');
+    originals.set(write.path, original);
+    const backup = path.join(archiveRoot, write.path);
+    await fsp.mkdir(path.dirname(backup), { recursive: true });
+    await atomicWriteText(backup, original);
+  }
+  for (const [name, value] of [['.manifest.json', originalManifestText], ['index.md', originalIndex], ['log.md', originalLog], ['hot.md', originalHot]]) {
+    await atomicWriteText(path.join(archiveRoot, name), value);
+  }
+
+  const project = plan.preview.project;
+  const overview = plan.writes.find((item) => item.path === project.overviewPath);
+  const summary = overview?.summary || oneLine(originalManifest.projects?.[project.id]?.summary || '项目知识增量同步', 240);
+  const pageSet = new Set([
+    ...plan.preview.existingPages.map((item) => item.path),
+    ...plan.writes.map((item) => item.path)
+  ]);
+  const nextManifest = {
+    ...originalManifest,
+    version: WIKI_SCHEMA_VERSION,
+    projects: {
+      ...(originalManifest.projects || {}),
+      [project.id]: {
+        id: project.id,
+        name: project.name,
+        source_cwd: project.sourceCwd,
+        source_fingerprint: plan.preview.sourceFingerprint,
+        last_git_commit: plan.preview.git?.head || '',
+        mode: plan.preview.mode,
+        files: plan.preview.sourceFiles,
+        pages_in_vault: [...pageSet].sort(),
+        summary,
+        updated: timestamp
+      }
+    }
+  };
+  const nextManifestText = `${JSON.stringify(nextManifest, null, 2)}\n`;
+  const nextIndex = updateProjectIndexText(originalIndex, project, summary, timestamp);
+  const nextHot = updateProjectHotText(originalHot, project, timestamp, plan.writes.length);
+  const nextLog = `${originalLog.trimEnd()}\n- [${timestamp}] WIKI_UPDATE project=${yamlString(project.id)} mode=${plan.preview.mode} added=${plan.preview.delta.added.length} modified=${plan.preview.delta.modified.length} removed=${plan.preview.delta.removed.length} pages=${plan.writes.length} archive=${yamlString(path.relative(vault, archiveRoot).replace(/\\/g, '/'))}\n`;
+  try {
+    for (const write of plan.writes) {
+      await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
+      await fsp.mkdir(path.dirname(write.absolute), { recursive: true });
+      await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
+      await atomicWriteText(write.absolute, write.text);
+    }
+    await afterPageWrites();
+    await atomicWriteText(manifestPath, nextManifestText);
+    await atomicWriteText(indexPath, nextIndex);
+    await atomicWriteText(logPath, nextLog);
+    await atomicWriteText(hotPath, nextHot);
+    for (const write of plan.writes) {
+      if (await fsp.readFile(write.absolute, 'utf8') !== write.text) throw new WikiBasicError('write-verification-failed', `项目页面 ${write.path} 写入后校验失败。`);
+    }
+    const [verifiedManifest, verifiedIndex, verifiedLog, verifiedHot] = await Promise.all([
+      fsp.readFile(manifestPath, 'utf8'), fsp.readFile(indexPath, 'utf8'), fsp.readFile(logPath, 'utf8'), fsp.readFile(hotPath, 'utf8')
+    ]);
+    if (verifiedManifest !== nextManifestText || verifiedIndex !== nextIndex || verifiedLog !== nextLog || verifiedHot !== nextHot) {
+      throw new WikiBasicError('write-verification-failed', '项目清单、索引、日志或热点页写入后校验失败。');
+    }
+  } catch (error) {
+    for (const write of plan.writes) {
+      if (originals.has(write.path)) await atomicWriteText(write.absolute, originals.get(write.path)).catch(() => undefined);
+      else await fsp.unlink(write.absolute).catch(() => undefined);
+    }
+    await Promise.all([
+      atomicWriteText(manifestPath, originalManifestText),
+      atomicWriteText(indexPath, originalIndex),
+      atomicWriteText(logPath, originalLog),
+      atomicWriteText(hotPath, originalHot)
+    ]).catch(() => undefined);
+    throw error;
+  }
+  return {
+    ok: true,
+    project,
+    pagesCreated: plan.writes.filter((item) => !item.exists).map((item) => item.path),
+    pagesUpdated: plan.writes.filter((item) => item.exists).map((item) => item.path),
+    archive: path.relative(vault, archiveRoot).replace(/\\/g, '/'),
+    message: '项目知识已增量同步，清单、索引、日志和恢复副本均已更新。'
+  };
+};
+
+const saveProjectSync = async (vaultPath, workspacePath, spec, options = {}) => {
+  if (!options.confirmed) return saveProjectSyncLocked(vaultPath, workspacePath, spec, options);
+  const vault = await assertPlainDirectory(vaultPath);
+  const release = await acquireProjectSyncLock(vault);
+  let result;
+  let primaryError;
+  try {
+    result = await saveProjectSyncLocked(vault, workspacePath, spec, options);
+  } catch (error) {
+    primaryError = error;
+  }
+  let releaseError;
+  try {
+    await release();
+  } catch (error) {
+    releaseError = error;
+  }
+  if (primaryError && releaseError) throw new AggregateError([primaryError, releaseError], '项目同步失败，且同步锁清理未完成。');
+  if (primaryError) throw primaryError;
+  if (releaseError) throw releaseError;
+  return result;
+};
+
 const readConfiguredVault = async (configPath) => {
   const resolved = normalizeAbsolutePath(configPath, 'Wiki 配置文件路径');
   const settings = normalizeSettings(await readJsonFile(resolved, {}));
@@ -545,7 +1177,33 @@ const runCli = async (argv = process.argv.slice(2)) => {
       workspaceName: path.basename(workspace)
     });
   }
-  throw new WikiBasicError('unknown-command', 'Wiki 工具仅支持 status、query、preview 和 save。');
+  if (command === 'project-preview') {
+    const workspace = normalizeAbsolutePath(args.workspace || process.env.DSH_CWD, '工作区路径');
+    return previewProjectSync(vaultPath, workspace);
+  }
+  if (command === 'project-page') {
+    const workspace = normalizeAbsolutePath(args.workspace || process.env.DSH_CWD, '工作区路径');
+    return readProjectWikiPage(vaultPath, workspace, args.path || '');
+  }
+  if (command === 'project-validate') {
+    const { workspace, spec } = await readWorkspaceSpec(args);
+    const plan = await buildProjectSyncPlan(vaultPath, workspace, spec);
+    return {
+      ok: true,
+      project: plan.preview.project,
+      pagesCreated: plan.pagesCreated,
+      pagesUpdated: plan.pagesUpdated,
+      sensitive: plan.sensitive
+    };
+  }
+  if (command === 'project-save') {
+    const { workspace, spec } = await readWorkspaceSpec(args);
+    return saveProjectSync(vaultPath, workspace, spec, {
+      confirmed: args['confirm-project-sync'] === true,
+      confirmedSensitive: args['confirm-sensitive'] === true
+    });
+  }
+  throw new WikiBasicError('unknown-command', 'Wiki 工具仅支持 status、query、preview、save、project-preview、project-page、project-validate 和 project-save。');
 };
 
 if (require.main === module) {
@@ -560,6 +1218,11 @@ if (require.main === module) {
 module.exports = {
   MAX_CAPTURE_CHARS,
   MAX_MARKDOWN_BYTES,
+  MAX_PROJECT_FILES,
+  MAX_PROJECT_FILE_BYTES,
+  MAX_PROJECT_PAGES,
+  MAX_PROJECT_TOTAL_BYTES,
+  MAX_PROJECT_TOTAL_PAGE_CHARS,
   MAX_QUERY_LENGTH,
   MAX_RESULTS,
   MAX_SCAN_FILES,
@@ -567,13 +1230,19 @@ module.exports = {
   WikiBasicError,
   WikiSettingsStore,
   buildCapturePreview,
+  buildProjectSyncPlan,
   initializeWikiVault,
+  inspectProjectGit,
   inspectWikiVault,
   parseFrontmatter,
   queryWiki,
   readConfiguredVault,
+  readProjectWikiPage,
   runCli,
   saveCapture,
+  saveProjectSync,
   sensitiveFindings,
-  slugify
+  slugify,
+  previewProjectSync,
+  walkProjectSources
 };

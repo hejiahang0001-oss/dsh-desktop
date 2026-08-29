@@ -1,0 +1,10 @@
+{
+  "name": "dsh-desktop-shell-env",
+  "version": "0.6.4",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs",
+  "files": [
+    "index.mjs"
+  ]
+}
