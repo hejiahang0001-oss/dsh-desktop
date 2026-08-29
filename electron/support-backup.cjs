@@ -16,6 +16,7 @@ const MAX_VALIDATION_DEPTH = 12;
 const MANIFEST_NAME = 'dsh-backup-manifest.json';
 const FIXED_STATE_FILES = Object.freeze([
   'desktop-state.json',
+  'update-state.json',
   'wiki-settings.json',
   'Preferences',
   'workbench-state.json',

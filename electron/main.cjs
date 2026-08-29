@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, safeStorage, screen, session, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, safeStorage, screen, session, shell, Tray } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -79,6 +79,16 @@ const {
 const { WorkbenchStore, normalizeWorkbenchState } = require('./workbench-store.cjs');
 const { GitWorktreeManager, runGitCommand } = require('./worktree-manager.cjs');
 const { GitDeliveryError, GitDeliveryManager, normalizeCommitMessage } = require('./git-delivery.cjs');
+const {
+  UpdatePreferenceStore,
+  checkForProductUpdate,
+  selectLatestProductRelease
+} = require('./release-update.cjs');
+const {
+  AgentTransitionTracker,
+  isBackgroundSupervisionRequired,
+  trayStatusLabel
+} = require('./tray-supervision.cjs');
 const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 const { SideChatController, SideChatError } = require('./side-chat.cjs');
@@ -96,6 +106,7 @@ let worktreesWindow;
 let tasksSubagentsWindow;
 let sideChatWindow;
 let gitDeliveryWindow;
+let appTray;
 let supervisor;
 let workspaceStore;
 let workbenchStore;
@@ -114,6 +125,7 @@ let worktreeManager;
 let tasksSubagentsController;
 let sideChatController;
 let gitDeliveryManager;
+let updatePreferenceStore;
 let reliableInterruptController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
@@ -123,6 +135,7 @@ let tasksSubagentsOperationPromise = null;
 let sideChatOperationPromise = null;
 let supportBackupOperationPromise = null;
 let gitDeliveryOperationPromise = null;
+let updateCheckPromise = null;
 let sideChatSelectionTimer;
 let sideChatPartitionSession;
 let sideChatMainLayout;
@@ -137,6 +150,8 @@ let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
 let loadFailureHandled = false;
 let agentPollTimer;
+const agentTransitionTracker = new AgentTransitionTracker();
+const activeNotifications = new Set();
 const unavailableWorkspaceSync = (status = 'pending', error = null) => Object.freeze({
   status,
   workspacePath: '',
@@ -266,6 +281,7 @@ const tasksSubagentsSmokeTarget = process.argv.find((argument) => argument.start
 const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith('--side-chat-smoke-file='));
 const supportSmokeTarget = process.argv.find((argument) => argument.startsWith('--support-smoke-file='));
 const gitDeliverySmokeTarget = process.argv.find((argument) => argument.startsWith('--git-delivery-smoke-file='));
+const traySmokeTarget = process.argv.find((argument) => argument.startsWith('--tray-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 const isolatedSmokeTarget = [
   desktopSmokeTarget,
@@ -280,7 +296,8 @@ const isolatedSmokeTarget = [
   tasksSubagentsSmokeTarget,
   sideChatSmokeTarget,
   supportSmokeTarget,
-  gitDeliverySmokeTarget
+  gitDeliverySmokeTarget,
+  traySmokeTarget
 ].find(Boolean);
 if (isolatedSmokeTarget) {
   const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
@@ -2908,8 +2925,13 @@ const refreshAgentDiagnostics = async ({ rebuildMenu = true } = {}) => {
     }
   }
   const changed = !sameAgentDiagnostics(agentDiagnostics, next);
+  const transition = agentTransitionTracker.observe(next);
   agentDiagnostics = Object.freeze({ ...next, producedPaths: Object.freeze([...(next.producedPaths || [])]) });
   const reviewChanged = await refreshChangeReviewDiagnostics({ rebuildMenu: false });
+  if (changed) updateApplicationTray();
+  if (transition && (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isFocused())) {
+    showFixedNotification(transition);
+  }
   if ((changed || reviewChanged) && rebuildMenu) installApplicationMenu();
   if ((changed || reviewChanged) && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('diagnostics:state', getDiagnosticsState());
@@ -3053,6 +3075,154 @@ const agentStatusLabel = () => {
     return `${base}（${agentDiagnostics.pendingCount}）`;
   }
   return base;
+};
+
+const trayIconPath = path.join(rootDir, 'build', 'icon.ico');
+
+const showMainWindow = () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  return true;
+};
+
+const showFixedNotification = (copy) => {
+  if (!copy || typeof copy.title !== 'string' || typeof copy.body !== 'string' || !Notification.isSupported()) return false;
+  const notification = new Notification({
+    title: copy.title,
+    body: copy.body,
+    icon: trayIconPath,
+    silent: false
+  });
+  activeNotifications.add(notification);
+  notification.once('close', () => activeNotifications.delete(notification));
+  const releaseReference = setTimeout(() => activeNotifications.delete(notification), 60_000);
+  releaseReference.unref?.();
+  notification.once('click', () => {
+    showMainWindow();
+    if (copy.focusAction && harnessUiReady()) {
+      void invokeHarnessUiAction(mainWindow.webContents, copy.focusAction).catch(() => undefined);
+    }
+  });
+  notification.show();
+  return true;
+};
+
+const updateApplicationTray = () => {
+  if (!appTray || appTray.isDestroyed()) return;
+  const skipped = updatePreferenceStore?.getState().skippedVersion || '';
+  appTray.setToolTip(`DSH Desktop · ${trayStatusLabel(agentDiagnostics)}`);
+  appTray.setContextMenu(Menu.buildFromTemplate([
+    { label: trayStatusLabel(agentDiagnostics), enabled: false },
+    { type: 'separator' },
+    { label: '打开 DSH Desktop', click: () => { showMainWindow(); } },
+    {
+      label: '定位待确认操作',
+      enabled: Boolean(agentDiagnostics.canFocusPending),
+      click: () => { void runHarnessUiAction('focus-pending'); }
+    },
+    {
+      label: '停止当前生成',
+      enabled: Boolean(agentDiagnostics.canStop),
+      click: () => { void runHarnessUiAction('stop-agent'); }
+    },
+    { type: 'separator' },
+    {
+      label: updateCheckPromise ? '正在检查更新…' : '检查产品 Latest 更新…',
+      enabled: !updateCheckPromise,
+      click: () => { void checkForUpdatesFromUser(); }
+    },
+    { label: skipped ? `已跳过 V${skipped}` : '未跳过产品 Latest', enabled: false },
+    { label: '自动下载与安装：关闭（未签名）', enabled: false },
+    { type: 'separator' },
+    { label: '退出 DSH Desktop', click: () => { app.quit(); } }
+  ]));
+};
+
+const createApplicationTray = () => {
+  if (appTray && !appTray.isDestroyed()) return true;
+  if (!fs.existsSync(trayIconPath)) return false;
+  appTray = new Tray(trayIconPath);
+  appTray.on('click', () => { showMainWindow(); });
+  appTray.on('double-click', () => { showMainWindow(); });
+  updateApplicationTray();
+  return true;
+};
+
+const destroyApplicationTray = () => {
+  if (appTray && !appTray.isDestroyed()) appTray.destroy();
+  appTray = undefined;
+  activeNotifications.clear();
+};
+
+const showUpdateDialog = (options) => (
+  mainWindow && !mainWindow.isDestroyed()
+    ? dialog.showMessageBox(mainWindow, options)
+    : dialog.showMessageBox(options)
+);
+
+const checkForUpdatesFromUser = () => {
+  if (updateCheckPromise) return updateCheckPromise;
+  updateCheckPromise = (async () => {
+    updateApplicationTray();
+    installApplicationMenu();
+    let result;
+    try {
+      result = await checkForProductUpdate({
+        currentVersion: app.getVersion(),
+        fetchImpl: (url, options) => session.defaultSession.fetch(url, options)
+      });
+    } catch (error) {
+      const safeError = String(error?.message || '网络请求失败。').replace(/[\r\n\u0000-\u001f]+/gu, ' ').slice(0, 240);
+      await showUpdateDialog({
+        type: 'warning',
+        title: '更新检查失败',
+        message: '暂时无法读取 DSH Desktop 的 GitHub 发布信息。',
+        detail: `${safeError}\n\n不会自动下载或修改当前安装。`,
+        buttons: ['确定'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      });
+      return { ok: false };
+    }
+    if (!result.release || !result.updateAvailable) {
+      await showUpdateDialog({
+        type: 'info',
+        title: '已是当前产品 Latest',
+        message: `当前版本 V${result.currentVersion} 暂无更高的公开版本。`,
+        detail: '检查更新不会自动下载或安装；V0.5.4 Stable 通道保持独立。',
+        buttons: ['确定'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      });
+      return { ok: true, updateAvailable: false };
+    }
+    const skipped = updatePreferenceStore?.getState().skippedVersion === result.release.version;
+    const response = await showUpdateDialog({
+      type: 'info',
+      title: `发现产品 Latest V${result.release.version}`,
+      message: skipped ? `V${result.release.version} 已被你跳过。` : `可以查看 V${result.release.version} 的 GitHub Pre-release。`,
+      detail: '当前安装包尚未代码签名，因此软件只打开经过固定校验的 GitHub 发布页，不会自动下载、安装或覆盖现有版本。覆盖前仍需建立并验证 last-known-good 回滚点。',
+      buttons: skipped ? ['取消', '打开发布页', '取消跳过'] : ['取消', '打开发布页', '跳过此版本'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    });
+    if (response.response === 1) await shell.openExternal(result.release.url);
+    if (response.response === 2 && updatePreferenceStore) {
+      if (skipped) await updatePreferenceStore.clearSkip();
+      else await updatePreferenceStore.skip(result.release.version);
+    }
+    return { ok: true, updateAvailable: true, version: result.release.version };
+  })().finally(() => {
+    updateCheckPromise = null;
+    updateApplicationTray();
+    installApplicationMenu();
+  });
+  return updateCheckPromise;
 };
 
 const toolStatusLabel = () => {
@@ -4174,6 +4344,19 @@ function installApplicationMenu() {
         },
         { type: 'separator' },
         {
+          label: updateCheckPromise ? '正在检查产品 Latest…' : '检查产品 Latest 更新…',
+          enabled: !updateCheckPromise,
+          click: () => { void checkForUpdatesFromUser(); }
+        },
+        {
+          label: updatePreferenceStore?.getState().skippedVersion
+            ? `已跳过 V${updatePreferenceStore.getState().skippedVersion}`
+            : '未跳过产品 Latest',
+          enabled: false
+        },
+        { label: '自动下载与安装：关闭（未签名）', enabled: false },
+        { type: 'separator' },
+        {
           label: '打开运行日志',
           click: async () => {
             const logFile = supervisor?.getState().logFile;
@@ -4745,6 +4928,16 @@ const createWindow = async () => {
     await showStatusPage();
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+  mainWindow.on('close', (event) => {
+    if (allowQuit || !appTray || appTray.isDestroyed() || !isBackgroundSupervisionRequired(agentDiagnostics)) return;
+    event.preventDefault();
+    mainWindow.hide();
+    showFixedNotification({
+      title: 'DSH Desktop 仍在后台运行',
+      body: agentDiagnostics.status === 'waiting' ? 'Agent 正在等待确认，可从托盘重新打开。' : 'Agent 仍在运行，可从托盘继续监督。',
+      focusAction: agentDiagnostics.status === 'waiting' ? 'focus-pending' : null
+    });
+  });
   mainWindow.on('closed', () => {
     stopAgentPolling();
     closeSideChatWindow();
@@ -4771,6 +4964,67 @@ const runDesktopSmoke = async (target) => {
     locale: app.getLocale(),
     safeStorage: safeStorage.isEncryptionAvailable()
   }, null, 2));
+};
+
+const runTraySmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  let smokeTray;
+  let result;
+  try {
+    const tracker = new AgentTransitionTracker({ status: 'ready' });
+    const started = tracker.observe({ status: 'running' });
+    const waiting = tracker.observe({ status: 'waiting' });
+    const repeatedWaiting = tracker.observe({ status: 'waiting' });
+    const completed = tracker.observe({ status: 'ready' });
+    const latest = selectLatestProductRelease([
+      {
+        tag_name: 'v0.9.0',
+        html_url: 'https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.9.0',
+        draft: false,
+        prerelease: true,
+        published_at: '2026-08-30T00:00:00Z'
+      },
+      {
+        tag_name: 'v0.8.0',
+        html_url: 'https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.8.0',
+        draft: false,
+        prerelease: true,
+        published_at: '2026-08-29T00:00:00Z'
+      }
+    ]);
+    smokeTray = new Tray(trayIconPath);
+    const menu = Menu.buildFromTemplate([
+      { label: trayStatusLabel({ status: 'waiting' }), enabled: false },
+      { label: '打开 DSH Desktop' },
+      { label: '检查产品 Latest 更新…' },
+      { label: '自动下载与安装：关闭（未签名）', enabled: false },
+      { label: '退出 DSH Desktop' }
+    ]);
+    smokeTray.setToolTip('DSH Desktop · Agent：等待确认');
+    smokeTray.setContextMenu(menu);
+    result = {
+      ok: fs.existsSync(trayIconPath)
+        && started === null
+        && waiting?.type === 'waiting'
+        && repeatedWaiting === null
+        && completed?.type === 'completed'
+        && latest?.version === '0.9.0'
+        && menu.items.length === 5,
+      version: app.getVersion(),
+      iconReady: fs.existsSync(trayIconPath),
+      notificationSupported: Notification.isSupported(),
+      transitionTypes: [waiting?.type, completed?.type],
+      latestVersion: latest?.version || '',
+      menuLabels: menu.items.map((item) => item.label)
+    };
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.message || String(error) };
+  } finally {
+    smokeTray?.destroy();
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  }
+  if (!result.ok) process.exitCode = 1;
 };
 
 const buildPdfSmokeDocument = () => {
@@ -6018,6 +6272,12 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  if (traySmokeTarget) {
+    await runTraySmoke(traySmokeTarget.slice('--tray-smoke-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
   if (supportSmokeTarget) {
     await runSupportSmoke(supportSmokeTarget.slice('--support-smoke-file='.length));
     allowQuit = true;
@@ -6040,8 +6300,12 @@ app.whenReady().then(async () => {
   proxyStore = new ProxySettingsStore({
     filePath: path.join(dataRoot, 'network-state.json')
   });
+  updatePreferenceStore = new UpdatePreferenceStore({
+    filePath: path.join(dataRoot, 'update-state.json')
+  });
   await workbenchStore.init();
   await proxyStore.init();
+  await updatePreferenceStore.init();
   const workspace = await workspaceStore.init();
   gitDeliveryManager = new GitDeliveryManager();
   gitDeliveryManager.activate(workspace.activePath);
@@ -6112,17 +6376,22 @@ app.whenReady().then(async () => {
   });
   sideChatController = new SideChatController({ getOrigin: () => harnessOrigin });
   await refreshDesktopDiagnostics({ rebuildMenu: false });
+  createApplicationTray();
   installApplicationMenu();
   await createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+    else showMainWindow();
   });
 });
 
 app.on('before-quit', (event) => {
   stopAgentPolling();
   stopSideChatSelectionMonitor();
-  if (allowQuit || (!supportBackupOperationPromise && !gitDeliveryOperationPromise && !supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) return;
+  if (allowQuit || (!supportBackupOperationPromise && !gitDeliveryOperationPromise && !supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) {
+    destroyApplicationTray();
+    return;
+  }
   event.preventDefault();
   const stopAfterBackup = async () => {
     if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);

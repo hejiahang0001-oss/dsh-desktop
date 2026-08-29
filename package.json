@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -17,7 +17,7 @@
     "release:governance": "node scripts/release-governance.cjs",
     "smoke:packaged-terminal": "node scripts/smoke-packaged-terminal.cjs",
     "pack:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --dir --win --x64",
-    "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis --x64"
+    "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis portable --x64"
   },
   "devDependencies": {
     "electron": "43.4.1",
@@ -62,6 +62,7 @@
       "git-delivery.html",
       "assets/git-delivery.css",
       "assets/git-delivery.js",
+      "build/icon.ico",
       "tasks-subagents.html",
       "assets/tasks-subagents.css",
       "assets/tasks-subagents.js",
@@ -173,6 +174,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
@@ -192,6 +199,10 @@
       ],
       "language": "2052",
       "displayLanguageSelector": false
+    },
+    "portable": {
+      "artifactName": "DSH-Desktop-Portable-${version}.${ext}",
+      "requestExecutionLevel": "user"
     }
   },
   "dependencies": {
