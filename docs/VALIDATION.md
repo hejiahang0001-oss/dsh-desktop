@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V0.6.5 DSH conversation-history Wiki ingestion evidence (candidate)
+## V0.6.5 DSH conversation-history Wiki ingestion evidence (published)
 
 - The native Wiki center lists only ordinary nonblank sessions in the active workspace, exposes opaque selection ids rather than Harness session ids, rejects running or stale selections, and limits one import to eight completed sessions. The desktop reads paginated `session.history`, keeps only user/assistant text, and excludes system/developer instructions, tools, thinking, subagents, images, and non-text blocks.
 - Private-key blocks, DeepSeek-style API keys, bearer tokens, and credential assignments are redacted before Agent access. The bounded source is private, expires after 30 minutes, is invalidated on reload/workspace change, and is deleted after save. The renderer never receives the source token, raw session id, path, or message content.
@@ -14,7 +14,7 @@ This page records versioned local engineering evidence without making the README
 - Release governance reports `packageReady: true`, zero reparse points, pnpm 11.19.0, seven required Wiki files (106,782 bytes), and 99.3904% reusable bytes versus V0.6.4. Signing and automatic update remain intentionally unavailable.
 - Silent overwrite exits 0 and Windows registers V0.6.5. The unpacked tree has 29,802 files and 693,039,821 bytes; the installed tree contains the same payload plus the normal uninstaller, for 29,803 files and 693,482,667 bytes. Installed and unpacked `app.asar` both hash to `CEF963C16B32CD18AD43264454066636968F6216FA1BBA951F7164CBF60C9015`.
 - All 28 credential-free semantic files—7 state, 15 session, 2 Profile, and 4 Local Storage files—remain byte-identical before install, after install, and after all installed regressions. Backup `backups/pre-v0.6.5-20260830-031912` preserves the three V0.6.4 release assets with exact hashes.
-- PR, CI, GitHub Pre-release, and unauthenticated public-redownload evidence will be added after the remote publication gate. Formal GitHub Latest/Stable remains V0.5.4.
+- Implementation PR [#49](https://github.com/hejiahang0001-oss/dsh-desktop/pull/49) and main CI run [33272267115](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33272267115) pass all three Windows jobs. [V0.6.5](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.5) is non-draft, marked Pre-release, and targets exact merge `6726f29847f564a5657dcfdfda013be129f2f75e`. GitHub reports all three asset sizes and SHA-256 digests equal to local evidence; a clean unauthenticated public download reproduces all three hashes and passes both checksum-manifest entries. Formal GitHub Latest/Stable remains V0.5.4.
 
 ## V0.6.4 active-project Wiki synchronization evidence (published)
 

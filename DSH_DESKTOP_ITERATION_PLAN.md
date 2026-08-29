@@ -1,12 +1,12 @@
 # DSH Desktop 桌面版迭代计划
 
 > 基线日期：2026-08-22
-> 最近计划调整：2026-08-30，V0.6.5 DSH 历史批量导入已通过源码、打包、覆盖安装、安装版真实模型与数据保留门禁，正在执行 PR/CI 和 GitHub Pre-release 发布；通过后进入 V0.7 试点与开发交付。
+> 最近计划调整：2026-08-30，V0.6.5 DSH 历史批量导入已完成源码、打包、覆盖安装、安装版真实模型、PR/CI、GitHub Pre-release 与公开回下载门禁；当前进入 V0.7 试点与开发交付。
 > 产品对标：**Claude Code**  
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：每个计划迭代形成一个可运行 Latest Build；验证通过后直接覆盖电脑中已安装的旧版。Stable 不按日程自动晋升，只有用户明确下达“更新 Stable”命令后才更新。
-> 执行状态：2026-08-30 V0.6.5 为当前产品 Latest 候选；V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`，完成 V0.6.5 全部门禁后连续推进到 V1.0。
+> 执行状态：2026-08-30 V0.6.5 为当前产品 Latest；V0.5.4 固定为 Stable 和 GitHub 正式 `Latest release`，当前连续推进 V0.7 至 V1.0。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 

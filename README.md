@@ -76,7 +76,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.6.5 product Latest candidate** adds selected DSH history ingestion to the native Wiki center. It uses pinned Harness session APIs, exposes only opaque UI selections, excludes non-text/tool/system content, redacts fixed credential patterns before Agent access, and requires a later explicit confirmation before transactional Wiki writes. The candidate installer is named `DSH-Desktop-Setup-0.6.5.exe`; Stable and the front-page download remain V0.5.4.
+**V0.6.5 product Latest** adds selected DSH history ingestion to the native Wiki center. It uses pinned Harness session APIs, exposes only opaque UI selections, excludes non-text/tool/system content, redacts fixed credential patterns before Agent access, and requires a later explicit confirmation before transactional Wiki writes. Its installer, `DSH-Desktop-Setup-0.6.5.exe`, is available from the [V0.6.5 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.5); Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -157,7 +157,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.6.5 产品 Latest 候选在原生 Wiki 中心新增 DSH 历史批量导入：只列出当前工作区普通会话，使用不透明选择标识；只让 Agent 读取用户/助手文本，固定凭据模式在进入 Agent 前遮蔽；Agent 必须先预览和校验，并在后续回合得到明确确认后才能事务写入。候选安装包名为 `DSH-Desktop-Setup-0.6.5.exe`，V0.5.4 继续保持 Stable 和首页下载版本。
+V0.6.5 产品 Latest 在原生 Wiki 中心新增 DSH 历史批量导入：只列出当前工作区普通会话，使用不透明选择标识；只让 Agent 读取用户/助手文本，固定凭据模式在进入 Agent 前遮蔽；Agent 必须先预览和校验，并在后续回合得到明确确认后才能事务写入。安装包 `DSH-Desktop-Setup-0.6.5.exe` 可从 [V0.6.5 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.6.5) 获取，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

@@ -20,7 +20,7 @@ V0.6.5 adds selected DSH conversation-history ingestion to the local Wiki while 
 ## Current limits
 
 - V0.6.5 ingests only explicitly selected DSH sessions from the active workspace. It does not crawl all local history, copy raw conversations, ingest subagent transcripts, fetch the web, install QMD, or control Obsidian UI.
-- Stable remains V0.5.4. V0.6.5 becomes product Latest only after source, package, overwrite-install, installed-runtime, real-model, data-retention, CI, and public-asset gates pass.
+- Stable remains V0.5.4. V0.6.5 is the product Latest Pre-release after source, package, overwrite-install, installed-runtime, real-model, data-retention, CI, and public-asset gates passed.
 
 ## Validation
 
