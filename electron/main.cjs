@@ -18,6 +18,10 @@ const { PluginHealthCatalog } = require('./plugin-health.cjs');
 const { buildExtensionCenter, callHarnessRemote } = require('./extension-center.cjs');
 const { inspectOfficeCenter, isOfficeSkillId } = require('./office-center.cjs');
 const { extractWikiSessionCandidates, selectCaptureCandidate } = require('./wiki-center.cjs');
+const {
+  DshHistorySelectionCatalog,
+  prepareDshHistorySource
+} = require('./wiki-history-ingest.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
 const {
   captureHarnessCheckpointLink,
@@ -114,6 +118,8 @@ let dataRoot;
 let harnessRuntimePaths;
 let wikiRuntime;
 let wikiSettingsStore;
+const dshHistorySelectionCatalog = new DshHistorySelectionCatalog();
+let dshHistoryExpiryTimer;
 let harnessOrigin = null;
 let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
@@ -281,6 +287,7 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
     isPackaged: app.isPackaged,
     homeDir: path.join(dataRoot, 'harness'),
     wikiConfigPath: path.join(dataRoot, 'wiki-settings.json'),
+    wikiHistorySourcePath: path.join(dataRoot, 'wiki-history-source.json'),
     launchDir,
     logFile: path.join(dataRoot, 'logs', 'harness.log'),
     env: harnessProxyEnvironment
@@ -1592,7 +1599,8 @@ const WIKI_SKILLS = Object.freeze([
   Object.freeze({ id: 'wiki-setup', name: '知识库初始化' }),
   Object.freeze({ id: 'wiki-query', name: '知识查询' }),
   Object.freeze({ id: 'wiki-capture', name: '会话结论保存' }),
-  Object.freeze({ id: 'wiki-update', name: '项目增量同步' })
+  Object.freeze({ id: 'wiki-update', name: '项目增量同步' }),
+  Object.freeze({ id: 'wiki-history-ingest', name: 'DSH 历史批量导入' })
 ]);
 
 const inspectWikiSkills = async () => Promise.all(WIKI_SKILLS.map(async (skill) => {
@@ -1613,7 +1621,8 @@ const unavailableWikiCenterState = (message = 'Wiki 中心尚未完成初始化�
   skills: WIKI_SKILLS.map((skill) => ({ ...skill, status: 'missing' })),
   harness: { status: 'waiting' },
   session: { available: false },
-  project: { available: false, status: 'waiting', name: '', path: '' }
+  project: { available: false, status: 'waiting', name: '', path: '' },
+  history: { available: false, status: 'waiting' }
 });
 
 const getWikiCenterState = async () => {
@@ -1632,6 +1641,7 @@ const getWikiCenterState = async () => {
     && !agentDiagnostics.canStop
     && agentDiagnostics.pendingCount === 0
     && agentDiagnostics.queuedCount === 0;
+  const projectAvailable = vault.ready && typeof getWorkspaceState().activePath === 'string' && path.isAbsolute(getWorkspaceState().activePath);
   return {
     available: vault.ready && skills.every((skill) => skill.status === 'ready'),
     vault,
@@ -1639,10 +1649,14 @@ const getWikiCenterState = async () => {
     harness: { status: harnessReady ? 'ready' : 'waiting' },
     session: { available: sessionAvailable },
     project: {
-      available: vault.ready && typeof getWorkspaceState().activePath === 'string' && path.isAbsolute(getWorkspaceState().activePath),
+      available: projectAvailable,
       status: vault.ready ? 'ready' : 'waiting',
       name: getWorkspaceState().displayName || '',
       path: getWorkspaceState().activePath || ''
+    },
+    history: {
+      available: projectAvailable && harnessReady,
+      status: projectAvailable && harnessReady ? 'ready' : 'waiting'
     }
   };
 };
@@ -1789,6 +1803,129 @@ const invokeCurrentProjectWikiSync = async () => {
   }
   const invoked = await invokeWikiSkill('wiki-update');
   return { ok: invoked, message: invoked ? '已在当前对话中加载 /wiki-update。' : '请在对话输入框中输入 /wiki-update。' };
+};
+
+const currentWikiHistorySourcePath = () => (
+  typeof dataRoot === 'string' && path.isAbsolute(dataRoot)
+    ? path.join(dataRoot, 'wiki-history-source.json')
+    : ''
+);
+
+const discardPreparedDshHistorySource = async () => {
+  if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
+  dshHistoryExpiryTimer = undefined;
+  const sourcePath = currentWikiHistorySourcePath();
+  if (!sourcePath) return false;
+  return fsp.unlink(sourcePath).then(() => true, (error) => {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  });
+};
+
+const scheduleDshHistorySourceExpiry = (sourcePath, sourceToken, expiresAt) => {
+  if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
+  const delay = Math.max(1000, Math.min(31 * 60 * 1000, Date.parse(expiresAt) - Date.now() + 1000));
+  dshHistoryExpiryTimer = setTimeout(() => {
+    dshHistoryExpiryTimer = undefined;
+    void wikiRuntime?.clearDshHistorySource(sourcePath, sourceToken).catch(() => undefined);
+  }, delay);
+  dshHistoryExpiryTimer.unref?.();
+};
+
+const listDshHistorySessions = async () => {
+  const state = await getWikiCenterState();
+  const workspacePath = getWorkspaceState().activePath;
+  if (!state.vault?.ready) return { ok: false, message: '请先配置并初始化知识库。', items: [] };
+  if (!state.history?.available || !harnessOrigin) return { ok: false, message: '请等待 Harness 与当前工作区就绪。', items: [] };
+  try {
+    await discardPreparedDshHistorySource();
+    const response = await callHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
+    const items = dshHistorySelectionCatalog.refresh(response?.items, workspacePath);
+    return {
+      ok: true,
+      items,
+      limit: 8,
+      message: items.length > 0 ? `已找到 ${items.length} 个当前工作区的普通会话。` : '当前工作区没有可导入的普通会话。'
+    };
+  } catch {
+    dshHistorySelectionCatalog.refresh([], '');
+    return { ok: false, message: 'DSH 历史列表读取失败；原始会话没有改变。', items: [] };
+  }
+};
+
+const prepareSelectedDshHistory = async (selection) => {
+  const state = await getWikiCenterState();
+  const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
+  const workspacePath = getWorkspaceState().activePath;
+  const sourcePath = currentWikiHistorySourcePath();
+  if (!state.vault?.ready || !vaultPath) return { ok: false, message: '请先配置并初始化知识库。' };
+  if (!state.history?.available || !harnessOrigin || !sourcePath) return { ok: false, message: '请等待 Harness 与当前工作区就绪。' };
+  let prepared;
+  try {
+    await discardPreparedDshHistorySource();
+    const response = await callHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
+    const summaries = dshHistorySelectionCatalog.resolve(selection, response?.items, workspacePath);
+    prepared = await prepareDshHistorySource({
+      apiCall: callHarnessApi,
+      origin: harnessOrigin,
+      summaries,
+      workspacePath,
+      sourcePath
+    });
+    const preview = await wikiRuntime.previewDshHistoryIngest(vaultPath, workspacePath, sourcePath);
+    scheduleDshHistorySourceExpiry(sourcePath, prepared.sourceToken, prepared.expiresAt);
+    const result = {
+      ok: true,
+      unchanged: preview.unchanged,
+      project: { id: preview.project.id, name: preview.project.name },
+      sessionCount: preview.sessions.length,
+      addedCount: preview.delta.added.length,
+      modifiedCount: preview.delta.modified.length,
+      unchangedCount: preview.delta.unchanged.length,
+      totalMessages: preview.totalMessages,
+      totalChars: preview.totalChars,
+      limited: preview.limited,
+      expiresAt: preview.expiresAt,
+      redactions: preview.redactions.map(({ id, label, count }) => ({ id, label, count })),
+      sessions: preview.sessions.map(({ title, messageCount, status, limited }) => ({ title, messageCount, status, limited }))
+    };
+    if (preview.unchanged) {
+      await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken);
+      if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
+      dshHistoryExpiryTimer = undefined;
+      return { ...result, message: '所选会话与上次成功导入一致，无需重复处理。' };
+    }
+    return { ...result, message: '历史范围已准备，可让 Agent 先整理、校验，再等待你的明确确认。' };
+  } catch {
+    if (prepared?.sourceToken) await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken).catch(() => undefined);
+    if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
+    dshHistoryExpiryTimer = undefined;
+    return { ok: false, message: 'DSH 历史准备失败；请重新加载会话后再试，知识库没有被修改。' };
+  }
+};
+
+const invokePreparedDshHistory = async () => {
+  const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
+  const workspacePath = getWorkspaceState().activePath;
+  const sourcePath = currentWikiHistorySourcePath();
+  if (!wikiRuntime || !vaultPath || !sourcePath) return { ok: false, message: '请先在 Wiki 中心准备 DSH 历史。' };
+  try {
+    const preview = await wikiRuntime.previewDshHistoryIngest(vaultPath, workspacePath, sourcePath);
+    if (preview.unchanged) {
+      await wikiRuntime.clearDshHistorySource(sourcePath, preview.sourceToken);
+      return { ok: false, message: '所选会话已导入，无需重复处理。' };
+    }
+  } catch {
+    return { ok: false, message: '准备内容已失效，请重新选择 DSH 历史。' };
+  }
+  if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  const invoked = await invokeWikiSkill('wiki-history-ingest');
+  return { ok: invoked, message: invoked ? '已在当前对话中加载 /wiki-history-ingest dsh。' : '请在对话输入框中输入 /wiki-history-ingest dsh。' };
 };
 
 const loadCurrentWikiCandidates = async ({ includeSessionId = false } = {}) => {
@@ -3035,16 +3172,16 @@ const invokePowerPointPptxSkill = async () => {
 };
 
 const invokeWikiSkill = async (id) => {
-  if (!harnessUiReady() || !['wiki-query', 'wiki-capture', 'wiki-update'].includes(id)) return false;
-  const methods = { 'wiki-query': 'invokeWikiQuery', 'wiki-capture': 'invokeWikiCapture', 'wiki-update': 'invokeWikiUpdate' };
-  const titles = { 'wiki-query': 'Wiki 知识查询', 'wiki-capture': 'Wiki 会话结论保存', 'wiki-update': 'Wiki 项目增量同步' };
+  if (!harnessUiReady() || !['wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest'].includes(id)) return false;
+  const methods = { 'wiki-query': 'invokeWikiQuery', 'wiki-capture': 'invokeWikiCapture', 'wiki-update': 'invokeWikiUpdate', 'wiki-history-ingest': 'invokeWikiHistory' };
+  const titles = { 'wiki-query': 'Wiki 知识查询', 'wiki-capture': 'Wiki 会话结论保存', 'wiki-update': 'Wiki 项目增量同步', 'wiki-history-ingest': 'DSH 历史批量导入' };
   const method = methods[id];
   const invoked = await mainWindow.webContents.executeJavaScript(`Boolean(window.__DSH_COMMAND_PALETTE__?.${method}?.())`, true).catch(() => false);
   if (invoked) return true;
   await dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: titles[id],
-    message: `在对话输入框中输入 /${id} 后继续描述。`,
+    message: `在对话输入框中输入 ${id === 'wiki-history-ingest' ? '/wiki-history-ingest dsh' : `/${id}`} 后继续描述。`,
     detail: '请先从“工具 → Wiki 中心”选择并初始化知识库。基础版不要求 Git、Python、QMD 或 Obsidian。',
     buttons: ['确定'],
     defaultId: 0
@@ -3138,6 +3275,8 @@ const activateWorkspace = async (workspacePath) => {
     await previewManager?.stop();
     await terminalSettlePromise;
     const workspace = await workspaceStore.activate(workspacePath);
+    dshHistorySelectionCatalog.refresh([], '');
+    await discardPreparedDshHistorySource();
     if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) contextSourcesWindow.close();
     if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
     if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
@@ -3391,7 +3530,7 @@ function installApplicationMenu() {
           label: 'Wiki 中心…',
           click: () => { void openWikiCenterWindow(); }
         },
-        { label: 'Wiki：知识查询、会话结论与项目增量同步 · Git 可选', enabled: false },
+        { label: 'Wiki：知识查询、会话结论、项目同步与 DSH 历史导入 · Git 可选', enabled: false },
         {
           label: '查询 Wiki 知识…',
           enabled: harnessReady,
@@ -3406,6 +3545,11 @@ function installApplicationMenu() {
           label: '同步当前项目知识到 Wiki…',
           enabled: harnessReady,
           click: () => { void invokeWikiSkill('wiki-update'); }
+        },
+        {
+          label: '选择并导入 DSH 历史到 Wiki…',
+          enabled: harnessReady,
+          click: () => { void openWikiCenterWindow(); }
         },
         {
           label: '创建或修改 Word 文档…',
@@ -4009,6 +4153,15 @@ ipcMain.handle('wiki-center:preview-project-sync', (event) => (
 ));
 ipcMain.handle('wiki-center:invoke-project-sync', (event) => (
   wikiCenterIpcAllowed(event) ? invokeCurrentProjectWikiSync() : { ok: false, message: '项目同步请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:list-history-sessions', (event) => (
+  wikiCenterIpcAllowed(event) ? listDshHistorySessions() : { ok: false, message: 'DSH 历史列表请求未通过安全校验。', items: [] }
+));
+ipcMain.handle('wiki-center:prepare-history', (event, selection) => (
+  wikiCenterIpcAllowed(event) ? prepareSelectedDshHistory(selection) : { ok: false, message: 'DSH 历史准备请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:invoke-history', (event) => (
+  wikiCenterIpcAllowed(event) ? invokePreparedDshHistory() : { ok: false, message: 'DSH 历史导入请求未通过安全校验。' }
 ));
 ipcMain.handle('wiki-center:get-session-candidates', (event) => (
   wikiCenterIpcAllowed(event) ? loadCurrentWikiCandidates() : { ok: false, message: '会话读取请求未通过安全校验。', items: [] }
@@ -4834,7 +4987,7 @@ const runWikiCenterSmoke = async (target) => {
       'title: "无 Git Wiki 基础能力"',
       'summary: "DSH Desktop 可在没有 Git 的普通目录初始化并查询 Wiki。"',
       'sources:',
-      '  - "dsh-smoke:v0.6.4"',
+      '  - "dsh-smoke:v0.6.5"',
       'lifecycle: verified',
       '---',
       '',
@@ -4847,7 +5000,7 @@ const runWikiCenterSmoke = async (target) => {
     const renderedInTime = await wikiCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
       const deadline = Date.now() + 10000;
       const check = () => {
-        if (document.querySelectorAll('.capability').length === 5 && document.querySelector('#vault-status')?.textContent === '已就绪') return resolve(true);
+        if (document.querySelectorAll('.capability').length === 6 && document.querySelector('#vault-status')?.textContent === '已就绪') return resolve(true);
         if (Date.now() >= deadline) return resolve(false);
         setTimeout(check, 50);
       };
@@ -4879,27 +5032,36 @@ const runWikiCenterSmoke = async (target) => {
     const screenshot = await wikiCenterWindow.webContents.capturePage();
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
+    await wikiCenterWindow.webContents.executeJavaScript("const panel = document.querySelector('#history-title')?.closest('section'); if (panel) window.scrollTo(0, Math.max(0, panel.offsetTop - 24)); true", true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const historyScreenshot = await wikiCenterWindow.webContents.capturePage();
+    const historyScreenshotPath = `${resolvedTarget}.history.png`;
+    const historyScreenshotSize = historyScreenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeProjectSync', 'previewCapture', 'previewProjectSync', 'query', 'saveCapture'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeHistory', 'invokeProjectSync', 'listHistorySessions', 'prepareHistory', 'previewCapture', 'previewProjectSync', 'query', 'saveCapture'])
         && rendered.title === 'Wiki 中心'
-        && rendered.capabilityRows === 5
+        && rendered.capabilityRows === 6
         && rendered.resultRows >= 1
         && rendered.text.includes('无 Git Wiki 基础能力')
         && rendered.text.includes('页面：concepts/wiki-basic.md')
-        && rendered.text.includes('来源：dsh-smoke:v0.6.4')
+        && rendered.text.includes('来源：dsh-smoke:v0.6.5')
         && rendered.text.includes('无 Git、Python、QMD 或 Obsidian也可使用基础能力。'.replace('Obsidian也', 'Obsidian 也'))
         && screenshotSize.width > 0
-        && screenshotSize.height > 0,
+        && screenshotSize.height > 0
+        && historyScreenshotSize.width > 0
+        && historyScreenshotSize.height > 0,
       version: app.getVersion(),
       apiKeys: rendered.apiKeys,
       title: rendered.title,
       capabilityRows: rendered.capabilityRows,
       resultRows: rendered.resultRows,
       vaultPath: smokeVault,
-      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
+      screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height },
+      historyScreenshot: { path: historyScreenshotPath, width: historyScreenshotSize.width, height: historyScreenshotSize.height }
     };
     await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
     await fsp.writeFile(screenshotPath, screenshot.toPNG());
+    await fsp.writeFile(historyScreenshotPath, historyScreenshot.toPNG());
   } catch (error) {
     result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
   } finally {
@@ -5335,6 +5497,7 @@ app.whenReady().then(async () => {
   }
 
   dataRoot = app.getPath('userData');
+  await discardPreparedDshHistorySource();
   workspaceStore = new WorkspaceStore({
     filePath: path.join(dataRoot, 'desktop-state.json'),
     fallbackDir: path.join(dataRoot, 'launch-root')

@@ -1,8 +1,32 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.6.4 产品 Latest（项目知识增量同步）
-> 状态：V0.6.4 已完成源码、真实模型、打包、覆盖安装、数据保留、PR/CI、GitHub Pre-release 与公开资产回下载门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.6.5 产品 Latest 候选（DSH 历史批量导入）
+> 状态：V0.6.5 已通过源码、打包、覆盖安装、安装版真实模型与数据保留门禁，正在执行 PR/CI 和 GitHub Pre-release 发布；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V0.6.5 本轮进展
+
+1. Wiki 中心新增 DSH 历史批量导入：只列出当前工作区普通、非空会话；运行中会话不可选，每次最多选择 8 个。
+2. Renderer 只接收随机不透明选择标识、标题、时间、状态和计数，不接收 Harness 真实会话编号、短期源令牌、历史路径或正文。
+3. 桌面通过固定 Harness `session.list` / 分页 `session.history` 读取完整持久内容，只保留用户和助手文本；排除 Subagent、工具、思考、系统指令、图片和非文本块。
+4. 私钥、DeepSeek 风格 API Key、Bearer Token 和凭据赋值在进入 Agent 前遮蔽；短期源位于用户数据目录，30 分钟到期并定时清理，重新加载会话、切换工作区或保存后立即作废。
+5. `/wiki-history-ingest dsh` 只允许固定预览、会话读取、页面读取、规格校验、确认保存和精确清理命令；历史正文视为不可信资料，不得扩展权限或触发外部操作。
+6. Wiki 写入支持指纹去重、已有页面哈希合并、人工页面保护、敏感内容二次确认、跨进程写锁、事务归档、写后校验和失败回退。
+
+### V0.6.5 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| 历史导入核心与桌面接入 | 通过：不透明/陈旧选择、运行会话拒绝、ISO/数字时间、分页、文本过滤、凭据遮蔽、大小/过期限制、去重、人工页保护、并发锁、回滚、危险路径和窄 IPC 已覆盖 |
+| 完整源码与生产审计 | 289/289 通过；生产依赖无已知漏洞；语法与 `git diff --check` 通过 |
+| 固定 Harness / 真实模型 | source、packaged、installed 三层 `skill.list` 发现五个可由模型调用的 Wiki 用户 Skill；真实 DeepSeek 三层两回合完成预览、读取、校验、后续明确确认和保存，确认前零写入，测试凭据未进入 Agent，短期源已清理 |
+| Skill 规范检查 | Harness 实际发现和调用通过；通用 Skill Creator 校验器不接受 Harness 所需的 `user-invocable` / `disable-model-invocation` 元数据方言，因此以固定 Harness `skill.list` 与真实 Agent 验收作为发布依据 |
+| 打包与覆盖安装 | 安装包 184,089,462 字节，SHA-256 `5B89D3B43F15E46D2EA38B6FBFDDDBE99FE7D66EA90B29BAEBB74E82D806382E`；静默覆盖退出码 0，Windows 登记 V0.6.5 |
+| 包体与更新边界 | 解包版与安装版均 `packageReady: true`、零重解析点；相对 V0.6.4 复用 99.3904%；安装包未签名，自动更新继续关闭 |
+| 已安装回归与数据 | 11/11 GUI、固定终端、Wiki 基础和真实模型历史导入均通过；安装目录 `app.asar` 与解包目录同哈希；28 份无凭据语义文件在安装前、安装后和全部回归后逐字节一致 |
+| 待完成 | PR/CI、GitHub Pre-release 与公开回下载 |
+
+完成 V0.6.5 发布门禁后进入 V0.7 试点与开发交付。Stable V0.5.4 不变。
 
 ## V0.6.4 本轮进展
 

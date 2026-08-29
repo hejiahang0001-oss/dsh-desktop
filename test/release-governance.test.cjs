@@ -178,7 +178,7 @@ test('package layout requires the trusted PowerPoint skill and fixed offline PPT
   assert.equal(ready.powerpointSkillRuntime.files, 2);
 });
 
-test('package layout requires all five Wiki skills and the fixed offline Wiki tool', async (context) => {
+test('package layout requires all six Wiki skills and the fixed offline Wiki tool', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-wiki-skill-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const relative of [
@@ -186,17 +186,18 @@ test('package layout requires all five Wiki skills and the fixed offline Wiki to
     'wiki-setup/SKILL.md',
     'wiki-query/SKILL.md',
     'wiki-capture/SKILL.md',
-    'wiki-update/SKILL.md'
+    'wiki-update/SKILL.md',
+    'wiki-history-ingest/SKILL.md'
   ]) writeFile(path.join(root, 'resources', 'skills', relative), `---\nname: ${relative.split('/')[0]}\n---\n`);
 
   const incomplete = await inspectPackageLayout(root);
   assert.equal(incomplete.requiredWikiSkillFilesReady, false);
-  assert.equal(incomplete.wikiSkillRuntime.files, 5);
+  assert.equal(incomplete.wikiSkillRuntime.files, 6);
 
   writeFile(path.join(root, 'resources', 'skills', 'llm-wiki', 'scripts', 'wiki-basic.cjs'), '// fixed offline Wiki tool\n');
   const ready = await inspectPackageLayout(root);
   assert.equal(ready.requiredWikiSkillFilesReady, true);
-  assert.equal(ready.wikiSkillRuntime.files, 6);
+  assert.equal(ready.wikiSkillRuntime.files, 7);
 });
 
 test('package manifest excludes the duplicate app PTY and unused xterm development surfaces', () => {

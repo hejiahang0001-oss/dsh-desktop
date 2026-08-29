@@ -11,9 +11,9 @@
 <body>
   <header class="toolbar">
     <div>
-      <span class="eyebrow">DSH Desktop 0.6.4</span>
+      <span class="eyebrow">DSH Desktop 0.6.5</span>
       <h1>Wiki 中心</h1>
-      <p>把会话结论和当前项目增量沉淀为可查询、可追溯的本地 Markdown 知识。</p>
+      <p>把会话结论、当前项目增量和你选择的 DSH 历史沉淀为可查询、可追溯的本地 Markdown 知识。</p>
     </div>
     <button id="close" class="ghost" type="button">关闭</button>
   </header>
@@ -45,6 +45,21 @@
         <button id="invoke-project-sync" type="button" disabled>让 Agent 整理并同步</button>
       </div>
       <div id="project-sync-preview" class="preview" aria-live="polite">尚未检查项目增量；保存前仍会再次校验并要求确认。</div>
+    </section>
+
+    <section class="panel" aria-labelledby="history-title">
+      <div class="section-heading">
+        <div><span class="section-label">当前工作区</span><h2 id="history-title">DSH 历史批量导入</h2></div>
+        <span id="history-status" class="status waiting">待选择</span>
+      </div>
+      <p class="detail">只列出当前工作区的普通会话。运行中的会话不可选；工具调用、思考、系统指令、图片和固定凭据模式不会交给 Agent。</p>
+      <div class="actions">
+        <button id="load-history-sessions" class="secondary" type="button" disabled>加载 DSH 会话</button>
+        <button id="prepare-history" class="secondary" type="button" disabled>检查所选历史</button>
+        <button id="invoke-history" type="button" disabled>让 Agent 整理</button>
+      </div>
+      <div id="history-session-list" class="candidate-list history-list" aria-live="polite"><p class="empty">每次最多选择 8 个已完成会话；原始历史保持只读。</p></div>
+      <div id="history-preview" class="preview" aria-live="polite">尚未准备历史范围。Agent 完成预览和校验后，仍会在后续对话中等待你的明确确认再保存。</div>
     </section>
 
     <section class="panel" aria-labelledby="query-title">

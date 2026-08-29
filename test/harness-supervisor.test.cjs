@@ -231,7 +231,7 @@ test('supervisor launches Harness in the selected workspace directory', async (c
     "const fs = require('node:fs');",
     "fs.writeFileSync(process.env.DSH_TEST_CWD_FILE, process.cwd());",
     "fs.writeFileSync(process.env.DSH_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));",
-    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, docx: process.env.DSH_DESKTOP_DOCX_TOOL, xlsx: process.env.DSH_DESKTOP_XLSX_TOOL, pptx: process.env.DSH_DESKTOP_PPTX_TOOL, wiki: process.env.DSH_DESKTOP_WIKI_TOOL, wikiConfig: process.env.DSH_DESKTOP_WIKI_CONFIG, node: process.env.DSH_DESKTOP_NODE }));",
+    "fs.writeFileSync(process.env.DSH_TEST_ENV_FILE, JSON.stringify({ bundled: process.env.DSH_BUNDLED_SKILL_DIR, docx: process.env.DSH_DESKTOP_DOCX_TOOL, xlsx: process.env.DSH_DESKTOP_XLSX_TOOL, pptx: process.env.DSH_DESKTOP_PPTX_TOOL, wiki: process.env.DSH_DESKTOP_WIKI_TOOL, wikiConfig: process.env.DSH_DESKTOP_WIKI_CONFIG, wikiHistorySource: process.env.DSH_DESKTOP_WIKI_HISTORY_SOURCE, node: process.env.DSH_DESKTOP_NODE }));",
     "process.stdout.write('dsh web: http://127.0.0.1:45678\\n');",
     'setInterval(() => {}, 1000);'
   ].join('\n'));
@@ -256,7 +256,8 @@ test('supervisor launches Harness in the selected workspace directory', async (c
       DSH_DESKTOP_XLSX_TOOL: 'C:\\untrusted-excel-tool.cjs',
       DSH_DESKTOP_PPTX_TOOL: 'C:\\untrusted-powerpoint-tool.cjs',
       DSH_DESKTOP_WIKI_TOOL: 'C:\\untrusted-wiki-tool.cjs',
-      DSH_DESKTOP_WIKI_CONFIG: 'C:\\untrusted-wiki-config.json'
+      DSH_DESKTOP_WIKI_CONFIG: 'C:\\untrusted-wiki-config.json',
+      DSH_DESKTOP_WIKI_HISTORY_SOURCE: 'C:\\untrusted-history-source.json'
     }
   });
   context.after(async () => {
@@ -277,6 +278,7 @@ test('supervisor launches Harness in the selected workspace directory', async (c
     pptx: office.pptxToolPath,
     wiki: office.wikiToolPath,
     wikiConfig: path.join(root, 'wiki-settings.json'),
+    wikiHistorySource: path.join(root, 'wiki-history-source.json'),
     node: process.execPath
   });
 });

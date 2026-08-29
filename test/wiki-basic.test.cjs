@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
@@ -10,17 +11,54 @@ const {
   WikiBasicError,
   WikiSettingsStore,
   buildCapturePreview,
+  buildDshHistoryIngestPlan,
   buildProjectSyncPlan,
   initializeWikiVault,
   inspectWikiVault,
+  previewDshHistoryIngest,
   previewProjectSync,
   queryWiki,
+  readDshHistorySession,
+  readDshHistorySource,
+  readDshHistoryWikiPage,
   readProjectWikiPage,
   saveCapture,
+  saveDshHistoryIngest,
   saveProjectSync
 } = require('../resources/skills/llm-wiki/scripts/wiki-basic.cjs');
 
 const fixedClock = () => new Date('2026-08-29T08:00:00.000Z');
+
+const writeHistorySource = async (sourcePath, workspace, {
+  sourceToken = '0123456789abcdef0123456789abcdef',
+  sourceId = 'a'.repeat(24),
+  title = 'DSH 历史导入会话',
+  messages = [
+    { seq: 1, time: 100, role: 'user', text: '请整理项目知识。' },
+    { seq: 2, time: 200, role: 'assistant', text: '固定历史导入应保留来源并去重。' }
+  ],
+  redactions = [],
+  limited = false,
+  expiresAt = '2026-08-29T08:30:00.000Z'
+} = {}) => {
+  const updatedAt = 200;
+  const fingerprint = createHash('sha256').update(JSON.stringify({ sourceId, updatedAt, messages })).digest('hex');
+  const source = {
+    version: 1,
+    sourceToken,
+    createdAt: '2026-08-29T07:50:00.000Z',
+    expiresAt,
+    workspacePath: path.resolve(workspace),
+    workspaceName: path.basename(workspace),
+    limited,
+    totalMessages: messages.length,
+    totalChars: messages.reduce((sum, message) => sum + message.text.length, 0),
+    redactions,
+    sessions: [{ sourceId, title, updatedAt, lastSeq: messages[messages.length - 1].seq, fingerprint, messages, redactions, limited }]
+  };
+  await fsp.writeFile(sourcePath, `${JSON.stringify(source, null, 2)}\n`, 'utf8');
+  return source;
+};
 
 const fixture = async (t, name = 'DSH Wiki 中文 空格') => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-wiki-basic-'));
@@ -373,4 +411,207 @@ test('project sync rejects Windows alternate streams and reserved page names', a
       (error) => error instanceof WikiBasicError && error.code === 'invalid-project-page-path'
     );
   }
+});
+
+test('DSH history import previews, reads, saves, and deduplicates selected sessions', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'history-project');
+  const sourcePath = path.join(root, 'wiki-history-source.json');
+  await fsp.mkdir(workspace, { recursive: true });
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const source = await writeHistorySource(sourcePath, workspace);
+  const preview = await previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock });
+  assert.equal(preview.unchanged, false);
+  assert.equal(preview.delta.added.length, 1);
+  assert.equal(preview.totalMessages, 2);
+  assert.doesNotMatch(JSON.stringify(preview), /请整理项目知识/);
+  const session = await readDshHistorySession(sourcePath, workspace, preview.sourceToken, source.sessions[0].sourceId, { clock: fixedClock });
+  assert.equal(session.messages.length, 2);
+  const pagePath = `${preview.project.rootPath}/history/knowledge-ingest.md`;
+  const spec = {
+    previewToken: preview.previewToken,
+    sourceToken: preview.sourceToken,
+    pages: [{
+      path: pagePath,
+      expectedSha256: null,
+      title: '历史导入知识',
+      summary: '记录 DSH 历史导入的来源和去重边界。',
+      content: '# 历史导入知识\n\n只读会话经用户选择后增量沉淀。 ^[extracted]',
+      sources: [source.sessions[0].sourceId],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }]
+  };
+  assert.equal((await buildDshHistoryIngestPlan(vault, workspace, sourcePath, spec, { clock: fixedClock })).pagesCreated, 1);
+  const saved = await saveDshHistoryIngest(vault, workspace, sourcePath, spec, { clock: fixedClock, confirmed: true });
+  assert.equal(saved.ok, true);
+  assert.deepEqual(saved.pagesCreated, [pagePath]);
+  assert.equal(saved.sourceCleared, true);
+  assert.equal(fs.existsSync(sourcePath), false);
+  const page = await fsp.readFile(path.join(vault, pagePath), 'utf8');
+  assert.match(page, /category: project-history/);
+  assert.match(page, /dsh-session:a{24}/);
+  assert.match(page, /原始历史只读/);
+  const manifest = JSON.parse(await fsp.readFile(path.join(vault, '.manifest.json'), 'utf8'));
+  assert.equal(manifest.history.dsh[preview.project.id].sessions[source.sessions[0].sourceId].fingerprint, source.sessions[0].fingerprint);
+
+  await writeHistorySource(sourcePath, workspace, { sourceToken: 'f'.repeat(32) });
+  const unchanged = await previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock });
+  assert.equal(unchanged.unchanged, true);
+  assert.equal(unchanged.delta.unchanged.length, 1);
+  const trackedPage = await readDshHistoryWikiPage(vault, workspace, sourcePath, pagePath, { clock: fixedClock });
+  assert.match(trackedPage.sha256, /^[a-f0-9]{64}$/);
+  await assert.rejects(
+    () => saveDshHistoryIngest(vault, workspace, sourcePath, { ...spec, previewToken: unchanged.previewToken, sourceToken: unchanged.sourceToken }, { clock: fixedClock, confirmed: true }),
+    (error) => error instanceof WikiBasicError && error.code === 'history-unchanged'
+  );
+});
+
+test('DSH history import requires sensitive confirmation and rolls back failed writes', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'sensitive-history-project');
+  const sourcePath = path.join(root, 'wiki-history-source.json');
+  await fsp.mkdir(workspace, { recursive: true });
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const redactions = [{ id: 'credential-value', label: '疑似凭据字段', count: 1 }];
+  const source = await writeHistorySource(sourcePath, workspace, {
+    messages: [{ seq: 1, time: 100, role: 'user', text: 'TOKEN=[已遮蔽凭据]' }, { seq: 2, time: 200, role: 'assistant', text: '安全结论' }],
+    redactions
+  });
+  const preview = await previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock });
+  const pagePath = `${preview.project.rootPath}/history/sensitive.md`;
+  const spec = {
+    previewToken: preview.previewToken,
+    sourceToken: preview.sourceToken,
+    pages: [{
+      path: pagePath,
+      expectedSha256: null,
+      title: '敏感历史边界',
+      summary: '固定模式在进入 Agent 前已遮蔽。',
+      content: '# 敏感历史边界\n\n源中固定凭据值已遮蔽。',
+      sources: [source.sessions[0].sourceId],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }]
+  };
+  await assert.rejects(
+    () => saveDshHistoryIngest(vault, workspace, sourcePath, spec, { clock: fixedClock, confirmed: true }),
+    (error) => error instanceof WikiBasicError && error.code === 'sensitive-confirmation-required'
+  );
+  const originalManifest = await fsp.readFile(path.join(vault, '.manifest.json'), 'utf8');
+  await assert.rejects(
+    () => saveDshHistoryIngest(vault, workspace, sourcePath, spec, {
+      clock: fixedClock,
+      confirmed: true,
+      confirmedSensitive: true,
+      afterPageWrites: async () => { throw new Error('history-rollback-injected'); }
+    }),
+    /history-rollback-injected/
+  );
+  assert.equal(fs.existsSync(sourcePath), true);
+  assert.equal(fs.existsSync(path.join(vault, pagePath)), false);
+  assert.equal(await fsp.readFile(path.join(vault, '.manifest.json'), 'utf8'), originalManifest);
+  assert.equal(fs.existsSync(path.join(vault, '_staging', '.dsh-wiki-history-ingest.lock')), false);
+});
+
+test('DSH history source rejects stale fingerprints, expiry, and unsafe page paths', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'invalid-history-project');
+  const sourcePath = path.join(root, 'wiki-history-source.json');
+  await fsp.mkdir(workspace, { recursive: true });
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const source = await writeHistorySource(sourcePath, workspace);
+  const tampered = JSON.parse(await fsp.readFile(sourcePath, 'utf8'));
+  tampered.sessions[0].messages[0].text = 'tampered';
+  await fsp.writeFile(sourcePath, JSON.stringify(tampered), 'utf8');
+  await assert.rejects(
+    () => readDshHistorySource(sourcePath, workspace, { clock: fixedClock }),
+    (error) => error instanceof WikiBasicError && error.code === 'invalid-history-source'
+  );
+  await writeHistorySource(sourcePath, workspace, { expiresAt: '2026-08-29T07:59:59.000Z' });
+  await assert.rejects(
+    () => previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock }),
+    (error) => error instanceof WikiBasicError && error.code === 'history-source-expired'
+  );
+  await writeHistorySource(sourcePath, workspace);
+  const preview = await previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock });
+  const base = {
+    expectedSha256: null,
+    title: 'Unsafe',
+    summary: 'Unsafe page path.',
+    content: '# Unsafe',
+    sources: [source.sessions[0].sourceId],
+    provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+  };
+  for (const relative of [`${preview.project.rootPath}/history/note.md:ads.md`, `${preview.project.rootPath}/history/CON.md`]) {
+    await assert.rejects(
+      () => buildDshHistoryIngestPlan(vault, workspace, sourcePath, {
+        previewToken: preview.previewToken,
+        sourceToken: preview.sourceToken,
+        pages: [{ ...base, path: relative }]
+      }, { clock: fixedClock }),
+      (error) => error instanceof WikiBasicError && error.code === 'invalid-history-page-path'
+    );
+  }
+});
+
+test('DSH history import never overwrites an untracked human page', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'human-history-project');
+  const sourcePath = path.join(root, 'wiki-history-source.json');
+  await fsp.mkdir(workspace, { recursive: true });
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const source = await writeHistorySource(sourcePath, workspace);
+  const preview = await previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock });
+  const pagePath = `${preview.project.rootPath}/history/human-note.md`;
+  const absolute = path.join(vault, pagePath);
+  await fsp.mkdir(path.dirname(absolute), { recursive: true });
+  await fsp.writeFile(absolute, '# Human history page\n\nDo not overwrite.\n', 'utf8');
+  await assert.rejects(
+    () => buildDshHistoryIngestPlan(vault, workspace, sourcePath, {
+      previewToken: preview.previewToken,
+      sourceToken: preview.sourceToken,
+      pages: [{
+        path: pagePath,
+        expectedSha256: null,
+        title: 'Replacement',
+        summary: 'This must be refused.',
+        content: '# Replacement',
+        sources: [source.sessions[0].sourceId],
+        provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+      }]
+    }, { clock: fixedClock }),
+    (error) => error instanceof WikiBasicError && error.code === 'untracked-history-page'
+  );
+  assert.equal(await fsp.readFile(absolute, 'utf8'), '# Human history page\n\nDo not overwrite.\n');
+});
+
+test('DSH history import serializes concurrent writers and releases its lock', async (t) => {
+  const { root, vault } = await fixture(t);
+  const workspace = path.join(root, 'concurrent-history-project');
+  const sourcePath = path.join(root, 'wiki-history-source.json');
+  await fsp.mkdir(workspace, { recursive: true });
+  await initializeWikiVault(vault, { clock: fixedClock });
+  const source = await writeHistorySource(sourcePath, workspace);
+  const preview = await previewDshHistoryIngest(vault, workspace, sourcePath, { clock: fixedClock });
+  const pagePath = `${preview.project.rootPath}/history/concurrent.md`;
+  const spec = {
+    previewToken: preview.previewToken,
+    sourceToken: preview.sourceToken,
+    pages: [{
+      path: pagePath,
+      expectedSha256: null,
+      title: 'Concurrent history',
+      summary: 'Only one writer may commit this history source.',
+      content: '# Concurrent history\n\nOne serialized writer. ^[extracted]',
+      sources: [source.sessions[0].sourceId],
+      provenance: { extracted: 1, inferred: 0, ambiguous: 0 }
+    }]
+  };
+  const results = await Promise.allSettled([
+    saveDshHistoryIngest(vault, workspace, sourcePath, spec, { clock: fixedClock, confirmed: true }),
+    saveDshHistoryIngest(vault, workspace, sourcePath, spec, { clock: fixedClock, confirmed: true })
+  ]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+  assert.equal(fs.existsSync(path.join(vault, '_staging', '.dsh-wiki-history-ingest.lock')), false);
+  assert.match(await fsp.readFile(path.join(vault, pagePath), 'utf8'), /One serialized writer/);
 });

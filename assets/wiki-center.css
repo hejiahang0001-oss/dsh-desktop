@@ -31,7 +31,7 @@ main { display: grid; gap: 18px; padding: 24px 34px 80px; }
 .path { margin: 0 0 6px; color: #f5f7fa; word-break: break-all; }
 .detail, .empty { margin: 0; color: #9fa8b4; line-height: 1.6; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-.capability-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.capability-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
 .capability { padding: 11px 12px; border-radius: 11px; background: #20242a; border: 1px solid #343a43; }
 .capability strong { display: block; font-size: 13px; }
 .capability small { display: block; color: #919aa6; margin-top: 4px; }
@@ -47,6 +47,8 @@ textarea { resize: vertical; min-height: 150px; line-height: 1.55; }
 .meta { color: #8290a1; font-size: 12px; word-break: break-all; }
 .candidate { display: grid; grid-template-columns: auto 1fr; gap: 10px; cursor: pointer; }
 .candidate input { width: auto; margin-top: 3px; }
+.candidate.is-disabled { cursor: not-allowed; opacity: .6; }
+.history-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .editor-grid { margin-top: 18px; }
 .editor-grid input { margin-bottom: 14px; }
 .preview { margin-top: 14px; border-radius: 10px; border: 1px solid #343a43; padding: 12px; background: #15181c; color: #b8c1cc; white-space: pre-wrap; line-height: 1.55; }
@@ -59,6 +61,7 @@ footer { position: fixed; inset: auto 0 0; display: flex; justify-content: space
   body { min-width: 0; }
   .toolbar, main { padding-left: 20px; padding-right: 20px; }
   .capability-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .history-list { grid-template-columns: 1fr; }
   footer { position: static; padding: 12px 20px; flex-direction: column; }
 }
 
