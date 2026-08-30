@@ -16,7 +16,11 @@ test('desktop exposes bounded persisted interface zoom and complete layout reset
   assert.match(main, /重置整个工作台布局/);
   assert.match(preload, /setUiZoomFactor/);
   assert.match(preload, /resetLayout/);
-  assert.doesNotMatch(preload, /sendSync|ipcRenderer\.on\('workbench/);
+  assert.doesNotMatch(preload, /ipcRenderer\.on\('workbench/);
+  assert.equal((preload.match(/ipcRenderer\.sendSync\(/g) || []).length, 1);
+  assert.match(preload, /if \(process\.isMainFrame\)[\s\S]*sendSync\('harness:take-selection-intent'\)/);
+  assert.match(main, /ipcMain\.on\('harness:take-selection-intent'/);
+  assert.doesNotMatch(main, /event\.returnValue = null;\s*if \(isolatedSmokeTarget/);
 });
 
 test('compact desktop smoke size and isolated terminal window budget are explicit', () => {

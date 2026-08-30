@@ -15,10 +15,15 @@
       <p id="repository-path" class="repository-path">正在检查当前仓库…</p>
     </div>
     <button id="create" class="primary" type="button">新建隔离工作树</button>
+    <button id="handoff" type="button">交接当前会话</button>
     <button id="refresh" type="button">刷新</button>
     <button id="close" type="button">关闭</button>
   </header>
   <main>
+    <section aria-labelledby="handoff-title">
+      <div class="section-heading"><div><h2 id="handoff-title">会话交接与恢复</h2><p>在原目录与独立工作树间继续工作。保留原会话、草稿与恢复点，不自动合并提交。</p></div></div>
+      <div id="handoff-list" aria-live="polite"></div>
+    </section>
     <section aria-labelledby="summary-title">
       <div class="section-heading">
         <div><h2 id="summary-title">仓库状态</h2><p>每个工作树绑定独立分支与目录；软件 Key 不进入 Git 子进程。</p></div>

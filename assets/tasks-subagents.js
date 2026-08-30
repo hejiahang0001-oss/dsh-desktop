@@ -190,11 +190,12 @@
       : state.message || 'Harness 任务状态尚未就绪。';
     empty(summary);
     addSummary('当前任务', state.current?.title || '尚未选择', state.current?.title || '');
-    addSummary('当前状态', state.current?.running ? '正在运行' : state.available ? '当前未运行' : '不可用');
+    addSummary('当前状态', state.workflow?.approvals ? '等待你确认' : state.current?.running ? '正在运行' : state.available ? '当前未运行' : '不可用');
     addSummary('子代理', `${state.counts?.runningSubagents || 0} 运行 / ${state.counts?.subagents || 0} 总计`);
     addSummary('后台任务', `${state.counts?.liveJobs || 0} 运行 / ${state.counts?.backgroundJobs || 0} 总计`);
     addSummary('目录共享', String(state.counts?.sharedWorkspaces || 0));
     addSummary('等待确认', String(state.counts?.pending || 0));
+    addSummary('排队 / 插话', state.workflow?.available ? `${state.workflow.queued} / ${state.workflow.steering}` : '状态待同步');
     renderSubagents(state);
     renderJobs(state);
   };

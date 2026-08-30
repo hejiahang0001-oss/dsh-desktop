@@ -99,7 +99,8 @@ test('workspace sync creates a session when the page has not selected one', asyn
   assert.equal(result.sessionId, NEW_SESSION_ID);
   assert.equal(result.sessionCreated, true);
   assert.equal(fixture.calls.at(-1).method, 'session/create');
-  assert.deepEqual(fixture.calls.at(-1).payload.args.request, { workspaceId: WORKSPACE_ID });
+  assert.equal(fixture.calls.at(-1).payload.args.request.workspaceId, WORKSPACE_ID);
+  assert.match(fixture.calls.at(-1).payload.args.request.sessionId, /^session-[a-f0-9-]{36}$/);
 });
 
 test('a selected session missing from the live list is not silently reopened', async () => {
@@ -177,4 +178,16 @@ test('session selection verification waits through the official startup persiste
   assert.equal(await readHarnessSessionSelection({
     executeJavaScript: async () => ({ sessionId: 'not-a-session' })
   }), '');
+});
+test('workspace sync retries only the transient dsh-mkdir scan race with one stable session id', async () => {
+  const fixture = createFetch(), ids = []; let failed = false;
+  await synchronizeHarnessWorkspace({ origin: 'http://127.0.0.1:54321', workspacePath: WORKSPACE_PATH, fetchImpl: async (url, options) => {
+    const request = JSON.parse(options.body);
+    if (request.method === 'session/create') { ids.push(request.payload.args.request.sessionId); if (!failed) { failed = true; return new Response(JSON.stringify({ type: 'server-response', rpcId: request.rpcId, result: { ok: false, error: { message: 'ENOENT .dsh-mkdir-test' } } })); } }
+    return fixture.fetchImpl(url, options);
+  } });
+  assert.equal(ids.length, 2); assert.equal(ids[0], ids[1]);
+  let attempts = 0;
+  await assert.rejects(synchronizeHarnessWorkspace({ origin: 'http://127.0.0.1:54321', workspacePath: WORKSPACE_PATH, fetchImpl: async () => { attempts++; throw new Error('unrelated offline'); } }), /offline/);
+  assert.equal(attempts, 1);
 });

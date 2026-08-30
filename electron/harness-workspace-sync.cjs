@@ -187,7 +187,16 @@ const synchronizeHarnessWorkspace = async ({
     throw new HarnessWorkspaceSyncError('invalid-workspace', 'Harness 工作区必须是本机绝对目录。');
   }
 
-  const created = await callHarnessApi(origin, 'workspace.create', { path: workspacePath }, { fetchImpl });
+  const call = async (method, payload) => {
+    for (let attempt = 0; ; attempt++) {
+      try { return await callHarnessApi(origin, method, payload, { fetchImpl }); }
+      catch (error) {
+        if (attempt >= 2 || !/ENOENT/i.test(error.message) || !/\.dsh-mkdir-/.test(error.message)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+      }
+    }
+  };
+  const created = await call('workspace.create', { path: workspacePath });
   let workspace = created?.workspace;
   if (!workspace?.workspaceId || pathKey(workspace.path) !== pathKey(workspacePath)) {
     throw new HarnessWorkspaceSyncError('workspace-mismatch', 'Harness 返回的工作区与桌面所选目录不一致。');
@@ -205,7 +214,7 @@ const synchronizeHarnessWorkspace = async ({
     }
   }
 
-  const sessionList = await callHarnessApi(origin, 'session.list', {}, { fetchImpl });
+  const sessionList = await call('session.list', {});
   const memberIds = new Set(Array.isArray(workspace.sessionIds) ? workspace.sessionIds : []);
   const sessions = Array.isArray(sessionList?.items) ? sessionList.items : [];
   const reusable = isSessionId(selectedSessionId)
@@ -218,7 +227,7 @@ const synchronizeHarnessWorkspace = async ({
   let sessionId = reusable?.sessionId;
   let sessionCreated = false;
   if (!sessionId) {
-    const session = await callHarnessApi(origin, 'session.create', { workspaceId: workspace.workspaceId }, { fetchImpl });
+    const session = await call('session.create', { workspaceId: workspace.workspaceId, sessionId: `session-${randomUUID()}` });
     sessionId = session?.sessionId;
     sessionCreated = true;
   }

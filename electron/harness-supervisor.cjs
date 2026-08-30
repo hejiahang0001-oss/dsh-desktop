@@ -70,6 +70,7 @@ const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName
     ['package.json', `${JSON.stringify(manifest, null, 2)}\n`],
     ['index.mjs', await fsp.readFile(sourceModulePath, 'utf8')]
   ];
+  if (expectedName === 'dsh-desktop-tools') files.push(['session-control.mjs', await fsp.readFile(path.join(sourceDir, 'session-control.mjs'), 'utf8')]);
   for (const [name, content] of files) {
     const targetPath = path.join(targetDir, name);
     try {
