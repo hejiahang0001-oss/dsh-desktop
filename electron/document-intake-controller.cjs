@@ -4,15 +4,23 @@ const { DocumentIntake, documentReference } = require('./document-intake.cjs');
 const contextKey = (context) => createHash('sha256').update(`${context.workspacePath}\0${context.sessionId || 'new'}`).digest('hex');
 
 class DocumentIntakeController {
-  constructor({ getContext, chooseFiles, confirmImport, intake = new DocumentIntake() }) {
+  constructor({ getContext, chooseFiles, confirmImport, intake = new DocumentIntake(), getPersistence = async () => null }) {
     this.getContext = getContext; this.chooseFiles = chooseFiles; this.confirmImport = confirmImport;
     this.intake = intake; this.catalog = new Map(); this.busy = false;
+    this.getPersistence = getPersistence;
+  }
+
+  async loadCatalog(key) {
+    if (!this.catalog.has(key)) this.catalog.set(key, (await this.getPersistence())?.read(key).items || []);
+    while (this.catalog.size > 100) this.catalog.delete(this.catalog.keys().next().value);
+    return this.catalog.get(key);
   }
 
   async getState() {
     const context = await this.getContext();
     const key = contextKey(context);
-    return { available: true, context: key, items: this.catalog.get(key) || [] };
+    const items = await this.loadCatalog(key);
+    return { available: true, context: key, items, references: items.map(documentReference) };
   }
 
   async importFiles({ expectedContext, paths, choose = false } = {}) {
@@ -22,6 +30,7 @@ class DocumentIntakeController {
       const context = await this.getContext();
       const key = contextKey(context);
       if (key !== expectedContext) throw new Error('工作区或会话已切换，请在当前会话重新添加。');
+      await this.loadCatalog(key);
       const selected = choose ? await this.chooseFiles() : paths;
       if (choose && !selected?.length) return { ok: false, canceled: true, context: key, message: '已取消选择，原文件未修改。' };
       if (!Array.isArray(selected) || !selected.length || selected.length > 10
@@ -35,6 +44,7 @@ class DocumentIntakeController {
       const merged = new Map((this.catalog.get(key) || []).map((item) => [item.id, item]));
       for (const item of result.items) merged.set(item.id, item);
       this.catalog.set(key, [...merged.values()].slice(-50));
+      await (await this.getPersistence())?.saveAttachments(key, this.catalog.get(key));
       while (this.catalog.size > 100) this.catalog.delete(this.catalog.keys().next().value);
       return { ok: result.items.length > 0, context: key, ...result,
         references: result.items.map(documentReference),

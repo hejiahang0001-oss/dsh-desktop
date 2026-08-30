@@ -5,6 +5,19 @@
   if (!api || !bridge) return false;
   let bar, list, status, button, busy = false, mountedCard, scheduled = false;
   const refs = new Map();
+  let catalogSelection = null, catalogLoading = false;
+  const hydrate = async () => {
+    const selected = localStorage.getItem('dsh.sessions.current');
+    if (catalogLoading || catalogSelection === selected) return;
+    catalogLoading = true;
+    try {
+      const state = await api.getState();
+      if (selected !== localStorage.getItem('dsh.sessions.current')) return;
+      refs.clear(); state.references?.forEach((reference, index) => refs.set(reference, state.items[index]));
+      catalogSelection = selected; if (list) redraw();
+    } catch { /* The add action reports connection errors. */ }
+    finally { catalogLoading = false; }
+  };
   const composer = bridge.current;
   const message = (text, error = false) => {
     status.textContent = text; status.dataset.error = String(error);
@@ -57,6 +70,7 @@
   };
   const mount = () => {
     scheduled = false;
+    void hydrate();
     const card = document.querySelector('[data-composer-card]');
     if (!card) return;
     if (bar?.isConnected && mountedCard === card) return;
@@ -89,12 +103,14 @@
     }
   };
   const onInput = (event) => { if (event.target === composer() && list) redraw(); };
+  const restored = () => { if (list) redraw(); };
+  document.addEventListener('dsh-draft-restored', restored);
   document.addEventListener('drop', drop, true);
   document.addEventListener('dragover', dragover, true);
   document.addEventListener('input', onInput);
   observer.observe(document.body, { childList: true, subtree: true }); mount();
   window.__DSH_DOCUMENT_INTAKE__ = Object.freeze({ installed: true, isPending: () => busy, dispose: () => {
-    observer.disconnect(); document.removeEventListener('drop', drop, true); document.removeEventListener('dragover', dragover, true); document.removeEventListener('input', onInput); bar?.remove();
+    observer.disconnect(); document.removeEventListener('dsh-draft-restored', restored); document.removeEventListener('drop', drop, true); document.removeEventListener('dragover', dragover, true); document.removeEventListener('input', onInput); bar?.remove();
   } });
   return true;
 })();

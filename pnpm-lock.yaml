@@ -35,6 +35,8 @@ importers:
 
   runtime/dsh-desktop-shell-env: {}
 
+  runtime/dsh-desktop-tools: {}
+
   runtime/harness: {}
 
 packages:

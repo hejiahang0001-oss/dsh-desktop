@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('worktreesAPI', Object.freeze({
   getState: () => ipcRenderer.invoke('worktrees:get-state'),
   refresh: () => ipcRenderer.invoke('worktrees:refresh'),
   create: () => ipcRenderer.invoke('worktrees:create'),
+  handoff: () => ipcRenderer.invoke('worktrees:handoff'),
+  openHandoff: (id, side) => ipcRenderer.invoke('worktrees:open-handoff', { id, side }),
   activate: (id) => ipcRenderer.invoke('worktrees:activate', id),
   reveal: (id) => ipcRenderer.invoke('worktrees:reveal', id),
   remove: (id) => ipcRenderer.invoke('worktrees:remove', id),

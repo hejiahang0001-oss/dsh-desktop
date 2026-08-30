@@ -165,6 +165,7 @@ class ReliableInterruptController {
     getOrigin,
     getWebContents,
     getWorkspacePath,
+    resumeQueue,
     apiCall = callHarnessApi,
     readQueue = readHarnessQueueSnapshot,
     readSelection = readHarnessSessionSelection,
@@ -173,6 +174,7 @@ class ReliableInterruptController {
     this.getOrigin = getOrigin;
     this.getWebContents = getWebContents;
     this.getWorkspacePath = getWorkspacePath;
+    this.resumeQueue = resumeQueue;
     this.apiCall = apiCall;
     this.readQueue = readQueue;
     this.readSelection = readSelection;
@@ -271,79 +273,42 @@ class ReliableInterruptController {
   async interruptQueued({ maxIdleChecks = DEFAULT_IDLE_CHECKS } = {}) {
     const sessionId = await this._selectedSession();
     const initial = await this._summary(sessionId);
-    if (initial.running !== true) {
-      throw new ReliableInterruptError('turn-ended', '当前回合已经结束，排队消息会按顺序继续处理。');
-    }
     const origin = this.getOrigin?.();
     const queue = await this.readQueue(origin, sessionId);
     const item = Array.isArray(queue) ? queue.find((entry) => entry?.placement === 'queued') : undefined;
-    const blocks = Array.isArray(item?.message?.content) ? item.message.content : [];
-    const prompt = blocks.length > 0 && blocks.every((block) => block?.type === 'text')
-      ? normalizedPrompt(blocks.map((block) => block.text).join(''))
-      : '';
-    if (!item || typeof item.id !== 'string' || item.id.length > 160 || !prompt) {
-      throw new ReliableInterruptError('unsupported-queued-message', '这条排队消息含附件或内容过长，请等待当前回合结束后再发送。');
+    if (!item || typeof item.id !== 'string' || item.id.length > 160) {
+      throw new ReliableInterruptError('queue-empty', '当前没有可继续的排队消息，请刷新状态。');
     }
-
-    try {
-      await this._call('session.updateQueue', {
-        sessionId,
-        itemId: item.id,
-        action: { kind: 'remove' }
-      });
-    } catch (error) {
-      if (error?.code === 'queue-item-not-found') {
-        throw new ReliableInterruptError('queue-race', '排队消息已经被当前回合接收，请等待回复。');
+    let idleConfirmed = initial.running !== true;
+    if (!idleConfirmed) {
+      const cancellation = await this._call('session.cancel', { sessionId });
+      if (cancellation?.accepted !== true) throw new ReliableInterruptError('cancel-unconfirmed', '未确认中断；原排队消息未修改。');
+      const checks = Number.isSafeInteger(maxIdleChecks) && maxIdleChecks > 0 ? Math.min(maxIdleChecks, DEFAULT_IDLE_CHECKS) : DEFAULT_IDLE_CHECKS;
+      for (let attempt = 0; attempt < checks; attempt += 1) {
+        if ((await this._summary(sessionId)).running !== true) { idleConfirmed = true; break; }
+        if (attempt + 1 < checks) await this.wait(IDLE_CHECK_DELAY_MS);
       }
-      throw error;
-    }
-
-    const cancellation = await this._call('session.cancel', { sessionId });
-    if (cancellation?.accepted !== true) {
-      await this._call('session.prompt', {
-        sessionId,
-        mode: 'queue',
-        content: [{ type: 'text', text: prompt }]
-      });
-      throw new ReliableInterruptError('cancel-unconfirmed', '未确认中断；消息已恢复到 Harness 队列。');
-    }
-
-    const checks = Number.isSafeInteger(maxIdleChecks) && maxIdleChecks > 0
-      ? Math.min(maxIdleChecks, DEFAULT_IDLE_CHECKS)
-      : DEFAULT_IDLE_CHECKS;
-    let idleConfirmed = false;
-    for (let attempt = 0; attempt < checks; attempt += 1) {
-      const current = await this._summary(sessionId);
-      if (current.running !== true) {
-        idleConfirmed = true;
-        break;
-      }
-      if (attempt + 1 < checks) await this.wait(IDLE_CHECK_DELAY_MS);
     }
     if (await this._selectedSession() !== sessionId) {
-      await this._call('session.prompt', {
-        sessionId,
-        mode: 'queue',
-        content: [{ type: 'text', text: prompt }]
-      });
       throw new ReliableInterruptError('session-changed', '处理插话期间会话已经切换；消息已保留在原会话。');
     }
-    const receipt = await this._call('session.prompt', {
-      sessionId,
-      mode: idleConfirmed ? 'steer' : 'queue',
-      content: [{ type: 'text', text: prompt }]
-    });
-    if (receipt?.accepted !== true) {
-      throw new ReliableInterruptError('prompt-unconfirmed', 'Harness 未确认排队消息已重新发送。');
+    // Promote the exact pending item atomically inside Harness. Never remove
+    // then resubmit content: a transport failure in between could lose a task.
+    try {
+      if (!idleConfirmed) throw new ReliableInterruptError('cancel-pending', '当前回合尚未停止；原队列保留，请稍后继续。');
+      if (!this.resumeQueue) throw new ReliableInterruptError('queue-unavailable', '桌面队列恢复组件尚未就绪。');
+      const receipt = await this.resumeQueue({ sessionId, workspacePath: this.getWorkspacePath(), itemId: item.id });
+      if (receipt?.accepted !== true) throw new ReliableInterruptError('queue-unconfirmed', '未确认排队消息已受理，请刷新状态；未重复发送。');
+    } catch (error) {
+      if (error?.code === 'queue-item-not-found') throw new ReliableInterruptError('queue-race', '排队消息已离开队列，请查看回复；未重复发送。');
+      throw error;
     }
     return Object.freeze({
       ok: true,
       accepted: true,
-      interrupted: true,
+      interrupted: initial.running === true,
       delivery: idleConfirmed ? 'started' : 'queued-after-cancel',
-      message: idleConfirmed
-        ? '已中断当前回合，排队消息已开始处理。'
-        : '中断请求已受理，排队消息已保留并会继续处理。'
+      message: '继续处理原排队消息的请求已受理；未重复发送，请以实际回复为准。'
     });
   }
 }

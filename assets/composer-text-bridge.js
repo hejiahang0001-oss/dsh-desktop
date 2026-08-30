@@ -1,7 +1,18 @@
 (() => {
   if (window.__DSH_COMPOSER_TEXT__) return true;
   const current = () => document.querySelector('[data-composer-card] [data-composer-input][contenteditable="true"], [data-composer-card] textarea:not([disabled])');
-  const read = (input = current()) => input?.tagName === 'TEXTAREA' ? input.value : input?.innerText || '';
+  const read = (input = current()) => {
+    if (input?.tagName === 'TEXTAREA') return input.value;
+    if (!input) return '';
+    // The public rendered Lexical blocks use ONE newline, matching the
+    // upstream clipboard/draft serialization; innerText uses CSS paragraph gaps.
+    const content = (node) => node.nodeType === Node.TEXT_NODE ? node.textContent
+      : node.nodeName === 'BR' ? '\n' : Array.from(node.childNodes).map(content).join('');
+    return Array.from(input.childNodes).map((block) => {
+      const text = content(block);
+      return block.childNodes.length === 1 && block.firstChild.nodeName === 'BR' ? '' : text;
+    }).join('\n');
+  };
   const insert = async (input, text, range, guard = () => true) => {
     if (!input?.isConnected || input !== current()) throw new Error('输入框已变化，请在当前会话重试。');
     input.focus({ preventScroll: true });
@@ -32,6 +43,7 @@
   const append = (input, text, guard) => insert(input, `${read(input).trim() && !read(input).endsWith('\n') ? '\n' : ''}${text}`, null, guard);
   const remove = (input, text) => {
     if (input?.tagName === 'TEXTAREA') return insert(input, '', text);
+    if (text === read(input)) { const range = document.createRange(); range.selectNodeContents(input); return insert(input, '', range); }
     const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
     const nodes = []; let node, joined = '';
     while ((node = walker.nextNode())) { nodes.push({ node, start: joined.length }); joined += node.textContent; }
@@ -44,6 +56,10 @@
     range.setStart(first.node, start - first.start); range.setEnd(last.node, end - last.start);
     return insert(input, '', range);
   };
-  window.__DSH_COMPOSER_TEXT__ = Object.freeze({ current, read, append, remove });
+  const restore = (input, text, guard) => {
+    if (read(input).trim()) throw new Error('输入框已有内容，未覆盖当前草稿。');
+    return insert(input, text, null, guard);
+  };
+  window.__DSH_COMPOSER_TEXT__ = Object.freeze({ current, read, append, remove, restore });
   return true;
 })();

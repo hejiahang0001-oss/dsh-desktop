@@ -49,6 +49,7 @@ const fixture = ({
     readSelection: async () => selections[Math.min(selectionCalls++, selections.length - 1)],
     apiCall,
     readQueue: async () => queue,
+    resumeQueue: async (payload) => { calls.push({ method: 'desktop.resumeQueue', payload }); return { accepted: true }; },
     wait: async () => {}
   });
   return { controller, calls };
@@ -101,17 +102,25 @@ test('the visible queued-message button promotes authoritative full content with
   assert.equal(receipt.interrupted, true);
   assert.deepEqual(calls.map((entry) => entry.method), [
     'session.list',
-    'session.updateQueue',
     'session.cancel',
     'session.list',
-    'session.prompt'
+    'desktop.resumeQueue'
   ]);
-  assert.deepEqual(calls[1].payload, {
+  assert.deepEqual(calls.at(-1).payload, {
     sessionId: SESSION_ID,
     itemId: 'message-queued-full',
-    action: { kind: 'remove' }
+    workspacePath: 'C:\\repo'
   });
-  assert.equal(calls.at(-1).payload.content[0].text, full);
+  assert.equal(calls.some((entry) => entry.method === 'session.prompt'), false);
+});
+test('idle retained queue is resumed atomically and a switched session never removes or resends it', async () => {
+  const idle = fixture({ running: false });
+  assert.equal((await idle.controller.interruptQueued()).accepted, true);
+  assert.deepEqual(idle.calls.map((entry) => entry.method), ['session.list', 'desktop.resumeQueue']);
+  assert.equal(idle.calls.at(-1).payload.itemId, 'message-queued-1');
+  const changed = fixture({ selections: [SESSION_ID, OTHER_SESSION_ID] });
+  await assert.rejects(changed.controller.interruptQueued(), /已经切换/);
+  assert.equal(changed.calls.some((entry) => ['desktop.resumeQueue', 'session.updateQueue', 'session.prompt'].includes(entry.method)), false);
 });
 
 test('queue snapshot reads one bounded authoritative WebSocket baseline', async () => {

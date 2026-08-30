@@ -26,7 +26,7 @@ test('worktree manager window is local-only, fixed-action, accessible, and packa
   assert.match(main, /runWorktreesSmoke/);
   assert.match(main, /requestAnimationFrame\(\(\) => requestAnimationFrame\(resolve\)\)/);
   assert.match(main, /buttons: \['取消', '创建工作树'\]/);
-  assert.match(main, /buttons: \['取消', '切换并重启 Harness'\]/);
+  assert.match(main, /buttons: \['取消', '切换工作区'\]/);
   assert.match(main, /buttons: \['取消', '建立恢复并回收'\]/);
   assert.match(main, /defaultId: 0/g);
   assert.match(main, /\^\[0-9a-f\]\{24\}\$/);

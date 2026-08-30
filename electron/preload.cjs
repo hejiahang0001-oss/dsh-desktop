@@ -1,6 +1,18 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
+// Apply a host-confirmed one-shot selection before the upstream app boots.
+// Writing only in the outgoing page can be overwritten by its unload mirror.
+try {
+  if (process.isMainFrame) {
+    const selected = ipcRenderer.sendSync('harness:take-selection-intent');
+    if (typeof selected === 'string' && /^session-[0-9a-f-]{36}$/i.test(selected)) localStorage.setItem('dsh.sessions.current', JSON.stringify({ sessionId: selected }));
+  }
+} catch { /* Startup synchronization still verifies the selected session. */ }
 
 contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
+  drafts: Object.freeze({
+    getState: () => ipcRenderer.invoke('drafts:get-state'),
+    save: (request) => ipcRenderer.invoke('drafts:save', request)
+  }),
   documents: Object.freeze({
     getState: () => ipcRenderer.invoke('documents:get-state'),
     choose: (context) => ipcRenderer.invoke('documents:choose', context),
@@ -115,6 +127,7 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     openWindow: () => ipcRenderer.invoke('git-delivery:open-window')
   }),
   harness: Object.freeze({
+    workflowState: () => ipcRenderer.invoke('harness:workflow-state'),
     getState: () => ipcRenderer.invoke('harness:get-state'),
     interruptAndPrompt: (text) => ipcRenderer.invoke('harness:interrupt-and-prompt', text),
     interruptQueued: () => ipcRenderer.invoke('harness:interrupt-queued'),

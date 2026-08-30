@@ -108,6 +108,7 @@ const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs')
 const { NativeWorkbenchDock } = require('./native-workbench-dock.cjs');
 const { DockLayoutStore, TOOLS: DOCK_TOOLS } = require('./dock-layout.cjs');
 const { TerminalReadBroker } = require('./terminal-read-broker.cjs');
+const { SessionContinuityStore } = require('./session-continuity-store.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setName('DSH Desktop');
@@ -115,6 +116,11 @@ app.setName('DSH Desktop');
 let mainWindow;
 let nativeDock;
 let dockLayoutStore;
+let continuityStorePromise;
+const draftWriteGrants = new Map();
+const getContinuityStore = () => continuityStorePromise ||= (async () => {
+  const store = new SessionContinuityStore(path.join(app.getPath('userData'), 'session-continuity.json')); await store.init(); return store;
+})();
 let terminalWindow;
 let contextSourcesWindow;
 let pluginHealthWindow;
@@ -166,6 +172,8 @@ const dshHistorySelectionCatalog = new DshHistorySelectionCatalog();
 let dshHistoryExpiryTimer;
 let harnessOrigin = null;
 let harnessAuthCookie = null;
+let harnessSelectionIntent = null;
+const harnessSelectionTrace = [];
 let harnessFetch = null;
 let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
@@ -295,6 +303,8 @@ const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('
 const documentIntakeSmokeTarget = process.argv.find((argument) => argument.startsWith('--document-intake-smoke-file='));
 const reviewSmokeTarget = process.argv.find((argument) => argument.startsWith('--review-smoke-file='));
 const dockSmokeTarget = process.argv.find((argument) => argument.startsWith('--dock-smoke-file='));
+const continuitySmokeTarget = process.argv.find((argument) => argument.startsWith('--continuity-smoke-file='));
+const handoffSmokeTarget = process.argv.find((argument) => argument.startsWith('--handoff-smoke-file='));
 const credentialAgentSmokeTarget = process.argv.find((argument) => argument.startsWith('--credential-agent-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
@@ -316,6 +326,8 @@ const isolatedSmokeTarget = [
   documentIntakeSmokeTarget,
   reviewSmokeTarget,
   dockSmokeTarget,
+  continuitySmokeTarget,
+  handoffSmokeTarget,
   credentialAgentSmokeTarget,
   ipcSecuritySmokeTarget,
   pdfSmokeTarget,
@@ -487,8 +499,13 @@ const waitForInitialHarnessSelection = async (webContents, { timeoutMs = 8000, i
   } while (true);
 };
 
-const startHarnessForWindow = async ({ restart = false } = {}) => {
+const flushComposerDraft = async () => {
+  if (!mainWindow || mainWindow.isDestroyed() || !harnessUiReady()) return;
+  await mainWindow.webContents.executeJavaScript('window.__DSH_CONTINUITY__?.flush()', true);
+};
+const startHarnessForWindow = async ({ restart = false, preferredSessionId = '' } = {}) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, error: '窗口不可用。' };
+  await flushComposerDraft();
   if (sideChatOperationPromise) await sideChatOperationPromise;
   closeSideChatWindow();
   stopAgentPolling();
@@ -510,7 +527,7 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
     await supervisor.credentialHost?.verifyReady(harnessOrigin, harnessFetch);
     await installHarnessCookie(mainWindow.webContents.session);
     await mainWindow.loadURL(harnessOrigin);
-    const selectedSessionId = await waitForInitialHarnessSelection(mainWindow.webContents);
+    const selectedSessionId = isSessionId(preferredSessionId) ? preferredSessionId : await waitForInitialHarnessSelection(mainWindow.webContents);
     const workspace = getWorkspaceState();
     workspaceSyncDiagnostics = await synchronizeHarnessWorkspace({
       origin: harnessOrigin,
@@ -521,6 +538,7 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
     });
     const selection = await selectHarnessSession(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
     if (selection.changed) {
+      harnessSelectionIntent = { sessionId: workspaceSyncDiagnostics.sessionId, expires: Date.now() + 15000 };
       await mainWindow.loadURL(harnessOrigin);
       await waitForHarnessSessionSelection(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
     }
@@ -529,6 +547,15 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
     startAgentPolling();
     return { ok: true, url };
   } catch (error) {
+    if (isolatedSmokeTarget) {
+      const listing = harnessOrigin ? await authenticatedHarnessApi(harnessOrigin, 'session.list', {}).catch(() => null) : null;
+      await fsp.writeFile(`${path.resolve(isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1))}.selection.json`, JSON.stringify({
+        error: error.message, expected: workspaceSyncDiagnostics.sessionId, selected: await readHarnessSessionSelection(mainWindow.webContents).catch(() => ''),
+        intentPending: Boolean(harnessSelectionIntent), trace: harnessSelectionTrace,
+        sessions: listing?.items?.map((item) => ({ sessionId: item.sessionId, cwd: item.cwd, origin: item.origin, blank: item.blank, running: item.running }))
+      }, null, 2)).catch(() => {});
+    }
+    harnessSelectionIntent = null;
     workspaceSyncDiagnostics = unavailableWorkspaceSync('failed', error.message);
     harnessOrigin = null;
     clearHarnessAuthentication();
@@ -864,6 +891,8 @@ const installWorkbenchPanel = async () => {
     const reliableInterruptInstalled = await installReliableInterrupt(assets);
     await mainWindow.webContents.executeJavaScript(assets.composerTextScript, true);
     const documentsInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.documentsScript, true));
+    await mainWindow.webContents.executeJavaScript(await fsp.readFile(path.join(rootDir, 'assets', 'session-continuity.js'), 'utf8'), true);
+    await mainWindow.webContents.executeJavaScript(await fsp.readFile(path.join(rootDir, 'assets', 'session-workflow.js'), 'utf8'), true);
     if (nativeDock) { await mainWindow.webContents.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8')); nativeDock.layout(); }
     return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled
       && networkInstalled && commandInstalled && reliableInterruptInstalled && documentsInstalled;
@@ -1276,7 +1305,16 @@ const forkCheckpointSession = (checkpointId) => {
 const desktopIpcAllowed = (event) => isTrustedMainFrameEvent(event, mainWindow?.webContents, currentUrlAllowed);
 
 const harnessIpcAllowed = (event) => desktopIpcAllowed(event) && harnessUiReady();
+ipcMain.on('harness:take-selection-intent', (event) => {
+  if (isolatedSmokeTarget && harnessSelectionTrace.length < 30) harnessSelectionTrace.push({ intent: Boolean(harnessSelectionIntent), frameOrigin: (() => { try { return new URL(event.senderFrame.url).origin; } catch { return ''; } })(), trusted: isTrustedMainFrameEvent(event, mainWindow?.webContents, currentUrlAllowed) });
+  if (!harnessOrigin || !isTrustedMainFrameEvent(event, mainWindow?.webContents, (value) => { try { return new URL(value).origin === harnessOrigin; } catch { return false; } })) { event.returnValue = null; return; }
+  const intent = harnessSelectionIntent; harnessSelectionIntent = null;
+  // sendSync replies on assignment: assigning a default first would consume
+  // the one-shot intent while returning null to the preload.
+  event.returnValue = intent && intent.expires >= Date.now() && isSessionId(intent.sessionId) ? intent.sessionId : null;
+});
 const documentIntakeController = new DocumentIntakeController({
+  getPersistence: getContinuityStore,
   getContext: async () => {
     if (!harnessUiReady()) throw new Error('请等待工作区连接完成后添加文件。');
     const workspacePath = getWorkspaceState().activePath;
@@ -1309,6 +1347,24 @@ const documentIntakeController = new DocumentIntakeController({
   }
 });
 const terminalIpcAllowed = (event) => isTrustedMainFrameEvent(event, terminalWindow?.webContents, terminalUrlAllowed);
+ipcMain.handle('drafts:get-state', async (event) => {
+  if (!harnessIpcAllowed(event)) throw new Error('草稿来源未通过校验。');
+  const context = await documentIntakeController.getContext(), key = contextKey(context);
+  if (!isSessionId(context.sessionId)) throw new Error('请等待当前会话就绪后恢复草稿。');
+  const row = (await getContinuityStore()).read(key);
+  const token = require('node:crypto').randomUUID();
+  draftWriteGrants.set(token, { key, sender: event.sender, expires: Date.now() + 120000 });
+  while (draftWriteGrants.size > 100) draftWriteGrants.delete(draftWriteGrants.keys().next().value);
+  return { ...row, context: key, token, sessionId: context.sessionId, workspacePath: context.workspacePath };
+});
+ipcMain.handle('drafts:save', async (event, request) => {
+  if (!harnessIpcAllowed(event)) throw new Error('草稿来源未通过校验。');
+  const grant = draftWriteGrants.get(request?.token);
+  if (!grant || grant.sender !== event.sender || grant.expires < Date.now() || request?.context !== grant.key) throw new Error('草稿会话已过期，请重新打开当前会话。');
+  // A short-lived grant may finish an outgoing session's already captured draft after a UI switch.
+  const row = await (await getContinuityStore()).saveDraft(grant.key, request.text, request.revision);
+  return { context: grant.key, revision: row.revision, updatedAt: row.updatedAt };
+});
 const nativeParent = (surface) => surface?.getDialogParent?.() || surface || mainWindow;
 const terminalReadBroker = new TerminalReadBroker({
   getContext: () => documentIntakeController.getContext(),
@@ -2489,13 +2545,15 @@ const openGitDeliveryWindow = async () => {
   return { ok: true, reused: false };
 };
 
-const getTasksSubagentsState = () => {
+const getTasksSubagentsState = async () => {
   const workspace = getWorkspaceState();
-  return tasksSubagentsController?.scan({
+  const state = await (tasksSubagentsController?.scan({
     agentDiagnostics,
     workspacePath: workspace.activePath,
     workspaceName: workspace.displayName
-  }) || Promise.resolve(unavailableTasksSubagentsState());
+  }) || Promise.resolve(unavailableTasksSubagentsState()));
+  const workflow = await getCurrentWorkflow();
+  return { ...state, workflow };
 };
 
 const publishTasksSubagentsState = async () => {
@@ -3030,9 +3088,29 @@ const unavailableWorktreeState = (message = 'Git 工作树管理尚未初始化�
   worktrees: Object.freeze([])
 });
 
-const getWorktreeState = () => worktreeManager
-  ? worktreeManager.inspect(getWorkspaceState().activePath)
-  : Promise.resolve(unavailableWorktreeState());
+let handoffServicePromise;
+const getHandoffService = () => handoffServicePromise ||= (async () => {
+  const { SessionHandoff } = require('./session-handoff.cjs');
+  const service = new SessionHandoff({ filePath: path.join(app.getPath('userData'), 'session-handoffs.json'), manager: worktreeManager,
+    control: (operation, request) => supervisor.credentialHost.sessionControl.request(operation, request),
+    getContext: async () => { await flushComposerDraft(); return documentIntakeController.getContext(); },
+    continuity: getContinuityStore, trashItem: (target) => shell.trashItem(target),
+    activate: (target, sessionId) => activateWorkspace(target, sessionId),
+    confirm: async ({ direction, repository, session, targetPath }) => (await dialog.showMessageBox(nativeParent(worktreesWindow), {
+      title: direction === 'back' ? '返回原目录继续' : '交接到独立工作树', type: 'question',
+      message: direction === 'back' ? '将当前会话和代码状态交接回原目录？' : '新建独立工作树并继续当前会话？',
+      detail: `源目录：${repository.repository.root}\n目标：${targetPath || '软件管理的新工作树'}\n分支：${repository.repository.branch}\n历史事件：${session.eventCount}\n\n保留原会话、原目录和恢复点；迁移草稿、会话文档、Git 跟踪及未忽略的文件，保留暂存状态。忽略的依赖和环境文件不搬运。只复制代码状态，不自动合并提交。原目录有其他修改时拒绝返回覆盖。`,
+      buttons: ['取消', '确认交接'], defaultId: 0, cancelId: 0, noLink: true
+    })).response === 1
+  });
+  await service.init(); return service;
+})();
+const getWorktreeState = async () => {
+  if (!worktreeManager) return unavailableWorktreeState();
+  const workspacePath = getWorkspaceState().activePath, state = await worktreeManager.inspect(workspacePath);
+  const handoff = await getHandoffService();
+  return { ...state, handoffs: handoff.list(workspacePath), worktrees: state.worktrees.map((item) => ({ ...item, handoffProtected: handoff.protects(item.path), canRemove: item.canRemove && !handoff.protects(item.path) })) };
+};
 
 const performWorktreeCreate = async () => {
   if (!worktreeManager) return { ok: false, message: 'Git 工作树管理尚未初始化。', state: unavailableWorktreeState() };
@@ -3083,7 +3161,7 @@ const performWorktreeActivate = async (id) => {
     title: '切换工作树',
     message: `确认切换到 ${item.branch || item.directoryName}？`,
     detail: `目录：${item.path}\n提交：${item.headShort}\n未提交修改：${item.status.changed}\n\n切换会停止当前预览并重启 Harness；当前工作树及其修改不会被删除。`,
-    buttons: ['取消', '切换并重启 Harness'],
+    buttons: ['取消', '切换工作区'],
     defaultId: 0,
     cancelId: 0,
     noLink: true
@@ -3106,6 +3184,8 @@ const performWorktreeActivate = async (id) => {
 const performWorktreeRemove = async (id) => {
   if (!worktreeManager) return { ok: false, message: 'Git 工作树管理尚未初始化。', state: unavailableWorktreeState() };
   if (worktreeExternalBusy()) return { ok: false, message: '请先结束当前 Agent、插件、终端或检查点任务。', state: await getWorktreeState() };
+  const resolved = await worktreeManager.resolve({ workspacePath: getWorkspaceState().activePath, id });
+  if ((await getHandoffService()).protects(resolved.item.path)) return { ok: false, message: '此目录仍有交接或恢复记录；请先返回原目录，不能直接回收。', state: await getWorktreeState() };
   let preview;
   try { preview = await worktreeManager.previewRemove({ workspacePath: getWorkspaceState().activePath, id }); } catch (error) {
     return { ok: false, message: error?.message || '工作树已变化。', state: await getWorktreeState() };
@@ -4008,8 +4088,9 @@ const showWorkspaceError = async (error) => {
   });
 };
 
-const activateWorkspace = async (workspacePath) => {
+const activateWorkspace = async (workspacePath, preferredSessionId = '') => {
   try {
+    await flushComposerDraft();
     if (sideChatOperationPromise) await sideChatOperationPromise;
     closeSideChatWindow();
     if (terminalRunner?.isActive()) await terminalRunner.stop();
@@ -4038,7 +4119,7 @@ const activateWorkspace = async (workspacePath) => {
     supervisor.setLaunchDir(workspace.activePath);
     installApplicationMenu();
     applyWindowTitle();
-    const result = await startHarnessForWindow({ restart: true });
+    const result = await startHarnessForWindow({ restart: false, preferredSessionId });
     if (worktreesWindow && !worktreesWindow.isDestroyed()) {
       worktreesWindow.webContents.send('worktrees:state', await getWorktreeState());
     }
@@ -5043,6 +5124,30 @@ ipcMain.handle('worktrees:create', (event) => {
   if (worktreeMutationBusy()) return { ok: false, message: '另一个仓库操作仍在进行。' };
   return queueWorktreeOperation(() => performWorktreeCreate());
 });
+ipcMain.handle('worktrees:handoff', (event) => {
+  if (!worktreesIpcAllowed(event)) return { ok: false, message: '会话交接来源未通过校验。' };
+  if (worktreeMutationBusy()) return { ok: false, message: '请先结束当前运行和仓库操作。' };
+  return queueWorktreeOperation(async () => {
+    try { const result = await (await getHandoffService()).run(); return { ...result, state: await getWorktreeState() }; }
+    catch (error) { return { ok: false, message: error.message, state: await getWorktreeState() }; }
+  });
+});
+ipcMain.handle('worktrees:open-handoff', (event, request) => {
+  if (!worktreesIpcAllowed(event) || !/^[a-f0-9-]{36}$/.test(request?.id || '') || !['source', 'target'].includes(request.side)) return { ok: false, message: '恢复记录请求无效。' };
+  if (worktreeMutationBusy()) return { ok: false, message: '请先结束当前运行和仓库操作。' };
+  return queueWorktreeOperation(async () => {
+    try {
+      const service = await getHandoffService(), row = service.list(getWorkspaceState().activePath).find((item) => item.id === request.id);
+      if (!row) throw new Error('记录不属于当前工作区。');
+      const workspacePath = request.side === 'source' ? row.sourcePath : row.targetPath;
+      const sessionId = request.side === 'source' ? row.sourceSessionId : row.targetSessionId;
+      if (!workspacePath) throw new Error('目标目录尚未建立。');
+      await supervisor.credentialHost.sessionControl.request('inspect', { workspacePath, sessionId });
+      const result = await activateWorkspace(workspacePath, sessionId);
+      return { ...result, message: result.ok ? '已打开保存的会话；未重跑交接或复制代码。' : result.error, state: await getWorktreeState() };
+    } catch (error) { return { ok: false, message: error.message, state: await getWorktreeState() }; }
+  });
+});
 ipcMain.handle('worktrees:activate', (event, id) => {
   if (!worktreesIpcAllowed(event) || typeof id !== 'string' || !/^[0-9a-f]{24}$/.test(id)) {
     return { ok: false, message: '工作树切换请求未通过安全校验。' };
@@ -5118,6 +5223,17 @@ ipcMain.handle('git-delivery:open-window', (event) => (
     ? openGitDeliveryWindow()
     : { ok: false, message: 'Git 交付中心请求来源未通过安全校验。' }
 ));
+const getCurrentWorkflow = async () => {
+  try {
+    if (!harnessUiReady() || worktreeOperationPromise) return { available: false };
+    const context = await documentIntakeController.getContext();
+    const value = await supervisor.credentialHost.sessionControl.request('inspect', context);
+    if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
+    return { available: true, sessionId: value.sessionId, running: value.running, queued: value.queued, steering: value.steering,
+      pending: value.pending, approvals: value.approvals, jobs: value.liveJobs, lastTurnReason: value.lastTurnReason };
+  } catch { return { available: false }; }
+};
+ipcMain.handle('harness:workflow-state', (event) => harnessIpcAllowed(event) ? getCurrentWorkflow() : { available: false });
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
@@ -5225,15 +5341,27 @@ const createWindow = async () => {
     await showStatusPage();
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+  let closingDraft = false, draftFlushedForClose = false;
   mainWindow.on('close', (event) => {
-    if (allowQuit || !appTray || appTray.isDestroyed() || !isBackgroundSupervisionRequired(agentDiagnostics)) return;
+    if (allowQuit || draftFlushedForClose) return;
     event.preventDefault();
-    mainWindow.hide();
-    showFixedNotification({
-      title: 'DSH Desktop 仍在后台运行',
-      body: agentDiagnostics.status === 'waiting' ? 'Agent 正在等待确认，可从托盘重新打开。' : 'Agent 仍在运行，可从托盘继续监督。',
-      focusAction: agentDiagnostics.status === 'waiting' ? 'focus-pending' : null
-    });
+    if (appTray && !appTray.isDestroyed() && isBackgroundSupervisionRequired(agentDiagnostics)) {
+      void flushComposerDraft().catch(() => {}); mainWindow.hide();
+      showFixedNotification({ title: 'DSH Desktop 仍在后台运行',
+        body: agentDiagnostics.status === 'waiting' ? 'Agent 正在等待确认，可从托盘重新打开。' : 'Agent 仍在运行，可从托盘继续监督。',
+        focusAction: agentDiagnostics.status === 'waiting' ? 'focus-pending' : null });
+      return;
+    }
+    if (closingDraft) return;
+    closingDraft = true;
+    void (async () => {
+      try { await flushComposerDraft(); }
+      catch {
+        const answer = await dialog.showMessageBox(mainWindow, { type: 'warning', title: '草稿尚未保存', message: '最后输入的内容未能写入本机。建议取消关闭并复制草稿。', buttons: ['取消关闭', '仍然关闭'], defaultId: 0, cancelId: 0 });
+        if (answer.response !== 1) return;
+      }
+      draftFlushedForClose = true; mainWindow?.close();
+    })().finally(() => { closingDraft = false; });
   });
   mainWindow.on('closed', () => {
     nativeDock?.destroy(); nativeDock = undefined;
@@ -5770,7 +5898,7 @@ const runHarnessSmoke = async (target) => {
   await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 };
 
-const runDocumentIntakeSmoke = async (target, { review = false, dock = false } = {}) => {
+const runDocumentIntakeSmoke = async (target, { review = false, dock = false, continuity = false, handoff = false } = {}) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = app.getPath('userData');
   const workspacePath = path.join(smokeRoot, 'workspace');
@@ -5811,7 +5939,15 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false } =
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
     for (const name of ['composer-text-bridge.js', 'document-intake.js']) await evaluate(await fsp.readFile(path.join(rootDir, 'assets', name), 'utf8'));
     await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
-    if (dock) {
+    if (continuity) {
+      documentIntakeController.chooseFiles = async () => [source];
+      documentIntakeController.confirmImport = async () => true;
+      result = await require('./session-continuity-smoke.cjs').runContinuitySmoke({ window: mainWindow, rootDir, evaluate, waitFor, target: resolvedTarget, version: app.getVersion(), selected, origin: harnessOrigin, api: authenticatedHarnessApi });
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
+    if (dock || handoff) {
+      if (handoff) await require('./session-handoff-smoke.cjs').prepareHandoffFixture(workspacePath);
       workspaceSyncDiagnostics = selected;
       workbenchStore = new WorkbenchStore({ filePath: path.join(smokeRoot, 'workbench-state.json') }); await workbenchStore.init();
       harnessRuntimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
@@ -5822,12 +5958,30 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false } =
       bindTerminalRunner(terminalRunner);
       pluginHealthCatalog = new PluginHealthCatalog({ harnessHome: path.join(smokeRoot, 'harness'), dshPackageDir: path.resolve(path.dirname(harnessRuntimePaths.dshBinPath), '..') });
       tasksSubagentsController = new TasksSubagentsController({ getOrigin: () => harnessOrigin, getWebContents: () => wc, apiCall: authenticatedHarnessApi });
+      reliableInterruptController = new ReliableInterruptController({ getOrigin: () => harnessOrigin, getWebContents: () => wc,
+        getWorkspacePath: () => getWorkspaceState().activePath, apiCall: authenticatedHarnessApi,
+        resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
+        readQueue: (origin, id, options) => readHarnessQueueSnapshotFromWebContents(wc, origin, id, options) });
       worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
+      if (handoff) { checkpointManager = new GitCheckpointManager(); checkpointDiagnostics = await checkpointManager.activate(workspacePath); }
       wikiRuntime = require(harnessRuntimePaths.wikiToolPath); wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: path.join(smokeRoot, 'wiki-settings.json') }); await wikiSettingsStore.init();
       await ensureNativeDock();
       await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8'));
       if (!await installWorkbenchPanel()) throw new Error('完整工作台未安装。');
       await supervisor.credentialHost.verifyReady(harnessOrigin, harnessFetch);
+      if (dock && process.argv.includes('--smoke-workflow')) {
+        if (!process.argv.includes('--smoke-real-model')) throw new Error('Workflow acceptance requires the real model flag.');
+        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
+      if (handoff) {
+        documentIntakeController.chooseFiles = async () => [source]; documentIntakeController.confirmImport = async () => true;
+        result = await require('./session-handoff-smoke.cjs').runHandoffSmoke({ window: mainWindow, dock: nativeDock, supervisor, selected, workspacePath, rootDir, version: app.getVersion(), target: resolvedTarget,
+          origin: harnessOrigin, api: authenticatedHarnessApi, realModel: process.argv.includes('--smoke-real-model'), mount: installWorkbenchPanel });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
       const { runNativeDockSmoke } = require('./native-dock-ui-smoke.cjs');
       result = await runNativeDockSmoke({ window: mainWindow, dock: nativeDock, terminal: terminalRunner, broker: terminalReadBroker, version: app.getVersion(), target: resolvedTarget,
         sessionId: selected.sessionId, origin: harnessOrigin, api: authenticatedHarnessApi, realModel: process.argv.includes('--smoke-real-model') });
@@ -5887,7 +6041,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false } =
       upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
-    if (dock) { await terminalRunner?.stop(); nativeDock?.destroy(); nativeDock = undefined; }
+    if (dock || handoff) { await terminalRunner?.stop(); nativeDock?.destroy(); nativeDock = undefined; }
     mainWindow?.destroy(); mainWindow = undefined;
     await supervisor?.stop(); harnessOrigin = null; clearHarnessAuthentication();
     await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
@@ -6857,6 +7011,14 @@ app.whenReady().then(async () => {
     await runDocumentIntakeSmoke(dockSmokeTarget.slice('--dock-smoke-file='.length), { dock: true });
     allowQuit = true; app.quit(); return;
   }
+  if (continuitySmokeTarget) {
+    await runDocumentIntakeSmoke(continuitySmokeTarget.slice('--continuity-smoke-file='.length), { continuity: true });
+    allowQuit = true; app.quit(); return;
+  }
+  if (handoffSmokeTarget) {
+    await runDocumentIntakeSmoke(handoffSmokeTarget.slice('--handoff-smoke-file='.length), { handoff: true });
+    allowQuit = true; app.quit(); return;
+  }
   if (reviewSmokeTarget) {
     await runDocumentIntakeSmoke(reviewSmokeTarget.slice('--review-smoke-file='.length), { review: true });
     allowQuit = true; app.quit(); return;
@@ -7046,6 +7208,7 @@ app.whenReady().then(async () => {
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
     getWorkspacePath: () => getWorkspaceState().activePath,
+    resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
     apiCall: authenticatedHarnessApi,
     readQueue: (origin, sessionId, options) => readHarnessQueueSnapshotFromWebContents(
       mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined,
@@ -7074,6 +7237,8 @@ app.on('before-quit', (event) => {
   }
   event.preventDefault();
   const stopAfterBackup = async () => {
+    await flushComposerDraft().catch(() => {});
+    if (worktreeOperationPromise) await Promise.allSettled([worktreeOperationPromise]);
     if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);
     if (gitDeliveryOperationPromise) await Promise.allSettled([gitDeliveryOperationPromise]);
     const stops = [];
