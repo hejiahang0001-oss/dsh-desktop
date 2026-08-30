@@ -26,12 +26,17 @@
       const selected = selection(), input = bridge.current(), text = bridge.read(input);
       if (!text.trim() || text.length > 8000 || text.trim().startsWith('/') || card.querySelector('[data-decoration="chip"],img')) return show('此入口支持 1–8,000 字普通文字与文档引用；图片或命令请用原输入框。');
       busy = true; for (const button of actions.children) button.disabled = true; show('正在申请中断并发送插话…');
+      let edited = false, accepted = false;
+      const protectEdits = (event) => { if (event.isTrusted && event.target?.closest?.('[data-composer-input]')) edited = true; };
+      document.addEventListener('input', protectEdits, true);
       try {
         const result = await api.interruptAndPrompt(text); if (!result.accepted) throw new Error(result.message || '插话未受理。');
-        if (selection() === selected && input === bridge.current() && bridge.read(input) === text) { await bridge.remove(input, text); await window.__DSH_CONTINUITY__?.flush(); }
+        accepted = true;
+        const unchanged = () => !edited && selection() === selected && bridge.read() === text;
+        if (unchanged()) { await bridge.remove(bridge.current(), text, unchanged); await window.__DSH_CONTINUITY__?.flush(); }
         show(`${result.message} 尚不代表已执行完成；新写的草稿会保留。`);
-      } catch (error) { show(`插话失败，草稿保留：${error.message}`); }
-      finally { busy = false; for (const button of actions.children) button.disabled = false; input?.focus({ preventScroll: true }); }
+      } catch (error) { show(accepted ? `插话已受理，但草稿未自动清理；请核对后删除。${error.message}` : `插话未确认受理，草稿保留；请先核对会话，避免重复发送。${error.message}`); }
+      finally { document.removeEventListener('input', protectEdits, true); busy = false; for (const button of actions.children) button.disabled = false; bridge.current()?.focus({ preventScroll: true }); }
     });
     action('停止当前回合', '只申请停止当前执行；不宣称排队消息已删除。', async () => { const stop = stopControl(); if (!stop) return show('当前没有可停止的前台回合。'); stop.click(); show('已申请停止；排队消息请单独查看和取消。'); });
     resume = action('继续排队消息', '处理保留的排队消息，不重新提交一份。', async () => {

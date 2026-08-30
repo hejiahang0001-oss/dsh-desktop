@@ -50,6 +50,8 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   await evaluate('window.__DSH_WORKFLOW__.refresh()');
   checks.idleActionsHidden = await evaluate('document.querySelector(".dsh-session-workflow button").parentElement.hidden');
   await fsp.writeFile(`${target}.workflow.png`, (await wc.capturePage()).toPNG());
-  return { ok: Object.values(checks).every(Boolean), version, realModel: true, checks, evidence: 'Real DeepSeek calls and upstream composer/stop plus native reliable interrupt; marker files prove queued and steered messages executed.' };
+  return { ok: Object.values(checks).every(Boolean), version, realModel: true, checks,
+    notices: await evaluate('window.__DSH_SMOKE_NOTICES__.slice(-30)'), remainingDraft: await evaluate('window.__DSH_COMPOSER_TEXT__.read()'),
+    evidence: 'Real DeepSeek calls and upstream composer/stop plus native reliable interrupt; marker files prove queued and steered messages executed.' };
 }
 module.exports = { runWorkflowSmoke };

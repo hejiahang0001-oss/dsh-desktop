@@ -14,7 +14,7 @@
     }).join('\n');
   };
   const insert = async (input, text, range, guard = () => true) => {
-    if (!input?.isConnected || input !== current()) throw new Error('输入框已变化，请在当前会话重试。');
+    if (!input?.isConnected || input !== current() || !guard()) throw new Error('输入框已变化，请在当前会话重试。');
     input.focus({ preventScroll: true });
     if (input.tagName === 'TEXTAREA') {
       const value = read(input);
@@ -23,11 +23,18 @@
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return;
     }
+    // Focus may restore the editor's old caret on its next commit. Let that
+    // settle before applying the public selection or only one character may
+    // be removed when returning from a toolbar button.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (input !== current() || !guard()) throw new Error('会话已变化，请在原会话重新添加。');
     const selection = window.getSelection();
     selection.removeAllRanges();
-    const selected = range || document.createRange();
+    const selected = range === 'all' ? document.createRange() : range || document.createRange();
+    if (range === 'all') selected.selectNodeContents(input);
     if (!range) { selected.selectNodeContents(input); selected.collapse(false); }
     selection.addRange(selected);
+    if (range === 'all') input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', keyCode: 65, ctrlKey: true, bubbles: true, cancelable: true }));
     // Let the upstream editor synchronize its selection before using its public paste/key handlers.
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (input !== current() || !guard()) throw new Error('会话已变化，请在原会话重新添加。');
@@ -41,9 +48,9 @@
     await new Promise((resolve) => requestAnimationFrame(resolve));
   };
   const append = (input, text, guard) => insert(input, `${read(input).trim() && !read(input).endsWith('\n') ? '\n' : ''}${text}`, null, guard);
-  const remove = (input, text) => {
-    if (input?.tagName === 'TEXTAREA') return insert(input, '', text);
-    if (text === read(input)) { const range = document.createRange(); range.selectNodeContents(input); return insert(input, '', range); }
+  const remove = (input, text, guard) => {
+    if (input?.tagName === 'TEXTAREA') return insert(input, '', text, guard);
+    if (text === read(input)) return insert(input, '', 'all', guard);
     const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
     const nodes = []; let node, joined = '';
     while ((node = walker.nextNode())) { nodes.push({ node, start: joined.length }); joined += node.textContent; }
@@ -54,7 +61,7 @@
     const last = nodes.findLast((item) => item.start < end);
     const range = document.createRange();
     range.setStart(first.node, start - first.start); range.setEnd(last.node, end - last.start);
-    return insert(input, '', range);
+    return insert(input, '', range, guard);
   };
   const restore = (input, text, guard) => {
     if (read(input).trim()) throw new Error('输入框已有内容，未覆盖当前草稿。');

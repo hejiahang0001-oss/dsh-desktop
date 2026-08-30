@@ -37,6 +37,7 @@ async function runContinuitySmoke({ window, rootDir, evaluate, waitFor, target, 
   checks.forgedTokenRejected = await evaluate('(async()=>{try{await desktopAPI.drafts.save({token:"forged",context:"x",text:"bad",revision:0});return false}catch{return true}})()');
   checks.staleRevisionRejected = await evaluate('(async()=>{const s=await desktopAPI.drafts.getState(); await desktopAPI.drafts.save({...s,text:s.text}); try{await desktopAPI.drafts.save({...s,text:"stale"});return false}catch{return true}})()');
   await window.loadURL(origin); await mount();
+  await evaluate('document.querySelector(".dsh-document-actions button").focus()');
   await evaluate('window.__DSH_COMPOSER_TEXT__.remove(window.__DSH_COMPOSER_TEXT__.current(), window.__DSH_COMPOSER_TEXT__.read())');
   await flush(); await window.loadURL(origin); await mount();
   checks.clearedDraftStaysEmpty = !(await read()).trim();
