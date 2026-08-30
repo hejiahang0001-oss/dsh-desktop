@@ -1,6 +1,6 @@
 # DSH Desktop V1.0.1
 
-V1.0.1 is a focused trust and discoverability update on the same pinned DeepSeek Harness `0.1.2-alpha.1` source runtime. It is prepared as a product Latest candidate; V0.5.4 remains Stable and is not promoted or replaced automatically.
+V1.0.1 is a focused trust and discoverability update on the same pinned DeepSeek Harness `0.1.2-alpha.1` source runtime. It is published as the product Latest Pre-release; V0.5.4 remains Stable and is not promoted or replaced automatically.
 
 ## Changed
 
@@ -18,9 +18,9 @@ V1.0.1 is a focused trust and discoverability update on the same pinned DeepSeek
 
 ## Validation status
 
-The local candidate passes 325/325 source tests and six-part unpacked plus installed smoke coverage for Desktop, IPC, Office, command feedback/network access, Harness, and terminal. The interaction smoke verifies a real failure, retry focus, forward/backward focus wrapping, a fully loaded proxy dialog, and an unobstructed maximized failure surface. Silent overwrite installation registers V1.0.1, and all 31 credential-free semantic state files remain byte-identical. Exact artifact hashes and rollback evidence are recorded in `PROGRESS.md` and `docs/VALIDATION.md`.
+The release passes 325/325 source tests and six-part unpacked plus installed smoke coverage for Desktop, IPC, Office, command feedback/network access, Harness, and terminal. The interaction smoke verifies a real failure, retry focus, forward/backward focus wrapping, a fully loaded proxy dialog, and an unobstructed maximized failure surface. Silent overwrite installation registers V1.0.1, and all 31 credential-free semantic state files remain byte-identical. Exact artifact hashes and rollback evidence are recorded in `PROGRESS.md` and `docs/VALIDATION.md`.
 
-Publication evidence is intentionally absent until a matching GitHub Pre-release and public re-download verification exist.
+Implementation PR [#60](https://github.com/hejiahang0001-oss/dsh-desktop/pull/60) and both PR/main CI runs pass. The [V1.0.1 GitHub Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1) targets merge commit `b76e850330b9f3e037277a7f6f9d645387fd8841`; all four public assets match their recorded size and SHA-256 after credential-free re-download, and the checksum manifest passes 3/3.
 
 ## Rollback
 
