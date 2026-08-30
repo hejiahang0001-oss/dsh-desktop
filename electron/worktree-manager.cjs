@@ -42,7 +42,10 @@ const sanitizedGitEnvironment = (baseEnv = process.env) => ({
       ].includes(normalized)
       && !/^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(normalized);
   })),
-  GIT_TERMINAL_PROMPT: '0'
+  GIT_TERMINAL_PROMPT: '0',
+  // Read-only status polling must not refresh and lock the user's index.
+  // Required locks for add/read-tree/worktree mutations remain enforced.
+  GIT_OPTIONAL_LOCKS: '0'
 });
 
 const runGitCommand = async (gitPath, cwd, args, { baseEnv = process.env, timeoutMs = GIT_TIMEOUT_MS } = {}) => {

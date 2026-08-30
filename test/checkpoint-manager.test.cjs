@@ -28,6 +28,39 @@ const createRepository = () => {
   return root;
 };
 
+test('read-only index snapshots do not contend with a real-index lock or lose staged changes', async (context) => {
+  const root = createRepository();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'staged\n');
+  git(root, ['add', 'tracked.txt']);
+  const expectedIndexTree = git(root, ['write-tree']).trim();
+  fs.appendFileSync(path.join(root, 'tracked.txt'), 'unstaged\n');
+  const manager = new GitCheckpointManager();
+  await manager.activate(root);
+  const lock = path.join(root, '.git', 'index.lock');
+  fs.writeFileSync(lock, 'external writer owns this lock', { flag: 'wx' });
+  const state = await manager.captureCurrentState();
+  assert.equal(state.indexTree, expectedIndexTree);
+  const checkpoint = await manager.create({ source: 'safety' });
+  assert.equal(checkpoint.created, true);
+  assert.equal(checkpoint.last.indexTree, expectedIndexTree);
+  assert.equal(fs.readFileSync(lock, 'utf8'), 'external writer owns this lock');
+  await assert.rejects(manager.executeGit(['read-tree', expectedIndexTree]), /index.lock/);
+});
+
+test('private index reads support split indexes and never fall back from a corrupt index to HEAD', async (context) => {
+  const root = createRepository();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 'split staged\n');
+  git(root, ['add', 'tracked.txt']);
+  git(root, ['update-index', '--split-index']);
+  const expected = git(root, ['write-tree']).trim();
+  const manager = new GitCheckpointManager(); await manager.activate(root);
+  assert.equal((await manager.captureCurrentState()).indexTree, expected);
+  fs.writeFileSync(path.join(root, '.git', 'index'), 'invalid index');
+  assert.equal((await manager.create({ source: 'safety' })).created, false);
+});
+
 test('automatic checkpoint captures code without changing the worktree or real index', async (context) => {
   const root = createRepository();
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
