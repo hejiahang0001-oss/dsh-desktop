@@ -1,8 +1,8 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.9.0 产品 Latest 候选（托盘监督、固定通知、手动更新检查与便携版）
-> 状态：V0.9.0 已完成核心实现、专项测试和真实 Electron 托盘检查，正在进入打包、覆盖安装、便携版、PR/CI 与 GitHub Pre-release 门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V0.9.0 产品 Latest/Pre-release（托盘监督、固定通知、手动更新检查与便携版）
+> 状态：V0.9.0 已完成源码、打包、覆盖安装、便携版、真实模型、PR/CI、远端资产和匿名回下载全部门禁；当前进入 V1.0.0 上游适配与稳定化，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
 ## V0.9.0 本轮进展
 
@@ -12,7 +12,10 @@
 4. “检查产品 Latest”只访问固定的公开 GitHub Releases API，限制响应大小、条数和超时，拒绝草稿、异常版本与外站链接；检查不下载、不安装、不执行远端内容。
 5. 用户可跳过或取消跳过一个明确版本；该偏好使用原子写入并纳入语义数据快照与可验证备份。未签名、可信链/Publisher 未验证及 Stable/Pre-release 通道未分离时，自动更新继续强制关闭。
 6. 构建配置新增普通用户权限便携版，与安装版使用同一应用包；文件名独立，避免覆盖 NSIS 安装包。
-7. 专项测试 15/15、完整源码回归 309/309 通过；真实 GitHub 更新检查识别 V0.8.0 Pre-release，真实 Electron 桌面/Harness/托盘 smoke 3/3 通过，系统通知受支持。
+7. 完整源码回归 310/310 和生产依赖审计通过；真实 GitHub 更新检查识别 V0.8.0 Pre-release，真实 Electron 桌面/Harness/托盘 smoke 3/3 通过，系统通知受支持。
+8. 解包版与已安装版均通过 14/14 GUI、固定终端和 Wiki 基础；真实已安装 DeepSeek 历史导入完成预览、校验、独立确认、保存、脱敏和临时源清理。便携版独立通过桌面、真实 Harness 和原生托盘三项核心链路。
+9. 静默覆盖退出 0 并注册 V0.9.0；28 份既有语义文件在覆盖前、覆盖后和全部回归后逐字节一致。隔离迁移启动生成结构受限的 `update-state.json`。
+10. 实现 PR [#56](https://github.com/hejiahang0001-oss/dsh-desktop/pull/56) 和主分支 CI [33281260979](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33281260979) 三项通过；[V0.9.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.9.0) 已发布为非草稿 Pre-release，四项资产远端摘要和匿名公开回下载均通过，Stable 仍为 V0.5.4。
 
 ### V0.9.0 当前门禁
 
@@ -20,9 +23,9 @@
 |---|---|
 | 核心与隐私 | 通过：状态迁移去重、本轮失败基线、固定通知文案、固定托盘动作、GitHub URL/版本/响应边界和可恢复跳过偏好均有测试 |
 | 源码与真实运行 | 完整源码回归 309/309；真实公开更新检查通过；Electron 桌面、Harness、托盘 smoke 3/3 通过 |
-| 数据与回滚 | `update-state.json` 已纳入语义快照和可验证备份；自动下载/安装仍关闭，覆盖前继续建立 last-known-good |
-| 打包、覆盖与便携版 | 待执行最终 NSIS、portable、解包/安装/便携 smoke 和用户数据逐文件复核 |
-| PR / CI / GitHub | 待执行；发布后仍保持 V0.5.4 为正式 Latest/Stable |
+| 数据与回滚 | `backups/pre-v0.9.0-20260830-073600` 保存 V0.8.0 三项回滚资产和 28 份数据快照；覆盖和最终回归后 28/28 逐字节一致；`update-state.json` 已纳入后续语义快照和备份 |
+| 打包、覆盖与便携版 | 安装包 184,115,025 字节，便携版 183,423,525 字节；解包/安装 14/14、终端、Wiki、真实模型及便携三项核心 smoke 全部通过；`app.asar` 安装/解包摘要均为 `9F36755B2176E5ED79187B639475E6EF9CC5FAC40A3A6904C87F58DA134D845C` |
+| PR / CI / GitHub | PR #56 与主分支 CI 33281260979 通过；V0.9.0 为非草稿 Pre-release，目标 `04f0277808a849a1f79ec1e215cde6ec83bcbcf2`，四项远端/匿名回下载摘要和清单 3/3 均通过；V0.5.4 仍为正式 Latest/Stable |
 
 ## V0.8.0 本轮进展
 
