@@ -15,9 +15,10 @@ const MAX_RESTORE_PATHS = 500;
 const CHECKPOINT_ID_PATTERN = /^[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}$/i;
 const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const sanitizedEnvironment = () => Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !/^DEEPSEEK(?:_|$)/i.test(name))
-);
+const sanitizedEnvironment = () => ({
+  ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^DEEPSEEK(?:_|$)/i.test(name))),
+  GIT_OPTIONAL_LOCKS: '0'
+});
 
 const isInside = (parent, candidate) => {
   const relative = path.relative(parent, candidate);
@@ -92,6 +93,17 @@ class GitCheckpointManager {
     } catch {
       return '';
     }
+  }
+
+  async readIndexTree(tempRoot) {
+    // write-tree updates the cache-tree extension and locks its index even
+    // with GIT_OPTIONAL_LOCKS=0. Snapshot a private copy instead of writing
+    // the user's index or competing with status refreshes in another view.
+    const source = (await this.executeGit(['rev-parse', '--path-format=absolute', '--git-path', 'index'])).trim();
+    const snapshot = path.join(tempRoot, 'real-index-copy');
+    try { await this.fsPromises.copyFile(source, snapshot); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    return (await this.executeGit(['write-tree'], { env: { ...sanitizedEnvironment(), GIT_INDEX_FILE: snapshot } })).trim();
   }
 
   async readCheckpoint(commit, expectedId = '') {
@@ -212,7 +224,7 @@ class GitCheckpointManager {
     const indexEnv = { ...baseEnv, GIT_INDEX_FILE: tempIndex };
     try {
       const head = await this.optionalGit(['rev-parse', '--verify', 'HEAD'], { env: baseEnv });
-      const indexTree = await this.optionalGit(['write-tree'], { env: baseEnv });
+      const indexTree = await this.readIndexTree(tempRoot);
       const porcelain = await this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'], { env: baseEnv });
       const sensitiveExcludedCount = new Set(statusPaths(porcelain).filter(isRestrictedGitPath)).size;
 
@@ -281,10 +293,7 @@ class GitCheckpointManager {
       else await this.executeGit(['read-tree', '--empty'], { env: indexEnv });
       await this.executeGit(['add', '-A', '--', '.', ...SENSITIVE_PATHSPECS], { env: indexEnv });
       const tree = (await this.executeGit(['write-tree'], { env: indexEnv })).trim();
-      // Keep real-index reads serialized on Windows. `git status` may refresh
-      // and briefly lock the index, so running it beside `write-tree` can make
-      // an otherwise read-only restore preview fail intermittently.
-      const indexTree = await this.executeGit(['write-tree']);
+      const indexTree = await this.readIndexTree(tempRoot);
       const untrackedOutput = await this.executeGit(['ls-files', '--others', '--exclude-standard', '-z', '--']);
       const porcelain = await this.executeGit(['status', '--porcelain=v1', '-z', '--untracked-files=all']);
       return Object.freeze({

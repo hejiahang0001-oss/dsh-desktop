@@ -90,6 +90,7 @@ test('Git environment removes software keys and Git execution overrides', () => 
   assert.equal(environment.GIT_CONFIG_KEY_0, undefined);
   assert.equal(environment.GIT_CONFIG_VALUE_0, undefined);
   assert.equal(environment.GIT_TERMINAL_PROMPT, '0');
+  assert.equal(environment.GIT_OPTIONAL_LOCKS, '0');
 });
 
 test('workspace links and the total worktree limit fail closed before mutation', async (context) => {
