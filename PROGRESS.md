@@ -1,10 +1,10 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V1.0.0 产品 Latest/Pre-release（最终本机候选已覆盖安装）
-> 状态：V1.0.0 已完成固定上游源码构建、认证/Remote API/插话适配、真实模型、打包、覆盖安装、便携版和本机完整回归；正在执行 PR/CI、远端资产和匿名回下载门禁，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V1.0.0 产品 Latest / GitHub Pre-release（已发布并覆盖安装）
+> 状态：V1.0.0 已完成固定上游源码构建、认证/Remote API/插话适配、真实模型、打包、覆盖安装、便携版、PR/CI、远端资产和匿名回下载全部门禁；V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
 
-## V1.0.0 本轮进展（候选）
+## V1.0.0 本轮进展（已发布）
 
 1. 上游固定为 DeepSeek Harness 标签 `dsh-v0.1.2-alpha.1`、提交 `cd5ef8148158c3a752a658978873241fdf8e2bbc`；使用 Node v24.19.0、上游 pnpm 11.7.0、冻结 lockfile、官方构建/发布校验和包不变量校验重建 241 个 DSH 与 9 个 Cordis 发布包。
 2. 最终 Harness 运行时包含 24,299 个文件、244,621,952 字节、零链接，`harness-runtime.json` 固定记录版本、标签、提交、构建运行时、250 个包和允许执行的三个原生依赖安装步骤；打包治理拒绝来源不一致的运行时。
@@ -14,6 +14,8 @@
 6. 真实 DeepSeek 验收完成运行中直接插话和已有排队消息插话；两次均返回 accepted/interrupted/delivery started，原长回合记录 aborted，两条标记回复均完成。
 7. 所有 Office、Wiki、插件与 Agent 验收脚本统一使用认证传输；源码 Word、Excel、PowerPoint Skill 发现和无 Git 中文空格路径 Wiki 查询/保存/同步均通过。
 8. 新增可复现许可证清单：529 个实际打包 JavaScript 包、8 类许可证声明，零缺失许可证字段；明确区分桌面 MIT、Harness 来源和各依赖自身条款。
+9. 首轮干净 GitHub CI 发现一项本地产物测试错误假定 244MB 源码构建运行时会提交进 Git；未合并该候选。修复为运行时不存在时明确环境跳过，同时保留来源配方、固定身份和治理夹具的强制检查，本机仍为 319/319。
+10. 实现 PR [#58](https://github.com/hejiahang0001-oss/dsh-desktop/pull/58)、通过的 PR CI [33289813007](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33289813007) 和主分支 CI [33289861190](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33289861190) 三项均通过；[V1.0.0](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.0) 已发布为非草稿 Pre-release，四项远端摘要和匿名公开回下载全部一致，Stable 仍为 V0.5.4。
 
 ### V1.0.0 当前门禁
 
@@ -27,7 +29,7 @@
 | 打包与运行时 | `packageReady: true`；489/489 Harness 启动闭包健康；解包版与已安装版 14/14 GUI、终端、Wiki 和三项 Office Skill 全部通过，便携版桌面/Harness/托盘三项通过 |
 | 覆盖与数据 | 静默覆盖退出 0，Windows 登记 V1.0.0；解包 24,857 个文件、733,676,361 字节，安装目录只多正常卸载器；28 个语义文件在覆盖前、后和完整回归后逐字节一致，摘要均为 `45F741934C8251F8576AF52123E75B093B4EC0B7000BB2B2DC6F4CC085A6C994` |
 | 发布物 | 安装包 188,705,896 字节，SHA-256 `1233AAA7C2B6249E3B0C90236B705E279ACF6C6FB8D0D4329F35918F29725D97`；便携版 188,014,396 字节，SHA-256 `F0E00619EE7CC47DD3B97FF24DCE1BB9C7C6D2E3AA789A7C638C6D85DBEF2BF4`；清单 3/3 通过，V0.9.0 回退资产已核验保留 |
-| GitHub | 待完成：实现 PR/主分支 CI、V1.0.0 Pre-release 和匿名回下载；V0.5.4 Stable 不变 |
+| GitHub | 通过：实现 PR #58 合并为 `4a325845dd2b717b058753b45b448236ea3ce501`；PR CI 33289813007、main CI 33289861190 三项通过；V1.0.0 非草稿 Pre-release 精确指向该提交；远端与匿名回下载 4/4 摘要、下载清单 3/3 通过；V0.5.4 仍为正式 Latest/Stable |
 
 ## V0.9.0 本轮进展
 

@@ -23,6 +23,13 @@ V1.0.0 stabilizes the existing local Agent programming workflow on the official 
 - The installer is 188,705,896 bytes with SHA-256 `1233AAA7C2B6249E3B0C90236B705E279ACF6C6FB8D0D4329F35918F29725D97`; the portable executable is 188,014,396 bytes with SHA-256 `F0E00619EE7CC47DD3B97FF24DCE1BB9C7C6D2E3AA789A7C638C6D85DBEF2BF4`. The three-entry checksum manifest passes 3/3.
 - A final scan checks 85 V1.0.0 evidence and log files against the software-managed credential and raw startup-token pattern; neither value is present.
 
+## Publication evidence
+
+- Implementation PR [#58](https://github.com/hejiahang0001-oss/dsh-desktop/pull/58) and its successful three-job run [33289813007](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33289813007) pass; the merge is `4a325845dd2b717b058753b45b448236ea3ce501`.
+- Main CI run [33289861190](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/33289861190) passes quality, production dependency security, and package/semantic-data contracts.
+- The [V1.0.0 release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.0) is non-draft, marked Pre-release, and targets the exact implementation merge. All four GitHub asset sizes/digests match local evidence; clean unauthenticated downloads match 4/4 hashes and all 3/3 checksum-manifest entries.
+- V0.5.4 remains the formal GitHub Latest/Stable release.
+
 ## Safety boundaries and known limits
 
 - DSH Desktop remains an independent community project and is not an official DeepSeek product. Harness `0.1.2-alpha.1` is an alpha upstream release.
