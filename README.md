@@ -78,7 +78,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V0.9.0 product Latest candidate** adds native tray supervision, fixed privacy-safe notifications for completion, failure, stop, disconnection, and approval waits, plus a manual public-GitHub update check with a reversible skip preference. Automatic download and install remain disabled while builds are unsigned. The candidate provides `DSH-Desktop-Setup-0.9.0.exe` and a user-level portable build; Stable and the front-page download remain V0.5.4 until publication gates pass.
+**[V0.9.0 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.9.0)** adds native tray supervision, fixed privacy-safe notifications for completion, failure, stop, disconnection, and approval waits, plus a manual public-GitHub update check with a reversible skip preference. Automatic download and install remain disabled while builds are unsigned. The Pre-release provides `DSH-Desktop-Setup-0.9.0.exe` and `DSH-Desktop-Portable-0.9.0.exe`; Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -159,7 +159,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V0.9.0 产品 Latest 候选新增原生系统托盘、完成/失败/停止/连接中断/等待确认的固定隐私通知，以及只读取公开 GitHub 发布信息的手动更新检查；用户可以跳过或取消跳过指定 Latest。未签名阶段自动下载和安装继续关闭。候选提供 `DSH-Desktop-Setup-0.9.0.exe` 安装版与普通用户权限的便携版，V0.5.4 继续保持 Stable 和首页下载版本。
+[V0.9.0 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.9.0)新增原生系统托盘、完成/失败/停止/连接中断/等待确认的固定隐私通知，以及只读取公开 GitHub 发布信息的手动更新检查；用户可以跳过或取消跳过指定 Latest。未签名阶段自动下载和安装继续关闭。Pre-release 提供 `DSH-Desktop-Setup-0.9.0.exe` 安装版与 `DSH-Desktop-Portable-0.9.0.exe` 便携版，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 
