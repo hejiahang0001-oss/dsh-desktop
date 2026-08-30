@@ -2,7 +2,7 @@ const { app, BrowserWindow, WebContentsView, desktopCapturer, dialog, ipcMain, M
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, randomUUID } = require('node:crypto');
 const { GitChangeReviewer } = require('./change-review.cjs');
 const { ReviewScopes } = require('./review-scopes.cjs');
 const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
@@ -148,6 +148,11 @@ let profileBundleManager;
 let controlledPluginInstaller;
 let worktreeManager;
 let tasksSubagentsController;
+let backgroundTasks;
+let backgroundUnavailableMessage = '独立后台任务尚未初始化。';
+let backgroundOperationPromise = null;
+let quitOperationPromise = null;
+let workspaceActivationPromise = null;
 let sideChatController;
 let gitDeliveryManager;
 let updatePreferenceStore;
@@ -505,8 +510,10 @@ const flushComposerDraft = async () => {
 };
 const startHarnessForWindow = async ({ restart = false, preferredSessionId = '' } = {}) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, error: '窗口不可用。' };
+  if (restart && (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size)) return { ok: false, error: '请先结束后台运行，再重启 Harness；未中断其他任务。' };
   await flushComposerDraft();
   if (sideChatOperationPromise) await sideChatOperationPromise;
+  if (restart && (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size)) return { ok: false, error: '等待期间后台任务已启动，未重启 Harness。' };
   closeSideChatWindow();
   stopAgentPolling();
   harnessOrigin = null;
@@ -2553,7 +2560,76 @@ const getTasksSubagentsState = async () => {
     workspaceName: workspace.displayName
   }) || Promise.resolve(unavailableTasksSubagentsState()));
   const workflow = await getCurrentWorkflow();
-  return { ...state, workflow };
+  return { ...state, workflow, background: backgroundTasks?.snapshot() || { available: false, tasks: [], runs: [], warning: backgroundUnavailableMessage } };
+};
+
+const initializeBackgroundTasks = async () => {
+  if (backgroundTasks) return backgroundTasks;
+  const { BackgroundTasks } = require('./background-tasks.cjs');
+  const control = (operation, request) => supervisor.credentialHost.sessionControl.request(operation, request);
+  backgroundTasks = new BackgroundTasks({ filePath: path.join(app.getPath('userData'), 'background-tasks.json'), manager: worktreeManager,
+    control, prompt: (request) => control('task-prompt', request), cancel: (request) => control('task-cancel', request),
+    ready: () => Boolean(harnessOrigin && supervisor?.credentialHost?.sessionControl?.child?.connected
+      && !supportBackupOperationPromise && !pluginTogglePromise && !pluginInstallPromise && !worktreeOperationPromise && !quitOperationPromise),
+    notify: ({ task, run }) => {
+      const labels = { waiting: '后台任务等待确认', completed: '后台任务已完成', failed: '后台任务失败', review: '后台任务需要核对' };
+      showFixedNotification({ title: labels[run.status] || '后台任务状态更新', body: task.name, backgroundRunId: run.id });
+      updateApplicationTray();
+    }
+  });
+  await backgroundTasks.init(); return backgroundTasks;
+};
+const openBackgroundRun = async (id) => {
+  const run = backgroundTasks?.state.runs.find((r) => r.id === id);
+  if (!run) throw new Error('运行记录不存在，请刷新。');
+  const task = backgroundTasks.task(run.taskId); await backgroundTasks.verify(task);
+  await supervisor.credentialHost.sessionControl.request('status', { workspacePath: task.workspacePath, sessionId: run.sessionId });
+  const result = await activateWorkspace(task.workspacePath, run.sessionId);
+  if (!result.ok) throw new Error(result.error || '未能打开后台任务会话。');
+  return result;
+};
+const backgroundConfirmation = (title, message, detail) => dialog.showMessageBox(nativeParent(tasksSubagentsWindow), {
+  type: 'question', title, message, detail, buttons: ['取消', '确认'], defaultId: 0, cancelId: 0, noLink: true
+}).then((answer) => answer.response === 1);
+const backgroundScheduleDescription = (schedule) => {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const description = schedule.kind === 'manual' ? '仅手动启动' : schedule.kind === 'once' ? `一次：${new Date(schedule.at).toLocaleString('zh-CN', { hour12: false })}`
+    : schedule.kind === 'daily' ? `每天 ${schedule.time}` : `每 ${schedule.minutes} 分钟`;
+  return `${description}（本机时区 ${zone}）`;
+};
+const performBackgroundAction = async (request) => {
+  if (!backgroundTasks) throw new Error('后台任务尚未初始化。');
+  const { operation, id } = request;
+  if (operation === 'create') {
+    const sourcePath = getWorkspaceState().activePath;
+    return backgroundTasks.create(request.input, sourcePath, ({ input, repository }) => backgroundConfirmation('建立独立后台任务', `创建“${input.name}”并授权所选运行计划？`,
+      `源仓库：${repository.root}\n基础提交：${repository.head}\n计划：${backgroundScheduleDescription(input.schedule)}\n\n只从已提交内容建立独立分支和目录，不复制未提交文件、Key 或依赖，不自动同步或合并。每次执行使用新的会话；同一任务沿用自己的目录。权限固定 Workspace Write + Ask。软件需保持运行，关闭主窗口会留在托盘；错过时间仅补一次，不无限补跑。\n\n每日最多 ${input.dailyLimit} 次；将使用模型额度。\n任务内容：\n${input.prompt}`));
+  }
+  if (operation === 'archive') {
+    if (!await backgroundConfirmation('归档已完成记录', '归档完成、已停止和已核对的运行记录？', '保留本机归档文件、原会话和工作树；归档不重置每日运行次数。失败和待核对记录不会移走。')) return { canceled: true };
+    return { count: await backgroundTasks.archiveCompleted() };
+  }
+  if (operation === 'open') return openBackgroundRun(id);
+  if (operation === 'stop') return backgroundTasks.cancelRun(id);
+  if (operation === 'acknowledge') {
+    if (!await backgroundConfirmation('核对异常运行', '你已查看旧会话并确认本次记录可以结束？', '仅结束“结果不明”的记录，不重发旧任务、不删除文件。旧会话可能已执行部分操作；再次运行前请先核对结果。')) return { canceled: true };
+    return backgroundTasks.acknowledge(id);
+  }
+  const task = backgroundTasks.task(id);
+  if (operation === 'pause') return backgroundTasks.setEnabled(id, false);
+  if (operation === 'run') {
+    if (!await backgroundConfirmation('立即执行后台任务', `在独立目录执行“${task.name}”？`, `目录：${task.workspacePath}\n每日上限：${task.dailyLimit} 次\n使用付费模型额度；按 Workspace Write + Ask 执行。\n\n${task.prompt}`)) return { canceled: true };
+    return backgroundTasks.run(id);
+  }
+  if (operation === 'resume') {
+    if (!await backgroundConfirmation('启用定时任务', `启用“${task.name}”的计划？`, `计划：${backgroundScheduleDescription(task.schedule)}\n软件运行期间按计划使用模型额度，每日最多 ${task.dailyLimit} 次。错过的一次性计划会在就绪后执行一次。\n\n${task.prompt}`)) return { canceled: true };
+    return backgroundTasks.setEnabled(id, true);
+  }
+  if (operation === 'release') {
+    if (!await backgroundConfirmation('释放任务名额', `归档并移除“${task.name}”的调度配置？`, '会话、分支、任务目录和归档记录全部保留；不会删除代码。之后可在工作树面板自行决定是否回收目录。')) return { canceled: true };
+    return backgroundTasks.release(id);
+  }
+  throw new Error('不支持此后台任务操作。');
 };
 
 const publishTasksSubagentsState = async () => {
@@ -2884,6 +2960,7 @@ const pluginMutationBusy = () => (
   || agentDiagnostics.canStop
   || agentDiagnostics.status === 'waiting'
   || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)
+  || Boolean(backgroundOperationPromise) || Boolean(backgroundTasks?.snapshot().active) || Boolean(backgroundTasks?.pending.size)
 );
 
 const worktreeExternalBusy = () => (
@@ -2893,6 +2970,7 @@ const worktreeExternalBusy = () => (
 const worktreeMutationBusy = () => worktreeExternalBusy() || Boolean(worktreeOperationPromise);
 const handoffOperationBusy = () => Boolean(worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise
   || supportBackupOperationPromise || checkpointRestorePromise || checkpointForkPromise || terminalRunner?.isActive()
+  || backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size
   || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status));
 const handoffAvailable = async () => require('./handoff-availability.cjs').handoffWorkflowIdle(await getCurrentWorkflow(), handoffOperationBusy());
 
@@ -3113,7 +3191,7 @@ const getWorktreeState = async () => {
   if (!worktreeManager) return unavailableWorktreeState();
   const workspacePath = getWorkspaceState().activePath, state = await worktreeManager.inspect(workspacePath);
   const handoff = await getHandoffService();
-  return { ...state, handoffAvailable: await handoffAvailable(), handoffs: handoff.list(workspacePath), worktrees: state.worktrees.map((item) => ({ ...item, handoffProtected: handoff.protects(item.path), canRemove: item.canRemove && !handoff.protects(item.path) })) };
+  return { ...state, handoffAvailable: await handoffAvailable(), handoffs: handoff.list(workspacePath), worktrees: state.worktrees.map((item) => ({ ...item, handoffProtected: handoff.protects(item.path), taskProtected: Boolean(backgroundTasks?.protects(item.path)), canRemove: item.canRemove && !handoff.protects(item.path) && !backgroundTasks?.protects(item.path) })) };
 };
 
 const performWorktreeCreate = async () => {
@@ -3164,7 +3242,7 @@ const performWorktreeActivate = async (id) => {
     type: 'warning',
     title: '切换工作树',
     message: `确认切换到 ${item.branch || item.directoryName}？`,
-    detail: `目录：${item.path}\n提交：${item.headShort}\n未提交修改：${item.status.changed}\n\n切换会停止当前预览并重启 Harness；当前工作树及其修改不会被删除。`,
+    detail: `目录：${item.path}\n提交：${item.headShort}\n未提交修改：${item.status.changed}\n\n切换会停止当前预览和桌面终端；Harness 与其他会话继续保留。当前工作树及其修改不会被删除。`,
     buttons: ['取消', '切换工作区'],
     defaultId: 0,
     cancelId: 0,
@@ -3189,6 +3267,7 @@ const performWorktreeRemove = async (id) => {
   if (!worktreeManager) return { ok: false, message: 'Git 工作树管理尚未初始化。', state: unavailableWorktreeState() };
   if (worktreeExternalBusy()) return { ok: false, message: '请先结束当前 Agent、插件、终端或检查点任务。', state: await getWorktreeState() };
   const resolved = await worktreeManager.resolve({ workspacePath: getWorkspaceState().activePath, id });
+  if (backgroundTasks?.protects(resolved.item.path)) return { ok: false, message: '此目录属于独立后台任务；请先在任务面板暂停并释放任务名额。', state: await getWorktreeState() };
   if ((await getHandoffService()).protects(resolved.item.path)) return { ok: false, message: '此目录仍有交接或恢复记录；请先返回原目录，不能直接回收。', state: await getWorktreeState() };
   let preview;
   try { preview = await worktreeManager.previewRemove({ workspacePath: getWorkspaceState().activePath, id }); } catch (error) {
@@ -3210,6 +3289,8 @@ const performWorktreeRemove = async (id) => {
   if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，工作树和分支均未修改。', state: await getWorktreeState() };
   if (worktreeExternalBusy()) return { ok: false, message: '确认期间运行状态已变化，工作树未回收。', state: await getWorktreeState() };
   try {
+    const activity = await supervisor.credentialHost.sessionControl.request('workspace-status', { workspacePath: preview.path, sessionId: `session-${randomUUID()}` });
+    if (!activity.idle) return { ok: false, message: '此目录还有其他会话、排队消息或后台命令，未回收。', state: await getWorktreeState() };
     const result = await worktreeManager.remove({
       workspacePath: getWorkspaceState().activePath,
       id,
@@ -3426,7 +3507,9 @@ const showFixedNotification = (copy) => {
   releaseReference.unref?.();
   notification.once('click', () => {
     showMainWindow();
-    if (copy.focusAction && harnessUiReady()) {
+    if (copy.backgroundRunId && harnessUiReady()) {
+      void openBackgroundRun(copy.backgroundRunId).catch(() => openTasksSubagentsWindow());
+    } else if (copy.focusAction && harnessUiReady()) {
       void invokeHarnessUiAction(mainWindow.webContents, copy.focusAction).catch(() => undefined);
     }
   });
@@ -3442,6 +3525,7 @@ const updateApplicationTray = () => {
     { label: trayStatusLabel(agentDiagnostics), enabled: false },
     { type: 'separator' },
     { label: '打开 DSH Desktop', click: () => { showMainWindow(); } },
+    { label: `独立后台任务：${backgroundTasks?.snapshot().active || 0} 项运行`, click: () => { showMainWindow(); void openTasksSubagentsWindow().then(() => tasksSubagentsWindow?.webContents.executeJavaScript('document.getElementById("task-tab-background")?.click()')); } },
     {
       label: '定位待确认操作',
       enabled: Boolean(agentDiagnostics.canFocusPending),
@@ -3973,6 +4057,7 @@ const exportRedactedDiagnostics = async () => {
 };
 
 const supportBackupBusyReason = () => {
+  if (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size) return '请先结束独立后台运行；备份不会中断其他会话。';
   if (terminalRunner?.isActive()) return '请先停止正在运行的终端命令。';
   if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
   if (sideChatOperationPromise) return '请等待 Side Chat 操作完成。';
@@ -3996,7 +4081,7 @@ const runSupportBackupFromDialog = async () => {
     type: 'question',
     title: '创建 DSH 数据备份',
     message: '将短暂停止并重新启动 Harness，然后复制会话、工作区/Wiki 设置、插件状态和界面状态。',
-    detail: '软件 Key 文件、代理设置、缓存、日志和运行时依赖不会进入备份；会话正文按原样保存，可能包含你曾输入的敏感内容。备份完成后会逐文件校验 SHA-256，请妥善保管。',
+    detail: '软件 Key 文件、代理设置、缓存、日志和运行时依赖不会进入备份；会话正文、草稿、任务内容与运行记录按原样保存，可能包含你曾输入的敏感内容。工作树内代码和附件原件需另行备份。备份完成后会逐文件校验 SHA-256，请妥善保管。',
     buttons: ['取消', '开始备份'],
     defaultId: 0,
     cancelId: 0
@@ -4093,6 +4178,11 @@ const showWorkspaceError = async (error) => {
 };
 
 const activateWorkspace = async (workspacePath, preferredSessionId = '') => {
+  if (workspaceActivationPromise) return { ok: false, error: '另一项工作区切换尚未结束；未改变当前选择。' };
+  workspaceActivationPromise = performWorkspaceActivation(workspacePath, preferredSessionId).finally(() => { workspaceActivationPromise = null; });
+  return workspaceActivationPromise;
+};
+const performWorkspaceActivation = async (workspacePath, preferredSessionId = '') => {
   try {
     await flushComposerDraft();
     if (sideChatOperationPromise) await sideChatOperationPromise;
@@ -5181,6 +5271,18 @@ ipcMain.handle('worktrees:remove', (event, id) => {
 ipcMain.handle('tasks-subagents:get-state', (event) => (
   tasksSubagentsIpcAllowed(event) ? getTasksSubagentsState() : unavailableTasksSubagentsState('请求来源未通过安全校验。')
 ));
+ipcMain.handle('tasks-subagents:background-action', (event, request) => {
+  const allowed = ['create', 'run', 'pause', 'resume', 'open', 'stop', 'acknowledge', 'archive', 'release'];
+  if (!tasksSubagentsIpcAllowed(event) || !request || !allowed.includes(request.operation)
+    || !['create', 'archive'].includes(request.operation) && !/^[a-f0-9-]{36}$/i.test(request.id || '')) return { ok: false, message: '后台任务请求未通过安全校验。' };
+  if (backgroundOperationPromise || worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一项任务或工作区操作尚未结束。' };
+  backgroundOperationPromise = (async () => {
+    try { const result = await performBackgroundAction(request); return { ok: true, result, state: await getTasksSubagentsState() }; }
+    catch (error) { return { ok: false, message: error.message || '任务操作失败；未自动重试。', state: await getTasksSubagentsState() }; }
+    finally { backgroundOperationPromise = null; updateApplicationTray(); }
+  })();
+  return backgroundOperationPromise;
+});
 ipcMain.handle('tasks-subagents:refresh', (event) => (
   tasksSubagentsIpcAllowed(event) ? getTasksSubagentsState() : unavailableTasksSubagentsState('请求来源未通过安全校验。')
 ));
@@ -5231,7 +5333,7 @@ const getCurrentWorkflow = async () => {
   try {
     if (!harnessUiReady() || worktreeOperationPromise) return { available: false };
     const context = await documentIntakeController.getContext();
-    const value = await supervisor.credentialHost.sessionControl.request('inspect', context);
+    const value = await supervisor.credentialHost.sessionControl.request('status', context);
     if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
     return { available: true, sessionId: value.sessionId, running: value.running, queued: value.queued, steering: value.steering,
       pending: value.pending, approvals: value.approvals, jobs: value.liveJobs, turnOpen: value.turnOpen, lastTurnReason: value.lastTurnReason };
@@ -5349,10 +5451,10 @@ const createWindow = async () => {
   mainWindow.on('close', (event) => {
     if (allowQuit || draftFlushedForClose) return;
     event.preventDefault();
-    if (appTray && !appTray.isDestroyed() && isBackgroundSupervisionRequired(agentDiagnostics)) {
+    if (appTray && !appTray.isDestroyed() && (isBackgroundSupervisionRequired(agentDiagnostics) || backgroundTasks?.requiresBackground())) {
       void flushComposerDraft().catch(() => {}); mainWindow.hide();
       showFixedNotification({ title: 'DSH Desktop 仍在后台运行',
-        body: agentDiagnostics.status === 'waiting' ? 'Agent 正在等待确认，可从托盘重新打开。' : 'Agent 仍在运行，可从托盘继续监督。',
+        body: backgroundTasks?.requiresBackground() ? '独立任务或定时计划仍在托盘运行。退出软件会停止调度。' : agentDiagnostics.status === 'waiting' ? 'Agent 正在等待确认，可从托盘重新打开。' : 'Agent 仍在运行，可从托盘继续监督。',
         focusAction: agentDiagnostics.status === 'waiting' ? 'focus-pending' : null });
       return;
     }
@@ -5951,7 +6053,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       return;
     }
     if (dock || handoff) {
-      if (handoff) await require('./session-handoff-smoke.cjs').prepareHandoffFixture(workspacePath);
+      if (handoff || process.argv.includes('--smoke-background')) await require('./session-handoff-smoke.cjs').prepareHandoffFixture(workspacePath);
       workspaceSyncDiagnostics = selected;
       workbenchStore = new WorkbenchStore({ filePath: path.join(smokeRoot, 'workbench-state.json') }); await workbenchStore.init();
       harnessRuntimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
@@ -5967,12 +6069,27 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
         resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
         readQueue: (origin, id, options) => readHarnessQueueSnapshotFromWebContents(wc, origin, id, options) });
       worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
-      if (handoff) { checkpointManager = new GitCheckpointManager(); checkpointDiagnostics = await checkpointManager.activate(workspacePath); }
+      if (handoff || process.argv.includes('--smoke-background')) { checkpointManager = new GitCheckpointManager(); checkpointDiagnostics = await checkpointManager.activate(workspacePath); }
       wikiRuntime = require(harnessRuntimePaths.wikiToolPath); wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: path.join(smokeRoot, 'wiki-settings.json') }); await wikiSettingsStore.init();
       await ensureNativeDock();
       await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8'));
       if (!await installWorkbenchPanel()) throw new Error('完整工作台未安装。');
       await supervisor.credentialHost.verifyReady(harnessOrigin, harnessFetch);
+      if (dock && process.argv.includes('--smoke-background')) {
+        await initializeBackgroundTasks();
+        result = await require('./background-tasks-smoke.cjs').runBackgroundSmoke({ window: mainWindow, dock: nativeDock, supervisor, selected, workspacePath, version: app.getVersion(), target: resolvedTarget,
+          service: backgroundTasks, realModel: process.argv.includes('--smoke-real-model'), origin: harnessOrigin, api: authenticatedHarnessApi,
+          reload: async () => {
+            await backgroundTasks.stop(); await supervisor.stop(); harnessOrigin = null;
+            const authentication = await establishHarnessSession(await supervisor.start());
+            harnessOrigin = authentication.origin; harnessFetch = createAuthenticatedHarnessFetch(authentication); harnessAuthCookie = authentication.cookie;
+            await installHarnessCookie(wc.session); await mainWindow.loadURL(harnessOrigin);
+            await supervisor.credentialHost.verifyReady(harnessOrigin, harnessFetch);
+            backgroundTasks = null; return initializeBackgroundTasks();
+          } });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
       if (dock && process.argv.includes('--smoke-workflow')) {
         if (!process.argv.includes('--smoke-real-model')) throw new Error('Workflow acceptance requires the real model flag.');
         result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi });
@@ -6045,6 +6162,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
+    await backgroundTasks?.stop();
     if (dock || handoff) { await terminalRunner?.stop(); nativeDock?.destroy(); nativeDock = undefined; }
     mainWindow?.destroy(); mainWindow = undefined;
     await supervisor?.stop(); harnessOrigin = null; clearHarnessAuthentication();
@@ -7222,6 +7340,8 @@ app.whenReady().then(async () => {
     )
   });
   sideChatController = new SideChatController({ getOrigin: () => harnessOrigin, apiCall: authenticatedHarnessApi });
+  try { await initializeBackgroundTasks(); backgroundTasks.start(); }
+  catch (error) { await backgroundTasks?.stop().catch(() => {}); backgroundTasks = null; backgroundUnavailableMessage = `后台记录不能安全加载，已禁用调度；前台会话仍可使用。${error.message}`; }
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   createApplicationTray();
   installApplicationMenu();
@@ -7233,14 +7353,22 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', (event) => {
-  stopAgentPolling();
-  stopSideChatSelectionMonitor();
-  if (allowQuit || (!supportBackupOperationPromise && !gitDeliveryOperationPromise && !supervisor?.isActive() && !terminalRunner?.isActive() && !previewManager?.isActive())) {
+  if (allowQuit) {
     destroyApplicationTray();
     return;
   }
   event.preventDefault();
+  if (quitOperationPromise) return;
   const stopAfterBackup = async () => {
+    if (backgroundTasks?.requiresBackground() || backgroundOperationPromise) {
+      const answer = await dialog.showMessageBox(nativeParent(mainWindow), { type: 'warning', title: '退出 DSH Desktop', message: '完全退出会停止后台执行和定时检查。',
+        detail: '保留任务与会话记录；下次启动会先核对结果，不会自动重发结果不明的运行。若要继续后台工作，请取消并关闭主窗口，软件会留在托盘。', buttons: ['继续后台运行', '完全退出'], defaultId: 0, cancelId: 0, noLink: true });
+      if (answer.response !== 1) return false;
+    }
+    stopAgentPolling(); stopSideChatSelectionMonitor();
+    await backgroundTasks?.stop();
+    if (backgroundOperationPromise) await Promise.allSettled([backgroundOperationPromise]);
+    if (workspaceActivationPromise) await Promise.allSettled([workspaceActivationPromise]);
     await flushComposerDraft().catch(() => {});
     if (worktreeOperationPromise) await Promise.allSettled([worktreeOperationPromise]);
     if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);
@@ -7251,11 +7379,11 @@ app.on('before-quit', (event) => {
     if (supervisor?.isActive()) stops.push(supervisor.stop());
     await Promise.allSettled(stops);
     await terminalSettlePromise;
+    return true;
   };
-  void stopAfterBackup().finally(() => {
-    allowQuit = true;
-    app.quit();
-  });
+  quitOperationPromise = stopAfterBackup().then((confirmed) => { if (confirmed) { allowQuit = true; app.quit(); } })
+    .catch((error) => { showFixedNotification({ title: '未能安全退出', body: error.message || '请核对后台任务状态后重试。' }); })
+    .finally(() => { quitOperationPromise = null; });
 });
 
 app.on('window-all-closed', () => {

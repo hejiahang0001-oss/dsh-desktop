@@ -185,6 +185,7 @@
 
   const render = (state = {}) => {
     currentState = state;
+    window.dispatchEvent(new CustomEvent('dsh-background-state', { detail: state.background }));
     rootLine.textContent = state.available
       ? `根任务：${state.root?.title || '未知'} · …${state.root?.sessionSuffix || ''} · 状态来自 ${state.source}`
       : state.message || 'Harness 任务状态尚未就绪。';
@@ -202,7 +203,7 @@
 
   const refresh = ({ quiet = false } = {}) => {
     if (busy) return Promise.resolve();
-    return run(quiet ? status.textContent : '正在刷新 Harness 任务状态…', () => api.refresh());
+    return run(quiet ? status.textContent : '正在刷新 Harness 任务状态…', async () => ({ ok: true, state: await api.refresh(), message: quiet ? status.textContent : '任务状态已刷新。' }));
   };
   refreshButton.addEventListener('click', () => void refresh());
   closeButton.addEventListener('click', () => window.close());

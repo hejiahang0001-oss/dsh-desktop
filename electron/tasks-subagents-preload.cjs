@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('tasksSubagentsAPI', Object.freeze({
   getState: () => ipcRenderer.invoke('tasks-subagents:get-state'),
   refresh: () => ipcRenderer.invoke('tasks-subagents:refresh'),
+  backgroundAction: (request) => ipcRenderer.invoke('tasks-subagents:background-action', request),
   open: (id) => ipcRenderer.invoke('tasks-subagents:open', id),
   prompt: (id, text) => ipcRenderer.invoke('tasks-subagents:prompt', id, text),
   interrupt: (id) => ipcRenderer.invoke('tasks-subagents:interrupt', id),

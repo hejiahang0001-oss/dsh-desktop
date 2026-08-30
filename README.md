@@ -24,7 +24,7 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; V1.0.2 keeps source tag `dsh-v0.1.2-alpha.1` pinned at commit `cd5ef8148158c3a752a658978873241fdf8e2bbc`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; V1.1.0 keeps source tag `dsh-v0.1.2-alpha.1` pinned at commit `cd5ef8148158c3a752a658978873241fdf8e2bbc`.
 
 ## Why DSH Desktop
 
@@ -38,7 +38,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Persistent Git review panel** — keep a bounded real Diff beside Harness, resize or hide the panel, and accept or reject one file or a safe batch while protecting pre-existing edits.
 - **Native Git delivery center** — inspect the active repository, branch, upstream, ahead/behind counts, staged and unstaged work, recent commits, and public GitHub PR checks; create a local commit only from already-staged content after a second fingerprint check and native confirmation.
 - **Workspace file browser** — lazily browse the active Harness workspace, search bounded filenames, open safe text files in a read-only Quick Look surface, and reveal the selected Diff file in the tree.
-- **Isolated workspace terminal** — open an explicitly confirmed persistent Windows PowerShell PTY in a local-only terminal window. Harness can open or focus that window but cannot start, write, resize, stop, or read its output; the software-managed DeepSeek Key remains outside the terminal environment.
+- **Isolated workspace terminal** — open an explicitly confirmed persistent Windows PowerShell PTY in the native dock or a separate window. Harness can request a bounded read for the exact foreground session after native confirmation, but cannot start, write, resize or stop the PTY; the software-managed DeepSeek Key remains outside the terminal environment.
 - **Integrated application preview** — open workspace HTML through a software-managed random loopback port or connect to an existing localhost development server, with explicit ready/offline/stopped states and owned-port cleanup.
 - **Image and PDF Quick Look** — safely inspect PNG, JPEG, WebP, GIF, and PDF files in memory with fit, zoom, and PDF page controls; supported mislabelled images are identified by their real format.
 - **Global command palette** — press `Ctrl+Shift+P` to search and run a fixed, keyboard-accessible allowlist of workbench actions without exposing arbitrary shell or JavaScript execution.
@@ -58,6 +58,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **Isolated Git worktrees** — create a generated DSH-owned branch and worktree, switch the active Harness workspace, and safely reclaim only DSH-owned worktree directories. External worktrees stay read-only; dirty removal creates a private recovery checkpoint and retains the branch.
 - **Harness-native tasks and subagents** — inspect the authoritative subagent tree, live background-job mirror, approval count, and working-directory sharing risk; open the exact child transcript, queue a bounded follow-up to a continuable child, or request interruption without treating acknowledgement as completion.
+- **Independent background schedules** — create explicitly authorized local tasks in separate worktrees, with a new conversation per run, exact run history, daily caps, approval notifications, tray operation and recovery without blind resubmission. Full exit stops scheduling; worktrees are not VMs and results still need review.
 - **Isolated Side Chat** — fork the selected completed ordinary Harness session into a separate temporary browser partition with `Ctrl+Shift+S`; the main selection, Plan state, permissions, workspace, and pending work remain unchanged, while the side session is fixed to Workspace Write / Ask.
 - **In-app network settings** — choose direct access, the current Windows system proxy, or a credential-free custom HTTP(S) proxy; test DeepSeek connectivity before saving and keep loopback services and the integrated terminal outside that route.
 - **Reliable copy actions** — Harness can write sanitized text to the clipboard from its trusted main page, while clipboard reads, subframes, and unrelated permission requests remain denied.
@@ -79,7 +80,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.0.5 candidate** adds local per-session text/document drafts, explicit queue/steer/stop states, and confirmed source-preserving session/worktree handoff. Candidate artifacts are `DSH-Desktop-Setup-1.0.5.exe` and `DSH-Desktop-Portable-1.0.5.exe`. V1.0.2–V1.0.4 have passed overwrite installation and anonymous public asset verification. V0.5.4 Stable remains unchanged. See [credential migration and rollback boundaries](docs/KEY_STORAGE.md).
+**V1.1.0 candidate** adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Candidate artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. It retains the `DSH-Desktop-Setup-1.0.5.exe` milestone's per-session text/document drafts, queue/steer/stop feedback and protected worktree handoff. V0.5.4 Stable remains unchanged. See [background task boundaries](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -160,7 +161,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V1.0.2 候选新增 Excel/Word/PDF 拖入与点击添加、外部文件受控复制、会话切换保护，以及 Windows 账户加密的软件 Key。完成安装验收后才发布；目前已发布产品 Latest 仍为 [V1.0.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1)。V0.5.4 Stable 保持不变。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)。
+V1.1.0 候选在 Excel/Word/PDF 入口、软件 Key 加密、审查批注、一体化工作台和会话交接基础上，增加独立后台任务、定时计划、运行历史和恢复。入口为“任务与子代理 → 独立后台任务”。托盘运行时有效，完全退出后不执行；任务失败或结果不明不会自动重发。独立任务需要 Git；普通文档拖入不需要 Git。安装与公开下载验收状态见[执行进度](PROGRESS.md)，通过后发布 Pre-release。V0.5.4 Stable 保持不变。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

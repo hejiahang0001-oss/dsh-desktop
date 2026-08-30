@@ -16,7 +16,15 @@ async function baseline(ctx) {
   try { const first = await iterator.next(); if (first.value?.type !== 'baseline') throw new Error('任务状态基线不可用。'); return first.value.value; }
   finally { abort.abort(); await iterator.return?.(); }
 }
-function summary(ctx, observation, control) {
+async function workspaceActivity(ctx, directory, exceptId = '') {
+  const catalog = await ctx.sessionController.list({}), state = await baseline(ctx);
+  const ids = catalog.items.filter((row) => row.sessionId !== exceptId && row.cwd && pathKey(row.cwd) === pathKey(directory));
+  const running = ids.filter((row) => row.running).length;
+  const pending = ids.reduce((sum, row) => sum + (state.queues[row.sessionId]?.length || 0), 0);
+  const jobs = ids.reduce((sum, row) => sum + (state.jobs[row.sessionId] || []).filter((j) => ['running', 'stopping'].includes(j.status)).length, 0);
+  return { idle: !running && !pending && !jobs, running, pending, jobs };
+}
+function summary(ctx, observation, control, withHistory = true) {
   const { header, events } = observation, agent = ctx.agents.get(header.id);
   const pendingApprovals = new Set(); let turnOpen = false, lastTurnReason = null;
   for (const event of events) {
@@ -27,21 +35,64 @@ function summary(ctx, observation, control) {
   }
   const queue = control.queues[header.id] || [], jobs = control.jobs[header.id] || [];
   return { sessionId: header.id, workspacePath: header.cwd, cursor: observation.cursor,
-    historyHash: digest(events), eventCount: events.length, agentPreset: header.agentPreset || null,
+    ...(withHistory ? { historyHash: digest(events) } : {}), eventCount: events.length, agentPreset: header.agentPreset || null,
     running: agent?.status === 'running', pending: queue.length, queued: queue.filter((item) => item.placement === 'queued').length,
     steering: queue.filter((item) => item.placement === 'steering').length, approvals: pendingApprovals.size,
     liveJobs: jobs.filter((job) => ['running', 'stopping'].includes(job.status)).length, turnOpen, lastTurnReason };
 }
 export async function sessionControl(ctx, operation, request) {
-  if (!['inspect', 'fork', 'resume-queue'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
+  if (!['inspect', 'status', 'workspace-status', 'fork', 'resume-queue', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
   const sourcePath = await canonicalDirectory(request.workspacePath);
+  if (operation === 'workspace-status') return workspaceActivity(ctx, sourcePath);
+  if (operation === 'task-create') {
+    if (!(await workspaceActivity(ctx, sourcePath)).idle) throw new Error('这个任务目录还有其他会话、排队消息或后台命令，未并发开工。');
+    if (ctx.sessions.get(request.sessionId)) throw new Error('任务会话已存在；未重复创建。');
+    const created = await ctx.sessionController.create({ sessionId: request.sessionId, cwd: sourcePath, agentPreset: 'standard' });
+    // Agent-local optional service: public strict lookup, not an undeclared
+    // property injection on the desktop plugin's composition context.
+    const agent = ctx.agents.get(created.sessionId), permissions = agent?.ctx.get('permissionPresets');
+    const preset = permissions?.resolve('workspace-write');
+    if (!agent || preset?.sandbox !== 'workspace-write' || preset?.approval !== 'ask') throw new Error('后台权限预设不满足工作区写入和逐项审批要求，未发送任务。');
+    permissions.set(agent.session, 'workspace-write');
+    if (permissions.current(agent.session.events) !== 'workspace-write') throw new Error('后台权限设置未通过校验。');
+    await ctx.sessionPersistence.ensureMaterialized(agent.session);
+    const workspace = await ctx.workspaceRegistry.create(sourcePath);
+    await workspace.attachSession(created.sessionId);
+    return { sessionId: created.sessionId, workspacePath: sourcePath, permission: 'workspace-write', approval: 'ask' };
+  }
   const targetPath = operation === 'fork' ? await canonicalDirectory(request.targetPath) : null;
   const control = await baseline(ctx);
   const observation = await ctx.sessionQuery.observeSession(request.sessionId);
   try {
     if (observation.header.origin === 'subagent' || !observation.header.cwd || pathKey(observation.header.cwd) !== pathKey(sourcePath)) throw new Error('会话不属于指定的普通工作区。');
-    const state = summary(ctx, observation, control);
-    if (operation === 'inspect') return state;
+    const state = summary(ctx, observation, control, ['inspect', 'fork'].includes(operation));
+    if (['inspect', 'status'].includes(operation)) return state;
+    if (operation === 'task-prompt') {
+      if (!(await workspaceActivity(ctx, sourcePath, request.sessionId)).idle) throw new Error('任务目录的另一会话已经开始工作，未提交任务。');
+      const agent = ctx.agents.get(request.sessionId), permissions = agent?.ctx.get('permissionPresets');
+      const preset = permissions?.resolve('workspace-write');
+      if (!agent || preset?.sandbox !== 'workspace-write' || preset?.approval !== 'ask' || permissions.current(agent.session.events) !== 'workspace-write') throw new Error('后台会话权限发生变化；未提交任务。');
+      if (state.running || state.pending || observation.events.some((e) => e.type === 'user/message' && e.data.source?.kind === 'user')) throw new Error('后台会话已有工作；未重复提交。');
+      if (!/^[a-f0-9-]{36}$/i.test(request.requestId || '') || typeof request.text !== 'string' || !request.text.trim() || request.text.length > 8000 || request.text.includes('\0')) throw new Error('后台任务输入无效。');
+      return await ctx.sessionController.prompt({ sessionId: request.sessionId, requestId: request.requestId, mode: 'queue', clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        content: [{ type: 'text', text: request.text }] }, AbortSignal.timeout(45000));
+    }
+    if (operation === 'task-status') {
+      if (!/^[a-f0-9-]{36}$/i.test(request.requestId || '')) throw new Error('运行身份无效。');
+      let turn = null, acceptedTurn = null, admitted = false, outcome = null;
+      for (const event of observation.events) {
+        if (event.type === 'turn/start') turn = event.data.turn;
+        if (event.type === 'user/message' && event.data.source?.rpcId === request.requestId) { admitted = true; acceptedTurn = turn; }
+        if (event.type === 'turn/end' && acceptedTurn !== null && event.data.turn === acceptedTurn) outcome = event.data.reason?.kind || null;
+      }
+      return { ...state, admitted, outcome };
+    }
+    if (operation === 'task-cancel') {
+      const agent = ctx.agents.get(request.sessionId); if (!agent) throw new Error('任务没有活动实例；请先核对上次运行。');
+      // Native user action on a dedicated task session; never other sessions.
+      agent.cancel({ kind: 'user' }, { keepInbox: false });
+      return { accepted: true };
+    }
     if (operation === 'resume-queue') {
       const agent = ctx.agents.get(request.sessionId);
       if (!agent || !agent.inbox.nextTurn.some((item) => item.id === request.itemId)) throw new Error('排队消息已离开队列；未重复发送。');

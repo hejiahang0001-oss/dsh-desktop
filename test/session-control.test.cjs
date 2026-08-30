@@ -33,6 +33,36 @@ async function sdkFixture(t) {
   const { sessionControl } = await import(pathToFileURL(path.resolve('runtime/dsh-desktop-tools/session-control.mjs')).href);
   return { ctx, entries, events, agents, id, source, target, sessionControl, created: () => createOptions };
 }
+function taskSdk(f, preset = { sandbox: 'workspace-write', approval: 'ask' }) {
+  let sent = 0;
+  f.ctx.sessionController.list = async () => ({ items: [...f.entries].map(([id, s]) => ({ sessionId: id, cwd: s.header.cwd, running: f.agents.get(id)?.status === 'running' })) });
+  f.ctx.sessionController.create = async (request) => {
+    const session = { id: request.sessionId, header: { id: request.sessionId, cwd: request.cwd }, events: [], [Symbol.dispose]() {} };
+    const permissions = { resolve: () => preset, current: () => session.events.findLast((e) => e.type === 'permission/preset')?.data.preset, set: (_s, name) => session.events.push({ type: 'permission/preset', data: { preset: name } }) };
+    f.entries.set(session.id, session); f.agents.set(session.id, { session, status: 'idle', inbox: { hasPending: false }, ctx: { get: (name) => name === 'permissionPresets' ? permissions : undefined }, cancel() { this.status = 'idle'; } });
+    return { sessionId: session.id };
+  };
+  f.ctx.sessionController.prompt = async (request, signal) => { signal.throwIfAborted(); sent++; f.entries.get(request.sessionId).events.push({ type: 'user/message', data: { source: { kind: 'user', rpcId: request.requestId } } }); return { accepted: true }; };
+  return () => sent;
+}
+test('background SDK pins workspace-write plus ask and rejects duplicate work and widened permission', async (t) => {
+  const f = await sdkFixture(t), sent = taskSdk(f), request = { sessionId: `session-${randomUUID()}`, workspacePath: f.target, requestId: randomUUID(), text: 'test' };
+  const created = await f.sessionControl(f.ctx, 'task-create', request); assert.equal(created.approval, 'ask');
+  await f.sessionControl(f.ctx, 'task-prompt', request); await assert.rejects(f.sessionControl(f.ctx, 'task-prompt', request), /未重复提交/); assert.equal(sent(), 1);
+  await assert.rejects(f.sessionControl(f.ctx, 'task-create', request), /已存在/);
+  const bad = await sdkFixture(t); taskSdk(bad, { sandbox: 'danger-full-access', approval: 'never' });
+  await assert.rejects(bad.sessionControl(bad.ctx, 'task-create', { ...request, workspacePath: bad.target }), /权限预设/);
+});
+test('background SDK rejects occupied directories and attributes outcomes only to the exact request turn', async (t) => {
+  const f = await sdkFixture(t); taskSdk(f); f.agents.get(f.id).status = 'running';
+  const request = { sessionId: `session-${randomUUID()}`, workspacePath: f.source, requestId: randomUUID() };
+  await assert.rejects(f.sessionControl(f.ctx, 'task-create', request), /其他会话/);
+  assert.equal((await f.sessionControl(f.ctx, 'workspace-status', request)).idle, false);
+  f.agents.get(f.id).status = 'idle'; const r = { ...request, sessionId: f.id };
+  f.events.push({ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: { source: { kind: 'user', rpcId: request.requestId } } }, { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }, { type: 'turn/start', data: { turn: 2 } }, { type: 'turn/end', data: { turn: 2, reason: { kind: 'interrupted' } } });
+  assert.equal((await f.sessionControl(f.ctx, 'task-status', r)).outcome, 'completed');
+  assert.equal((await f.sessionControl(f.ctx, 'task-status', { ...r, requestId: randomUUID() })).outcome, null);
+});
 test('SDK handoff creates composed Agent with immutable inherited history and permits only the seed marker', async (t) => {
   const f = await sdkFixture(t), request = { sessionId: f.id, workspacePath: f.source }, original = JSON.stringify(f.events);
   const state = await f.sessionControl(f.ctx, 'inspect', request);

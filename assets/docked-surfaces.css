@@ -24,3 +24,4 @@ body:has(#office-grid) .office-card h3 { margin: 3px 0 0 !important; font-size: 
 body:has(#office-grid) .summary { min-height: 0; margin: 3px 0; }
 body:has(#office-grid) .boundary { margin: 5px 0; }
 @media (max-width: 780px) { .office-grid, .surface-grid { grid-template-columns: 1fr !important; } .toolbar { flex-wrap: wrap; } }
+body:has(#background-task-panel) main { padding-bottom: 64px !important; }
