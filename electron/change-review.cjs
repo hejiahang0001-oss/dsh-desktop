@@ -16,6 +16,7 @@ class ChangeReviewError extends Error {
 const splitNull = (value) => String(value || '').split('\0').filter(Boolean);
 const toGitPath = (value) => value.split(path.sep).join('/');
 const pathKey = (value) => process.platform === 'win32' ? value.toLowerCase() : value;
+const isConflict = (code) => /^(DD|AU|UD|UA|DU|AA|UU)$/.test(code);
 
 const parsePorcelainEntries = (output) => {
   const records = splitNull(output);
@@ -60,7 +61,7 @@ const classifyPorcelain = (output) => {
   const untracked = entries.some((entry) => entry.code === '??');
   const staged = entries.some((entry) => entry.code !== '??' && entry.code[0] !== ' ');
   const unstaged = entries.some((entry) => entry.code !== '??' && entry.code[1] !== ' ');
-  return { entries, untracked, staged, unstaged };
+  return { entries, untracked, staged, unstaged, conflicted: entries.some((entry) => isConflict(entry.code)) };
 };
 
 const reviewStateForReason = (reason) => ({
@@ -222,15 +223,15 @@ class GitChangeReviewer {
       const parsed = classifyPorcelain(output);
       const protectedPath = this.protectedPaths.has(pathKey(resolved.repoPath));
       const pending = parsed.untracked || parsed.unstaged;
-      const status = pending
+      const status = parsed.conflicted ? 'conflict' : pending
         ? protectedPath ? 'protected' : 'pending'
         : parsed.staged ? 'accepted' : 'clean';
       return Object.freeze({
         status,
         path: reportedPath,
         repoPath: resolved.repoPath,
-        canAccept: pending,
-        canReject: pending && !protectedPath,
+        canAccept: pending && !parsed.conflicted,
+        canReject: pending && !protectedPath && !parsed.conflicted,
         protected: protectedPath,
         untracked: parsed.untracked,
         staged: parsed.staged,
@@ -342,18 +343,19 @@ class GitChangeReviewer {
           const untracked = entry.code === '??';
           const staged = !untracked && entry.code[0] !== ' ';
           const unstaged = !untracked && entry.code[1] !== ' ';
+          const conflicted = isConflict(entry.code);
           const protectedPath = this.protectedPaths.has(pathKey(entry.path))
             || (entry.originalPath && this.protectedPaths.has(pathKey(entry.originalPath)));
           const pending = untracked || unstaged;
-          const status = pending
+          const status = conflicted ? 'conflict' : pending
             ? protectedPath ? 'protected' : 'pending'
             : staged ? 'accepted' : 'clean';
           return Object.freeze({
             status,
             path: reportedPath,
             repoPath: entry.path,
-            canAccept: pending,
-            canReject: pending && !protectedPath,
+            canAccept: pending && !conflicted,
+            canReject: pending && !protectedPath && !conflicted,
             protected: protectedPath,
             untracked,
             staged,

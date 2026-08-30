@@ -29,7 +29,7 @@
     if (!event.defaultPrevented) throw new Error('输入框未接受资料操作，请重试。');
     await new Promise((resolve) => requestAnimationFrame(resolve));
   };
-  const append = (input, text, guard) => insert(input, `${read(input).trim() ? '\n' : ''}${text}\n`, null, guard);
+  const append = (input, text, guard) => insert(input, `${read(input).trim() && !read(input).endsWith('\n') ? '\n' : ''}${text}`, null, guard);
   const remove = (input, text) => {
     if (input?.tagName === 'TEXTAREA') return insert(input, '', text);
     const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
