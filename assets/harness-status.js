@@ -12,6 +12,7 @@ const elements = {
   retry: document.querySelector('[data-retry]'),
   chooseWorkspace: document.querySelector('[data-choose-workspace]'),
   openLog: document.querySelector('[data-open-log]'),
+  openNetwork: document.querySelector('[data-open-network]'),
   live: document.querySelector('[data-live-status]')
 };
 
@@ -79,6 +80,10 @@ elements.retry.addEventListener('click', async () => {
 });
 
 elements.openLog.addEventListener('click', () => window.desktopAPI.harness.openLog());
+elements.openNetwork.addEventListener('click', () => {
+  const opened = window.__DSH_NETWORK__?.open?.();
+  if (opened === false || opened == null) elements.live.textContent = '网络与代理入口暂不可用，请稍后重试。';
+});
 
 elements.chooseWorkspace.addEventListener('click', async () => {
   elements.chooseWorkspace.disabled = true;

@@ -74,6 +74,7 @@ const inspectOfficeCenter = async ({
   rootDir,
   resourcesPath,
   isPackaged = false,
+  appVersion = '',
   harnessReady = false,
   workspaceSynced = false,
   workspaceName = ''
@@ -94,6 +95,7 @@ const inspectOfficeCenter = async ({
   }));
   const readyCount = office.filter((item) => item.ready).length;
   return {
+    appVersion: /^\d+\.\d+\.\d+$/.test(appVersion) ? appVersion : '',
     available: readyCount === OFFICE_SKILLS.length,
     readyCount,
     total: OFFICE_SKILLS.length,

@@ -7,6 +7,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>DSH Desktop · 正在连接 Harness</title>
   <link rel="stylesheet" href="assets/harness-status.css">
+  <link rel="stylesheet" href="assets/workbench-network.css">
 </head>
 <body>
   <main class="status-shell">
@@ -29,6 +30,7 @@
       <p class="error-detail" data-error-detail role="alert" hidden></p>
       <div class="actions">
         <button class="secondary-button" type="button" data-choose-workspace>选择代码仓库…</button>
+        <button class="secondary-button" type="button" data-open-network>网络与代理…</button>
         <button class="primary-button" type="button" data-retry hidden>重新启动 Harness</button>
         <button class="secondary-button" type="button" data-open-log>打开运行日志</button>
       </div>
@@ -36,5 +38,6 @@
     </section>
   </main>
   <script src="assets/harness-status.js"></script>
+  <script src="assets/workbench-network.js"></script>
 </body>
 </html>

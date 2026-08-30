@@ -123,6 +123,21 @@
   let busy = false;
 
   const setLive = (message) => { live.textContent = message; };
+  const reviewStateOf = (changes = {}) => changes.reviewState || ({
+    'no-change': 'clean',
+    ready: 'changes',
+    'git-unavailable': 'git-unavailable',
+    'not-a-git-repository': 'not-a-git-repository',
+    'git-status-failed': 'status-read-failed'
+  }[changes.reason] || 'not-initialized');
+  const copyForReviewState = (state) => ({
+    changes: ['Git 变更', '选择文件后可查看有界 Diff，并按安全门禁接受或拒绝。'],
+    clean: ['仓库干净', '已成功读取 Git 状态，当前没有待审、受保护或已接受的变更。'],
+    'git-unavailable': ['Git 不可用', '未检测到 Git。对话、Office、Wiki、文件查看和终端仍可使用。'],
+    'not-a-git-repository': ['当前目录不是 Git 仓库', 'Git 审查动作已关闭；其他工作台能力仍可使用。'],
+    'status-read-failed': ['Git 状态读取失败', '未将读取失败误判为仓库干净。请检查 Git 后刷新；其他工作台能力仍可使用。'],
+    'not-initialized': ['Git 审查尚未初始化', '工作台就绪后可刷新状态。']
+  }[state] || ['Git 状态不可用', 'Git 审查动作已关闭；其他工作台能力仍可使用。']);
   const applyLayout = (next = {}) => {
     const width = Math.min(520, Math.max(280, Math.round(Number(next.reviewPanelWidth) || 340)));
     layout = { reviewPanelOpen: next.reviewPanelOpen !== false, reviewPanelWidth: width };
@@ -156,7 +171,7 @@
     if (!selectedPath) {
       diffPath.textContent = '未选择文件';
       diffNote.textContent = '选择文件后显示有界 Git Diff';
-      renderDiffLines('', '暂无 Git 变更。');
+      renderDiffLines('', '当前没有可审查文件。');
       return;
     }
     diffPath.textContent = selectedPath;
@@ -202,7 +217,11 @@
     diagnostics = next;
     const changes = diagnostics.changes || {};
     const items = Array.isArray(changes.items) ? changes.items : [];
+    const reviewState = reviewStateOf(changes);
+    const [emptyTitle, emptyDetail] = copyForReviewState(reviewState);
     const signature = JSON.stringify([
+      reviewState,
+      changes.reason,
       changes.total,
       changes.pendingCount,
       changes.protectedCount,
@@ -210,15 +229,16 @@
       changes.truncated,
       items.map((item) => [item.path, item.status, item.canAccept, item.canReject])
     ]);
-    summary.textContent = changes.total > 0
+    summary.textContent = reviewState === 'changes' && changes.total > 0
       ? `${changes.total}${changes.truncated ? '+' : ''} 个 · 待审 ${changes.pendingCount || 0} · 保护 ${changes.protectedCount || 0} · 已接受 ${changes.acceptedCount || 0}`
-      : '暂无 Git 变更';
+      : emptyTitle;
     if (signature !== changeSignature) {
       changeSignature = signature;
       files.replaceChildren();
       if (items.length === 0) {
         const empty = create('div', 'dsh-review-empty');
-        empty.append(create('strong', '', '暂无 Git 变更'), create('p', '', 'Agent 修改文件后会自动出现在这里。'));
+        empty.dataset.state = reviewState;
+        empty.append(create('strong', '', emptyTitle), create('p', '', emptyDetail));
         files.append(empty);
         selectedPath = '';
         selectedItem = null;
@@ -276,8 +296,12 @@
     refreshButton.disabled = true;
     setLive('正在刷新 Git 状态…');
     try {
-      renderChanges(await api.changes.refresh());
-      setLive('Git 状态已刷新。');
+      const next = await api.changes.refresh();
+      renderChanges(next);
+      const state = reviewStateOf(next?.changes || {});
+      setLive(state === 'status-read-failed' ? 'Git 状态读取失败；未执行任何修改。' : 'Git 状态已刷新。');
+    } catch {
+      setLive('Git 状态刷新失败；未执行任何修改。');
     } finally {
       refreshButton.disabled = false;
     }

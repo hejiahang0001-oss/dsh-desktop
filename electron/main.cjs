@@ -206,6 +206,7 @@ const unavailableAgentDiagnostics = () => Object.freeze({
 let agentDiagnostics = unavailableAgentDiagnostics();
 const emptyChangeReviewDiagnostics = (reason = 'no-change') => Object.freeze({
   status: reason === 'no-change' ? 'none' : 'unavailable',
+  reviewState: reason === 'no-change' ? 'clean' : reason,
   path: '',
   repoPath: '',
   canAccept: false,
@@ -293,6 +294,7 @@ const sideChatSmokeTarget = process.argv.find((argument) => argument.startsWith(
 const supportSmokeTarget = process.argv.find((argument) => argument.startsWith('--support-smoke-file='));
 const gitDeliverySmokeTarget = process.argv.find((argument) => argument.startsWith('--git-delivery-smoke-file='));
 const traySmokeTarget = process.argv.find((argument) => argument.startsWith('--tray-smoke-file='));
+const commandFeedbackSmokeTarget = process.argv.find((argument) => argument.startsWith('--command-feedback-smoke-file='));
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 const isolatedSmokeTarget = [
   desktopSmokeTarget,
@@ -308,7 +310,8 @@ const isolatedSmokeTarget = [
   sideChatSmokeTarget,
   supportSmokeTarget,
   gitDeliverySmokeTarget,
-  traySmokeTarget
+  traySmokeTarget,
+  commandFeedbackSmokeTarget
 ].find(Boolean);
 if (isolatedSmokeTarget) {
   const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
@@ -678,8 +681,36 @@ const networkModeLabel = () => {
 };
 
 const openNetworkSettings = async () => {
-  if (!harnessUiReady()) return false;
+  if (!mainWindow || mainWindow.isDestroyed() || !currentUrlAllowed(mainWindow.webContents.getURL())) return false;
   return Boolean(await mainWindow.webContents.executeJavaScript('Boolean(window.__DSH_NETWORK__?.open?.())', true));
+};
+
+const runVisibleDesktopAction = async (title, action) => {
+  try {
+    const result = await action();
+    if (result === false || (result?.ok === false && !result?.canceled)) {
+      throw new Error(result?.message || `${title}入口当前不可用。`);
+    }
+    return result;
+  } catch (error) {
+    const detail = String(error?.message || error || `${title}入口当前不可用。`)
+      .replace(/[\u0000-\u001f\u007f]/gu, ' ')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .slice(0, 400);
+    const response = await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: `${title}未执行`,
+      message: '入口未成功打开。',
+      detail: `${detail || '入口当前不可用。'}\n\n可以重试；若问题与连接有关，可从“模型 → 网络与代理设置”恢复。`,
+      buttons: ['重试', '确定'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    });
+    if (response.response === 0) return runVisibleDesktopAction(title, action);
+    return false;
+  }
 };
 
 const networkChangeBlocked = () => agentDiagnostics.canStop || agentDiagnostics.status === 'waiting';
@@ -1263,6 +1294,7 @@ const sameAgentDiagnostics = (left, right) => (
 
 const sameChangeReviewDiagnostics = (left, right) => (
   left.status === right.status
+  && left.reviewState === right.reviewState
   && left.path === right.path
   && left.repoPath === right.repoPath
   && left.canAccept === right.canAccept
@@ -1297,6 +1329,7 @@ const refreshChangeReviewDiagnostics = async ({ rebuildMenu = true } = {}) => {
     const latest = latestPath ? await changeReviewer.inspect(latestPath) : emptyChangeReviewDiagnostics(list.reason);
     next = {
       ...latest,
+      reviewState: list.reviewState,
       total: list.total,
       pendingCount: list.pendingCount,
       protectedCount: list.protectedCount,
@@ -1645,6 +1678,7 @@ const getOfficeCenterState = () => inspectOfficeCenter({
   rootDir,
   resourcesPath: process.resourcesPath,
   isPackaged: app.isPackaged,
+  appVersion: app.getVersion(),
   harnessReady: Boolean(officeCenterSmokeTarget) || harnessUiReady(),
   workspaceSynced: workspaceSyncDiagnostics.status === 'synced',
   workspaceName: workspaceStore?.getState()?.displayName || '当前工作区'
@@ -3637,16 +3671,18 @@ const showCredentialDiagnostics = async () => {
     unavailable: `${credential.message}\n\n请检查 Harness 数据目录权限后重试。`
   };
   const canOpenSettings = harnessUiReady();
+  const buttons = canOpenSettings ? ['打开模型设置', '网络与代理', '确定'] : ['网络与代理', '确定'];
   const result = await dialog.showMessageBox(mainWindow, {
     type,
     title: '模型配置诊断',
     message: credentialLabel(),
     detail: detailByStatus[credential.status] || credential.message,
-    buttons: canOpenSettings ? ['打开模型设置', '确定'] : ['确定'],
-    defaultId: 0,
-    cancelId: canOpenSettings ? 1 : 0
+    buttons,
+    defaultId: canOpenSettings ? 2 : 1,
+    cancelId: canOpenSettings ? 2 : 1
   });
   if (canOpenSettings && result.response === 0) await runHarnessUiAction('models-settings');
+  if ((canOpenSettings && result.response === 1) || (!canOpenSettings && result.response === 0)) await openNetworkSettings();
 };
 
 const supportTimestamp = () => new Date().toISOString().replace(/[-:]/gu, '').replace(/\.\d{3}Z$/u, 'Z').replace('T', '-');
@@ -4093,7 +4129,7 @@ function installApplicationMenu() {
         },
         {
           label: 'Office 交付中心…',
-          click: () => { void openOfficeCenterWindow(); }
+          click: () => { void runVisibleDesktopAction('Office 交付中心', openOfficeCenterWindow); }
         },
         { label: 'Word / Excel / PowerPoint：可编辑文件统一入口', enabled: false },
         {
@@ -4225,7 +4261,7 @@ function installApplicationMenu() {
         {
           label: '打开软件 Key 设置',
           enabled: harnessReady,
-          click: () => { void runHarnessUiAction('models-settings'); }
+          click: () => { void runVisibleDesktopAction('软件 Key 设置', () => runHarnessUiAction('models-settings')); }
         },
         {
           label: '检查模型配置…',
@@ -4236,8 +4272,8 @@ function installApplicationMenu() {
         {
           label: '网络与代理设置…',
           accelerator: 'CmdOrCtrl+,',
-          enabled: harnessReady,
-          click: () => { void openNetworkSettings(); }
+          enabled: Boolean(mainWindow),
+          click: () => { void runVisibleDesktopAction('网络与代理设置', openNetworkSettings); }
         }
       ]
     },
@@ -4248,7 +4284,7 @@ function installApplicationMenu() {
           label: '打开命令面板…',
           accelerator: 'CmdOrCtrl+Shift+P',
           enabled: harnessReady,
-          click: () => { void mainWindow?.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.open?.())', true); }
+          click: () => { void runVisibleDesktopAction('命令面板', () => mainWindow?.webContents.executeJavaScript('Boolean(window.__DSH_COMMAND_PALETTE__?.open?.())', true)); }
         },
         {
           label: '立即创建代码检查点',
@@ -4423,6 +4459,19 @@ function installApplicationMenu() {
         { label: '自动下载与安装：关闭（未签名）', enabled: false },
         { type: 'separator' },
         {
+          label: `关于 DSH Desktop V${app.getVersion()}…`,
+          click: () => { void dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: `关于 DSH Desktop V${app.getVersion()}`,
+            message: `DSH Desktop V${app.getVersion()}`,
+            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.1'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
+            buttons: ['确定'],
+            defaultId: 0,
+            cancelId: 0
+          }); }
+        },
+        { type: 'separator' },
+        {
           label: '打开运行日志',
           click: async () => {
             const logFile = supervisor?.getState().logFile;
@@ -4446,12 +4495,12 @@ ipcMain.handle('network:get-state', (event) => (
     : { mode: 'direct', proxyUrl: '', effectiveProxy: '', status: 'unavailable', reason: 'untrusted', message: '代理状态请求来源未通过安全校验。' }
 ));
 ipcMain.handle('network:test', (event, settings) => (
-  harnessIpcAllowed(event)
+  desktopIpcAllowed(event)
     ? testNetworkSettings(settings)
     : { ok: false, reason: 'untrusted', message: '代理测试请求来源未通过安全校验。' }
 ));
 ipcMain.handle('network:save', (event, settings) => (
-  harnessIpcAllowed(event)
+  desktopIpcAllowed(event)
     ? saveNetworkSettings(settings)
     : { ok: false, reason: 'untrusted', message: '代理设置请求来源未通过安全校验。' }
 ));
@@ -5031,6 +5080,173 @@ const runDesktopSmoke = async (target) => {
     locale: app.getLocale(),
     safeStorage: safeStorage.isEncryptionAvailable()
   }, null, 2));
+};
+
+const runCommandFeedbackSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const compactSize = initialWindowSize || { width: 1220, height: 800 };
+  const screenshots = {
+    command: `${resolvedTarget}.command.png`,
+    network: `${resolvedTarget}.network.png`,
+    maximized: `${resolvedTarget}.maximized.png`
+  };
+  let created;
+  let result;
+  try {
+    created = new BrowserWindow({
+      width: compactSize.width,
+      height: compactSize.height,
+      minWidth: 820,
+      minHeight: 600,
+      show: false,
+      backgroundColor: '#151618',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        spellcheck: false,
+        webSecurity: true
+      }
+    });
+    mainWindow = created;
+    created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    created.webContents.on('will-navigate', (event, url) => {
+      if (!currentUrlAllowed(url)) event.preventDefault();
+    });
+    await created.loadFile(statusPage);
+    const commandCss = await fsp.readFile(workbenchCommandCssPath, 'utf8');
+    const commandScript = await fsp.readFile(workbenchCommandScriptPath, 'utf8');
+    await created.webContents.insertCSS(commandCss);
+    const installed = Boolean(await created.webContents.executeJavaScript(commandScript, true));
+    created.showInactive();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    const command = await created.webContents.executeJavaScript(`(async () => {
+      const palette = window.__DSH_COMMAND_PALETTE__;
+      palette?.open?.();
+      const search = document.querySelector('.dsh-command-search');
+      search.value = '聚焦对话输入';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const dialog = document.querySelector('.dsh-command-dialog');
+      const failure = document.querySelector('.dsh-command-failure');
+      const focusable = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled)')]
+        .filter((node) => !node.closest('[hidden]'));
+      const initialFocus = document.activeElement?.textContent || document.activeElement?.getAttribute?.('aria-label') || '';
+      const last = focusable.at(-1);
+      last?.focus();
+      const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      document.dispatchEvent(tab);
+      const forwardWrapped = tab.defaultPrevented && document.activeElement === focusable[0];
+      focusable[0]?.focus();
+      const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+      document.dispatchEvent(shiftTab);
+      const backwardWrapped = shiftTab.defaultPrevented && document.activeElement === last;
+      const rect = dialog.getBoundingClientRect();
+      return {
+        installed: Boolean(palette),
+        failureVisible: !failure.hidden,
+        title: failure.querySelector('strong')?.textContent || '',
+        detail: failure.querySelector('p')?.textContent || '',
+        initialFocus,
+        forwardWrapped,
+        backwardWrapped,
+        fits: rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight
+      };
+    })()`, true);
+    const commandShot = await created.webContents.capturePage();
+    await fsp.writeFile(screenshots.command, commandShot.toPNG());
+
+    const network = await created.webContents.executeJavaScript(`(async () => {
+      window.__DSH_COMMAND_PALETTE__?.close?.();
+      document.querySelector('[data-open-network]')?.click();
+      const networkStatus = document.querySelector('.dsh-network-status');
+      const paintReady = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      for (let attempt = 0; attempt < 50 && networkStatus?.textContent === '正在读取当前设置…'; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await paintReady();
+      const dialog = document.querySelector('.dsh-network-dialog');
+      const backdrop = document.querySelector('.dsh-network-backdrop');
+      const rect = dialog?.getBoundingClientRect();
+      return {
+        installed: Boolean(window.__DSH_NETWORK__),
+        visible: Boolean(backdrop && !backdrop.hidden),
+        title: dialog?.querySelector('h2')?.textContent || '',
+        status: networkStatus?.textContent || '',
+        ready: Boolean(networkStatus && networkStatus.textContent !== '正在读取当前设置…'),
+        fits: Boolean(rect && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight)
+      };
+    })()`, true);
+    const networkShot = await created.webContents.capturePage();
+    await fsp.writeFile(screenshots.network, networkShot.toPNG());
+
+    created.maximize();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const maximized = await created.webContents.executeJavaScript(`(async () => {
+      const maximizedPaintReady = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      window.__DSH_NETWORK__?.close?.();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const networkBackdrop = document.querySelector('.dsh-network-backdrop');
+      window.__DSH_COMMAND_PALETTE__?.open?.();
+      const search = document.querySelector('.dsh-command-search');
+      search.value = '聚焦对话输入';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await maximizedPaintReady();
+      const dialog = document.querySelector('.dsh-command-dialog');
+      const failure = document.querySelector('.dsh-command-failure');
+      const rect = dialog?.getBoundingClientRect();
+      return {
+        networkHidden: Boolean(networkBackdrop?.hidden),
+        failureVisible: !failure?.hidden,
+        title: failure?.querySelector('strong')?.textContent || '',
+        fits: Boolean(rect && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight),
+        viewport: { width: innerWidth, height: innerHeight }
+      };
+    })()`, true);
+    const maximizedShot = await created.webContents.capturePage();
+    await fsp.writeFile(screenshots.maximized, maximizedShot.toPNG());
+
+    result = {
+      ok: installed
+        && command.installed
+        && command.failureVisible
+        && command.title === '聚焦对话输入未执行'
+        && command.detail.includes('未能确认操作完整完成')
+        && !command.detail.includes('没有执行任何修改')
+        && command.initialFocus === '重试此命令'
+        && command.forwardWrapped
+        && command.backwardWrapped
+        && command.fits
+      && network.installed
+      && network.visible
+      && network.title === '网络与代理'
+      && network.ready
+      && network.fits
+      && maximized.networkHidden
+      && maximized.failureVisible
+      && maximized.title === '聚焦对话输入未执行'
+      && maximized.fits,
+      version: app.getVersion(),
+      compactSize,
+      command,
+      network,
+      maximized,
+      screenshots
+    };
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error), screenshots };
+  } finally {
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    created?.destroy();
+    if (mainWindow === created) mainWindow = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
 };
 
 const runTraySmoke = async (target) => {
@@ -5638,13 +5854,13 @@ const runOfficeCenterSmoke = async (target) => {
   let result;
   try {
     workspaceStore = {
-      getState: () => ({ activePath: rootDir, displayName: 'V0.6 集成工作区', isFallback: false, recentPaths: [rootDir] })
+      getState: () => ({ activePath: rootDir, displayName: 'Office 验证工作区', isFallback: false, recentPaths: [rootDir] })
     };
     workspaceSyncDiagnostics = Object.freeze({
       ...unavailableWorkspaceSync(),
       status: 'synced',
       workspacePath: rootDir,
-      workspaceTitle: 'V0.6 集成工作区',
+      workspaceTitle: 'Office 验证工作区',
       sessionId: 'session-33333333-3333-4333-8333-333333333333'
     });
     await createOfficeCenterWindow();
@@ -5661,6 +5877,8 @@ const runOfficeCenterSmoke = async (target) => {
     const rendered = await officeCenterWindow.webContents.executeJavaScript(`({
       apiKeys: Object.keys(window.officeCenterAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
+      appVersion: document.querySelector('#app-version')?.textContent || '',
+      integrationVersion: document.querySelector('#integration-version')?.textContent || '',
       officeRows: document.querySelectorAll('.office-card').length,
       integrationRows: document.querySelectorAll('.integration-card').length,
       buttons: document.querySelectorAll('.invoke').length,
@@ -5678,6 +5896,8 @@ const runOfficeCenterSmoke = async (target) => {
     result = {
       ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'invoke'])
         && rendered.title === 'Office 交付中心'
+        && rendered.appVersion === `V${app.getVersion()}`
+        && rendered.integrationVersion === `V${app.getVersion()}`
         && rendered.officeRows === 3
         && rendered.integrationRows === 3
         && rendered.buttons === 3
@@ -5695,6 +5915,8 @@ const runOfficeCenterSmoke = async (target) => {
       version: app.getVersion(),
       apiKeys: rendered.apiKeys,
       title: rendered.title,
+      appVersion: rendered.appVersion,
+      integrationVersion: rendered.integrationVersion,
       officeRows: rendered.officeRows,
       integrationRows: rendered.integrationRows,
       buttons: rendered.buttons,
@@ -6315,6 +6537,12 @@ app.whenReady().then(async () => {
 
   if (desktopSmokeTarget) {
     await runDesktopSmoke(desktopSmokeTarget.slice('--smoke-test-file='.length));
+    allowQuit = true;
+    app.quit();
+    return;
+  }
+  if (commandFeedbackSmokeTarget) {
+    await runCommandFeedbackSmoke(commandFeedbackSmokeTarget.slice('--command-feedback-smoke-file='.length));
     allowQuit = true;
     app.quit();
     return;

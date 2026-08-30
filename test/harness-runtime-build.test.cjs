@@ -14,7 +14,7 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   const buildScript = fs.readFileSync(path.join(ROOT, 'scripts', 'build-harness-runtime.ps1'), 'utf8');
   const assembler = fs.readFileSync(path.join(ROOT, 'scripts', 'assemble-harness-runtime.cjs'), 'utf8');
 
-  assert.equal(manifest.version, '1.0.0');
+  assert.match(manifest.version, /^1\.\d+\.\d+$/, 'the pinned source runtime remains governed across V1 patch releases');
   assert.equal(manifest.devDependencies['harness-build-pnpm'], 'npm:pnpm@11.7.0');
   assert.match(manifest.scripts['runtime:deploy'], /build-harness-runtime\.ps1/);
   assert.deepEqual(runtimeManifest.dshDesktop, {
