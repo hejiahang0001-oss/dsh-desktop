@@ -36,6 +36,15 @@ test('Office center reports exactly three fixed editable delivery skills', async
   assert.equal(state.integrations.length, 3);
 });
 
+test('Office center exposes only a validated current application version', async (t) => {
+  const root = await createFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const state = await inspectOfficeCenter({ rootDir: root, resourcesPath: root, appVersion: '1.0.1' });
+  assert.equal(state.appVersion, '1.0.1');
+  const invalid = await inspectOfficeCenter({ rootDir: root, resourcesPath: root, appVersion: '<script>' });
+  assert.equal(invalid.appVersion, '');
+});
+
 test('Office center fails closed when a fixed tool is missing or linked', async (t) => {
   const root = await createFixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

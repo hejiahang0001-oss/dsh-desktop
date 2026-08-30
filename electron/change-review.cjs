@@ -63,9 +63,19 @@ const classifyPorcelain = (output) => {
   return { entries, untracked, staged, unstaged };
 };
 
+const reviewStateForReason = (reason) => ({
+  'no-change': 'clean',
+  ready: 'changes',
+  'git-unavailable': 'git-unavailable',
+  'not-a-git-repository': 'not-a-git-repository',
+  'git-status-failed': 'status-read-failed',
+  'not-initialized': 'not-initialized'
+}[reason] || 'status-read-failed');
+
 const emptyChangeList = (reason = 'no-change') => Object.freeze({
   available: reason === 'no-change',
   reason,
+  reviewState: reviewStateForReason(reason),
   total: 0,
   pendingCount: 0,
   protectedCount: 0,
@@ -112,18 +122,35 @@ class GitChangeReviewer {
     this.available = false;
     this.reason = 'not-a-git-repository';
     this.protectedPaths = new Set();
+    let root = '';
     try {
-      const root = (await this.executeGit(['rev-parse', '--show-toplevel'], this.workspacePath)).trim();
-      if (!root) throw new Error('Git did not return a repository root.');
+      root = (await this.executeGit(['rev-parse', '--show-toplevel'], this.workspacePath)).trim();
+      if (!root) {
+        this.reason = 'not-a-git-repository';
+        return this.getAvailability();
+      }
       this.repoRoot = path.resolve(root);
-      if (!isInside(this.repoRoot, this.workspacePath)) throw new Error('Workspace is outside the Git repository.');
+      if (!isInside(this.repoRoot, this.workspacePath)) {
+        this.repoRoot = '';
+        this.reason = 'not-a-git-repository';
+        return this.getAvailability();
+      }
+    } catch (error) {
+      const detail = `${error?.stderr || ''}\n${error?.message || ''}`;
+      this.reason = error?.code === 'ENOENT'
+        ? 'git-unavailable'
+        : /not a git repository|outside (?:the )?git repository/iu.test(detail)
+          ? 'not-a-git-repository'
+          : 'git-status-failed';
+      return this.getAvailability();
+    }
+    try {
       this.available = true;
       this.reason = 'ready';
       await this.captureBaseline();
     } catch (error) {
-      this.repoRoot = '';
       this.available = false;
-      this.reason = error?.code === 'ENOENT' ? 'git-unavailable' : 'not-a-git-repository';
+      this.reason = error?.code === 'ENOENT' ? 'git-unavailable' : 'git-status-failed';
     }
     return this.getAvailability();
   }
@@ -150,9 +177,12 @@ class GitChangeReviewer {
 
   resolveChangePath(reportedPath) {
     if (!this.available) {
-      throw new ChangeReviewError(this.reason, this.reason === 'git-unavailable'
+      const message = this.reason === 'git-unavailable'
         ? '未检测到 Git，当前只能查看 Harness Diff。'
-        : '当前工作区不是 Git 仓库，只能查看 Harness Diff。');
+        : this.reason === 'not-a-git-repository'
+          ? '当前工作区不是 Git 仓库，只能查看 Harness Diff。'
+          : 'Git 状态读取失败，审查操作已关闭；其他工作台能力仍可使用。';
+      throw new ChangeReviewError(this.reason, message);
     }
     const absolutePath = resolveReportedPath(this.workspacePath, reportedPath);
     if (!isInside(this.repoRoot, absolutePath)) {
@@ -328,6 +358,7 @@ class GitChangeReviewer {
       return Object.freeze({
         available: true,
         reason: allItems.length > 0 ? 'ready' : 'no-change',
+        reviewState: allItems.length > 0 ? 'changes' : 'clean',
         total: allItems.length,
         pendingCount: allItems.filter((item) => item.status === 'pending').length,
         protectedCount: allItems.filter((item) => item.status === 'protected').length,

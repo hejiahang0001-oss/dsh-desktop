@@ -6,7 +6,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-test('V0.6 Office center is local-only, narrow, accessible, and packaged', () => {
+test('Office center is local-only, dynamically versioned, narrow, accessible, and packaged', () => {
   const main = read('electron/main.cjs');
   const preload = read('electron/office-center-preload.cjs');
   const renderer = read('assets/office-center.js');
@@ -28,8 +28,10 @@ test('V0.6 Office center is local-only, narrow, accessible, and packaged', () =>
   assert.doesNotMatch(preload, /readFile|writeFile|shell|ipcRenderer\.send/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /api\.invoke\(item\.id\)/);
+  assert.match(renderer, /state\.appVersion/);
   assert.doesNotMatch(renderer, /innerHTML|eval\(|createElement\(['"]input['"]\)/);
   assert.match(page, /Office 交付中心/);
+  assert.doesNotMatch(page, /DSH Desktop 0\.6|V0\.6 集成链/);
   assert.match(page, /并行、扩展与交付保持同一工作区/);
   assert.match(desktopPreload, /office: Object\.freeze/);
   assert.match(desktopPreload, /office-center:open-window/);

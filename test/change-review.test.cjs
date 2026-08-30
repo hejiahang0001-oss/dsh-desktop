@@ -45,6 +45,53 @@ test('porcelain parser keeps rename records paired instead of inventing another 
   ]);
 });
 
+test('review state distinguishes clean repositories from repositories with only untracked files', async (t) => {
+  const root = await createRepository();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const reviewer = new GitChangeReviewer();
+  await reviewer.activate(root);
+
+  const clean = await reviewer.listChanges();
+  assert.equal(clean.available, true);
+  assert.equal(clean.reviewState, 'clean');
+  assert.equal(clean.reason, 'no-change');
+
+  await fsp.writeFile(path.join(root, 'untracked.txt'), 'new output\n', 'utf8');
+  const changed = await reviewer.listChanges();
+  assert.equal(changed.available, true);
+  assert.equal(changed.reviewState, 'changes');
+  assert.equal(changed.total, 1);
+  assert.equal(changed.items[0].untracked, true);
+});
+
+test('review state distinguishes missing Git, non-repositories, and Git status failures', async (t) => {
+  const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-change-review-state-'));
+  t.after(() => fsp.rm(directory, { recursive: true, force: true }));
+
+  const missing = new GitChangeReviewer({
+    run: async () => { const error = new Error('spawn git ENOENT'); error.code = 'ENOENT'; throw error; }
+  });
+  assert.equal((await missing.activate(directory)).reason, 'git-unavailable');
+  assert.equal((await missing.listChanges()).reviewState, 'git-unavailable');
+
+  const nonRepository = new GitChangeReviewer();
+  assert.equal((await nonRepository.activate(directory)).reason, 'not-a-git-repository');
+  assert.equal((await nonRepository.listChanges()).reviewState, 'not-a-git-repository');
+
+  const failed = new GitChangeReviewer({
+    run: async (_command, args) => {
+      if (args.includes('rev-parse')) return { stdout: directory };
+      const error = new Error('Git status access denied');
+      error.code = 'EACCES';
+      throw error;
+    }
+  });
+  assert.equal((await failed.activate(directory)).reason, 'git-status-failed');
+  const failedList = await failed.listChanges();
+  assert.equal(failedList.available, false);
+  assert.equal(failedList.reviewState, 'status-read-failed');
+});
+
 test('reject restores a tracked Harness change to the current index', async (t) => {
   const root = await createRepository();
   t.after(() => fsp.rm(root, { recursive: true, force: true }));

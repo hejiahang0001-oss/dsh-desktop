@@ -122,13 +122,47 @@
     create('span', '', '↑↓ 选择 · Enter 执行 · Esc 关闭'),
     create('span', '', 'Ctrl+Shift+P 打开')
   );
-  dialog.append(title, search, results, empty, footer);
+  const failure = create('section', 'dsh-command-failure');
+  failure.hidden = true;
+  failure.setAttribute('role', 'alert');
+  const failureTitle = create('strong', '', '命令未执行');
+  const failureDetail = create('p', '', '未能确认操作完整完成。');
+  const failureActions = create('div', 'dsh-command-failure-actions');
+  const retryButton = create('button', '', '重试此命令');
+  retryButton.type = 'button';
+  const dismissFailureButton = create('button', '', '返回命令列表');
+  dismissFailureButton.type = 'button';
+  failureActions.append(retryButton, dismissFailureButton);
+  failure.append(failureTitle, failureDetail, failureActions);
+  dialog.append(title, search, failure, results, empty, footer);
   backdrop.append(dialog);
   document.body.append(backdrop);
 
   let filtered = [...commands];
   let activeIndex = 0;
   let previousFocus = null;
+  let failedCommand = null;
+
+  const boundedFailure = (value) => String(value || '命令入口当前不可用。')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240) || '命令入口当前不可用。';
+  const clearFailure = () => {
+    failedCommand = null;
+    failure.hidden = true;
+    failureDetail.textContent = '未能确认操作完整完成。';
+  };
+  const showFailure = (command, error) => {
+    failedCommand = command;
+    failureTitle.textContent = `${command?.title || '命令'}未执行`;
+    failureDetail.textContent = `${boundedFailure(error?.message || error)} 未能确认操作完整完成；可以重试或返回选择其他入口。`;
+    failure.hidden = false;
+    backdrop.hidden = false;
+    backdrop.inert = false;
+    document.documentElement.dataset.dshCommandOpen = 'true';
+    retryButton.focus();
+  };
 
   const close = ({ restoreFocus = true } = {}) => {
     if (backdrop.hidden) return false;
@@ -156,9 +190,14 @@
     const fallbackFocus = previousFocus;
     close({ restoreFocus: false });
     try {
-      await command.run();
-    } catch {
-      if (fallbackFocus?.isConnected) fallbackFocus.focus();
+      const result = await command.run();
+      if (result === false || (result?.ok === false && !result?.canceled)) {
+        throw new Error(result?.message || '命令入口当前不可用。');
+      }
+      clearFailure();
+    } catch (error) {
+      previousFocus = fallbackFocus;
+      showFailure(command, error);
     }
   };
   const render = () => {
@@ -180,6 +219,25 @@
     });
     select(Math.min(activeIndex, Math.max(0, filtered.length - 1)));
   };
+  const focusableInDialog = () => [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled)')]
+    .filter((node) => !node.closest('[hidden]'));
+  const trapDialogFocus = (event) => {
+    const focusable = focusableInDialog();
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const current = document.activeElement;
+    if (event.shiftKey && (current === first || !dialog.contains(current))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (current === last || !dialog.contains(current))) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
   const filter = () => {
     const query = search.value.trim().toLocaleLowerCase();
     filtered = query
@@ -195,6 +253,7 @@
       return true;
     }
     previousFocus = document.activeElement;
+    clearFailure();
     backdrop.hidden = false;
     backdrop.inert = false;
     document.documentElement.dataset.dshCommandOpen = 'true';
@@ -207,6 +266,15 @@
   };
 
   search.addEventListener('input', filter);
+  retryButton.addEventListener('click', () => {
+    const command = failedCommand;
+    failure.hidden = true;
+    void runCommand(command);
+  });
+  dismissFailureButton.addEventListener('click', () => {
+    clearFailure();
+    search.focus();
+  });
   search.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -217,8 +285,6 @@
     } else if (event.key === 'Escape') {
       event.preventDefault();
       close();
-    } else if (event.key === 'Tab') {
-      event.preventDefault();
     }
   });
   backdrop.addEventListener('pointerdown', (event) => {
@@ -232,6 +298,8 @@
     } else if (event.key === 'Escape' && !backdrop.hidden) {
       event.preventDefault();
       close();
+    } else if (event.key === 'Tab' && !backdrop.hidden) {
+      trapDialogFocus(event);
     }
   }, true);
 

@@ -8,6 +8,8 @@
   const harnessSignal = document.getElementById('harness-signal');
   const workspaceSignal = document.getElementById('workspace-signal');
   const status = document.getElementById('status');
+  const appVersion = document.getElementById('app-version');
+  const integrationVersion = document.getElementById('integration-version');
 
   const empty = (node) => { while (node.firstChild) node.firstChild.remove(); };
   const element = (tag, className, text) => {
@@ -51,6 +53,9 @@
     return card;
   };
   const render = (state = {}) => {
+    const version = typeof state.appVersion === 'string' && /^\d+\.\d+\.\d+$/.test(state.appVersion) ? state.appVersion : '未知';
+    appVersion.textContent = `V${version}`;
+    integrationVersion.textContent = `V${version}`;
     readyCount.textContent = String(state.readyCount || 0);
     totalCount.textContent = String(state.total || 3);
     setSignal(harnessSignal, state.harness?.status, state.harness?.status === 'ready' ? 'Harness 已连接' : 'Harness 连接中');

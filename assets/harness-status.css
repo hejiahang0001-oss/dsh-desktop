@@ -10,6 +10,15 @@
   --accent-hover: #085ba9;
   --danger: #b42318;
   --focus: #0b6bcb;
+  --dsh-panel-text: var(--text);
+  --dsh-panel-muted: var(--muted);
+  --dsh-panel-border: var(--border);
+  --dsh-panel-accent: var(--accent);
+  --dsh-panel-focus: var(--focus);
+  --dsh-panel-surface: var(--surface-subtle);
+  --dsh-panel-raised: var(--surface);
+  --dsh-panel-success: #137333;
+  --dsh-panel-danger: var(--danger);
 }
 
 * { box-sizing: border-box; }
