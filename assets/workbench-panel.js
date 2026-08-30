@@ -18,9 +18,11 @@
     protected: '已保护',
     accepted: '已接受',
     clean: '已恢复',
+    conflict: '冲突待解决',
     unavailable: '只读'
   }[status] || '未知');
   const markForStatus = (status, untracked) => {
+    if (status === 'conflict') return '!';
     if (status === 'accepted') return '✓';
     if (status === 'protected') return '!';
     if (untracked) return 'A';
@@ -67,6 +69,15 @@
   header.append(heading, headerActions);
   panel.append(header);
 
+  const scopeControls = create('div', 'dsh-review-scopes');
+  const scopeSelect = create('select');
+  scopeSelect.setAttribute('aria-label', '审查范围');
+  for (const [value, text] of Object.entries({ unstaged: '未暂存（含新文件）', staged: '已暂存', branch: '当前分支提交', 'last-turn': '上一回合以来' })) {
+    const option = create('option', '', text); option.value = value; scopeSelect.append(option);
+  }
+  const baseSelect = create('select'); baseSelect.setAttribute('aria-label', '基准分支'); baseSelect.hidden = true;
+  scopeControls.append(scopeSelect, baseSelect); panel.append(scopeControls);
+
   const content = create('div', 'dsh-review-content');
   const files = create('div', 'dsh-review-files');
   files.setAttribute('role', 'listbox');
@@ -110,7 +121,18 @@
   actions.append(acceptButton, rejectButton, acceptAllButton, rejectAllButton);
   const live = create('p', 'dsh-review-live', '仅处理当前工作区，拒绝操作恢复到 Git 暂存基线。');
   live.setAttribute('aria-live', 'polite');
-  footer.append(actions, live);
+  const commentsPanel = create('details', 'dsh-review-comments');
+  const commentsSummary = create('summary', '', '审查批注（0）');
+  const commentsList = create('div');
+  const commentForm = create('div'); commentForm.hidden = true;
+  const commentLabel = create('label', '', '所选行批注'); commentLabel.htmlFor = 'dsh-review-comment-text';
+  const commentText = create('textarea'); commentText.id = commentLabel.htmlFor; commentText.maxLength = 2000; commentText.rows = 2;
+  const saveComment = create('button', 'dsh-review-button', '保存批注'); saveComment.type = 'button';
+  const cancelComment = create('button', 'dsh-review-button', '取消'); cancelComment.type = 'button';
+  commentForm.append(commentLabel, commentText, saveComment, cancelComment);
+  const sendComments = create('button', 'dsh-review-button', '将批注放入输入框'); sendComments.type = 'button'; sendComments.disabled = true;
+  commentsPanel.append(commentsSummary, commentsList, commentForm, sendComments);
+  footer.append(actions, commentsPanel, live);
   panel.append(footer);
   document.body.append(panel);
 
@@ -121,6 +143,8 @@
   let changeSignature = '';
   let diffRequest = 0;
   let busy = false;
+  let scopeView = null, currentDiff = null, commentAnchor = null, editingCommentId = null;
+  let scopeRequest = 0, lastScopeRefresh = 0, lastContext = '';
 
   const setLive = (message) => { live.textContent = message; };
   const reviewStateOf = (changes = {}) => changes.reviewState || ({
@@ -158,9 +182,22 @@
       return;
     }
     const fragment = document.createDocumentFragment();
-    for (const value of text.split('\n')) {
+    for (const [index, value] of text.split('\n').entries()) {
       const line = create('li', 'dsh-review-diff-line', value || ' ');
       line.dataset.kind = kindForLine(value);
+      const anchor = currentDiff?.lines?.[index];
+      if (anchor?.line && !currentDiff.binary) {
+        line.dataset.kind = value.startsWith('+') ? 'add' : value.startsWith('-') ? 'delete' : 'context';
+        line.dataset.sourceLine = anchor.line; line.dataset.side = anchor.side;
+        const button = create('button', 'dsh-review-line-comment', '+'); button.type = 'button';
+        button.setAttribute('aria-label', `评论${anchor.side === 'old' ? '删除侧' : '新侧'}第 ${anchor.line} 行`);
+        button.addEventListener('click', () => {
+          commentAnchor = { token: scopeView.token, file: selectedPath, fingerprint: currentDiff.fingerprint, index };
+          editingCommentId = null; commentText.value = ''; commentLabel.textContent = `${selectedPath}:${anchor.line} 批注`;
+          commentForm.hidden = false; commentsPanel.open = true; commentText.focus();
+        });
+        line.prepend(button);
+      }
       fragment.append(line);
     }
     diffLines.append(fragment);
@@ -168,6 +205,7 @@
 
   const loadDiff = async () => {
     const request = ++diffRequest;
+    currentDiff = null;
     if (!selectedPath) {
       diffPath.textContent = '未选择文件';
       diffNote.textContent = '选择文件后显示有界 Git Diff';
@@ -178,14 +216,18 @@
     diffPath.title = selectedPath;
     diffNote.textContent = '正在读取 Git Diff…';
     renderDiffLines('', '正在读取…');
-    const result = await api.changes.getDiff(selectedPath);
+    let result;
+    try { result = api.reviews && scopeView?.token ? await api.reviews.diff({ token: scopeView.token, file: selectedPath }) : await api.changes.getDiff(selectedPath); }
+    catch (error) { if (request === diffRequest) { diffNote.textContent = '差异读取失败'; renderDiffLines('', error.message || '请刷新后重试。'); } return; }
     if (request !== diffRequest) return;
     if (!result?.available) {
       diffNote.textContent = result?.reason === 'no-diff' ? '当前文件没有可显示的差异' : '无法安全读取 Diff';
       renderDiffLines('', result?.reason === 'no-diff' ? '当前文件没有可显示的差异。' : 'Diff 读取失败，请刷新后重试。');
       return;
     }
-    const notes = [labelForStatus(result.status)];
+    currentDiff = result;
+    const notes = [scopeView?.label || labelForStatus(result.status)];
+    if (selectedItem?.status === 'conflict') notes.push('合并冲突，先解决后再接受');
     if (result.binary) notes.push('二进制');
     if (result.truncated) notes.push('已截断');
     diffNote.textContent = notes.join(' · ');
@@ -201,6 +243,7 @@
     acceptAllButton.disabled = !idle || !(changes.canAcceptCount > 0);
     rejectAllButton.disabled = !idle || !(changes.canRejectCount > 0);
     revealFileButton.disabled = !selectedPath;
+    actions.hidden = Boolean(api.reviews && scopeSelect.value !== 'unstaged');
   };
 
   const selectPath = (pathValue) => {
@@ -266,12 +309,92 @@
         files.append(fragment);
         selectedItem = items.find((item) => item.path === selectedPath) || null;
       }
-      void loadDiff();
+      if (!api.reviews) void loadDiff();
     } else {
       selectedItem = items.find((item) => item.path === selectedPath) || null;
     }
     updateActionState();
   };
+
+  const renderComments = async () => {
+    if (!api.reviews) return;
+    const context = scopeView?.context;
+    const comments = await api.reviews.listComments();
+    if (context !== scopeView?.context) return;
+    commentsList.replaceChildren(); commentsSummary.textContent = `审查批注（${comments.length}）`; sendComments.disabled = comments.length === 0;
+    for (const comment of comments) {
+      const item = create('div', 'dsh-review-comment');
+      item.append(create('strong', '', `${comment.file}:${comment.line}`), create('p', '', comment.body));
+      const edit = create('button', 'dsh-review-button', '编辑'); edit.type = 'button';
+      const remove = create('button', 'dsh-review-button', '删除'); remove.type = 'button';
+      edit.addEventListener('click', async () => {
+        try {
+          const view = await api.reviews.list({ scope: comment.scope, base: comment.base });
+          const diffValue = await api.reviews.diff({ token: view.token, file: comment.file });
+          if (diffValue.fingerprint !== comment.fingerprint) throw new Error('文件已变化，请删除旧批注后重新选行。');
+          commentAnchor = { token: view.token, file: comment.file, fingerprint: comment.fingerprint, index: comment.index };
+          editingCommentId = comment.id; commentText.value = comment.body; commentLabel.textContent = `${comment.file}:${comment.line} 批注`;
+          commentForm.hidden = false; commentText.focus();
+        } catch (error) { setLive(error.message); }
+      });
+      remove.addEventListener('click', async () => { try { await api.reviews.removeComment(comment.id); await renderComments(); } catch (error) { setLive(error.message); } });
+      item.append(edit, remove); commentsList.append(item);
+    }
+  };
+
+  const refreshScope = async (next = diagnostics) => {
+    if (!api.reviews) { renderChanges(next); return; }
+    const request = ++scopeRequest;
+    lastScopeRefresh = Date.now();
+    try {
+      const view = await api.reviews.list({ scope: scopeSelect.value, base: baseSelect.value });
+      if (request !== scopeRequest) return;
+      if (lastContext && lastContext !== view.context) { selectedPath = ''; commentForm.hidden = true; commentAnchor = null; }
+      lastContext = view.context; scopeView = view; lastScopeRefresh = Date.now();
+      baseSelect.hidden = scopeSelect.value !== 'branch';
+      baseSelect.replaceChildren();
+      for (const branch of view.baseChoices || []) { const option = create('option', '', branch); option.value = branch; baseSelect.append(option); }
+      if (view.base) baseSelect.value = view.base;
+      const items = view.items || [];
+      const changes = { ...view, reviewState: view.available ? items.length ? 'changes' : 'clean' : next.changes?.reviewState,
+        pendingCount: items.filter((item) => item.status === 'pending').length, protectedCount: items.filter((item) => item.protected).length,
+        canAcceptCount: items.filter((item) => item.canAccept && !item.protected).length, canRejectCount: items.filter((item) => item.canReject).length };
+      renderChanges({ ...next, changes });
+      summary.textContent = view.available ? `${view.label} · ${items.length}${view.truncated ? '+' : ''} 个文件` : view.message || summary.textContent;
+      if (!view.available) renderDiffLines('', view.message || copyForReviewState(reviewStateOf(changes))[1]);
+      else await loadDiff();
+      await renderComments();
+    } catch (error) {
+      if (request !== scopeRequest) return;
+      scopeView = null; selectedPath = ''; selectedItem = null; currentDiff = null; ++diffRequest;
+      commentAnchor = null; commentForm.hidden = true; commentsList.replaceChildren(); commentsSummary.textContent = '审查批注（未就绪）'; sendComments.disabled = true;
+      renderChanges({ ...next, changes: { reviewState: 'status-read-failed', items: [] } });
+      setLive(error.message || '审查读取失败，请刷新后重试。');
+    }
+  };
+  scopeSelect.addEventListener('change', () => { baseSelect.replaceChildren(); changeSignature = ''; commentForm.hidden = true; void refreshScope(); });
+  baseSelect.addEventListener('change', () => { changeSignature = ''; void refreshScope(); });
+  cancelComment.addEventListener('click', () => { commentForm.hidden = true; commentAnchor = null; diffScroll.focus(); });
+  commentText.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.stopPropagation(); cancelComment.click(); } });
+  saveComment.addEventListener('click', async () => {
+    if (!commentAnchor) return;
+    saveComment.disabled = true;
+    try { await api.reviews.addComment({ ...commentAnchor, body: commentText.value, id: editingCommentId }); commentForm.hidden = true; await renderComments(); setLive('批注已保存，尚未发送给 AI。'); }
+    catch (error) { setLive(error.message); }
+    finally { saveComment.disabled = false; }
+  });
+  sendComments.addEventListener('click', async () => {
+    const selection = localStorage.getItem('dsh.sessions.current'); sendComments.disabled = true;
+    try {
+      const result = await api.reviews.prompt();
+      const state = await api.documents.getState();
+      if (state.context !== result.context || selection !== localStorage.getItem('dsh.sessions.current')) throw new Error('会话已切换，请回到原会话重试。');
+      const bridge = window.__DSH_COMPOSER_TEXT__;
+      await bridge.append(bridge.current(), result.text, () => selection === localStorage.getItem('dsh.sessions.current'));
+      setLive('批注已放入输入框，请确认后发送。');
+    } catch (error) { setLive(error.message || '无法放入输入框，请重试。'); }
+    finally { sendComments.disabled = false; }
+  });
 
   const runAction = async (action, all = false) => {
     if (busy) return;
@@ -283,7 +406,7 @@
         ? action === 'accept' ? await api.changes.acceptAll() : await api.changes.rejectAll()
         : action === 'accept' ? await api.changes.accept(selectedPath) : await api.changes.reject(selectedPath);
       setLive(result?.ok ? '操作已完成，Git 状态已刷新。' : '操作已取消或未执行。');
-      renderChanges(result?.diagnostics || await api.diagnostics.getState());
+      await refreshScope(result?.diagnostics || await api.diagnostics.getState());
     } catch {
       setLive('操作失败；没有绕过桌面安全门禁。');
     } finally {
@@ -297,7 +420,7 @@
     setLive('正在刷新 Git 状态…');
     try {
       const next = await api.changes.refresh();
-      renderChanges(next);
+      await refreshScope(next);
       const state = reviewStateOf(next?.changes || {});
       setLive(state === 'status-read-failed' ? 'Git 状态读取失败；未执行任何修改。' : 'Git 状态已刷新。');
     } catch {
@@ -309,6 +432,10 @@
   closeButton.addEventListener('click', async () => {
     const next = await api.workbench.setReviewPanelOpen(false);
     applyLayout(next);
+    window.__DSH_COMPOSER_TEXT__?.current()?.focus({ preventScroll: true });
+  });
+  panel.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && commentForm.hidden) { event.preventDefault(); closeButton.click(); }
   });
   acceptButton.addEventListener('click', () => void runAction('accept'));
   rejectButton.addEventListener('click', () => void runAction('reject'));
@@ -356,7 +483,11 @@
     }
   });
   applyLayout(bootstrap);
-  void api.diagnostics.getState().then(renderChanges);
-  api.diagnostics.onState(renderChanges);
+  void api.diagnostics.getState().then(refreshScope);
+  api.diagnostics.onState((next) => {
+    diagnostics.agent = next.agent;
+    updateActionState();
+    if (Date.now() - lastScopeRefresh > 2000 && !commentForm.contains(document.activeElement)) void refreshScope(next);
+  });
   return true;
 })();

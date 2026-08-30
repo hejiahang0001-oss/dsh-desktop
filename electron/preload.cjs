@@ -45,6 +45,14 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     acceptAll: () => ipcRenderer.invoke('changes:accept-all'),
     rejectAll: () => ipcRenderer.invoke('changes:reject-all')
   }),
+  reviews: Object.freeze({
+    list: (options) => ipcRenderer.invoke('reviews:list', options),
+    diff: (options) => ipcRenderer.invoke('reviews:diff', options),
+    addComment: (options) => ipcRenderer.invoke('reviews:add-comment', options),
+    removeComment: (id) => ipcRenderer.invoke('reviews:remove-comment', id),
+    listComments: () => ipcRenderer.invoke('reviews:list-comments'),
+    prompt: () => ipcRenderer.invoke('reviews:prompt')
+  }),
   workbench: Object.freeze({
     getState: () => ipcRenderer.invoke('workbench:get-state'),
     setFilePanelOpen: (open) => ipcRenderer.invoke('workbench:set-file-panel-open', open),

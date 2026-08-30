@@ -4,6 +4,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const { GitChangeReviewer } = require('./change-review.cjs');
+const { ReviewScopes } = require('./review-scopes.cjs');
 const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
 const { GitCheckpointManager, isCheckpointId } = require('./checkpoint-manager.cjs');
 const { getDeepSeekCredentialStatus } = require('./credential-status.cjs');
@@ -102,6 +103,7 @@ const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs')
 const { WorkspaceStore } = require('./workspace-store.cjs');
 const { SideChatController, SideChatError } = require('./side-chat.cjs');
 const { DocumentIntakeController } = require('./document-intake-controller.cjs');
+const { contextKey } = require('./document-intake-controller.cjs');
 const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
@@ -123,6 +125,7 @@ let workspaceStore;
 let workbenchStore;
 let proxyStore;
 let changeReviewer;
+let reviewScopes;
 let checkpointManager;
 let terminalRunner;
 let terminalOwner = null;
@@ -285,6 +288,7 @@ let harnessReliableInterruptScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const documentIntakeSmokeTarget = process.argv.find((argument) => argument.startsWith('--document-intake-smoke-file='));
+const reviewSmokeTarget = process.argv.find((argument) => argument.startsWith('--review-smoke-file='));
 const credentialAgentSmokeTarget = process.argv.find((argument) => argument.startsWith('--credential-agent-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
@@ -304,6 +308,7 @@ const isolatedSmokeTarget = [
   desktopSmokeTarget,
   harnessSmokeTarget,
   documentIntakeSmokeTarget,
+  reviewSmokeTarget,
   credentialAgentSmokeTarget,
   ipcSecuritySmokeTarget,
   pdfSmokeTarget,
@@ -4573,6 +4578,27 @@ ipcMain.handle('support:create-backup', (event) => (
 ipcMain.handle('support:validate-backup', (event) => (
   desktopIpcAllowed(event) ? validateSupportBackupFromDialog() : { ok: false, canceled: false, message: '备份验证请求未通过安全校验。' }
 ));
+const currentReviewScopes = () => {
+  if (!changeReviewer) throw new Error('审查尚未就绪，请稍后刷新。');
+  if (!reviewScopes) reviewScopes = new ReviewScopes({
+    reviewer: changeReviewer,
+    getContext: async () => contextKey(await documentIntakeController.getContext()),
+    getLastTurn: async () => {
+      const last = checkpointManager?.last;
+      if (last?.source !== 'automatic' || !(await checkpointMatchesCurrentSession()).matches) return null;
+      const state = await checkpointManager.captureCurrentState();
+      if (checkpointManager.last !== last || !(await checkpointMatchesCurrentSession()).matches) return null;
+      return { before: last.tree, after: state.tree };
+    }
+  });
+  return reviewScopes;
+};
+for (const [channel, method] of Object.entries({ list: 'list', diff: 'diff', 'add-comment': 'addComment', 'remove-comment': 'removeComment', 'list-comments': 'listComments', prompt: 'prompt' })) {
+  ipcMain.handle(`reviews:${channel}`, async (event, payload) => {
+    if (!harnessIpcAllowed(event)) throw new Error('审查操作仅限当前受信工作区页面。');
+    return currentReviewScopes()[method](payload);
+  });
+}
 ipcMain.handle('changes:get-diff', async (event, reportedPath) => {
   if (!harnessIpcAllowed(event) || !changeReviewer) {
     return { available: false, reason: 'untrusted-or-unavailable', content: '', truncated: false, binary: false };
@@ -5649,7 +5675,7 @@ const runHarnessSmoke = async (target) => {
   await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 };
 
-const runDocumentIntakeSmoke = async (target) => {
+const runDocumentIntakeSmoke = async (target, { review = false } = {}) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = app.getPath('userData');
   const workspacePath = path.join(smokeRoot, 'workspace');
@@ -5690,6 +5716,16 @@ const runDocumentIntakeSmoke = async (target) => {
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
     for (const name of ['composer-text-bridge.js', 'document-intake.js']) await evaluate(await fsp.readFile(path.join(rootDir, 'assets', name), 'utf8'));
     await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
+    if (review) {
+      const { prepareReviewFixture, runReviewUiSmoke } = require('./review-ui-smoke.cjs');
+      await prepareReviewFixture(workspacePath);
+      changeReviewer = new GitChangeReviewer(); await changeReviewer.activate(workspacePath);
+      reviewScopes = null;
+      workbenchStore = new WorkbenchStore({ filePath: path.join(smokeRoot, 'workbench-state.json') }); await workbenchStore.init();
+      result = await runReviewUiSmoke({ window: mainWindow, rootDir, evaluate, waitFor, target: resolvedTarget, version: app.getVersion() });
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
     documentIntakeController.chooseFiles = async () => [source];
     documentIntakeController.confirmImport = async () => true;
     await evaluate('(async()=>{await window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "请汇总测试数据，保留这段草稿。"); document.querySelector(".dsh-document-actions button").click()})()');
@@ -6698,6 +6734,10 @@ app.whenReady().then(async () => {
     allowQuit = true; app.quit(); return;
   }
 
+  if (reviewSmokeTarget) {
+    await runDocumentIntakeSmoke(reviewSmokeTarget.slice('--review-smoke-file='.length), { review: true });
+    allowQuit = true; app.quit(); return;
+  }
   if (documentIntakeSmokeTarget) {
     await runDocumentIntakeSmoke(documentIntakeSmokeTarget.slice('--document-intake-smoke-file='.length));
     allowQuit = true; app.quit(); return;
