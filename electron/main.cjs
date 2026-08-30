@@ -2891,6 +2891,10 @@ const worktreeExternalBusy = () => (
   || Boolean(pluginTogglePromise || pluginInstallPromise)
 );
 const worktreeMutationBusy = () => worktreeExternalBusy() || Boolean(worktreeOperationPromise);
+const handoffOperationBusy = () => Boolean(worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise
+  || supportBackupOperationPromise || checkpointRestorePromise || checkpointForkPromise || terminalRunner?.isActive()
+  || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status));
+const handoffAvailable = async () => require('./handoff-availability.cjs').handoffWorkflowIdle(await getCurrentWorkflow(), handoffOperationBusy());
 
 const performPluginToggle = async ({ profileId, packageName, enable }) => {
   if (!profileBundleManager || !pluginHealthCatalog) {
@@ -3109,7 +3113,7 @@ const getWorktreeState = async () => {
   if (!worktreeManager) return unavailableWorktreeState();
   const workspacePath = getWorkspaceState().activePath, state = await worktreeManager.inspect(workspacePath);
   const handoff = await getHandoffService();
-  return { ...state, handoffs: handoff.list(workspacePath), worktrees: state.worktrees.map((item) => ({ ...item, handoffProtected: handoff.protects(item.path), canRemove: item.canRemove && !handoff.protects(item.path) })) };
+  return { ...state, handoffAvailable: await handoffAvailable(), handoffs: handoff.list(workspacePath), worktrees: state.worktrees.map((item) => ({ ...item, handoffProtected: handoff.protects(item.path), canRemove: item.canRemove && !handoff.protects(item.path) })) };
 };
 
 const performWorktreeCreate = async () => {
@@ -5124,9 +5128,9 @@ ipcMain.handle('worktrees:create', (event) => {
   if (worktreeMutationBusy()) return { ok: false, message: '另一个仓库操作仍在进行。' };
   return queueWorktreeOperation(() => performWorktreeCreate());
 });
-ipcMain.handle('worktrees:handoff', (event) => {
+ipcMain.handle('worktrees:handoff', async (event) => {
   if (!worktreesIpcAllowed(event)) return { ok: false, message: '会话交接来源未通过校验。' };
-  if (worktreeMutationBusy()) return { ok: false, message: '请先结束当前运行和仓库操作。' };
+  if (!await handoffAvailable()) return { ok: false, message: '内核尚未确认空闲，或仓库操作未结束；请稍后刷新。' };
   return queueWorktreeOperation(async () => {
     try { const result = await (await getHandoffService()).run(); return { ...result, state: await getWorktreeState() }; }
     catch (error) { return { ok: false, message: error.message, state: await getWorktreeState() }; }
@@ -5230,7 +5234,7 @@ const getCurrentWorkflow = async () => {
     const value = await supervisor.credentialHost.sessionControl.request('inspect', context);
     if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
     return { available: true, sessionId: value.sessionId, running: value.running, queued: value.queued, steering: value.steering,
-      pending: value.pending, approvals: value.approvals, jobs: value.liveJobs, lastTurnReason: value.lastTurnReason };
+      pending: value.pending, approvals: value.approvals, jobs: value.liveJobs, turnOpen: value.turnOpen, lastTurnReason: value.lastTurnReason };
   } catch { return { available: false }; }
 };
 ipcMain.handle('harness:workflow-state', (event) => harnessIpcAllowed(event) ? getCurrentWorkflow() : { available: false });
