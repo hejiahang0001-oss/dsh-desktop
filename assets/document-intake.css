@@ -13,3 +13,4 @@
 .dsh-document-status[data-error=true]{color:light-dark(#a23c12,#ffb391)}
 .dsh-session-workflow [hidden]{display:none!important}
 @media(max-height:650px){.dsh-document-actions>span{display:none}.dsh-document-status{max-height:50px}}
+@media(max-height:600px){.dsh-document-intake{margin:2px auto;padding:0 8px}.dsh-session-workflow{font-size:11px;line-height:1.2}.dsh-session-workflow .dsh-document-status{margin-top:0}}

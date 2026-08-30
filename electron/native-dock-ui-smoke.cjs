@@ -53,6 +53,7 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
       const rect = await window.webContents.executeJavaScript('(()=>{const e=document.querySelector("[data-composer-input]");const r=e.getBoundingClientRect();const buttons=[...document.querySelectorAll("button")].filter(b=>/发送|Send/.test(b.getAttribute("aria-label")||""));return {top:r.top,bottom:Math.max(r.bottom,...buttons.map(b=>b.getBoundingClientRect().bottom)),innerHeight};})()');
       const bar = dock.bar.getBounds(), zoom = window.webContents.getZoomFactor();
       const horizontal = await window.webContents.executeJavaScript('(()=>{const root=document.getElementById("root").getBoundingClientRect();const card=document.querySelector("[data-composer-card]").getBoundingClientRect();return card.left>=root.left-1 && card.right<=root.right+1 && [...document.querySelectorAll("[data-composer-card] button")].filter(b=>b.getBoundingClientRect().width>0).every(b=>{const r=b.getBoundingClientRect();return r.left>=root.left-1&&r.right<=root.right+1;});})()');
+      await fsp.writeFile(`${target}.layout-${zoom}.json`, JSON.stringify({ rect, bar, zoom, horizontal, extras: await window.webContents.executeJavaScript('Array.from(document.querySelectorAll(".dsh-document-intake")).map(e=>({text:e.textContent,top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom}))') }, null, 2));
       return horizontal && rect.top >= 0 && rect.bottom * zoom <= bar.y + 1;
     };
     assertions.composerFits = await fits(); await shot('terminal');
