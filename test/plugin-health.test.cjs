@@ -22,10 +22,10 @@ test('plugin health catalog audits fixed closure and profile dependencies withou
   const installRoot = path.join(root, 'runtime', 'node_modules');
   const dshDir = path.join(installRoot, '@deepseek-ai', 'dsh');
   const baseDir = path.join(installRoot, '@deepseek-ai', 'dsh-base');
-  writePackage(dshDir, { name: '@deepseek-ai/dsh', version: '0.1.1-rc.2', dependencies: { '@deepseek-ai/dsh-base': '0.1.1-rc.2', '@deepseek-ai/dsh-skill': '0.1.1-rc.2', '@deepseek-ai/dsh-mcp-client': '0.1.1-rc.2', '@deepseek-ai/dsh-host-plugin-inventory': '0.1.1-rc.2' } });
-  writePackage(baseDir, { name: '@deepseek-ai/dsh-base', version: '0.1.1-rc.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+  writePackage(dshDir, { name: '@deepseek-ai/dsh', version: '0.1.2-alpha.1', dependencies: { '@deepseek-ai/dsh-base': '0.1.2-alpha.1', '@deepseek-ai/dsh-skill': '0.1.2-alpha.1', '@deepseek-ai/dsh-mcp-client': '0.1.2-alpha.1', '@deepseek-ai/dsh-host-plugin-inventory': '0.1.2-alpha.1' } });
+  writePackage(baseDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.1', dsh: { bundle: { patch: './cordis.patch.yml' } } });
   for (const name of ['dsh-skill', 'dsh-mcp-client', 'dsh-host-plugin-inventory']) {
-    writePackage(path.join(installRoot, '@deepseek-ai', name), { name: `@deepseek-ai/${name}`, version: '0.1.1-rc.2' });
+    writePackage(path.join(installRoot, '@deepseek-ai', name), { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.1' });
   }
   const harnessHome = path.join(root, 'home');
   const profilesRoot = path.join(harnessHome, 'profiles');
@@ -50,9 +50,9 @@ test('plugin health catalog audits fixed closure and profile dependencies withou
   assert.equal(state.available, true);
   assert.equal(state.runtime.status, 'healthy');
   assert.equal(state.runtime.expected, 5);
-  assert.equal(state.runtime.version, '0.1.1-rc.2');
+  assert.equal(state.runtime.version, '0.1.2-alpha.1');
   assert.equal(state.runtime.capabilities.skills.status, 'ready');
-  assert.equal(state.runtime.capabilities.mcp.version, '0.1.1-rc.2');
+  assert.equal(state.runtime.capabilities.mcp.version, '0.1.2-alpha.1');
   assert.equal(state.runtime.capabilities.pluginInventory.status, 'ready');
   assert.equal(state.profiles[0].status, 'healthy');
   assert.equal(state.profiles[0].bundles[0].source, 'runtime');

@@ -3,9 +3,10 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { HarnessSupervisor, buildHarnessEnvironment, probeHarness } = require('../electron/harness-supervisor.cjs');
+const { HarnessSupervisor, buildHarnessEnvironment } = require('../electron/harness-supervisor.cjs');
 const { PluginHealthCatalog } = require('../electron/plugin-health.cjs');
 const { ProfileBundleManager } = require('../electron/profile-bundle-manager.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const PLUGIN = '@nonamelego/dsh-catppuccin';
 const PROFILE = 'web';
@@ -19,7 +20,7 @@ const VERSION_SEQUENCE = Object.freeze([
     integrity: 'sha512-N6ZVm/n23E7M1piBbS29pzfzSfz1vCGaTkT30utyUepoPgpyL3ZOfHkeCDC9VbV8lnlzSleeWJEUf65tAf4hig=='
   })
 ]);
-const EXPECTED_RUNTIME_PACKAGES = 432;
+const EXPECTED_RUNTIME_PACKAGES = 489;
 const TEST_STATE = Object.freeze({
   version: 1,
   flavor: 'catppuccin-mocha',
@@ -96,8 +97,8 @@ const installPlugin = ({ nodePath, dshBinPath, harnessHome, workspaceDir, versio
   assert.equal(lockfile.includes(integrity), true, 'pnpm lockfile 缺少固定完整性摘要。');
 };
 
-const requestJson = async (url, { method = 'GET', body, expectedStatus = 200 } = {}) => {
-  const response = await fetch(url, {
+const requestJson = async (fetchImpl, url, { method = 'GET', body, expectedStatus = 200 } = {}) => {
+  const response = await fetchImpl(url, {
     method,
     headers: body === undefined ? undefined : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -167,16 +168,15 @@ const main = async () => {
   const stages = [];
 
   const startAndProbe = async ({ version, enabled, expectedState = TEST_STATE, routeStatus = 200, name }) => {
-    const url = await supervisor.start();
-    const rootProbe = await probeHarness(url);
-    assert.equal(rootProbe.status, 200);
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    assert.equal(authentication.probe.status, 200);
     const health = await pluginHealth({ harnessHome, dshPackageDir, version, enabled });
-    const payload = await requestJson(`${url}/catppuccin/state`, { expectedStatus: routeStatus });
+    const payload = await requestJson(authentication.fetchImpl, `${authentication.origin}/catppuccin/state`, { expectedStatus: routeStatus });
     if (routeStatus === 200) {
       assert.equal(payload?.ok, true);
       assert.deepEqual(payload.state, expectedState);
     }
-    stages.push({ name, version, enabled, routeStatus, rootStatus: rootProbe.status, ...health });
+    stages.push({ name, version, enabled, routeStatus, rootStatus: authentication.probe.status, ...health });
     await supervisor.stop();
   };
 
@@ -184,14 +184,14 @@ const main = async () => {
   try {
     const initial = VERSION_SEQUENCE[0];
     installPlugin({ nodePath, dshBinPath, harnessHome, workspaceDir, ...initial });
-    const initialUrl = await supervisor.start();
-    const initialRootProbe = await probeHarness(initialUrl);
-    assert.equal(initialRootProbe.status, 200);
-    assert.deepEqual(await requestJson(`${initialUrl}/catppuccin/state`), { ok: true, state: null });
-    assert.deepEqual(await requestJson(`${initialUrl}/catppuccin/state`, { method: 'PUT', body: TEST_STATE }), { ok: true });
-    assert.deepEqual((await requestJson(`${initialUrl}/catppuccin/state`)).state, TEST_STATE);
+    const initialAuthentication = await authenticateHarnessSupervisor(supervisor);
+    assert.equal(initialAuthentication.probe.status, 200);
+    const initialStateUrl = `${initialAuthentication.origin}/catppuccin/state`;
+    assert.deepEqual(await requestJson(initialAuthentication.fetchImpl, initialStateUrl), { ok: true, state: null });
+    assert.deepEqual(await requestJson(initialAuthentication.fetchImpl, initialStateUrl, { method: 'PUT', body: TEST_STATE }), { ok: true });
+    assert.deepEqual((await requestJson(initialAuthentication.fetchImpl, initialStateUrl)).state, TEST_STATE);
     await pluginHealth({ harnessHome, dshPackageDir, version: initial.version, enabled: true });
-    stages.push({ name: 'install-and-write', version: initial.version, enabled: true, routeStatus: 200, rootStatus: initialRootProbe.status, runtime: '432/432', compatibility: 'verified' });
+    stages.push({ name: 'install-and-write', version: initial.version, enabled: true, routeStatus: 200, rootStatus: initialAuthentication.probe.status, runtime: '489/489', compatibility: 'verified' });
     await supervisor.stop();
 
     await startAndProbe({ name: 'restart-persistence', version: initial.version, enabled: true });

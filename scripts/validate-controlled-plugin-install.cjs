@@ -14,9 +14,9 @@ const {
 } = require('../electron/controlled-plugin-installer.cjs');
 const {
   HarnessSupervisor,
-  probeHarness,
   resolveHarnessRuntimePaths
 } = require('../electron/harness-supervisor.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const CATALOG_ID = 'catppuccin-0.3.1';
 const PROFILE = 'web';
@@ -130,9 +130,8 @@ const main = async () => {
   let transaction;
   let transactionManager = manager;
   try {
-    const url = await supervisor.start();
-    const rootProbe = await probeHarness(url);
-    assert.equal(rootProbe.status, 200);
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    assert.equal(authentication.probe.status, 200);
     await supervisor.stop();
     const profileDir = path.join(harnessHome, 'profiles', PROFILE);
     diagnosticProfileDir = profileDir;

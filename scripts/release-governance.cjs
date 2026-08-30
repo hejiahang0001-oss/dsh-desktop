@@ -47,6 +47,9 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 ]);
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
+const REQUIRED_HARNESS_VERSION = '0.1.2-alpha.1';
+const REQUIRED_HARNESS_COMMIT = 'cd5ef8148158c3a752a658978873241fdf8e2bbc';
+const REQUIRED_HARNESS_PACKAGE_COUNT = 250;
 
 const normalize = (value) => value.replaceAll('\\', '/');
 
@@ -194,6 +197,7 @@ const inspectPackageLayout = async (rootPath) => {
   const excelSkillPrefix = normalize(path.join('resources', 'skills', 'excel-xlsx'));
   const powerpointSkillPrefix = normalize(path.join('resources', 'skills', 'powerpoint-pptx'));
   const bundledSkillsPrefix = normalize(path.join('resources', 'skills'));
+  const harnessPrefix = normalize(path.join('resources', 'harness'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
@@ -210,6 +214,7 @@ const inspectPackageLayout = async (rootPath) => {
   const powerpointSkillPaths = new Set();
   const wikiSkillRuntime = { files: 0, bytes: 0 };
   const wikiSkillPaths = new Set();
+  const harnessRuntime = { files: 0, bytes: 0, version: '', packageCount: 0, commit: '', provenanceVersion: 0 };
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -274,6 +279,10 @@ const inspectPackageLayout = async (rootPath) => {
           wikiSkillRuntime.bytes += info.size;
         }
       }
+      if (relative === harnessPrefix || relative.startsWith(`${harnessPrefix}/`)) {
+        harnessRuntime.files += 1;
+        harnessRuntime.bytes += info.size;
+      }
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
@@ -291,6 +300,23 @@ const inspectPackageLayout = async (rootPath) => {
       && /package\\bin\\pnpm\.mjs/i.test(wrapper)
       && !/\b(?:curl|powershell|cmd\s+\/c|npm|npx)\b/i.test(wrapper);
   }
+  try {
+    const dshManifest = JSON.parse(await fsp.readFile(path.join(root, 'resources', 'harness', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'));
+    if (dshManifest.name === '@deepseek-ai/dsh' && typeof dshManifest.version === 'string') harnessRuntime.version = dshManifest.version;
+    const provenance = JSON.parse(await fsp.readFile(path.join(root, 'resources', 'harness', 'harness-runtime.json'), 'utf8'));
+    harnessRuntime.packageCount = Number.isSafeInteger(provenance?.build?.packageCount) ? provenance.build.packageCount : 0;
+    harnessRuntime.commit = typeof provenance?.harness?.commit === 'string' ? provenance.harness.commit : '';
+    harnessRuntime.provenanceVersion = Number.isSafeInteger(provenance?.version) ? provenance.version : 0;
+    if (provenance?.harness?.name !== '@deepseek-ai/dsh' || provenance?.harness?.version !== harnessRuntime.version) {
+      harnessRuntime.version = '';
+    }
+  } catch {
+    harnessRuntime.version = '';
+  }
+  const requiredHarnessRuntimeReady = harnessRuntime.version === REQUIRED_HARNESS_VERSION
+    && harnessRuntime.commit === REQUIRED_HARNESS_COMMIT
+    && harnessRuntime.packageCount === REQUIRED_HARNESS_PACKAGE_COUNT
+    && harnessRuntime.provenanceVersion === 1;
   return {
     redundantAppRuntime,
     terminalRuntime,
@@ -306,6 +332,8 @@ const inspectPackageLayout = async (rootPath) => {
     requiredPowerpointSkillFilesReady: REQUIRED_POWERPOINT_SKILL_FILES.every((name) => powerpointSkillPaths.has(name)),
     wikiSkillRuntime,
     requiredWikiSkillFilesReady: REQUIRED_WIKI_SKILL_FILES.every((name) => wikiSkillPaths.has(name)),
+    harnessRuntime,
+    requiredHarnessRuntimeReady,
     reparsePoints
   };
 };
@@ -346,6 +374,7 @@ const main = async () => {
     && packageLayout.requiredExcelSkillFilesReady
     && packageLayout.requiredPowerpointSkillFilesReady
     && packageLayout.requiredWikiSkillFilesReady
+    && packageLayout.requiredHarnessRuntimeReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
@@ -382,6 +411,9 @@ module.exports = {
   MAX_PACKAGE_FILES,
   REQUIRED_PNPM_FILES,
   REQUIRED_PNPM_VERSION,
+  REQUIRED_HARNESS_COMMIT,
+  REQUIRED_HARNESS_PACKAGE_COUNT,
+  REQUIRED_HARNESS_VERSION,
   REQUIRED_TERMINAL_FILES,
   REQUIRED_WIKI_SKILL_FILES,
   REQUIRED_EXCEL_SKILL_FILES,

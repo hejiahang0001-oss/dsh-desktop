@@ -2,8 +2,9 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const { HarnessSupervisor, probeHarness } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { HarnessSupervisor } = require('../electron/harness-supervisor.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const readArgument = (name) => {
   const prefix = `--${name}=`;
@@ -35,14 +36,15 @@ const main = async () => {
 
   let result;
   try {
-    const origin = await supervisor.start();
-    const probe = await probeHarness(origin);
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, probe, fetchImpl, apiCall } = authentication;
     const workspace = await synchronizeHarnessWorkspace({
       origin,
       workspacePath,
-      fallbackTitle: 'V0.5.22 PowerPoint Skill Smoke'
+      fallbackTitle: 'V1.0 PowerPoint Skill Smoke',
+      fetchImpl
     });
-    const catalog = await callHarnessApi(origin, 'skill.list', { sessionId: workspace.sessionId });
+    const catalog = await apiCall(origin, 'skill.list', { sessionId: workspace.sessionId });
     const entries = Array.isArray(catalog?.skills) ? catalog.skills : [];
     const powerpointSkill = entries.find((entry) => entry?.name === 'powerpoint-pptx');
     if (!powerpointSkill) throw new Error('Harness skill.list 未发现内置 powerpoint-pptx。');

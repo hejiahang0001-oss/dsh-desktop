@@ -7,7 +7,8 @@ const {
   MAX_INTERRUPT_PROMPT_LENGTH,
   ReliableInterruptController,
   ReliableInterruptError,
-  readHarnessQueueSnapshot
+  readHarnessQueueSnapshot,
+  readHarnessQueueSnapshotFromWebContents
 } = require('../electron/harness-reliable-interrupt.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -114,28 +115,55 @@ test('the visible queued-message button promotes authoritative full content with
 });
 
 test('queue snapshot reads one bounded authoritative WebSocket baseline', async () => {
-  const payload = {
-    type: 'server-request',
-    rpcId: 'rpc-1',
-    method: 'session/queue',
-    payload: {
-      type: 'session/queue',
-      sessionId: SESSION_ID,
-      items: [{ id: 'message-1', placement: 'queued', message: { content: [{ type: 'text', text: '完整内容' }] } }]
-    }
-  };
   class FakeWebSocket {
     constructor(url) {
-      assert.equal(url, 'ws://127.0.0.1:18888/api/events.mux');
+      assert.equal(url, 'ws://127.0.0.1:18888/api/remote.mux');
       this.listeners = new Map();
-      setImmediate(() => this.listeners.get('message')?.({ data: JSON.stringify(payload) }));
+      setImmediate(() => this.listeners.get('open')?.());
     }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
+    send(text) {
+      const request = JSON.parse(text);
+      assert.equal(request.endpoint, 'session/control');
+      assert.deepEqual(request.payload, { args: {} });
+      setImmediate(() => this.listeners.get('message')?.({ data: JSON.stringify({
+        type: 'item',
+        streamId: request.streamId,
+        value: {
+          type: 'baseline',
+          value: {
+            queues: {
+              [SESSION_ID]: [{ id: 'message-1', placement: 'queued', message: { content: [{ type: 'text', text: '完整内容' }] } }]
+            }
+          }
+        }
+      }) }));
+    }
     close() {}
   }
   const items = await readHarnessQueueSnapshot('http://127.0.0.1:18888', SESSION_ID, { webSocketImpl: FakeWebSocket, timeoutMs: 100 });
   assert.equal(items.length, 1);
   assert.equal(items[0].message.content[0].text, '完整内容');
+});
+
+test('authenticated queue snapshot runs inside the trusted Harness page session', async () => {
+  let observedScript = '';
+  const webContents = {
+    executeJavaScript: async (script) => {
+      observedScript = script;
+      return { ok: true, items: [{ id: 'message-authenticated', placement: 'queued' }] };
+    }
+  };
+  const items = await readHarnessQueueSnapshotFromWebContents(
+    webContents,
+    'http://127.0.0.1:18888',
+    SESSION_ID,
+    { timeoutMs: 100 }
+  );
+  assert.equal(items[0].id, 'message-authenticated');
+  assert.match(observedScript, /ws:\/\/127\.0\.0\.1:18888\/api\/remote\.mux/);
+  assert.match(observedScript, /session\/control/);
+  assert.match(observedScript, new RegExp(SESSION_ID));
 });
 
 test('session and workspace races fail closed before the correction is sent', async () => {

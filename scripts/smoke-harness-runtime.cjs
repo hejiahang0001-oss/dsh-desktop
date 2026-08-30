@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { HarnessSupervisor, probeHarness } = require('../electron/harness-supervisor.cjs');
+const { HarnessSupervisor } = require('../electron/harness-supervisor.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const readArgument = (name) => {
   const prefix = `--${name}=`;
@@ -31,9 +32,8 @@ const main = async () => {
 
   let result;
   try {
-    const url = await supervisor.start();
-    const probe = await probeHarness(url);
-    result = { ok: true, url, nodePath, dshBinPath, ...probe };
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    result = { ok: true, url: authentication.origin, nodePath, dshBinPath, ...authentication.probe };
   } catch (error) {
     result = { ok: false, error: error.stack || error.message, nodePath, dshBinPath };
     process.exitCode = 1;

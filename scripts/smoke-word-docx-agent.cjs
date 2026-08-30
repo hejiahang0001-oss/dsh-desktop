@@ -6,7 +6,8 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 
 const { HarnessSupervisor, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const execFileAsync = promisify(execFile);
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -19,21 +20,21 @@ const readArgument = (name) => {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 };
 
-const waitForPermission = async (origin, sessionId) => {
+const waitForPermission = async (apiCall, origin, sessionId) => {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 1 });
+    const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 1 });
     if (history?.projections?.values?.permissions?.currentValue === 'workspace-write') return;
     await delay(200);
   }
   throw new Error('Harness 没有确认 workspace-write 权限。');
 };
 
-const waitForAgent = async (origin, sessionId, outputPath) => {
+const waitForAgent = async (apiCall, origin, sessionId, outputPath) => {
   const deadline = Date.now() + 240_000;
   let sawRunning = false;
   let latest;
   while (Date.now() < deadline) {
-    const list = await callHarnessApi(origin, 'session.list', {}, { timeoutMs: 8000 });
+    const list = await apiCall(origin, 'session.list', {}, { timeoutMs: 8000 });
     latest = Array.isArray(list?.items) ? list.items.find((item) => item?.sessionId === sessionId) : undefined;
     if (!latest) throw new Error('真实 Word 验收会话从 Harness 目录中消失。');
     if (latest.running === true) sawRunning = true;
@@ -45,7 +46,7 @@ const waitForAgent = async (origin, sessionId, outputPath) => {
     }
     if (latest.running === false && outputReady) return { sawRunning, summary: latest };
     if (sawRunning && latest.running === false && !outputReady) {
-      const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 8 });
+      const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 8 });
       const eventTypes = Array.isArray(history?.events) ? history.events.map((entry) => entry?.event?.type).filter(Boolean) : [];
       throw new Error(`真实 Harness 轮次结束但没有生成 DOCX；事件：${eventTypes.slice(-12).join(', ')}`);
     }
@@ -95,19 +96,21 @@ const main = async () => {
 
   let result;
   try {
-    const origin = await supervisor.start();
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, fetchImpl, apiCall } = authentication;
     const workspace = await synchronizeHarnessWorkspace({
       origin,
       workspacePath,
-      fallbackTitle: 'V0.5.20 Real Word Agent Acceptance'
+      fallbackTitle: 'V1.0 Real Word Agent Acceptance',
+      fetchImpl
     });
-    const permission = await callHarnessApi(origin, 'session.prompt', {
+    const permission = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: '/permission workspace-write' }]
     });
     if (permission?.accepted !== true) throw new Error('Harness 未接受 workspace-write 权限命令。');
-    await waitForPermission(origin, workspace.sessionId);
+    await waitForPermission(apiCall, origin, workspace.sessionId);
 
     const prompt = [
       '/word-docx 请使用此 Skill 在当前工作区完成真实验收。',
@@ -115,14 +118,14 @@ const main = async () => {
       '文档标题为“DSH Desktop V0.5.20 真实 Harness 验收”，必须包含二级标题“端到端结果”、正文标记“REAL_HARNESS_WORD_VERIFIED”、两个项目符号、一张两列表格、页眉“DSH Desktop · Word 验收”和页脚“V0.5.20”。',
       '生成后必须调用 inspect 做结构检查；不要使用在线服务，不要生成其他文件。'
     ].join('\n');
-    const receipt = await callHarnessApi(origin, 'session.prompt', {
+    const receipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: prompt }],
       clientTimeZone: 'Asia/Shanghai'
     });
     if (receipt?.accepted !== true) throw new Error('Harness 未接受真实 Word 验收消息。');
-    const run = await waitForAgent(origin, workspace.sessionId, docxPath);
+    const run = await waitForAgent(apiCall, origin, workspace.sessionId, docxPath);
 
     const { stdout } = await execFileAsync(runtime.nodePath, [
       runtime.docxToolPath,
@@ -133,7 +136,7 @@ const main = async () => {
     const inspection = JSON.parse(stdout.trim());
     if (inspection?.ok !== true || inspection?.valid !== true) throw new Error('真实 Harness 生成的 DOCX 未通过独立结构检查。');
     const bytes = await fs.readFile(docxPath);
-    const history = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 12 });
+    const history = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 12 });
     result = {
       ok: true,
       session: {

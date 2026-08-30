@@ -16,7 +16,14 @@ class HarnessWorkspaceSyncError extends Error {
 const isSafeHarnessOrigin = (value) => {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port) && url.pathname === '/';
+    return url.protocol === 'http:'
+      && url.hostname === '127.0.0.1'
+      && Boolean(url.port)
+      && !url.username
+      && !url.password
+      && url.pathname === '/'
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }
@@ -29,7 +36,46 @@ const pathKey = (value) => {
 
 const isSessionId = (value) => typeof value === 'string' && SESSION_ID_PATTERN.test(value);
 
-const callHarnessApi = async (origin, method, payload, {
+const remoteRequest = (method, payload) => {
+  if (method === 'skill.list') {
+    return { endpoint: 'skills/list', args: { request: payload } };
+  }
+  if (method === 'subagent.list') {
+    return { endpoint: 'subagents/list', args: { parentSessionId: payload?.parentSessionId } };
+  }
+  if (method === 'subagent.prompt') {
+    return { endpoint: 'subagents/prompt', args: { request: payload } };
+  }
+  if (method === 'subagent.interrupt') {
+    return {
+      endpoint: 'subagents/interruptByParent',
+      args: {
+        childSessionId: payload?.childSessionId,
+        parentSessionId: payload?.parentSessionId,
+        mode: payload?.mode
+      }
+    };
+  }
+
+  const endpoint = method.replaceAll('.', '/');
+  if (method === 'session.list') return { endpoint, args: { _request: payload } };
+  if (method === 'session.prompt') {
+    return {
+      endpoint,
+      args: {
+        request: {
+          ...payload,
+          requestId: typeof payload?.requestId === 'string' && payload.requestId
+            ? payload.requestId
+            : randomUUID()
+        }
+      }
+    };
+  }
+  return { endpoint, args: { request: payload } };
+};
+
+const callHarnessRemoteApi = async (origin, method, payload, {
   fetchImpl = globalThis.fetch,
   timeoutMs = 8000
 } = {}) => {
@@ -43,16 +89,18 @@ const callHarnessApi = async (origin, method, payload, {
     throw new HarnessWorkspaceSyncError('fetch-unavailable', '当前运行时无法访问 Harness 工作区接口。');
   }
 
+  const boundedTimeoutMs = Math.min(60_000, Math.max(250, Number(timeoutMs) || 8000));
+  const { endpoint, args } = remoteRequest(method, payload);
   const rpcId = randomUUID();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
   timer.unref?.();
   let response;
   try {
-    response = await fetchImpl(`${origin}/api/${method}`, {
+    response = await fetchImpl(new URL(`/api/${endpoint}`, origin).toString(), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'client-request', rpcId, method, payload }),
+      body: JSON.stringify({ type: 'client-request', rpcId, method: endpoint, payload: { args } }),
       signal: controller.signal
     });
   } catch (error) {
@@ -88,10 +136,51 @@ const callHarnessApi = async (origin, method, payload, {
   return message.result.value;
 };
 
+const callHarnessApi = async (origin, method, payload, options = {}) => {
+  if (method !== 'session.history') return callHarnessRemoteApi(origin, method, payload, options);
+
+  const sessionId = payload?.sessionId;
+  if (!isSessionId(sessionId)) {
+    throw new HarnessWorkspaceSyncError('invalid-session', 'Harness 历史记录会话标识无效。');
+  }
+  const listing = await callHarnessRemoteApi(origin, 'session.list', {}, options);
+  const summary = Array.isArray(listing?.items)
+    ? listing.items.find((item) => item?.sessionId === sessionId)
+    : undefined;
+  if (!summary) {
+    throw new HarnessWorkspaceSyncError('session-not-found', 'Harness 历史记录会话不存在。');
+  }
+  const projectionCursor = summary?.projections?.asOfSeq;
+  let throughSeq;
+  if (Number.isSafeInteger(projectionCursor) && projectionCursor >= -1) {
+    throughSeq = projectionCursor;
+  } else if (summary.blank === true) {
+    throughSeq = -1;
+  } else {
+    throw new HarnessWorkspaceSyncError(
+      'history-cursor-unavailable',
+      'Harness 尚未提供可安全读取此会话历史记录的位置。'
+    );
+  }
+  const request = {
+    address: { kind: 'session', sessionId },
+    throughSeq,
+    ...(payload?.beforeSeq === undefined ? {} : { beforeSeq: payload.beforeSeq }),
+    ...(payload?.maxMessages === undefined ? {} : { maxMessages: payload.maxMessages })
+  };
+  const page = await callHarnessRemoteApi(origin, 'session.page', request, options);
+  return Object.freeze({
+    events: Array.isArray(page?.records) ? page.records : [],
+    hasMore: page?.hasMore === true,
+    projections: summary.projections || { asOfSeq: throughSeq, values: {} }
+  });
+};
+
 const synchronizeHarnessWorkspace = async ({
   origin,
   workspacePath,
   fallbackTitle,
+  selectedSessionId = '',
   fetchImpl = globalThis.fetch
 }) => {
   if (typeof workspacePath !== 'string' || !path.isAbsolute(workspacePath)) {
@@ -116,27 +205,15 @@ const synchronizeHarnessWorkspace = async ({
     }
   }
 
-  const [workspaceList, sessionList] = await Promise.all([
-    callHarnessApi(origin, 'workspace.list', {}, { fetchImpl }),
-    callHarnessApi(origin, 'session.list', {}, { fetchImpl })
-  ]);
-  const registered = Array.isArray(workspaceList?.items)
-    ? workspaceList.items.find((item) => item?.workspaceId === workspace.workspaceId && pathKey(item.path) === pathKey(workspacePath))
-    : undefined;
-  if (!registered) {
-    throw new HarnessWorkspaceSyncError('workspace-not-registered', 'Harness 没有在工作区注册表中确认桌面所选目录。');
-  }
-
-  const archived = new Set(Array.isArray(workspaceList.archivedSessionIds) ? workspaceList.archivedSessionIds : []);
-  const memberIds = new Set(Array.isArray(registered.sessionIds) ? registered.sessionIds : []);
+  const sessionList = await callHarnessApi(origin, 'session.list', {}, { fetchImpl });
+  const memberIds = new Set(Array.isArray(workspace.sessionIds) ? workspace.sessionIds : []);
   const sessions = Array.isArray(sessionList?.items) ? sessionList.items : [];
-  const reusable = sessions
-    .filter((item) => item?.blank === true
-      && isSessionId(item.sessionId)
+  const reusable = isSessionId(selectedSessionId)
+    ? sessions.find((item) => item?.sessionId === selectedSessionId
+      && item.origin !== 'subagent'
       && memberIds.has(item.sessionId)
-      && !archived.has(item.sessionId)
       && pathKey(item.cwd) === pathKey(workspacePath))
-    .sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))[0];
+    : undefined;
 
   let sessionId = reusable?.sessionId;
   let sessionCreated = false;

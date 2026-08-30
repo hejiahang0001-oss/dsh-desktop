@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto');
 const {
   callHarnessApi,
   isSafeHarnessOrigin,
@@ -32,7 +33,8 @@ const readHarnessQueueSnapshot = async (origin, sessionId, {
   if (!isSafeHarnessOrigin(origin) || !isSessionId(sessionId) || typeof webSocketImpl !== 'function') {
     throw new ReliableInterruptError('queue-unavailable', 'Harness 排队消息地址未通过安全校验。');
   }
-  const socketUrl = `${origin.replace(/^http:/, 'ws:')}/api/events.mux`;
+  const socketUrl = `${origin.replace(/^http:/, 'ws:')}/api/remote.mux`;
+  const streamId = `dsh-queue-${randomUUID()}`;
   return new Promise((resolve, reject) => {
     let settled = false;
     let socket;
@@ -54,6 +56,14 @@ const readHarnessQueueSnapshot = async (origin, sessionId, {
       finish(new ReliableInterruptError('queue-unavailable', '无法建立 Harness 排队消息通道。'));
       return;
     }
+    socket.addEventListener('open', () => {
+      socket.send(JSON.stringify({
+        type: 'open',
+        streamId,
+        endpoint: 'session/control',
+        payload: { args: {} }
+      }));
+    });
     socket.addEventListener('message', (event) => {
       if (typeof event.data !== 'string') return;
       let frame;
@@ -62,9 +72,17 @@ const readHarnessQueueSnapshot = async (origin, sessionId, {
       } catch {
         return;
       }
-      const payload = frame?.payload;
-      if (payload?.type === 'session/queue' && payload.sessionId === sessionId) {
-        finish(null, Array.isArray(payload.items) ? payload.items.slice(0, MAX_QUEUE_ITEMS) : []);
+      if (frame?.streamId !== streamId) return;
+      if (frame.type === 'error' || frame.type === 'end') {
+        finish(new ReliableInterruptError('queue-unavailable', 'Harness 排队消息通道没有返回状态。'));
+        return;
+      }
+      const value = frame?.value;
+      if (frame.type === 'item' && value?.type === 'baseline') {
+        const items = value.value?.queues?.[sessionId];
+        finish(null, Array.isArray(items) ? items.slice(0, MAX_QUEUE_ITEMS) : []);
+      } else if (frame.type === 'item' && value?.type === 'queue' && value.sessionId === sessionId) {
+        finish(null, Array.isArray(value.items) ? value.items.slice(0, MAX_QUEUE_ITEMS) : []);
       }
     });
     socket.addEventListener('error', () => {
@@ -74,6 +92,72 @@ const readHarnessQueueSnapshot = async (origin, sessionId, {
       finish(new ReliableInterruptError('queue-unavailable', 'Harness 排队消息通道提前关闭。'));
     });
   });
+};
+
+const readHarnessQueueSnapshotFromWebContents = async (webContents, origin, sessionId, {
+  timeoutMs = 2500
+} = {}) => {
+  if (!webContents || typeof webContents.executeJavaScript !== 'function'
+    || !isSafeHarnessOrigin(origin) || !isSessionId(sessionId)) {
+    throw new ReliableInterruptError('queue-unavailable', 'Harness 排队消息地址未通过安全校验。');
+  }
+  const boundedTimeout = Math.min(8000, Math.max(250, Number(timeoutMs) || 2500));
+  const socketUrl = `${origin.replace(/^http:/, 'ws:')}/api/remote.mux`;
+  const streamId = `dsh-queue-${randomUUID()}`;
+  const script = `(() => new Promise((resolve) => {
+    let settled = false;
+    let socket;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { socket?.close(); } catch {}
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ ok: false, error: 'timeout' }), ${boundedTimeout});
+    try { socket = new WebSocket(${JSON.stringify(socketUrl)}); }
+    catch { finish({ ok: false, error: 'unavailable' }); return; }
+    socket.addEventListener('open', () => socket.send(JSON.stringify({
+      type: 'open',
+      streamId: ${JSON.stringify(streamId)},
+      endpoint: 'session/control',
+      payload: { args: {} }
+    })));
+    socket.addEventListener('message', (event) => {
+      if (typeof event.data !== 'string') return;
+      let frame;
+      try { frame = JSON.parse(event.data); } catch { return; }
+      if (frame?.streamId !== ${JSON.stringify(streamId)}) return;
+      if (frame.type === 'error' || frame.type === 'end') {
+        finish({ ok: false, error: 'unavailable' });
+        return;
+      }
+      const value = frame?.value;
+      if (frame.type === 'item' && value?.type === 'baseline') {
+        const items = value.value?.queues?.[${JSON.stringify(sessionId)}];
+        finish({ ok: true, items: Array.isArray(items) ? items.slice(0, ${MAX_QUEUE_ITEMS}) : [] });
+      } else if (frame.type === 'item' && value?.type === 'queue' && value.sessionId === ${JSON.stringify(sessionId)}) {
+        finish({ ok: true, items: Array.isArray(value.items) ? value.items.slice(0, ${MAX_QUEUE_ITEMS}) : [] });
+      }
+    });
+    socket.addEventListener('error', () => finish({ ok: false, error: 'unavailable' }));
+    socket.addEventListener('close', () => finish({ ok: false, error: 'closed' }));
+  }))()`;
+  let result;
+  try {
+    result = await webContents.executeJavaScript(script, true);
+  } catch {
+    throw new ReliableInterruptError('queue-unavailable', '读取 Harness 排队消息失败。');
+  }
+  if (!result?.ok || !Array.isArray(result.items)) {
+    throw new ReliableInterruptError(result?.error === 'timeout' ? 'queue-timeout' : 'queue-unavailable',
+      result?.error === 'timeout' ? '读取 Harness 排队消息超时。' : '读取 Harness 排队消息失败。');
+  }
+  const items = result.items.slice(0, MAX_QUEUE_ITEMS);
+  if (JSON.stringify(items).length > 1024 * 1024) {
+    throw new ReliableInterruptError('queue-unavailable', 'Harness 排队消息响应过大。');
+  }
+  return items;
 };
 
 class ReliableInterruptController {
@@ -272,5 +356,6 @@ module.exports = {
   ReliableInterruptController,
   ReliableInterruptError,
   normalizedPrompt,
-  readHarnessQueueSnapshot
+  readHarnessQueueSnapshot,
+  readHarnessQueueSnapshotFromWebContents
 };

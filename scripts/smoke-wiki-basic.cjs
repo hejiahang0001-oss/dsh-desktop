@@ -4,8 +4,9 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const { HarnessSupervisor, probeHarness, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { HarnessSupervisor, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const readArgument = (name) => {
   const prefix = `--${name}=`;
@@ -45,10 +46,15 @@ const main = async () => {
 
   let result;
   try {
-    const origin = await supervisor.start();
-    const probe = await probeHarness(origin);
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.5 Wiki Basic Smoke' });
-    const catalog = await callHarnessApi(origin, 'skill.list', { sessionId: workspace.sessionId });
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, probe, fetchImpl, apiCall } = authentication;
+    const workspace = await synchronizeHarnessWorkspace({
+      origin,
+      workspacePath,
+      fallbackTitle: 'V1.0 Wiki Basic Smoke',
+      fetchImpl
+    });
+    const catalog = await apiCall(origin, 'skill.list', { sessionId: workspace.sessionId });
     const entries = Array.isArray(catalog?.skills) ? catalog.skills : [];
     const expectedSkills = ['wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest'];
     const discovered = expectedSkills.map((name) => entries.find((entry) => entry?.name === name));

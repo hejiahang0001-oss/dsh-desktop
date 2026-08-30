@@ -2,8 +2,12 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const { ReliableInterruptController } = require('../electron/harness-reliable-interrupt.cjs');
-const { HarnessSupervisor } = require('../electron/harness-supervisor.cjs');
+const { ReliableInterruptController, readHarnessQueueSnapshot } = require('../electron/harness-reliable-interrupt.cjs');
+const {
+  HarnessSupervisor,
+  createAuthenticatedHarnessFetch,
+  establishHarnessSession
+} = require('../electron/harness-supervisor.cjs');
 const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -16,14 +20,14 @@ const readArgument = (name) => {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 };
 
-const sessionSummary = async (origin, sessionId) => {
-  const list = await callHarnessApi(origin, 'session.list', {}, { timeoutMs: 8000 });
+const sessionSummary = async (apiCall, origin, sessionId) => {
+  const list = await apiCall(origin, 'session.list', {}, { timeoutMs: 8000 });
   return Array.isArray(list?.items) ? list.items.find((item) => item?.sessionId === sessionId) : undefined;
 };
 
-const waitForRunning = async (origin, sessionId) => {
+const waitForRunning = async (apiCall, origin, sessionId) => {
   for (let attempt = 0; attempt < 80; attempt += 1) {
-    const summary = await sessionSummary(origin, sessionId);
+    const summary = await sessionSummary(apiCall, origin, sessionId);
     if (!summary) throw new Error('可靠插话验收会话从 Harness 目录中消失。');
     if (summary.running === true) return summary;
     await delay(100);
@@ -31,11 +35,11 @@ const waitForRunning = async (origin, sessionId) => {
   throw new Error('初始长回复没有进入运行态，无法验证运行中插话。');
 };
 
-const waitForFinished = async (origin, sessionId) => {
+const waitForFinished = async (apiCall, origin, sessionId) => {
   const deadline = Date.now() + 180_000;
   let sawRunning = false;
   while (Date.now() < deadline) {
-    const summary = await sessionSummary(origin, sessionId);
+    const summary = await sessionSummary(apiCall, origin, sessionId);
     if (!summary) throw new Error('可靠插话验收会话从 Harness 目录中消失。');
     if (summary.running === true) sawRunning = true;
     if (sawRunning && summary.running === false) return summary;
@@ -80,13 +84,23 @@ const main = async () => {
 
   let result;
   try {
-    const origin = await supervisor.start();
+    const launchUrl = await supervisor.start();
+    const authentication = await establishHarnessSession(launchUrl);
+    const origin = authentication.origin;
+    const authenticatedFetch = createAuthenticatedHarnessFetch(authentication);
+    const apiCall = (targetOrigin, method, payload, options = {}) => callHarnessApi(
+      targetOrigin,
+      method,
+      payload,
+      { ...options, fetchImpl: authenticatedFetch }
+    );
     const workspace = await synchronizeHarnessWorkspace({
       origin,
       workspacePath,
-      fallbackTitle: 'V0.6.1 Reliable Interrupt Acceptance'
+      fallbackTitle: 'V1.0 Reliable Interrupt Acceptance',
+      fetchImpl: authenticatedFetch
     });
-    const initial = await callHarnessApi(origin, 'session.prompt', {
+    const initial = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -96,18 +110,31 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (initial?.accepted !== true) throw new Error('Harness 未接受初始长回复消息。');
-    await waitForRunning(origin, workspace.sessionId);
+    await waitForRunning(apiCall, origin, workspace.sessionId);
+
+    const WebSocket = require(path.join(rootDir, 'vendor', 'harness-hoisted-0.1.2-alpha.1', 'node_modules', 'ws'));
+    class AuthenticatedWebSocket extends WebSocket {
+      constructor(url) {
+        super(url, { headers: { cookie: authentication.cookie.header } });
+      }
+    }
 
     const controller = new ReliableInterruptController({
       getOrigin: () => origin,
       getWebContents: () => ({}),
       getWorkspacePath: () => workspacePath,
+      apiCall,
+      readQueue: (targetOrigin, sessionId, options = {}) => readHarnessQueueSnapshot(
+        targetOrigin,
+        sessionId,
+        { ...options, webSocketImpl: AuthenticatedWebSocket }
+      ),
       readSelection: async () => workspace.sessionId
     });
     const directReceipt = await controller.interruptAndPrompt('请立即停止上一个长文任务，只回复一行：RELIABLE_INTERRUPT_VERIFIED');
-    await waitForFinished(origin, workspace.sessionId);
+    await waitForFinished(apiCall, origin, workspace.sessionId);
 
-    const secondInitial = await callHarnessApi(origin, 'session.prompt', {
+    const secondInitial = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -117,8 +144,8 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (secondInitial?.accepted !== true) throw new Error('Harness 未接受第二个初始长回复消息。');
-    await waitForRunning(origin, workspace.sessionId);
-    const queued = await callHarnessApi(origin, 'session.prompt', {
+    await waitForRunning(apiCall, origin, workspace.sessionId);
+    const queued = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: '请中断长文，只回复一行：QUEUED_INTERRUPT_VERIFIED' }],
@@ -126,9 +153,9 @@ const main = async () => {
     });
     if (queued?.accepted !== true) throw new Error('Harness 未接受排队插话验收消息。');
     const queuedReceipt = await controller.interruptQueued();
-    await waitForFinished(origin, workspace.sessionId);
+    await waitForFinished(apiCall, origin, workspace.sessionId);
 
-    const history = await callHarnessApi(origin, 'session.history', {
+    const history = await apiCall(origin, 'session.history', {
       sessionId: workspace.sessionId,
       maxMessages: 64
     });
@@ -138,15 +165,20 @@ const main = async () => {
       : [];
     const markerReply = assistantTexts.some((text) => text.includes('RELIABLE_INTERRUPT_VERIFIED'));
     const queuedMarkerReply = assistantTexts.some((text) => text.includes('QUEUED_INTERRUPT_VERIFIED'));
-    const abortedTurns = Array.isArray(history?.events) ? history.events.filter((entry) => (
-      entry?.event?.type === 'turn/end' && entry.event.data?.reason?.kind === 'aborted'
+    const interruptedTurns = Array.isArray(history?.events) ? history.events.filter((entry) => (
+      entry?.event?.type === 'turn/end' && ['aborted', 'interrupted'].includes(entry.event.data?.reason?.kind)
+    )).length : 0;
+    const interruptedAssistantMessages = Array.isArray(history?.events) ? history.events.filter((entry) => (
+      entry?.event?.type === 'assistant/message' && entry.event.data?.interrupted === true
     )).length : 0;
     const turnEndKinds = Array.isArray(history?.events) ? history.events
       .filter((entry) => entry?.event?.type === 'turn/end')
       .map((entry) => entry.event.data?.reason?.kind || 'unknown') : [];
     if (!markerReply) throw new Error(`插话后没有收到标记回复；事件：${eventTypes.slice(-20).join(', ')}`);
     if (!queuedMarkerReply) throw new Error(`排队插话后没有收到标记回复；事件：${eventTypes.slice(-20).join(', ')}`);
-    if (abortedTurns < 1) throw new Error('真实会话没有记录被中断的原回合。');
+    if (directReceipt?.interrupted !== true || queuedReceipt?.interrupted !== true) {
+      throw new Error('真实会话没有确认两种插话路径都执行了中断。');
+    }
     if (turnEndKinds.length < 3) throw new Error(`真实会话缺少完整回合记录；回合结束原因=${turnEndKinds.join(',') || 'none'}。`);
 
     result = {
@@ -155,7 +187,8 @@ const main = async () => {
       queuedReceipt,
       session: {
         idSuffix: workspace.sessionId.slice(-8),
-        abortedTurns,
+        interruptedTurns,
+        interruptedAssistantMessages,
         turnEndKinds,
         markerReply,
         queuedMarkerReply,

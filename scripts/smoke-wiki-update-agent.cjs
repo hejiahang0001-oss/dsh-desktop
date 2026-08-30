@@ -5,7 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { HarnessSupervisor, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const redact = (value) => String(value || '')
@@ -17,11 +18,11 @@ const readArgument = (name) => {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 };
 
-const waitForPermission = async (origin, sessionId, expected) => {
+const waitForPermission = async (apiCall, origin, sessionId, expected) => {
   let actual = '';
   let projection = null;
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 1 });
+    const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 1 });
     projection = history?.projections?.values?.permissions || null;
     actual = projection?.currentValue || '';
     if (actual === expected) return;
@@ -30,19 +31,19 @@ const waitForPermission = async (origin, sessionId, expected) => {
   throw new Error(`Harness 没有确认 ${expected} 权限；actual=${actual || 'missing'} status=${projection?.status || 'missing'} writable=${projection?.writable === true} options=${Array.isArray(projection?.options) ? projection.options.map((item) => item?.value).filter(Boolean).join(',') : 'missing'}。`);
 };
 
-const waitForAgent = async (origin, sessionId, label) => {
+const waitForAgent = async (apiCall, origin, sessionId, label) => {
   const deadline = Date.now() + 300_000;
   let sawRunning = false;
   let latest;
   while (Date.now() < deadline) {
-    const list = await callHarnessApi(origin, 'session.list', {}, { timeoutMs: 8000 });
+    const list = await apiCall(origin, 'session.list', {}, { timeoutMs: 8000 });
     latest = Array.isArray(list?.items) ? list.items.find((item) => item?.sessionId === sessionId) : undefined;
     if (!latest) throw new Error(`${label} 会话从 Harness 目录中消失。`);
     if (latest.running === true) sawRunning = true;
     if (sawRunning && latest.running === false) return { sawRunning, summary: latest };
     await delay(500);
   }
-  const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 40 }).catch(() => null);
+  const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 40 }).catch(() => null);
   const eventTypes = Array.isArray(history?.events)
     ? history.events.map((entry) => entry?.event?.type).filter(Boolean).slice(-30)
     : [];
@@ -116,11 +117,12 @@ const main = async () => {
   });
   let result;
   try {
-    const origin = await supervisor.start();
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.4 Real Wiki Update Acceptance' });
-    await waitForPermission(origin, workspace.sessionId, 'danger-full-access');
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, fetchImpl, apiCall } = authentication;
+    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V1.0 Real Wiki Update Acceptance', fetchImpl });
+    await waitForPermission(apiCall, origin, workspace.sessionId, 'danger-full-access');
 
-    const previewReceipt = await callHarnessApi(origin, 'session.prompt', {
+    const previewReceipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -130,10 +132,10 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (previewReceipt?.accepted !== true) throw new Error('Harness 未接受真实 Wiki 项目预览消息。');
-    const previewRun = await waitForAgent(origin, workspace.sessionId, '真实 Wiki 项目预览');
+    const previewRun = await waitForAgent(apiCall, origin, workspace.sessionId, '真实 Wiki 项目预览');
     const manifestBefore = JSON.parse(await fs.readFile(path.join(vaultPath, '.manifest.json'), 'utf8'));
     if (Object.keys(manifestBefore.projects || {}).length !== 0) throw new Error('Agent 在确认前写入了项目知识。');
-    const previewHistory = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 24 });
+    const previewHistory = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 24 });
     const previewTrace = JSON.stringify(previewHistory);
     const previewToolCalls = toolCallsOf(previewHistory);
     const firstFixedRuntimeCall = previewToolCalls.findIndex((call) => call.arguments.includes('$env:DSH_DESKTOP_NODE')
@@ -156,7 +158,7 @@ const main = async () => {
       throw new Error(`真实 Agent 没有及时使用固定桌面工具环境，或执行步骤超出上限；toolCalls=${previewToolCalls.length} firstFixedRuntimeCall=${firstFixedRuntimeCall} broadRuntimeSearchIndexes=${broadRuntimeSearchIndexes.join(',') || 'none'} sensitiveCallIndexes=${sensitiveCallIndexes.join(',') || 'none'} names=${previewToolCalls.map((call) => call.name).join(',')}。`);
     }
 
-    const confirmReceipt = await callHarnessApi(origin, 'session.prompt', {
+    const confirmReceipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -166,8 +168,8 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (confirmReceipt?.accepted !== true) throw new Error('Harness 未接受真实 Wiki 项目保存确认。');
-    const saveRun = await waitForAgent(origin, workspace.sessionId, '真实 Wiki 项目保存');
-    const history = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 40 });
+    const saveRun = await waitForAgent(apiCall, origin, workspace.sessionId, '真实 Wiki 项目保存');
+    const history = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 40 });
     const trace = JSON.stringify(history);
     const reply = assistantTexts(history).join('\n');
     const manifest = JSON.parse(await fs.readFile(path.join(vaultPath, '.manifest.json'), 'utf8'));
