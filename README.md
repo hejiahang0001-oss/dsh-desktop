@@ -24,7 +24,7 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; V1.0.1 keeps source tag `dsh-v0.1.2-alpha.1` pinned at commit `cd5ef8148158c3a752a658978873241fdf8e2bbc`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; V1.0.2 keeps source tag `dsh-v0.1.2-alpha.1` pinned at commit `cd5ef8148158c3a752a658978873241fdf8e2bbc`.
 
 ## Why DSH Desktop
 
@@ -79,7 +79,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**[V1.0.1 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1)** makes Git review states trustworthy, removes stale Office version copy, exposes command failures with retry, and keeps network/proxy settings reachable when Harness startup fails. The published Pre-release provides `DSH-Desktop-Setup-1.0.1.exe` and `DSH-Desktop-Portable-1.0.1.exe`; its public assets pass exact size and SHA-256 re-download verification. V0.5.4 Stable remains unchanged.
+**V1.0.2 candidate** adds controlled document intake and Windows-encrypted software credentials. Candidate artifacts are `DSH-Desktop-Setup-1.0.2.exe` and `DSH-Desktop-Portable-1.0.2.exe`; publication remains gated on installed verification. [V1.0.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1) remains the published product Latest until then. V0.5.4 Stable remains unchanged. See [credential migration and rollback boundaries](docs/KEY_STORAGE.md).
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -160,7 +160,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-[V1.0.1 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1) 已作为 GitHub Pre-release 发布，修正 Git 状态误导、Office 旧版本文案、命令失败静默和 Harness 启动失败时无法进入网络/代理设置的问题。公开安装版与便携版均通过匿名回下载的文件大小和 SHA-256 复核；V0.5.4 Stable 保持不变。
+V1.0.2 候选新增 Excel/Word/PDF 拖入与点击添加、外部文件受控复制、会话切换保护，以及 Windows 账户加密的软件 Key。完成安装验收后才发布；目前已发布产品 Latest 仍为 [V1.0.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1)。V0.5.4 Stable 保持不变。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

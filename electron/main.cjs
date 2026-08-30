@@ -101,6 +101,8 @@ const {
 const { WorkspaceFiles, WorkspaceFilesError } = require('./workspace-files.cjs');
 const { WorkspaceStore } = require('./workspace-store.cjs');
 const { SideChatController, SideChatError } = require('./side-chat.cjs');
+const { DocumentIntakeController } = require('./document-intake-controller.cjs');
+const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setName('DSH Desktop');
@@ -282,6 +284,8 @@ let harnessLocalizationScript = '';
 let harnessReliableInterruptScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
+const documentIntakeSmokeTarget = process.argv.find((argument) => argument.startsWith('--document-intake-smoke-file='));
+const credentialAgentSmokeTarget = process.argv.find((argument) => argument.startsWith('--credential-agent-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
 const contextSourcesSmokeTarget = process.argv.find((argument) => argument.startsWith('--context-sources-smoke-file='));
@@ -299,6 +303,8 @@ const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWit
 const isolatedSmokeTarget = [
   desktopSmokeTarget,
   harnessSmokeTarget,
+  documentIntakeSmokeTarget,
+  credentialAgentSmokeTarget,
   ipcSecuritySmokeTarget,
   pdfSmokeTarget,
   contextSourcesSmokeTarget,
@@ -338,7 +344,8 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
     wikiHistorySourcePath: path.join(dataRoot, 'wiki-history-source.json'),
     launchDir,
     logFile: path.join(dataRoot, 'logs', 'harness.log'),
-    env: harnessProxyEnvironment
+    env: harnessProxyEnvironment,
+    createCredentialHost: (options) => createDesktopCredentialHost({ ...options, rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged, crypto: safeStorage })
   });
   instance.on('state', (state) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('harness:state', state);
@@ -477,6 +484,7 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
     harnessOrigin = authentication.origin;
     harnessAuthCookie = authentication.cookie;
     harnessFetch = createAuthenticatedHarnessFetch({ origin: harnessOrigin, cookie: harnessAuthCookie });
+    await supervisor.credentialHost?.verifyReady(harnessOrigin, harnessFetch);
     await installHarnessCookie(mainWindow.webContents.session);
     await mainWindow.loadURL(harnessOrigin);
     const selectedSessionId = await waitForInitialHarnessSelection(mainWindow.webContents);
@@ -584,7 +592,8 @@ const refreshDesktopDiagnostics = async ({ rebuildMenu = true } = {}) => {
     });
   }
   const credential = await getDeepSeekCredentialStatus({
-    credentialFile: path.join(harnessDataRoot, '.credentials.yaml')
+    credentialFile: path.join(harnessDataRoot, '.credentials.yaml'),
+    protectedStatus: supervisor?.credentialHost?.status()
   });
   desktopDiagnostics = Object.freeze({ credential, sessions });
   if (rebuildMenu) installApplicationMenu();
@@ -778,6 +787,9 @@ const testNetworkSettings = async (settings) => {
 };
 
 const loadWorkbenchPanelAssets = async () => {
+  const documentsCss = await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8');
+  const documentsScript = await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.js'), 'utf8');
+  const composerTextScript = await fsp.readFile(path.join(rootDir, 'assets', 'composer-text-bridge.js'), 'utf8');
   if (!workbenchPanelCss) workbenchPanelCss = await fsp.readFile(workbenchPanelCssPath, 'utf8');
   if (!workbenchPanelScript) workbenchPanelScript = await fsp.readFile(workbenchPanelScriptPath, 'utf8');
   if (!workbenchFilesCss) workbenchFilesCss = await fsp.readFile(workbenchFilesCssPath, 'utf8');
@@ -793,7 +805,9 @@ const loadWorkbenchPanelAssets = async () => {
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   if (!harnessReliableInterruptScript) harnessReliableInterruptScript = await fsp.readFile(harnessReliableInterruptScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}`,
+    css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}\n${documentsCss}`,
+    documentsScript,
+    composerTextScript,
     reviewScript: workbenchPanelScript,
     filesScript: workbenchFilesScript,
     previewScript: workbenchPreviewScript,
@@ -823,8 +837,10 @@ const installWorkbenchPanel = async () => {
     const networkInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.networkScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
     const reliableInterruptInstalled = await installReliableInterrupt(assets);
+    await mainWindow.webContents.executeJavaScript(assets.composerTextScript, true);
+    const documentsInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.documentsScript, true));
     return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled
-      && networkInstalled && commandInstalled && reliableInterruptInstalled;
+      && networkInstalled && commandInstalled && reliableInterruptInstalled && documentsInstalled;
   } catch {
     return false;
   }
@@ -1219,6 +1235,38 @@ const forkCheckpointSession = (checkpointId) => {
 const desktopIpcAllowed = (event) => isTrustedMainFrameEvent(event, mainWindow?.webContents, currentUrlAllowed);
 
 const harnessIpcAllowed = (event) => desktopIpcAllowed(event) && harnessUiReady();
+const documentIntakeController = new DocumentIntakeController({
+  getContext: async () => {
+    if (!harnessUiReady()) throw new Error('请等待工作区连接完成后添加文件。');
+    const workspacePath = getWorkspaceState().activePath;
+    if (!workspacePath) throw new Error('请先选择工作区。');
+    const sessionId = await readHarnessSessionSelection(mainWindow.webContents);
+    if (sessionId) {
+      const listing = await authenticatedHarnessApi(harnessOrigin, 'session.list', {});
+      const selected = listing.items?.find((item) => item.sessionId === sessionId);
+      if (!selected || selected.origin === 'subagent' || pathKey(selected.cwd) !== pathKey(workspacePath)) {
+        throw new Error('当前会话与工作区尚未同步，请等待同步后重试。');
+      }
+    }
+    return { workspacePath, sessionId };
+  },
+  chooseFiles: async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '添加参考资料（外部文件复制到工作区，原文件不修改）',
+      buttonLabel: '选择并添加', properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '文档与表格', extensions: ['xlsx', 'docx', 'pdf', 'pptx', 'csv', 'txt', 'md'] }]
+    });
+    return result.canceled ? [] : result.filePaths;
+  },
+  confirmImport: async (paths, context) => {
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'question', title: '确认添加参考资料', message: `将 ${paths.length} 个文件添加到当前工作区？`,
+      detail: `${paths.map((value) => path.basename(value)).join('\n')}\n\n工作区：${context.workspacePath}\n外部文件将复制到工作区；原文件不修改。发送后，文件内容可交由模型处理。`,
+      buttons: ['取消', '添加文件'], defaultId: 0, cancelId: 0, noLink: true
+    });
+    return result.response === 1;
+  }
+});
 const terminalIpcAllowed = (event) => isTrustedMainFrameEvent(event, terminalWindow?.webContents, terminalUrlAllowed);
 const terminalOwnedBy = (event) => terminalIpcAllowed(event) && isFrameOwner(event, terminalOwner);
 const contextSourcesIpcAllowed = (event) => isTrustedMainFrameEvent(
@@ -4642,6 +4690,20 @@ const runWorkspaceFilesRequest = async (event, operation) => {
 ipcMain.handle('files:list', (event, directoryPath) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.listDirectory(directoryPath))
 ));
+const runDocumentRequest = async (event, operation) => {
+  if (!harnessIpcAllowed(event)) return { ok: false, available: false, message: '文件入口尚未就绪。' };
+  try {
+    const result = await operation();
+    if (result.ok && result.context === (await documentIntakeController.getState()).context) {
+      changeReviewer?.protectUserPaths(result.items.map((item) => item.relativePath));
+    }
+    return result;
+  }
+  catch { return { ok: false, available: false, message: '工作区状态已变化，请稍后重试。' }; }
+};
+ipcMain.handle('documents:get-state', (event) => runDocumentRequest(event, () => documentIntakeController.getState()));
+ipcMain.handle('documents:choose', (event, context) => runDocumentRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, choose: true })));
+ipcMain.handle('documents:import', (event, paths, context) => runDocumentRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, paths })));
 ipcMain.handle('files:read', (event, filePath) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.readFile(filePath))
 ));
@@ -5585,6 +5647,98 @@ const runHarnessSmoke = async (target) => {
   }
   await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
   await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+};
+
+const runDocumentIntakeSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const smokeRoot = app.getPath('userData');
+  const workspacePath = path.join(smokeRoot, 'workspace');
+  const source = path.join(smokeRoot, '外部资料.csv');
+  let result, submitted = '', nativeFileResult, stage = 'startup';
+  const rendererErrors = [];
+  try {
+    await fsp.mkdir(workspacePath, { recursive: true });
+    await fsp.writeFile(source, '名称,金额\n测试甲,12\n测试乙,18\n', 'utf8');
+    workspaceStore = new WorkspaceStore({ filePath: path.join(smokeRoot, 'desktop-state.json'), fallbackDir: workspacePath });
+    await workspaceStore.init();
+    supervisor = createSupervisor(smokeRoot, workspacePath);
+    const url = await supervisor.start();
+    const authentication = await establishHarnessSession(url);
+    harnessOrigin = authentication.origin;
+    harnessFetch = createAuthenticatedHarnessFetch(authentication);
+    harnessAuthCookie = authentication.cookie;
+    const selected = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath, fetchImpl: harnessFetch });
+    mainWindow = new BrowserWindow({ width: 1280, height: 880, show: false, webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true
+    } });
+    await installHarnessCookie(mainWindow.webContents.session);
+    await mainWindow.loadURL(harnessOrigin);
+    await selectHarnessSession(mainWindow.webContents, selected.sessionId);
+    await mainWindow.loadURL(harnessOrigin);
+    const wc = mainWindow.webContents;
+    wc.on('console-message', (details) => { if (details.level === 'error' || details.level === 3) rendererErrors.push(details.message?.slice(0, 500)); });
+    const evaluate = (code) => { stage = code.slice(0, 160); return wc.executeJavaScript(`try { ${code} } catch (error) { console.error(error.stack); throw error; }`, true); };
+    const waitFor = async (code) => {
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) { if (await evaluate(code)) return; await new Promise((resolve) => setTimeout(resolve, 100)); }
+      throw new Error(`界面条件超时：${code}`);
+    };
+    await waitFor('Boolean(document.querySelector("[data-composer-input][contenteditable=true]"))');
+    mainWindow.show(); mainWindow.focus(); wc.focus();
+    await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="继续")?.click()');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
+    for (const name of ['composer-text-bridge.js', 'document-intake.js']) await evaluate(await fsp.readFile(path.join(rootDir, 'assets', name), 'utf8'));
+    await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
+    documentIntakeController.chooseFiles = async () => [source];
+    documentIntakeController.confirmImport = async () => true;
+    await evaluate('(async()=>{await window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "请汇总测试数据，保留这段草稿。"); document.querySelector(".dsh-document-actions button").click()})()');
+    await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    const chosen = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
+    await evaluate('document.querySelector(".dsh-document-chip button").click()');
+    await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
+    const removed = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
+    await evaluate('document.querySelector(".dsh-document-actions button").click()');
+    await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    // CDP supplies a real disk-backed File to the isolated preload; this is not a synthetic File constructor.
+    wc.debugger.attach('1.3');
+    await evaluate('var smokeInput=document.createElement("input"); smokeInput.type="file"; smokeInput.id="dsh-smoke-native-file"; smokeInput.hidden=true; document.body.append(smokeInput)');
+    const dom = await wc.debugger.sendCommand('DOM.getDocument');
+    const node = await wc.debugger.sendCommand('DOM.querySelector', { nodeId: dom.root.nodeId, selector: '#dsh-smoke-native-file' });
+    await wc.debugger.sendCommand('DOM.setFileInputFiles', { nodeId: node.nodeId, files: [source] });
+    nativeFileResult = await evaluate('(async()=>{const state=await desktopAPI.documents.getState(); return desktopAPI.documents.importFiles(Array.from(document.getElementById("dsh-smoke-native-file").files),state.context)})()');
+    await evaluate('document.querySelector(".dsh-document-chip button").click()');
+    await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
+    await evaluate('var dropped=new DataTransfer(); dropped.items.add(document.getElementById("dsh-smoke-native-file").files[0]); document.dispatchEvent(new DragEvent("drop",{dataTransfer:dropped,bubbles:true,cancelable:true}))');
+    await waitFor('window.__DSH_COMPOSER_TEXT__.read().includes("参考资料") && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    const fake = await evaluate('(async()=>{const state=await desktopAPI.documents.getState();return desktopAPI.documents.importFiles([new File(["x"],"fake.csv")],state.context)})()');
+    await wc.debugger.sendCommand('Fetch.enable', { patterns: [{ urlPattern: '*api/session/prompt', requestStage: 'Request' }] });
+    await fsp.writeFile(`${resolvedTarget}.before-send.png`, (await wc.capturePage()).toPNG());
+    wc.debugger.on('message', async (_event, method, params) => {
+      if (method !== 'Fetch.requestPaused') return;
+      submitted = params.request.postData || '';
+      await wc.debugger.sendCommand('Fetch.failRequest', { requestId: params.requestId, errorReason: 'Aborted' }).catch(() => {});
+    });
+    await evaluate('window.__DSH_COMPOSER_TEXT__.current().dispatchEvent(new KeyboardEvent("keydown", {key:"Enter",code:"Enter",keyCode:13,bubbles:true,cancelable:true}))');
+    const deadline = Date.now() + 5000;
+    while (!submitted && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 100));
+    await fsp.writeFile(`${resolvedTarget}.png`, (await wc.capturePage()).toPNG());
+    const originalUnchanged = await fsp.readFile(source, 'utf8') === '名称,金额\n测试甲,12\n测试乙,18\n';
+    result = { ok: chosen.includes('参考资料') && chosen.includes('保留这段草稿') && !removed.includes('参考资料') && removed.includes('保留这段草稿')
+      && nativeFileResult.ok && fake.ok === false && originalUnchanged && submitted.includes('dsh-attachments') && submitted.includes('保留这段草稿'),
+      version: app.getVersion(), evidence: 'real Harness renderer + native disk File + intercepted upstream send; no model request',
+      inputKind: 'Lexical contenteditable', chooseInserted: chosen.includes('参考资料'), removalPreservedDraft: !removed.includes('参考资料') && removed.includes('保留这段草稿'),
+      nativeFileImported: Boolean(nativeFileResult.ok), syntheticFileRejected: fake.ok === false, originalUnchanged,
+      nativeFileDropInserted: true,
+      upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
+  } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
+  finally {
+    mainWindow?.destroy(); mainWindow = undefined;
+    await supervisor?.stop(); harnessOrigin = null; clearHarnessAuthentication();
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`);
+  }
+  if (!result.ok) process.exitCode = 1;
 };
 
 const runIpcSecuritySmoke = async (target) => {
@@ -6534,6 +6688,20 @@ const runSupportSmoke = async (target) => {
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.dsh.desktop');
   configureHarnessSessionPermissions(session.defaultSession, () => mainWindow?.webContents);
+
+  if (credentialAgentSmokeTarget) {
+    const output = path.resolve(credentialAgentSmokeTarget.slice('--credential-agent-smoke-file='.length));
+    const source = process.argv.find((argument) => argument.startsWith('--smoke-credential-source='))?.slice('--smoke-credential-source='.length);
+    const runtime = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
+    const result = await require('./credential-agent-smoke.cjs').runCredentialAgentSmoke({ output, source, smokeRoot: app.getPath('userData'), createSupervisor, runtime, version: app.getVersion() });
+    if (!result.ok) process.exitCode = 1;
+    allowQuit = true; app.quit(); return;
+  }
+
+  if (documentIntakeSmokeTarget) {
+    await runDocumentIntakeSmoke(documentIntakeSmokeTarget.slice('--document-intake-smoke-file='.length));
+    allowQuit = true; app.quit(); return;
+  }
 
   if (desktopSmokeTarget) {
     await runDesktopSmoke(desktopSmokeTarget.slice('--smoke-test-file='.length));
