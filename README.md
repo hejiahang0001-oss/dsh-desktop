@@ -24,7 +24,7 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; this release pins `@deepseek-ai/dsh@0.1.1-rc.2`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; V1.0.0 pins source tag `dsh-v0.1.2-alpha.1` at commit `cd5ef8148158c3a752a658978873241fdf8e2bbc`.
 
 ## Why DSH Desktop
 
@@ -34,6 +34,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Persistent sessions** — create, search, resume, rename, archive, and branch sessions while keeping Harness as the source of truth.
 - **Agent visibility and control** — see whether the agent is idle, running, waiting for approval, or unavailable; stop or redirect a running turn from native menus.
 - **Reliable running-turn correction** — press `Ctrl+Enter` with a plain-text correction to request cancellation of the current official Harness turn before the complete correction is submitted; queued-message interruption also preserves the authoritative full text.
+- **Authenticated upstream compatibility** — exchange the Harness one-time loopback token for a same-origin browser session, redact it from public state and logs, and use the official Remote HTTP and `session/control` protocols without exposing arbitrary endpoints to the Renderer.
 - **Persistent Git review panel** — keep a bounded real Diff beside Harness, resize or hide the panel, and accept or reject one file or a safe batch while protecting pre-existing edits.
 - **Native Git delivery center** — inspect the active repository, branch, upstream, ahead/behind counts, staged and unstaged work, recent commits, and public GitHub PR checks; create a local commit only from already-staged content after a second fingerprint check and native confirmation.
 - **Workspace file browser** — lazily browse the active Harness workspace, search bounded filenames, open safe text files in a read-only Quick Look surface, and reveal the selected Diff file in the tree.
@@ -78,7 +79,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**[V0.9.0 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.9.0)** adds native tray supervision, fixed privacy-safe notifications for completion, failure, stop, disconnection, and approval waits, plus a manual public-GitHub update check with a reversible skip preference. Automatic download and install remain disabled while builds are unsigned. The Pre-release provides `DSH-Desktop-Setup-0.9.0.exe` and `DSH-Desktop-Portable-0.9.0.exe`; Stable and the front-page download remain V0.5.4.
+**[V1.0.0 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.0)** upgrades the fixed upstream runtime to source tag `dsh-v0.1.2-alpha.1`, adapts its authenticated Remote API and reliable-interruption stream, and adds exact runtime provenance plus a generated third-party license inventory. The Pre-release provides `DSH-Desktop-Setup-1.0.0.exe` and `DSH-Desktop-Portable-1.0.0.exe`; Stable and the front-page download remain V0.5.4.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -116,13 +117,13 @@ Open repository → run or approve the agent in Harness
 → accept/stage or reject one file or a safe batch
 ```
 
-The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and the [V0.6.5 release notes](docs/RELEASE_NOTES_v0.6.5.md).
+The pinned runtime includes the complete official dependency closure required by the default Web profile, but it does not activate every package in the upstream monorepo or silently bundle community plugins. See the [V1.0 upstream map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.1.md), [plugin inventory boundary](docs/HARNESS_PLUGIN_INVENTORY.md), [third-party license inventory](docs/THIRD_PARTY_LICENSES.md), [update/signing assessment](docs/UPDATE_AND_SIGNING_ASSESSMENT.md), [validation details](docs/VALIDATION.md), and [V1.0.0 release notes](docs/RELEASE_NOTES_v1.0.0.md).
 
 ## Security and current limits
 
 - The Windows installer is not code-signed yet.
-- Harness credentials are currently stored by Harness `0.1.1-rc.2` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
-- A Workspace Write crash with `0xC0000005` was previously observed on rc.8 in restricted mode. DSH Desktop reports tool failures and never switches to Full Access automatically; the exact rc.2 write path remains a separate compatibility gate.
+- Harness credentials are currently stored by Harness `0.1.2-alpha.1` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
+- The source-tagged upstream is alpha software. DSH Desktop reports tool failures and never switches to Full Access automatically; real V1.0 validation covers authenticated startup, Workspace/session mapping, Side Chat, Office/Wiki Skill discovery, and direct plus queued interruption, but it cannot prove every upstream plugin path.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
 - V0.5.20 Word editing performs exact replacement inside one OOXML text node; it does not guess across mixed-format runs, convert `.doc`, or provide tracked changes, comments, equations, or arbitrary Word DOM editing. Embedded images are limited to bounded workspace PNG/JPEG files.
 - V0.5.21 Excel supports bounded `.xlsx` creation, CSV import, explicit cell updates, formulas, styles, filters, frozen panes, and reconciliation. It does not execute macros, external links, connections, query tables, Power Query, arbitrary scripts, or legacy `.xls`; unsupported or risky content fails strict inspection.
@@ -159,7 +160,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-[V0.9.0 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v0.9.0)新增原生系统托盘、完成/失败/停止/连接中断/等待确认的固定隐私通知，以及只读取公开 GitHub 发布信息的手动更新检查；用户可以跳过或取消跳过指定 Latest。未签名阶段自动下载和安装继续关闭。Pre-release 提供 `DSH-Desktop-Setup-0.9.0.exe` 安装版与 `DSH-Desktop-Portable-0.9.0.exe` 便携版，V0.5.4 继续保持 Stable 和首页下载版本。
+[V1.0.0 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.0)升级到 DeepSeek Harness 源码标签 `dsh-v0.1.2-alpha.1`，适配一次性本机认证、Remote API 和可靠插话控制流，并加入固定上游来源证明与第三方许可证清单。Pre-release 提供 `DSH-Desktop-Setup-1.0.0.exe` 安装版与 `DSH-Desktop-Portable-1.0.0.exe` 便携版，V0.5.4 继续保持 Stable 和首页下载版本。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

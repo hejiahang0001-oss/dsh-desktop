@@ -4,21 +4,25 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
-const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+)/i;
+const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]{24,256}|http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
 const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE']);
-const HARNESS_VERSION = '0.1.1-rc.2';
+const HARNESS_VERSION = '0.1.2-alpha.1';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
+const redactHarnessLog = (value) => stripAnsi(value).replace(
+  /(http:\/\/127\.0\.0\.1:\d+\/)\?token=[A-Za-z0-9_-]{1,512}/gi,
+  '$1?token=[REDACTED]'
+);
 
 const parseHarnessUrl = (value) => {
   const match = stripAnsi(value).match(READY_PATTERN);
   if (!match) return null;
   try {
     const url = new URL(match[1]);
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port) return null;
-    return url.origin;
+    if (!isSafeHarnessUrl(url.toString())) return null;
+    return url.search ? url.toString() : url.origin;
   } catch {
     return null;
   }
@@ -27,7 +31,10 @@ const parseHarnessUrl = (value) => {
 const isSafeHarnessUrl = (value) => {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port);
+    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port
+      || url.username || url.password || url.hash || url.pathname !== '/') return false;
+    if (!url.search) return true;
+    return url.searchParams.size === 1 && /^[A-Za-z0-9_-]{24,256}$/.test(url.searchParams.get('token') || '');
   } catch {
     return false;
   }
@@ -211,27 +218,82 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-const probeHarness = async (url, { attempts = 30, intervalMs = 250, fetchImpl = globalThis.fetch } = {}) => {
+const parseHarnessCookie = (value) => {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2048) return null;
+  const pair = value.split(';', 1)[0];
+  const separator = pair.indexOf('=');
+  if (separator < 1) return null;
+  const name = pair.slice(0, separator);
+  const cookieValue = pair.slice(separator + 1);
+  if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(name)
+    || !/^[\x21-\x3A\x3C-\x7E]{1,1024}$/.test(cookieValue)) return null;
+  return Object.freeze({ name, value: cookieValue, header: `${name}=${cookieValue}` });
+};
+
+const establishHarnessSession = async (url, { attempts = 30, intervalMs = 250, fetchImpl = globalThis.fetch } = {}) => {
   if (!isSafeHarnessUrl(url)) throw new Error('Harness 返回了不受信任的地址。');
+  if (typeof fetchImpl !== 'function') throw new Error('Harness 健康检查传输不可用。');
+  const launchUrl = new URL(url);
+  const origin = launchUrl.origin;
   let lastError;
+  let cookie = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const response = await fetchImpl(url, { signal: controller.signal });
-      clearTimeout(timeout);
+      let response;
+      if (launchUrl.search && !cookie) {
+        response = await fetchImpl(launchUrl.toString(), { signal: controller.signal, redirect: 'manual' });
+        if (response.status !== 303) throw new Error(`Harness 本地认证返回 HTTP ${response.status}。`);
+        const location = response.headers.get('location') || '';
+        const redirectUrl = new URL(location, origin);
+        if (redirectUrl.origin !== origin || redirectUrl.pathname !== '/' || redirectUrl.search || redirectUrl.hash) {
+          throw new Error('Harness 本地认证返回了不受信任的跳转地址。');
+        }
+        cookie = parseHarnessCookie(response.headers.get('set-cookie'));
+        if (!cookie) throw new Error('Harness 本地认证没有返回有效会话。');
+        response = await fetchImpl(origin, { signal: controller.signal, headers: { cookie: cookie.header } });
+      } else {
+        response = await fetchImpl(origin, {
+          signal: controller.signal,
+          headers: cookie ? { cookie: cookie.header } : undefined
+        });
+      }
       if (response.ok) {
         const html = await response.text();
         const title = html.match(/<title>(.*?)<\/title>/i)?.[1] || '';
-        return { status: response.status, title, contentType: response.headers.get('content-type') || '' };
+        return {
+          origin,
+          cookie,
+          probe: { status: response.status, title, contentType: response.headers.get('content-type') || '' }
+        };
       }
       lastError = new Error(`Harness 健康检查返回 HTTP ${response.status}。`);
     } catch (error) {
       lastError = error;
+    } finally {
+      clearTimeout(timeout);
     }
     await delay(intervalMs);
   }
   throw lastError || new Error('Harness 健康检查失败。');
+};
+
+const probeHarness = async (url, options = {}) => (await establishHarnessSession(url, options)).probe;
+
+const createAuthenticatedHarnessFetch = ({ origin, cookie, fetchImpl = globalThis.fetch }) => {
+  if (!isSafeHarnessUrl(origin) || new URL(origin).search || !cookie?.header || typeof fetchImpl !== 'function') {
+    throw new Error('Harness 本地认证传输配置无效。');
+  }
+  return (input, options = {}) => {
+    const target = new URL(typeof input === 'string' || input instanceof URL ? input : input?.url);
+    if (target.origin !== origin || target.username || target.password || target.hash) {
+      throw new Error('拒绝向非 Harness 回环地址发送本地认证会话。');
+    }
+    const headers = new Headers(options.headers || (typeof input === 'object' ? input.headers : undefined));
+    headers.set('cookie', cookie.header);
+    return fetchImpl(input, { ...options, headers });
+  };
 };
 
 class HarnessSupervisor extends EventEmitter {
@@ -249,7 +311,8 @@ class HarnessSupervisor extends EventEmitter {
   }
 
   getState() {
-    return { ...this.state, logFile: this.options.logFile, workspacePath: this.options.launchDir };
+    const publicUrl = this.state.url && isSafeHarnessUrl(this.state.url) ? new URL(this.state.url).origin : null;
+    return { ...this.state, url: publicUrl, logFile: this.options.logFile, workspacePath: this.options.launchDir };
   }
 
   isActive() {
@@ -276,7 +339,7 @@ class HarnessSupervisor extends EventEmitter {
   }
 
   async _appendLog(source, chunk) {
-    const line = `[${new Date().toISOString()}] [${source}] ${stripAnsi(chunk)}`;
+    const line = `[${new Date().toISOString()}] [${source}] ${redactHarnessLog(chunk)}`;
     try {
       await fsp.appendFile(this.options.logFile, line.endsWith('\n') ? line : `${line}\n`, 'utf8');
     } catch {
@@ -431,11 +494,15 @@ module.exports = {
   HARNESS_VERSION,
   HarnessSupervisor,
   buildHarnessEnvironment,
+  createAuthenticatedHarnessFetch,
+  establishHarnessSession,
   isSafeHarnessUrl,
+  parseHarnessCookie,
   parseHarnessUrl,
   probeHarness,
   resolvePnpmDshBin,
   resolveHarnessRuntimePaths,
   provisionDesktopShellEnvPlugin,
+  redactHarnessLog,
   stripAnsi
 };

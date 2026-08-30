@@ -20,6 +20,6 @@ test('real third-party validator is fixed, isolated, credential-free, and script
   assert.match(source, /name: 'rollback'/);
   assert.match(source, /name: 'final-upgrade'/);
   assert.match(source, /catppuccin\/state/);
-  assert.match(source, /EXPECTED_RUNTIME_PACKAGES = 432/);
+  assert.match(source, /EXPECTED_RUNTIME_PACKAGES = 489/);
   assert.doesNotMatch(source, /npm view|latest'|latest\"|process\.env\.DEEPSEEK_API_KEY/);
 });

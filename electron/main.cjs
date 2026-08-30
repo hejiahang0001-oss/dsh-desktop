@@ -34,7 +34,15 @@ const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
 } = require('./harness-checkpoint-link.cjs');
-const { HARNESS_VERSION, HarnessSupervisor, isSafeHarnessUrl, probeHarness, resolveHarnessRuntimePaths } = require('./harness-supervisor.cjs');
+const {
+  HARNESS_VERSION,
+  HarnessSupervisor,
+  createAuthenticatedHarnessFetch,
+  establishHarnessSession,
+  isSafeHarnessUrl,
+  parseHarnessCookie,
+  resolveHarnessRuntimePaths
+} = require('./harness-supervisor.cjs');
 const { captureFrameOwner, isFrameOwner, isTrustedMainFrameEvent } = require('./ipc-policy.cjs');
 const {
   callHarnessApi,
@@ -47,7 +55,8 @@ const {
 } = require('./harness-workspace-sync.cjs');
 const {
   ReliableInterruptController,
-  ReliableInterruptError
+  ReliableInterruptError,
+  readHarnessQueueSnapshotFromWebContents
 } = require('./harness-reliable-interrupt.cjs');
 const {
   invokeHarnessCommandAction,
@@ -146,6 +155,8 @@ let wikiSettingsStore;
 const dshHistorySelectionCatalog = new DshHistorySelectionCatalog();
 let dshHistoryExpiryTimer;
 let harnessOrigin = null;
+let harnessAuthCookie = null;
+let harnessFetch = null;
 let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
 let loadFailureHandled = false;
@@ -400,12 +411,56 @@ const showStatusPage = async () => {
   if (!current.endsWith('/harness-status.html')) await mainWindow.loadFile(statusPage);
 };
 
+const clearHarnessAuthentication = () => {
+  harnessAuthCookie = null;
+  harnessFetch = null;
+};
+
+const authenticatedHarnessApi = (origin, method, payload, options = {}) => {
+  if (!harnessFetch) throw new Error('Harness 本地认证尚未就绪。');
+  return callHarnessApi(origin, method, payload, { ...options, fetchImpl: harnessFetch });
+};
+
+const authenticatedHarnessRemote = (origin, namespace, method, args = {}, options = {}) => {
+  if (!harnessFetch) throw new Error('Harness 本地认证尚未就绪。');
+  return callHarnessRemote(origin, namespace, method, args, { ...options, fetchImpl: harnessFetch });
+};
+
+const installHarnessCookie = async (targetSession) => {
+  const cookie = parseHarnessCookie(harnessAuthCookie?.header);
+  if (!targetSession?.cookies || !harnessOrigin || !cookie) throw new Error('Harness 本地认证会话无效。');
+  await targetSession.cookies.set({
+    url: harnessOrigin,
+    name: cookie.name,
+    value: cookie.value,
+    path: '/',
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: false
+  });
+};
+
+const waitForInitialHarnessSelection = async (webContents, { timeoutMs = 8000, intervalMs = 100 } = {}) => {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    try {
+      const sessionId = await readHarnessSessionSelection(webContents);
+      if (sessionId) return sessionId;
+    } catch {
+      // The freshly loaded page may not have initialized its local storage yet.
+    }
+    if (Date.now() >= deadline) return '';
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  } while (true);
+};
+
 const startHarnessForWindow = async ({ restart = false } = {}) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, error: '窗口不可用。' };
   if (sideChatOperationPromise) await sideChatOperationPromise;
   closeSideChatWindow();
   stopAgentPolling();
   harnessOrigin = null;
+  clearHarnessAuthentication();
   loadFailureHandled = false;
   agentDiagnostics = unavailableAgentDiagnostics();
   changeReviewDiagnostics = emptyChangeReviewDiagnostics();
@@ -414,19 +469,25 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
   await showStatusPage();
   try {
     const url = restart ? await supervisor.restart() : await supervisor.start();
-    await probeHarness(url);
-    if (!isSafeHarnessUrl(url)) throw new Error('Harness 地址未通过回环安全校验。');
-    harnessOrigin = new URL(url).origin;
+    const authentication = await establishHarnessSession(url);
+    if (!isSafeHarnessUrl(authentication.origin)) throw new Error('Harness 地址未通过回环安全校验。');
+    harnessOrigin = authentication.origin;
+    harnessAuthCookie = authentication.cookie;
+    harnessFetch = createAuthenticatedHarnessFetch({ origin: harnessOrigin, cookie: harnessAuthCookie });
+    await installHarnessCookie(mainWindow.webContents.session);
+    await mainWindow.loadURL(harnessOrigin);
+    const selectedSessionId = await waitForInitialHarnessSelection(mainWindow.webContents);
     const workspace = getWorkspaceState();
     workspaceSyncDiagnostics = await synchronizeHarnessWorkspace({
       origin: harnessOrigin,
       workspacePath: workspace.activePath,
-      fallbackTitle: workspace.isFallback ? 'DSH 临时工作区' : undefined
+      fallbackTitle: workspace.isFallback ? 'DSH 临时工作区' : undefined,
+      selectedSessionId,
+      fetchImpl: harnessFetch
     });
-    await mainWindow.loadURL(url);
     const selection = await selectHarnessSession(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
     if (selection.changed) {
-      await mainWindow.loadURL(url);
+      await mainWindow.loadURL(harnessOrigin);
       await waitForHarnessSessionSelection(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
     }
     void refreshDesktopDiagnostics();
@@ -435,6 +496,7 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
   } catch (error) {
     workspaceSyncDiagnostics = unavailableWorkspaceSync('failed', error.message);
     harnessOrigin = null;
+    clearHarnessAuthentication();
     supervisor.reportFailure(error);
     await showStatusPage();
     void refreshAgentDiagnostics();
@@ -853,7 +915,8 @@ const createCodeCheckpoint = async (source = 'manual') => {
         sessionLink = await captureHarnessCheckpointLink({
           origin: harnessOrigin,
           webContents: mainWindow.webContents,
-          workspacePath: getWorkspaceState().activePath
+          workspacePath: getWorkspaceState().activePath,
+          apiCall: authenticatedHarnessApi
         });
       }
     } catch {
@@ -1073,7 +1136,8 @@ const performForkCheckpointSession = async (checkpointId) => {
       origin: harnessOrigin,
       workspacePath: getWorkspaceState().activePath,
       sessionId: anchor.sessionId,
-      atSeq: anchor.atSeq
+      atSeq: anchor.atSeq,
+      apiCall: authenticatedHarnessApi
     });
     const selection = await selectHarnessSession(mainWindow.webContents, forked.sessionId);
     workspaceSyncDiagnostics = Object.freeze({
@@ -1476,7 +1540,7 @@ const unavailablePluginHealth = (message = '扩展中心尚未初始化。') => 
 const readHarnessExtensionInventory = async () => {
   if (!harnessOrigin || !harnessUiReady()) return { inventoryError: 'Harness 尚未就绪，无法读取实时扩展清单。' };
   try {
-    const inventory = await callHarnessRemote(harnessOrigin, 'pluginInventory', 'list', {}, { timeoutMs: 3000 });
+    const inventory = await authenticatedHarnessRemote(harnessOrigin, 'pluginInventory', 'list', {}, { timeoutMs: 3000 });
     return { inventory };
   } catch (error) {
     return { inventoryError: `Harness 实时扩展清单不可用：${error?.message || String(error)}` };
@@ -1879,7 +1943,7 @@ const listDshHistorySessions = async () => {
   if (!state.history?.available || !harnessOrigin) return { ok: false, message: '请等待 Harness 与当前工作区就绪。', items: [] };
   try {
     await discardPreparedDshHistorySource();
-    const response = await callHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
+    const response = await authenticatedHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
     const items = dshHistorySelectionCatalog.refresh(response?.items, workspacePath);
     return {
       ok: true,
@@ -1903,10 +1967,10 @@ const prepareSelectedDshHistory = async (selection) => {
   let prepared;
   try {
     await discardPreparedDshHistorySource();
-    const response = await callHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
+    const response = await authenticatedHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
     const summaries = dshHistorySelectionCatalog.resolve(selection, response?.items, workspacePath);
     prepared = await prepareDshHistorySource({
-      apiCall: callHarnessApi,
+      apiCall: authenticatedHarnessApi,
       origin: harnessOrigin,
       summaries,
       workspacePath,
@@ -1978,7 +2042,7 @@ const loadCurrentWikiCandidates = async ({ includeSessionId = false } = {}) => {
   try {
     const selected = await readHarnessSessionSelection(mainWindow?.webContents);
     if (!isSessionId(selected)) return { ok: false, message: '当前界面没有可读取的普通 Harness 会话。', items: [] };
-    const sessionList = await callHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
+    const sessionList = await authenticatedHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
     const selectedSummary = Array.isArray(sessionList?.items)
       ? sessionList.items.find((item) => item?.sessionId === selected)
       : undefined;
@@ -1989,7 +2053,7 @@ const loadCurrentWikiCandidates = async ({ includeSessionId = false } = {}) => {
       return { ok: false, message: '当前会话不是这个工作区的普通 Harness 会话。', items: [] };
     }
     if (selectedSummary.running === true) return { ok: false, message: '当前会话仍在运行，请完成后再读取结论。', items: [] };
-    const history = await callHarnessApi(harnessOrigin, 'session.history', {
+    const history = await authenticatedHarnessApi(harnessOrigin, 'session.history', {
       sessionId: selected,
       maxMessages: 40
     }, { timeoutMs: 5000 });
@@ -2380,6 +2444,7 @@ const createSideChatHarnessWindow = async (context) => {
   const partition = partitionOptions.partition;
   sideChatPartitionSession = session.fromPartition(partition);
   await applySessionProxy(sideChatPartitionSession, proxyStore?.getState() || { mode: 'direct' });
+  if (harnessAuthCookie) await installHarnessCookie(sideChatPartitionSession);
 
   const created = new BrowserWindow({
     width: 760,
@@ -3692,6 +3757,7 @@ const runSupportBackupFromDialog = async () => {
       await showStatusPage();
       await supervisor.stop();
       harnessOrigin = null;
+      clearHarnessAuthentication();
     }
     await session.defaultSession.flushStorageData();
     created = await createSupportBackup({
@@ -4924,6 +4990,7 @@ const createWindow = async () => {
     loadFailureHandled = true;
     stopAgentPolling();
     harnessOrigin = null;
+    clearHarnessAuthentication();
     supervisor.reportFailure(new Error(`Harness 页面加载失败（${code}: ${description}）。`));
     await showStatusPage();
   });
@@ -5178,24 +5245,57 @@ const runHarnessSmoke = async (target) => {
   const smokeRoot = path.join(path.dirname(resolvedTarget), 'harness-smoke-data');
   supervisor = createSupervisor(smokeRoot);
   let result;
+  let smokeHarnessWindow;
   try {
     const url = await supervisor.start();
-    const probe = await probeHarness(url);
-    const rootResponse = await fetch(url);
+    const authentication = await establishHarnessSession(url);
+    const probe = authentication.probe;
+    const smokeFetch = createAuthenticatedHarnessFetch(authentication);
+    const rootResponse = await smokeFetch(authentication.origin);
+    const smokeApi = (origin, method, payload, options = {}) => callHarnessApi(origin, method, payload, { ...options, fetchImpl: smokeFetch });
     const workspaceSync = await synchronizeHarnessWorkspace({
-      origin: url,
+      origin: authentication.origin,
       workspacePath: supervisor.getState().workspacePath,
-      fallbackTitle: 'DSH 临时工作区'
+      fallbackTitle: 'DSH 临时工作区',
+      fetchImpl: smokeFetch
     });
     const sideChat = await new SideChatController({
-      getOrigin: () => url,
+      getOrigin: () => authentication.origin,
+      apiCall: smokeApi,
       readSelection: async () => workspaceSync.sessionId
     }).create({
       mainWebContents: {},
       workspacePath: supervisor.getState().workspacePath,
       agentState: { status: 'ready', pendingCount: 0, queuedCount: 0 }
     });
-    const liveInventory = await callHarnessRemote(url, 'pluginInventory', 'list');
+    smokeHarnessWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true
+      }
+    });
+    const smokeCookie = parseHarnessCookie(authentication.cookie?.header);
+    if (!smokeCookie) throw new Error('Harness smoke authentication cookie is unavailable.');
+    await smokeHarnessWindow.webContents.session.cookies.set({
+      url: authentication.origin,
+      name: smokeCookie.name,
+      value: smokeCookie.value,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: false
+    });
+    await smokeHarnessWindow.loadURL(authentication.origin);
+    const queueSnapshot = await readHarnessQueueSnapshotFromWebContents(
+      smokeHarnessWindow.webContents,
+      authentication.origin,
+      workspaceSync.sessionId,
+      { timeoutMs: 5000 }
+    );
+    const liveInventory = await callHarnessRemote(authentication.origin, 'pluginInventory', 'list', {}, { fetchImpl: smokeFetch });
     const runtimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
     const runtimeCatalog = new PluginHealthCatalog({
       harnessHome: path.join(smokeRoot, 'harness'),
@@ -5216,6 +5316,7 @@ const runHarnessSmoke = async (target) => {
         && sideChat.sourceSessionId === workspaceSync.sessionId
         && sideChat.sideSessionId !== workspaceSync.sessionId
         && sideChat.permission === 'workspace-write'
+        && Array.isArray(queueSnapshot)
         && extensionCenter.available
         && pluginSurface?.total > 0
         && skillSurface?.total > 0
@@ -5224,7 +5325,7 @@ const runHarnessSmoke = async (target) => {
         && hookSurface?.status === 'unsupported',
       name: app.getName(),
       version: app.getVersion(),
-      url,
+      url: authentication.origin,
       ...probe,
       responseHeaders: {
         contentSecurityPolicy: rootResponse.headers.get('content-security-policy') || '',
@@ -5240,8 +5341,19 @@ const runHarnessSmoke = async (target) => {
         independent: sideChat.sideSessionId !== sideChat.sourceSessionId,
         permission: sideChat.permission
       },
+      reliableInterrupt: {
+        controlStream: 'ready',
+        queuedItems: queueSnapshot.length
+      },
       extensionCenter: {
         source: extensionCenter.source,
+        runtimeClosure: {
+          status: runtimeState.runtime?.status || 'unknown',
+          expected: runtimeState.runtime?.expected || 0,
+          healthy: runtimeState.runtime?.healthy || 0,
+          missing: runtimeState.runtime?.missing || 0,
+          misdirected: runtimeState.runtime?.misdirected || 0
+        },
         plugins: { total: pluginSurface?.total || 0, active: pluginSurface?.active || 0, failed: pluginSurface?.failed || 0 },
         skills: { total: skillSurface?.total || 0, active: skillSurface?.active || 0 },
         mcp: { status: mcpSurface?.status || 'unknown', version: mcpSurface?.version || '', total: mcpSurface?.total || 0, active: mcpSurface?.active || 0 },
@@ -5252,6 +5364,7 @@ const runHarnessSmoke = async (target) => {
     result = { ok: false, name: app.getName(), version: app.getVersion(), error: error.message };
     process.exitCode = 1;
   } finally {
+    smokeHarnessWindow?.destroy();
     await supervisor.stop();
   }
   await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
@@ -5416,16 +5529,16 @@ const runPluginHealthSmoke = async (target) => {
   try {
     await writeSmokePackage(dshPackageDir, {
       name: '@deepseek-ai/dsh',
-      version: '0.1.1-rc.2',
+      version: '0.1.2-alpha.1',
       dependencies: Object.fromEntries([
-        ['@deepseek-ai/dsh-base', '0.1.1-rc.2'],
-        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.1-rc.2'])
+        ['@deepseek-ai/dsh-base', '0.1.2-alpha.1'],
+        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.1'])
       ])
     });
-    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.1-rc.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.1', dsh: { bundle: { patch: './cordis.patch.yml' } } });
     for (const name of capabilityPackageNames) {
       const packageDir = path.join(installRoot, '@deepseek-ai', name);
-      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.1-rc.2' });
+      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.1' });
       await linkSmokePackage(fallbackRoot, `@deepseek-ai/${name}`, packageDir);
     }
     await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });
@@ -6367,14 +6480,22 @@ app.whenReady().then(async () => {
   supervisor = createSupervisor(dataRoot, workspace.activePath);
   tasksSubagentsController = new TasksSubagentsController({
     getOrigin: () => harnessOrigin,
-    getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined)
+    getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
+    apiCall: authenticatedHarnessApi
   });
   reliableInterruptController = new ReliableInterruptController({
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
-    getWorkspacePath: () => getWorkspaceState().activePath
+    getWorkspacePath: () => getWorkspaceState().activePath,
+    apiCall: authenticatedHarnessApi,
+    readQueue: (origin, sessionId, options) => readHarnessQueueSnapshotFromWebContents(
+      mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined,
+      origin,
+      sessionId,
+      options
+    )
   });
-  sideChatController = new SideChatController({ getOrigin: () => harnessOrigin });
+  sideChatController = new SideChatController({ getOrigin: () => harnessOrigin, apiCall: authenticatedHarnessApi });
   await refreshDesktopDiagnostics({ rebuildMenu: false });
   createApplicationTray();
   installApplicationMenu();
@@ -6410,7 +6531,7 @@ app.on('before-quit', (event) => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin' && (!isolatedSmokeTarget || allowQuit)) app.quit();
 });
 
 process.on('uncaughtException', (error) => {

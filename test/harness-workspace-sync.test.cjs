@@ -23,7 +23,7 @@ const rpcResponse = (request, value) => new Response(JSON.stringify({
   result: { ok: true, value }
 }), { status: 200, headers: { 'content-type': 'application/json' } });
 
-const createFetch = ({ blank = true, archived = false } = {}) => {
+const createFetch = ({ selectedAvailable = true } = {}) => {
   const calls = [];
   const workspace = {
     workspaceId: WORKSPACE_ID,
@@ -33,18 +33,24 @@ const createFetch = ({ blank = true, archived = false } = {}) => {
     createdAt: '2026-08-21T00:00:00.000Z',
     updatedAt: '2026-08-21T00:00:00.000Z'
   };
-  const fetchImpl = async (_url, options) => {
+  const fetchImpl = async (url, options) => {
     const request = JSON.parse(options.body);
-    calls.push(request);
-    if (request.method === 'workspace.create') return rpcResponse(request, { workspace, created: false });
-    if (request.method === 'workspace.list') return rpcResponse(request, {
-      items: [workspace],
-      archivedSessionIds: archived ? [SESSION_ID] : []
+    calls.push({ url, ...request });
+    if (request.method === 'workspace/create') return rpcResponse(request, { workspace, created: false });
+    if (request.method === 'session/list') return rpcResponse(request, {
+      items: selectedAvailable
+        ? [{
+            sessionId: SESSION_ID,
+            cwd: WORKSPACE_PATH,
+            blank: true,
+            updatedAt: 10,
+            projections: { asOfSeq: -1, values: {} }
+          }]
+        : []
     });
-    if (request.method === 'session.list') return rpcResponse(request, {
-      items: [{ sessionId: SESSION_ID, cwd: WORKSPACE_PATH, blank, updatedAt: 10 }]
-    });
-    if (request.method === 'session.create') return rpcResponse(request, { sessionId: NEW_SESSION_ID });
+    if (request.method === 'session/create') return rpcResponse(request, { sessionId: NEW_SESSION_ID });
+    if (request.method === 'session/page') return rpcResponse(request, { records: [], hasMore: false });
+    if (request.method === 'session/prompt') return rpcResponse(request, { accepted: true });
     throw new Error(`unexpected method ${request.method}`);
   };
   return { calls, fetchImpl };
@@ -52,6 +58,9 @@ const createFetch = ({ blank = true, archived = false } = {}) => {
 
 test('only a random IPv4 loopback origin can receive desktop workspace RPCs', async () => {
   assert.equal(isSafeHarnessOrigin('http://127.0.0.1:54321'), true);
+  assert.equal(isSafeHarnessOrigin('http://127.0.0.1:54321/?token=secret'), false);
+  assert.equal(isSafeHarnessOrigin('http://127.0.0.1:54321/#fragment'), false);
+  assert.equal(isSafeHarnessOrigin('http://user:pass@127.0.0.1:54321/'), false);
   assert.equal(isSafeHarnessOrigin('http://localhost:54321'), false);
   assert.equal(isSafeHarnessOrigin('https://127.0.0.1:54321'), false);
   await assert.rejects(
@@ -65,20 +74,23 @@ test('workspace sync adopts the official Workspace and reuses its blank session'
   const result = await synchronizeHarnessWorkspace({
     origin: 'http://127.0.0.1:54321',
     workspacePath: WORKSPACE_PATH,
+    selectedSessionId: SESSION_ID,
     fetchImpl: fixture.fetchImpl
   });
   assert.equal(result.workspaceId, WORKSPACE_ID);
   assert.equal(result.sessionId, SESSION_ID);
   assert.equal(result.sessionCreated, false);
   assert.deepEqual(fixture.calls.map((call) => call.method), [
-    'workspace.create',
-    'workspace.list',
-    'session.list'
+    'workspace/create',
+    'session/list'
   ]);
+  assert.deepEqual(fixture.calls[0].payload.args.request, { path: WORKSPACE_PATH });
+  assert.deepEqual(fixture.calls[1].payload.args._request, {});
+  assert.match(fixture.calls[0].url, /\/api\/workspace\/create$/);
 });
 
-test('workspace sync creates a session when no reusable blank session is available', async () => {
-  const fixture = createFetch({ blank: false });
+test('workspace sync creates a session when the page has not selected one', async () => {
+  const fixture = createFetch();
   const result = await synchronizeHarnessWorkspace({
     origin: 'http://127.0.0.1:54321',
     workspacePath: WORKSPACE_PATH,
@@ -86,19 +98,47 @@ test('workspace sync creates a session when no reusable blank session is availab
   });
   assert.equal(result.sessionId, NEW_SESSION_ID);
   assert.equal(result.sessionCreated, true);
-  assert.equal(fixture.calls.at(-1).method, 'session.create');
-  assert.deepEqual(fixture.calls.at(-1).payload, { workspaceId: WORKSPACE_ID });
+  assert.equal(fixture.calls.at(-1).method, 'session/create');
+  assert.deepEqual(fixture.calls.at(-1).payload.args.request, { workspaceId: WORKSPACE_ID });
 });
 
-test('archived blank sessions are not silently reopened', async () => {
-  const fixture = createFetch({ archived: true });
+test('a selected session missing from the live list is not silently reopened', async () => {
+  const fixture = createFetch({ selectedAvailable: false });
   const result = await synchronizeHarnessWorkspace({
     origin: 'http://127.0.0.1:54321',
     workspacePath: WORKSPACE_PATH,
+    selectedSessionId: SESSION_ID,
     fetchImpl: fixture.fetchImpl
   });
   assert.equal(result.sessionId, NEW_SESSION_ID);
   assert.equal(result.sessionCreated, true);
+});
+
+test('legacy prompt and history calls use the official Remote wire shape', async () => {
+  const fixture = createFetch();
+  const receipt = await callHarnessApi('http://127.0.0.1:54321', 'session.prompt', {
+    sessionId: SESSION_ID,
+    mode: 'queue',
+    content: [{ type: 'text', text: 'hello' }]
+  }, { fetchImpl: fixture.fetchImpl });
+  assert.equal(receipt.accepted, true);
+  const prompt = fixture.calls.at(-1);
+  assert.equal(prompt.method, 'session/prompt');
+  assert.equal(typeof prompt.payload.args.request.requestId, 'string');
+  assert.equal(prompt.payload.args.request.sessionId, SESSION_ID);
+
+  const history = await callHarnessApi('http://127.0.0.1:54321', 'session.history', {
+    sessionId: SESSION_ID,
+    maxMessages: 2
+  }, { fetchImpl: fixture.fetchImpl });
+  assert.deepEqual(history.events, []);
+  assert.equal(history.projections.asOfSeq, -1);
+  assert.deepEqual(fixture.calls.slice(-2).map((call) => call.method), ['session/list', 'session/page']);
+  assert.deepEqual(fixture.calls.at(-1).payload.args.request, {
+    address: { kind: 'session', sessionId: SESSION_ID },
+    throughSeq: -1,
+    maxMessages: 2
+  });
 });
 
 test('session selection is a fixed localStorage write with a validated id', async () => {

@@ -5,8 +5,9 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { HarnessSupervisor, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
 const { prepareDshHistorySource } = require('../electron/wiki-history-ingest.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const redact = (value) => String(value || '')
@@ -18,10 +19,10 @@ const readArgument = (name) => {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 };
 
-const waitForPermission = async (origin, sessionId, expected) => {
+const waitForPermission = async (apiCall, origin, sessionId, expected) => {
   let actual = '';
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 1 });
+    const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 1 });
     actual = history?.projections?.values?.permissions?.currentValue || '';
     if (actual === expected) return;
     await delay(200);
@@ -29,12 +30,12 @@ const waitForPermission = async (origin, sessionId, expected) => {
   throw new Error(`Harness 没有确认 ${expected} 权限；actual=${actual || 'missing'}。`);
 };
 
-const waitForAgent = async (origin, sessionId, label) => {
+const waitForAgent = async (apiCall, origin, sessionId, label) => {
   const deadline = Date.now() + 300_000;
   let sawRunning = false;
   let latest;
   while (Date.now() < deadline) {
-    const list = await callHarnessApi(origin, 'session.list', {}, { timeoutMs: 8000 });
+    const list = await apiCall(origin, 'session.list', {}, { timeoutMs: 8000 });
     latest = Array.isArray(list?.items) ? list.items.find((item) => item?.sessionId === sessionId) : undefined;
     if (!latest) throw new Error(`${label} 会话从 Harness 目录中消失。`);
     if (latest.running === true) sawRunning = true;
@@ -132,11 +133,12 @@ const main = async () => {
   });
   let result;
   try {
-    const origin = await supervisor.start();
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.5 Real Wiki History Acceptance' });
-    await waitForPermission(origin, workspace.sessionId, 'danger-full-access');
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, fetchImpl, apiCall } = authentication;
+    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V1.0 Real Wiki History Acceptance', fetchImpl });
+    await waitForPermission(apiCall, origin, workspace.sessionId, 'danger-full-access');
 
-    const previewReceipt = await callHarnessApi(origin, 'session.prompt', {
+    const previewReceipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -146,10 +148,10 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (previewReceipt?.accepted !== true) throw new Error('Harness 未接受真实 DSH 历史预览消息。');
-    const previewRun = await waitForAgent(origin, workspace.sessionId, '真实 DSH 历史预览');
+    const previewRun = await waitForAgent(apiCall, origin, workspace.sessionId, '真实 DSH 历史预览');
     const manifestBefore = JSON.parse(await fs.readFile(path.join(vaultPath, '.manifest.json'), 'utf8'));
     if (Object.keys(manifestBefore.history?.dsh || {}).length !== 0) throw new Error('Agent 在确认前写入了历史知识。');
-    const previewHistory = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 28 });
+    const previewHistory = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 28 });
     const previewTrace = JSON.stringify(previewHistory);
     const previewToolCalls = toolCallsOf(previewHistory);
     const previewSaveCalled = previewToolCalls.some((call) => (
@@ -166,7 +168,7 @@ const main = async () => {
     }
     if (previewTrace.includes(rawSecret)) throw new Error('真实 Agent 历史轨迹泄露了遮蔽前凭据。');
 
-    const confirmReceipt = await callHarnessApi(origin, 'session.prompt', {
+    const confirmReceipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -176,8 +178,8 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (confirmReceipt?.accepted !== true) throw new Error('Harness 未接受真实 DSH 历史保存确认。');
-    const saveRun = await waitForAgent(origin, workspace.sessionId, '真实 DSH 历史保存');
-    const history = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 44 });
+    const saveRun = await waitForAgent(apiCall, origin, workspace.sessionId, '真实 DSH 历史保存');
+    const history = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 44 });
     const trace = JSON.stringify(history);
     const reply = assistantTexts(history).join('\n');
     const manifest = JSON.parse(await fs.readFile(path.join(vaultPath, '.manifest.json'), 'utf8'));

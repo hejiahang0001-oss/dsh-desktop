@@ -1,8 +1,33 @@
 # DSH Desktop 执行进度
 
 > 日期：2026-08-30
-> 当前构建：V0.9.0 产品 Latest/Pre-release（托盘监督、固定通知、手动更新检查与便携版）
-> 状态：V0.9.0 已完成源码、打包、覆盖安装、便携版、真实模型、PR/CI、远端资产和匿名回下载全部门禁；当前进入 V1.0.0 上游适配与稳定化，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+> 当前构建：V1.0.0 产品 Latest/Pre-release（最终本机候选已覆盖安装）
+> 状态：V1.0.0 已完成固定上游源码构建、认证/Remote API/插话适配、真实模型、打包、覆盖安装、便携版和本机完整回归；正在执行 PR/CI、远端资产和匿名回下载门禁，V0.5.4 继续保持 Stable 和 GitHub 正式 `Latest release`
+
+## V1.0.0 本轮进展（候选）
+
+1. 上游固定为 DeepSeek Harness 标签 `dsh-v0.1.2-alpha.1`、提交 `cd5ef8148158c3a752a658978873241fdf8e2bbc`；使用 Node v24.19.0、上游 pnpm 11.7.0、冻结 lockfile、官方构建/发布校验和包不变量校验重建 241 个 DSH 与 9 个 Cordis 发布包。
+2. 最终 Harness 运行时包含 24,299 个文件、244,621,952 字节、零链接，`harness-runtime.json` 固定记录版本、标签、提交、构建运行时、250 个包和允许执行的三个原生依赖安装步骤；打包治理拒绝来源不一致的运行时。
+3. 适配上游一次性回环 token：只在精确 `127.0.0.1` 随机端口交换同源 Cookie，Token 不进入公开状态并在写日志前遮蔽，认证 Cookie 不向其他 Origin 转发。
+4. 适配官方 Remote HTTP 形状和 `session/control` 队列流；工作区同步只复用页面已经选择、仍存活、非 Subagent、属于当前 Workspace 且路径一致的会话，其他情况建立新的官方会话。
+5. 主 Electron smoke 完成 HTTP 200、工作区同步、独立 Side Chat、可靠插话控制流、插件清单和 MCP：176 个插件行、146 个活跃、0 个失败，Skills 表面 7/4，MCP `0.1.2-alpha.1` ready。
+6. 真实 DeepSeek 验收完成运行中直接插话和已有排队消息插话；两次均返回 accepted/interrupted/delivery started，原长回合记录 aborted，两条标记回复均完成。
+7. 所有 Office、Wiki、插件与 Agent 验收脚本统一使用认证传输；源码 Word、Excel、PowerPoint Skill 发现和无 Git 中文空格路径 Wiki 查询/保存/同步均通过。
+8. 新增可复现许可证清单：529 个实际打包 JavaScript 包、8 类许可证声明，零缺失许可证字段；明确区分桌面 MIT、Harness 来源和各依赖自身条款。
+
+### V1.0.0 当前门禁
+
+| 门禁 | 当前结果 |
+|---|---|
+| 上游身份与运行时 | 通过：精确 tag/commit、官方源码构建与三项校验、250 个发布包、CLI `0.1.2-alpha.1`、零链接和治理来源校验 |
+| 认证与 API 兼容 | 通过：一次性 token/Cookie、日志遮蔽、同源传输、Remote API、历史分页、工作区/会话和 `session/control` 均有测试及真实 smoke |
+| 真实 Agent | 通过：真实 DeepSeek 直接插话与排队插话均被接受、中断并开始新回复，原回合 aborted、两条标记回复完成 |
+| Office / Wiki | 通过：源码、最终解包版和已安装版的 Word、Excel、PowerPoint 与 Wiki 基础认证 smoke 全部通过 |
+| 源码质量与凭据 | 319/319 完整回归、145 个脚本语法检查、生产依赖审计和差异检查通过；85 个 V1.0.0 证据/日志文件未发现 API Key 或原始一次性 token |
+| 打包与运行时 | `packageReady: true`；489/489 Harness 启动闭包健康；解包版与已安装版 14/14 GUI、终端、Wiki 和三项 Office Skill 全部通过，便携版桌面/Harness/托盘三项通过 |
+| 覆盖与数据 | 静默覆盖退出 0，Windows 登记 V1.0.0；解包 24,857 个文件、733,676,361 字节，安装目录只多正常卸载器；28 个语义文件在覆盖前、后和完整回归后逐字节一致，摘要均为 `45F741934C8251F8576AF52123E75B093B4EC0B7000BB2B2DC6F4CC085A6C994` |
+| 发布物 | 安装包 188,705,896 字节，SHA-256 `1233AAA7C2B6249E3B0C90236B705E279ACF6C6FB8D0D4329F35918F29725D97`；便携版 188,014,396 字节，SHA-256 `F0E00619EE7CC47DD3B97FF24DCE1BB9C7C6D2E3AA789A7C638C6D85DBEF2BF4`；清单 3/3 通过，V0.9.0 回退资产已核验保留 |
+| GitHub | 待完成：实现 PR/主分支 CI、V1.0.0 Pre-release 和匿名回下载；V0.5.4 Stable 不变 |
 
 ## V0.9.0 本轮进展
 

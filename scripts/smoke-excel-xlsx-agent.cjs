@@ -6,8 +6,9 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 
 const { HarnessSupervisor, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
 const { readZip } = require('../resources/skills/word-docx/scripts/word-docx.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const execFileAsync = promisify(execFile);
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -20,21 +21,21 @@ const readArgument = (name) => {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 };
 
-const waitForPermission = async (origin, sessionId) => {
+const waitForPermission = async (apiCall, origin, sessionId) => {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 1 });
+    const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 1 });
     if (history?.projections?.values?.permissions?.currentValue === 'workspace-write') return;
     await delay(200);
   }
   throw new Error('Harness 没有确认 workspace-write 权限。');
 };
 
-const waitForAgent = async (origin, sessionId, outputPath) => {
+const waitForAgent = async (apiCall, origin, sessionId, outputPath) => {
   const deadline = Date.now() + 300_000;
   let sawRunning = false;
   let latest;
   while (Date.now() < deadline) {
-    const list = await callHarnessApi(origin, 'session.list', {}, { timeoutMs: 8000 });
+    const list = await apiCall(origin, 'session.list', {}, { timeoutMs: 8000 });
     latest = Array.isArray(list?.items) ? list.items.find((item) => item?.sessionId === sessionId) : undefined;
     if (!latest) throw new Error('真实 Excel 验收会话从 Harness 目录中消失。');
     if (latest.running === true) sawRunning = true;
@@ -46,7 +47,7 @@ const waitForAgent = async (origin, sessionId, outputPath) => {
     }
     if (latest.running === false && outputReady) return { sawRunning, summary: latest };
     if (sawRunning && latest.running === false && !outputReady) {
-      const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 8 });
+      const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 8 });
       const eventTypes = Array.isArray(history?.events) ? history.events.map((entry) => entry?.event?.type).filter(Boolean) : [];
       throw new Error(`真实 Harness 轮次结束但没有生成 XLSX；事件：${eventTypes.slice(-12).join(', ')}`);
     }
@@ -96,19 +97,21 @@ const main = async () => {
 
   let result;
   try {
-    const origin = await supervisor.start();
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, fetchImpl, apiCall } = authentication;
     const workspace = await synchronizeHarnessWorkspace({
       origin,
       workspacePath,
-      fallbackTitle: 'V0.5.21 Real Excel Agent Acceptance'
+      fallbackTitle: 'V1.0 Real Excel Agent Acceptance',
+      fetchImpl
     });
-    const permission = await callHarnessApi(origin, 'session.prompt', {
+    const permission = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: '/permission workspace-write' }]
     });
     if (permission?.accepted !== true) throw new Error('Harness 未接受 workspace-write 权限命令。');
-    await waitForPermission(origin, workspace.sessionId);
+    await waitForPermission(apiCall, origin, workspace.sessionId);
 
     const prompt = [
       '/excel-xlsx 请使用此 Skill 在当前工作区完成真实验收。',
@@ -118,14 +121,14 @@ const main = async () => {
       '所有表都设置标题样式、表头样式、筛选和冻结窗格，金额使用 currency 或 decimal 样式。',
       '生成后必须调用 inspect --strict 做结构检查；不要使用在线服务，不要生成其他文件。'
     ].join('\n');
-    const receipt = await callHarnessApi(origin, 'session.prompt', {
+    const receipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: prompt }],
       clientTimeZone: 'Asia/Shanghai'
     });
     if (receipt?.accepted !== true) throw new Error('Harness 未接受真实 Excel 验收消息。');
-    const run = await waitForAgent(origin, workspace.sessionId, xlsxPath);
+    const run = await waitForAgent(apiCall, origin, workspace.sessionId, xlsxPath);
 
     const { stdout } = await execFileAsync(runtime.nodePath, [
       runtime.xlsxToolPath,
@@ -150,7 +153,7 @@ const main = async () => {
     if (!sheetText.includes('REAL_HARNESS_EXCEL_VERIFIED')) {
       throw new Error('真实 Harness 生成的 XLSX 缺少验收标记。');
     }
-    const history = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 12 });
+    const history = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 12 });
     result = {
       ok: true,
       session: {

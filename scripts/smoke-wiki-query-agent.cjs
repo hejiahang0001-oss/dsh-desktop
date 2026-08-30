@@ -5,7 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { HarnessSupervisor, resolveHarnessRuntimePaths } = require('../electron/harness-supervisor.cjs');
-const { callHarnessApi, synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { synchronizeHarnessWorkspace } = require('../electron/harness-workspace-sync.cjs');
+const { authenticateHarnessSupervisor } = require('./harness-smoke-auth.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const redact = (value) => String(value || '')
@@ -17,21 +18,21 @@ const readArgument = (name) => {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length);
 };
 
-const waitForPermission = async (origin, sessionId) => {
+const waitForPermission = async (apiCall, origin, sessionId) => {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const history = await callHarnessApi(origin, 'session.history', { sessionId, maxMessages: 1 });
+    const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 1 });
     if (history?.projections?.values?.permissions?.currentValue === 'workspace-write') return;
     await delay(200);
   }
   throw new Error('Harness 没有确认 workspace-write 权限。');
 };
 
-const waitForAgent = async (origin, sessionId) => {
+const waitForAgent = async (apiCall, origin, sessionId) => {
   const deadline = Date.now() + 300_000;
   let sawRunning = false;
   let latest;
   while (Date.now() < deadline) {
-    const list = await callHarnessApi(origin, 'session.list', {}, { timeoutMs: 8000 });
+    const list = await apiCall(origin, 'session.list', {}, { timeoutMs: 8000 });
     latest = Array.isArray(list?.items) ? list.items.find((item) => item?.sessionId === sessionId) : undefined;
     if (!latest) throw new Error('真实 Wiki 验收会话从 Harness 目录中消失。');
     if (latest.running === true) sawRunning = true;
@@ -100,16 +101,17 @@ const main = async () => {
   });
   let result;
   try {
-    const origin = await supervisor.start();
-    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V0.6.4 Real Wiki Agent Acceptance' });
-    const permission = await callHarnessApi(origin, 'session.prompt', {
+    const authentication = await authenticateHarnessSupervisor(supervisor);
+    const { origin, fetchImpl, apiCall } = authentication;
+    const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fallbackTitle: 'V1.0 Real Wiki Agent Acceptance', fetchImpl });
+    const permission = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: '/permission workspace-write' }]
     });
     if (permission?.accepted !== true) throw new Error('Harness 未接受 workspace-write 权限命令。');
-    await waitForPermission(origin, workspace.sessionId);
-    const receipt = await callHarnessApi(origin, 'session.prompt', {
+    await waitForPermission(apiCall, origin, workspace.sessionId);
+    const receipt = await apiCall(origin, 'session.prompt', {
       sessionId: workspace.sessionId,
       mode: 'queue',
       content: [{
@@ -119,8 +121,8 @@ const main = async () => {
       clientTimeZone: 'Asia/Shanghai'
     });
     if (receipt?.accepted !== true) throw new Error('Harness 未接受真实 Wiki 查询消息。');
-    const run = await waitForAgent(origin, workspace.sessionId);
-    const history = await callHarnessApi(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 16 });
+    const run = await waitForAgent(apiCall, origin, workspace.sessionId);
+    const history = await apiCall(origin, 'session.history', { sessionId: workspace.sessionId, maxMessages: 16 });
     const reply = assistantTexts(history).join('\n');
     const log = await fs.readFile(path.join(vaultPath, 'log.md'), 'utf8');
     const toolCalled = /QUERY query=.*WIKI_REAL_QUERY_VERIFIED/i.test(log);

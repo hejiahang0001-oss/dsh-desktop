@@ -6,10 +6,13 @@ const path = require('node:path');
 const {
   HarnessSupervisor,
   buildHarnessEnvironment,
+  createAuthenticatedHarnessFetch,
+  establishHarnessSession,
   isSafeHarnessUrl,
   parseHarnessUrl,
   probeHarness,
   provisionDesktopShellEnvPlugin,
+  redactHarnessLog,
   resolvePnpmDshBin,
   resolveHarnessRuntimePaths,
   stripAnsi
@@ -81,6 +84,10 @@ test('desktop workspace is explicit in the Harness environment', () => {
 
 test('parseHarnessUrl accepts only a random IPv4 loopback origin', () => {
   assert.equal(parseHarnessUrl('dsh web: http://127.0.0.1:61045\n'), 'http://127.0.0.1:61045');
+  assert.equal(
+    parseHarnessUrl('dsh web: http://127.0.0.1:61045/?token=abcdefghijklmnopqrstuvwxyz012345'),
+    'http://127.0.0.1:61045/?token=abcdefghijklmnopqrstuvwxyz012345'
+  );
   assert.equal(parseHarnessUrl('\u001b[32mdsh web: http://127.0.0.1:3080\u001b[0m'), 'http://127.0.0.1:3080');
   assert.equal(parseHarnessUrl('dsh web: http://localhost:3080'), null);
   assert.equal(parseHarnessUrl('dsh web: https://127.0.0.1:3080'), null);
@@ -95,6 +102,13 @@ test('safe URL guard rejects non-loopback and incomplete addresses', () => {
 
 test('stripAnsi removes terminal control sequences from logs', () => {
   assert.equal(stripAnsi('\u001b[31mfailed\u001b[0m'), 'failed');
+});
+
+test('Harness startup logging redacts the local one-time authentication token', () => {
+  const token = 'abcdefghijklmnopqrstuvwxyz012345';
+  const redacted = redactHarnessLog(`dsh web: http://127.0.0.1:61045/?token=${token}`);
+  assert.equal(redacted, 'dsh web: http://127.0.0.1:61045/?token=[REDACTED]');
+  assert.equal(redacted.includes(token), false);
 });
 
 test('runtime resolver prefers explicit, existing paths', () => {
@@ -123,7 +137,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   const packageDir = path.join(
     nodeModules,
     '.pnpm',
-    '@deepseek-ai+dsh@0.1.1-rc.2_test',
+    '@deepseek-ai+dsh@0.1.2-alpha.1_test',
     'node_modules',
     '@deepseek-ai',
     'dsh',
@@ -216,6 +230,52 @@ test('probeHarness verifies a successful HTML response', async () => {
   });
   assert.equal(result.status, 200);
   assert.equal(result.title, 'DeepSeek Harness');
+});
+
+test('tokenized Harness launch exchanges a bounded cookie before probing the clean origin', async () => {
+  const calls = [];
+  const authenticated = await establishHarnessSession(
+    'http://127.0.0.1:4567/?token=abcdefghijklmnopqrstuvwxyz012345',
+    {
+      attempts: 1,
+      fetchImpl: async (url, options = {}) => {
+        calls.push({ url: String(url), options });
+        if (calls.length === 1) {
+          return new Response(null, {
+            status: 303,
+            headers: { location: '/', 'set-cookie': 'dsh_session=local-cookie-value; HttpOnly; SameSite=Strict; Path=/' }
+          });
+        }
+        return new Response('<title>DeepSeek Harness</title>', {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' }
+        });
+      }
+    }
+  );
+  assert.equal(authenticated.origin, 'http://127.0.0.1:4567');
+  assert.equal(authenticated.cookie.header, 'dsh_session=local-cookie-value');
+  assert.equal(authenticated.probe.status, 200);
+  assert.equal(calls[0].options.redirect, 'manual');
+  assert.equal(calls[1].options.headers.cookie, 'dsh_session=local-cookie-value');
+});
+
+test('authenticated Harness fetch never forwards its cookie outside the pinned loopback origin', async () => {
+  let observed;
+  const authenticatedFetch = createAuthenticatedHarnessFetch({
+    origin: 'http://127.0.0.1:4567',
+    cookie: { header: 'dsh_session=local-cookie-value' },
+    fetchImpl: async (url, options) => {
+      observed = { url: String(url), cookie: new Headers(options.headers).get('cookie') };
+      return new Response('{}');
+    }
+  });
+  await authenticatedFetch('http://127.0.0.1:4567/api/session.list', { headers: { accept: 'application/json' } });
+  assert.deepEqual(observed, {
+    url: 'http://127.0.0.1:4567/api/session.list',
+    cookie: 'dsh_session=local-cookie-value'
+  });
+  assert.throws(() => authenticatedFetch('https://example.com/api/session.list'), /拒绝/);
 });
 
 test('supervisor launches Harness in the selected workspace directory', async (context) => {

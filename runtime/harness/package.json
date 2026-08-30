@@ -1,8 +1,13 @@
 {
   "name": "dsh-harness-runtime",
-  "version": "0.1.1-rc.2",
+  "version": "0.1.2-alpha.1",
   "private": true,
-  "dependencies": {
-    "@deepseek-ai/dsh": "0.1.1-rc.2"
+  "dshDesktop": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+    "tag": "dsh-v0.1.2-alpha.1",
+    "commit": "cd5ef8148158c3a752a658978873241fdf8e2bbc",
+    "package": "@deepseek-ai/dsh",
+    "packageVersion": "0.1.2-alpha.1",
+    "distribution": "source-build"
   }
 }

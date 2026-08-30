@@ -22,7 +22,7 @@ test('extension center is local-only, official-inventory-backed, metadata-only, 
     /isTrustedMainFrameEvent\(\s*event,\s*pluginHealthWindow\?\.webContents,\s*pluginHealthUrlAllowed\s*\)/
   );
   assert.match(main, /label: '扩展中心…'/);
-  assert.match(main, /callHarnessRemote\(harnessOrigin, 'pluginInventory', 'list'/);
+  assert.match(main, /authenticatedHarnessRemote\(harnessOrigin, 'pluginInventory', 'list'/);
   assert.match(main, /ipcMain\.handle\('extensions:open-window'/);
   assert.match(main, /--plugin-health-smoke-file=/);
   assert.match(main, /runPluginHealthSmoke/);

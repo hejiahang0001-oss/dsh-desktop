@@ -200,6 +200,32 @@ test('package layout requires all six Wiki skills and the fixed offline Wiki too
   assert.equal(ready.wikiSkillRuntime.files, 7);
 });
 
+test('package layout requires exact Harness source-build provenance', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-harness-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const harnessRoot = path.join(root, 'resources', 'harness');
+  writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), JSON.stringify({
+    name: '@deepseek-ai/dsh', version: '0.1.2-alpha.1'
+  }));
+  writeFile(path.join(harnessRoot, 'harness-runtime.json'), JSON.stringify({
+    version: 1,
+    harness: {
+      name: '@deepseek-ai/dsh',
+      version: '0.1.2-alpha.1',
+      commit: 'cd5ef8148158c3a752a658978873241fdf8e2bbc'
+    },
+    build: { packageCount: 250 }
+  }));
+  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, true);
+
+  writeFile(path.join(harnessRoot, 'harness-runtime.json'), JSON.stringify({
+    version: 1,
+    harness: { name: '@deepseek-ai/dsh', version: '0.1.2-alpha.1', commit: 'wrong' },
+    build: { packageCount: 250 }
+  }));
+  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+});
+
 test('package manifest excludes the duplicate app PTY and unused xterm development surfaces', () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
   for (const pattern of [
