@@ -152,6 +152,7 @@ let backgroundTasks;
 let backgroundUnavailableMessage = '独立后台任务尚未初始化。';
 let backgroundOperationPromise = null;
 let quitOperationPromise = null;
+let workspaceActivationPromise = null;
 let sideChatController;
 let gitDeliveryManager;
 let updatePreferenceStore;
@@ -4177,6 +4178,11 @@ const showWorkspaceError = async (error) => {
 };
 
 const activateWorkspace = async (workspacePath, preferredSessionId = '') => {
+  if (workspaceActivationPromise) return { ok: false, error: '另一项工作区切换尚未结束；未改变当前选择。' };
+  workspaceActivationPromise = performWorkspaceActivation(workspacePath, preferredSessionId).finally(() => { workspaceActivationPromise = null; });
+  return workspaceActivationPromise;
+};
+const performWorkspaceActivation = async (workspacePath, preferredSessionId = '') => {
   try {
     await flushComposerDraft();
     if (sideChatOperationPromise) await sideChatOperationPromise;
@@ -7362,6 +7368,7 @@ app.on('before-quit', (event) => {
     stopAgentPolling(); stopSideChatSelectionMonitor();
     await backgroundTasks?.stop();
     if (backgroundOperationPromise) await Promise.allSettled([backgroundOperationPromise]);
+    if (workspaceActivationPromise) await Promise.allSettled([workspaceActivationPromise]);
     await flushComposerDraft().catch(() => {});
     if (worktreeOperationPromise) await Promise.allSettled([worktreeOperationPromise]);
     if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);
