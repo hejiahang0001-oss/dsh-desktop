@@ -6,6 +6,19 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
+test('fixed runtime plugin bundles include every relative module import', () => {
+  const manifest = JSON.parse(read('package.json'));
+  for (const resource of manifest.build.extraResources.filter((entry) => entry.to.startsWith('harness-plugins/'))) {
+    for (const file of resource.filter.filter((file) => file.endsWith('.mjs'))) {
+      const source = read(path.join(resource.from, file));
+      for (const match of source.matchAll(/from\s+['"]\.\/([^'"]+)['"]/g)) {
+        assert.ok(resource.filter.includes(match[1]), `${resource.from}/${file} requires bundled ${match[1]}`);
+        assert.ok(fs.existsSync(path.join(root, resource.from, match[1])));
+      }
+    }
+  }
+});
+
 test('release-facing files follow the package version', () => {
   const manifest = JSON.parse(read('package.json'));
   const version = manifest.version;
