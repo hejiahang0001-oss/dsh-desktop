@@ -21,7 +21,7 @@ class SessionControlClient {
     return task.finally(() => { this.queued--; });
   }
   send(operation, payload) {
-    if (!['inspect', 'fork', 'resume-queue'].includes(operation) || !this.child?.connected || this.pending.size >= 4) return Promise.reject(new Error('会话控制暂不可用，请稍后重试。'));
+    if (!['inspect', 'status', 'workspace-status', 'fork', 'resume-queue', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !this.child?.connected || this.pending.size >= 4) return Promise.reject(new Error('会话控制暂不可用，请稍后重试。'));
     const child = this.child, requestId = randomUUID();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => finish(new Error('会话控制超时；请查看交接记录，勿重复提交。')), 60000);

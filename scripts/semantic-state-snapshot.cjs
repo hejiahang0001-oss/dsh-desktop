@@ -14,6 +14,8 @@ const FIXED_STATE_FILES = Object.freeze([
   'workbench-dock.json',
   'session-continuity.json',
   'session-handoffs.json',
+  'background-tasks.json',
+  'background-tasks.json.bak',
   'worktrees/ownership.json',
   'worktrees/ownership.json.bak',
   'harness/.anonymous-user-id',
@@ -120,6 +122,7 @@ const snapshotSemanticUserData = async (rootPath) => {
   const files = [];
   for (const relativePath of FIXED_STATE_FILES) await addFile(root, relativePath, 'state', files);
   await addDirectoryTree(root, 'harness/sessions', 'session', files);
+  await addDirectoryTree(root, 'task-archives', 'state', files);
   await addProfileState(root, files);
   await addFlatDirectory(root, 'Local Storage/leveldb', 'local-storage', semanticLevelDbName, files);
   files.sort((left, right) => left.path.localeCompare(right.path, 'en'));

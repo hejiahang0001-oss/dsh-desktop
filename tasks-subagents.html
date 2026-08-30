@@ -7,6 +7,7 @@
   <title>DSH 任务与子代理</title>
   <link rel="stylesheet" href="assets/tasks-subagents.css">
   <script defer src="assets/tasks-subagents.js"></script>
+  <script defer src="assets/background-tasks.js"></script>
 </head>
 <body>
   <header class="toolbar">
@@ -18,6 +19,11 @@
     <button id="close" type="button">关闭</button>
   </header>
   <main>
+    <nav class="task-tabs" aria-label="任务视图">
+      <button id="task-tab-current" type="button" aria-pressed="true" aria-controls="current-task-panel">当前会话</button>
+      <button id="task-tab-background" type="button" aria-pressed="false" aria-controls="background-task-panel">独立后台任务</button>
+    </nav>
+    <div id="current-task-panel">
     <section class="summary-section" aria-labelledby="current-title">
       <div class="section-heading"><div><h2 id="current-title">当前任务</h2><p id="root-line">正在读取 Harness 会话…</p></div></div>
       <div id="summary" class="summary-grid" aria-live="polite"></div>
@@ -35,6 +41,35 @@
       </div>
       <div id="job-list" class="job-list" aria-live="polite"><p class="empty-state">当前没有后台任务。</p></div>
     </section>
+    </div>
+    <div id="background-task-panel" hidden>
+      <section aria-labelledby="background-title">
+        <div class="section-heading"><div><h2 id="background-title">独立后台任务</h2><p>每项任务使用自己的工作树，每次运行建立新会话。托盘运行时有效；完全退出后不执行。</p></div></div>
+        <p id="background-summary" role="status"></p>
+        <p id="background-warning" class="background-warning" role="status" hidden></p>
+        <details id="background-create"><summary>新建任务</summary>
+          <form id="background-form" class="background-form">
+            <label>填入任务示例<select id="background-template"><option value="">自行输入任务</option><option value="review">周期代码审查</option><option value="pr">PR 状态检查</option></select></label>
+            <label>任务名称<input id="background-name" required maxlength="80" placeholder="例如：每日检查代码质量"></label>
+            <label>任务内容<textarea id="background-prompt" required maxlength="8000" placeholder="说明检查范围、产出文件和完成条件。不要填入密钥。"></textarea></label>
+            <div class="background-fields">
+              <label>执行方式<select id="background-schedule"><option value="manual">仅手动运行</option><option value="once">指定时间运行一次</option><option value="daily">每天</option><option value="interval">固定间隔</option></select></label>
+              <label id="background-once-label" hidden>本机日期与时间<input id="background-once" type="datetime-local"></label>
+              <label id="background-daily-label" hidden>本机时间<input id="background-daily" type="time" value="09:00"></label>
+              <label id="background-interval-label" hidden>间隔（分钟）<input id="background-interval" type="number" min="15" max="1440" value="60"></label>
+              <label>每日最多运行次数<input id="background-limit" type="number" min="1" max="96" value="3" required></label>
+            </div>
+            <p class="background-note">从当前 Git 仓库已提交内容建立目录，不复制未提交文件或依赖，不自动合并。使用模型额度；仅工作区写入，敏感操作仍需确认。不要同时手动修改任务目录。</p>
+            <button id="background-submit" type="submit">创建并确认计划</button>
+          </form>
+        </details>
+        <div id="background-list" class="background-list"></div>
+      </section>
+      <section aria-labelledby="background-history-title">
+        <div class="section-heading"><div><h2 id="background-history-title">运行记录</h2><p>“完成”表示内核回合结束，产出质量请打开会话检查。异常不会自动重发。</p></div><button id="background-archive" type="button">归档已完成记录</button></div>
+        <div id="background-history" class="background-list"></div>
+      </section>
+    </div>
   </main>
   <footer>
     <span id="status" role="status">补充消息进入 FIFO 队列；中断“已受理”不等于“已经停止”。</span>

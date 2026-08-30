@@ -66,6 +66,19 @@ test('support backup copies only verified semantic data and excludes credential 
   assert.equal((await validateSupportBackup(created.backupRoot)).fileCount, snapshot.files.length);
 });
 
+test('support backups include task plans and bounded archives but never task worktree contents', async (t) => {
+  const f = await fixture(); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+  await fs.writeFile(path.join(f.dataRoot, 'background-tasks.json'), '{"tasks":[],"runs":[]}');
+  await fs.mkdir(path.join(f.dataRoot, 'task-archives'));
+  const archive = 'task-archives/1788000000000-12345678-1234-1234-1234-123456789abc.json';
+  await fs.writeFile(path.join(f.dataRoot, archive), '{"runs":[]}');
+  await fs.writeFile(path.join(f.dataRoot, 'task-archives', 'unrelated.txt'), 'excluded');
+  const created = await createSupportBackup({ dataRoot: f.dataRoot, destinationRoot: f.destinationRoot, appVersion: '1.1.0' });
+  assert.equal(created.valid, true); assert.equal(await fs.readFile(path.join(created.backupRoot, archive), 'utf8'), '{"runs":[]}');
+  assert.equal(await fs.readFile(path.join(created.backupRoot, 'background-tasks.json'), 'utf8'), '{"tasks":[],"runs":[]}');
+  assert.equal(await fs.stat(path.join(created.backupRoot, 'task-archives', 'unrelated.txt')).then(() => true, () => false), false);
+});
+
 test('support backup validation rejects tampering and unsafe destinations', async (context) => {
   const setup = await fixture();
   context.after(() => fs.rm(setup.root, { recursive: true, force: true }));

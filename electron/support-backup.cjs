@@ -20,6 +20,11 @@ const FIXED_STATE_FILES = Object.freeze([
   'wiki-settings.json',
   'Preferences',
   'workbench-state.json',
+  'workbench-dock.json',
+  'session-continuity.json',
+  'session-handoffs.json',
+  'background-tasks.json',
+  'background-tasks.json.bak',
   'worktrees/ownership.json',
   'worktrees/ownership.json.bak',
   'harness/.anonymous-user-id',
@@ -75,6 +80,7 @@ const semanticLevelDbName = (name) => /^\d+\.ldb$/iu.test(name) || /^MANIFEST-/u
 
 const backupCategoryForPath = (relativePath) => {
   if (FIXED_STATE_SET.has(relativePath)) return 'state';
+  if (/^task-archives\/(?:released-|recovered-)?\d{10,16}-[a-f0-9-]{36}\.json$/i.test(relativePath)) return 'state';
   const segments = relativePath.split('/');
   if (segments.length >= 3 && segments.length <= 7 && segments[0] === 'harness' && segments[1] === 'sessions') return 'session';
   if (segments.length === 4 && segments[0] === 'harness' && segments[1] === 'profiles' && segments[2] !== 'node_modules' && PROFILE_STATE_NAMES.has(segments[3])) return 'pluginProfile';
@@ -161,6 +167,7 @@ const collectSupportBackupFiles = async (dataRoot) => {
   const files = [];
   for (const relativePath of FIXED_STATE_FILES) await addFile(root, relativePath, 'state', files);
   await addDirectoryTree(root, 'harness/sessions', 'session', files);
+  await addFlatDirectory(root, 'task-archives', 'state', (name) => Boolean(backupCategoryForPath(`task-archives/${name}`)), files);
   await addProfileState(root, files);
   await addFlatDirectory(root, 'Local Storage/leveldb', 'local-storage', semanticLevelDbName, files);
   files.sort((left, right) => left.path.localeCompare(right.path, 'en'));

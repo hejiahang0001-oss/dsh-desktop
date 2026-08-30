@@ -31,6 +31,7 @@ test('tasks and subagents window is local-only, narrow, accessible, and packaged
   assert.match(renderer, /api\.prompt\(item\.id, value\)/);
   assert.match(renderer, /api\.interrupt\(item\.id\)/);
   assert.match(renderer, /api\.open\(item\.id\)/);
+  assert.match(renderer, /state: await api\.refresh\(\)/);
   assert.doesNotMatch(renderer, /innerHTML|eval\(/);
   assert.match(page, /aria-live="polite"/);
   assert.match(page, /role="status"/);
