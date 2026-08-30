@@ -1,0 +1,26 @@
+html, body { min-width: 0 !important; min-height: 0 !important; }
+body { background: #191918 !important; font: 12px/1.5 "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif; }
+.toolbar { padding: 10px 16px !important; gap: 14px !important; }
+.toolbar h1 { font-size: 17px !important; margin: 0 !important; }
+.toolbar .identity p { margin: 3px 0 0 !important; }
+main { padding: 12px 16px !important; gap: 14px !important; }
+.surface-card { padding: 10px !important; }
+.surface-header p, .surface-message, .surface-facts, .section-heading p, .root-path, .surface-metrics span { font-size: 11px !important; }
+.office-card { border-radius: 7px !important; padding: 12px !important; background: #232322 !important; }
+.office-card h3 { font-size: 16px !important; margin-top: 8px !important; }
+.readiness { border-radius: 7px !important; padding: 10px 14px !important; box-shadow: none !important; }
+body:has(#office-grid) .toolbar .eyebrow, body:has(#office-grid) .toolbar p,
+body:has(#office-grid) .section-label, body:has(#office-grid) .capabilities { display: none; }
+body:has(#office-grid) .toolbar { padding: 5px 12px !important; align-items: center; }
+body:has(#office-grid) main { padding: 8px 12px !important; gap: 9px !important; max-width: none; }
+body:has(#office-grid) .readiness { padding: 5px 10px !important; }
+body:has(#office-grid) .readiness h2, body:has(#office-grid) .readiness h2 strong { font-size: 12px; margin: 0; }
+body:has(#office-grid) .section-heading { margin-bottom: 6px; }
+body:has(#office-grid) .section-heading h2 { font-size: 13px; margin: 0; }
+body:has(#office-grid) .office-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body:has(#office-grid) .office-card { padding: 8px !important; }
+body:has(#office-grid) .office-mark { width: 22px; height: 22px; font-size: 12px; }
+body:has(#office-grid) .office-card h3 { margin: 3px 0 0 !important; font-size: 14px !important; }
+body:has(#office-grid) .summary { min-height: 0; margin: 3px 0; }
+body:has(#office-grid) .boundary { margin: 5px 0; }
+@media (max-width: 780px) { .office-grid, .surface-grid { grid-template-columns: 1fr !important; } .toolbar { flex-wrap: wrap; } }

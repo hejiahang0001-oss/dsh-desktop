@@ -1,0 +1,11 @@
+#root { height: calc(100dvh - var(--dsh-native-dock-height, 0px)) !important; min-height: 0 !important; }
+#root > div { max-height: 100%; min-height: 0 !important; }
+#root .h-screen, #root .h-dvh { height: calc(100dvh - var(--dsh-native-dock-height, 0px)) !important; }
+#dsh-workbench-files, #dsh-workbench-review { bottom: var(--dsh-native-dock-height, 0px) !important; }
+#dsh-app-preview, #dsh-file-preview { bottom: calc(var(--dsh-native-dock-height, 0px) + 18px) !important; }
+/* Use a side panel as a deliberate overlay at small widths; native tools always reserve vertical room. */
+html { overflow: hidden; }
+/* In the desktop workbench, reserve side-panel room even below the old overlay breakpoints. */
+html[data-dsh-review-open="true"] #root { width: calc(100vw - var(--dsh-review-width)) !important; max-width: calc(100vw - var(--dsh-review-width)) !important; }
+html[data-dsh-files-open="true"] #root { width: calc(100vw - var(--dsh-files-width)) !important; max-width: calc(100vw - var(--dsh-files-width)) !important; margin-left: var(--dsh-files-width) !important; }
+html[data-dsh-files-open="true"][data-dsh-review-open="true"] #root { width: calc(100vw - var(--dsh-files-width) - var(--dsh-review-width)) !important; max-width: calc(100vw - var(--dsh-files-width) - var(--dsh-review-width)) !important; }

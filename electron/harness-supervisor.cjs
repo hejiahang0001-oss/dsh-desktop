@@ -43,7 +43,7 @@ const isSafeHarnessUrl = (value) => {
 const firstExistingFile = (candidates) => candidates.find((candidate) => candidate && fs.existsSync(candidate));
 
 const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName = 'dsh-desktop-shell-env' }) => {
-  if (!['dsh-desktop-shell-env', 'dsh-desktop-credentials'].includes(expectedName)) throw new Error('Invalid fixed desktop plugin.');
+  if (!['dsh-desktop-shell-env', 'dsh-desktop-credentials', 'dsh-desktop-tools'].includes(expectedName)) throw new Error('Invalid fixed desktop plugin.');
   const sourceManifestPath = path.join(sourceDir, 'package.json');
   const sourceModulePath = path.join(sourceDir, 'index.mjs');
   const manifest = JSON.parse(await fsp.readFile(sourceManifestPath, 'utf8'));
@@ -414,6 +414,8 @@ class HarnessSupervisor extends EventEmitter {
       environment.DSH_DESKTOP_NODE = nodePath;
       delete environment.DSH_DESKTOP_CREDENTIAL_MODULE;
       if (this.credentialHost) environment.DSH_DESKTOP_CREDENTIAL_MODULE = this.credentialHost.providerModule;
+      delete environment.DSH_DESKTOP_TOOL_MODULE;
+      if (this.credentialHost?.toolsModule) environment.DSH_DESKTOP_TOOL_MODULE = this.credentialHost.toolsModule;
       this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', this.credentialHost?.patchPath || patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,
         env: environment,

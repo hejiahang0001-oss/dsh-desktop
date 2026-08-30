@@ -1,6 +1,6 @@
 # DSH Desktop V1.0.2
 
-Candidate: document intake and encrypted software credentials. Stable V0.5.4 is unchanged; no automatic installation or Stable promotion.
+Published Pre-release: document intake and encrypted software credentials. Stable V0.5.4 is unchanged; no automatic installation or Stable promotion.
 
 ## Changes
 
@@ -17,6 +17,6 @@ DPAPI does not protect against code running as the same Windows user or trusted 
 
 ## Evidence
 
-350/350 source tests pass. Unpacked and installed builds pass document intake, IPC isolation, Harness startup, Office center and real two-command terminal checks. A paid real-model acceptance in the unpacked build verified exact XLSX totals and a random DOCX marker using migrated encrypted credentials. Windows registers 1.0.2 after overwrite installation. All 31 semantic files match immediately before/after installation; subsequent normal startup intentionally migrates credentials. Public-release verification is pending.
+350/350 source tests pass. Unpacked and installed builds pass document intake, IPC isolation, Harness startup, Office center and real two-command terminal checks. A paid real-model acceptance in the unpacked build verified exact XLSX totals and a random DOCX marker using migrated encrypted credentials. Windows registers 1.0.2 after overwrite installation. All 31 semantic files match immediately before/after installation; subsequent normal startup intentionally migrates credentials. PR #62 and main CI 33325999737 passed. All four public assets match local size and SHA-256 after anonymous re-download. The release targets cfc5d388f59898636383147281eeaeffd9f892cd; Stable remains V0.5.4.
 
 A first-start upstream session-directory race occurred once and passed on retry; bounded startup recovery remains a V1.0.5 acceptance item. Test profiles must keep their Chromium user data with their encrypted Harness vault.
