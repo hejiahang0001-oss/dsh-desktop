@@ -38,6 +38,16 @@ test('reported paths stay inside the active workspace', () => {
   assert.throws(() => resolveReportedPath(workspace, path.join(workspace, 'absolute.js')), ChangeReviewError);
 });
 
+test('documents added by the user are protected from rejecting all Agent output', async (t) => {
+  const root = await createRepository(); t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const reviewer = new GitChangeReviewer(); await reviewer.activate(root);
+  await fsp.writeFile(path.join(root, '资料.csv'), '项目,金额\n甲,12');
+  reviewer.protectUserPaths(['资料.csv']);
+  assert.equal((await reviewer.inspect('资料.csv')).canReject, false);
+  await assert.rejects(reviewer.reject('资料.csv'), /未暂存修改/);
+  assert.equal(await fsp.readFile(path.join(root, '资料.csv'), 'utf8'), '项目,金额\n甲,12');
+});
+
 test('porcelain parser keeps rename records paired instead of inventing another file', () => {
   assert.deepEqual(parsePorcelainEntries('R  renamed.txt\0original.txt\0?? new.txt\0'), [
     { code: 'R ', path: 'renamed.txt', originalPath: 'original.txt' },

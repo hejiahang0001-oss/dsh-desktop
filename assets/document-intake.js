@@ -1,0 +1,100 @@
+(() => {
+  if (window.__DSH_DOCUMENT_INTAKE__) return true;
+  const api = window.desktopAPI?.documents;
+  const bridge = window.__DSH_COMPOSER_TEXT__;
+  if (!api || !bridge) return false;
+  let bar, list, status, button, busy = false, mountedCard, scheduled = false;
+  const refs = new Map();
+  const composer = bridge.current;
+  const message = (text, error = false) => {
+    status.textContent = text; status.dataset.error = String(error);
+  };
+  const redraw = () => {
+    list.replaceChildren();
+    const value = bridge.read();
+    for (const [reference, item] of refs) {
+      if (!value.includes(reference)) continue;
+      const chip = document.createElement('span'); chip.className = 'dsh-document-chip';
+      const label = document.createElement('span'); label.textContent = item.name; label.title = item.relativePath;
+      const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×';
+      remove.setAttribute('aria-label', `移除附件 ${item.name}`);
+      remove.onclick = async () => {
+        const input = composer(); if (!input) return;
+        try { await bridge.remove(input, reference); }
+        catch (error) { return message(error.message, true); }
+        redraw(); input.focus({ preventScroll: true });
+        message('已从输入中移除引用，原文件和已导入副本未删除。');
+      };
+      chip.append(label, remove); list.append(chip);
+    }
+  };
+  const add = async (files) => {
+    if (busy) return;
+    const input = composer();
+    const selection = localStorage.getItem('dsh.sessions.current');
+    if (!input) return message('输入框尚未就绪，请连接工作区后重试。', true);
+    busy = true; button.disabled = true; bar.setAttribute('aria-busy', 'true');
+    message('正在准备文件…');
+    try {
+      const before = await api.getState();
+      if (!before.available) throw new Error(before.message || '请等待工作区连接完成。');
+      const result = files ? await api.importFiles(files, before.context) : await api.choose(before.context);
+      if (result.canceled) return message(result.message);
+      const after = await api.getState();
+      if (before.context !== after.context || input !== composer() || selection !== localStorage.getItem('dsh.sessions.current')) throw new Error('会话已切换；没有把引用写入新会话，请回原会话重新添加。');
+      if (!result.ok) throw new Error(result.rejected?.map((r) => `${r.name}：${r.message}`).join('；') || result.message);
+      const additions = [];
+      result.references.forEach((reference, index) => {
+        refs.set(reference, result.items[index]);
+        if (!bridge.read(input).includes(reference)) additions.push(reference);
+      });
+      if (additions.length) await bridge.append(input, additions.join('\n'), () => selection === localStorage.getItem('dsh.sessions.current'));
+      redraw(); input.focus({ preventScroll: true });
+      const rejected = result.rejected?.map((r) => `${r.name}：${r.message}`).join('；');
+      message(`${result.message}${rejected ? ` 未添加：${rejected}` : ''}`, Boolean(rejected));
+    } catch (error) { message(error.message || '添加失败，草稿已保留，请重试。', true); }
+    finally { busy = false; button.disabled = false; bar.removeAttribute('aria-busy'); }
+  };
+  const mount = () => {
+    scheduled = false;
+    const card = document.querySelector('[data-composer-card]');
+    if (!card) return;
+    if (bar?.isConnected && mountedCard === card) return;
+    bar?.remove(); mountedCard = card;
+    bar = document.createElement('section'); bar.className = 'dsh-document-intake'; bar.setAttribute('aria-label', '参考资料');
+    const row = document.createElement('div'); row.className = 'dsh-document-actions';
+    button = document.createElement('button'); button.type = 'button'; button.textContent = '＋ 添加文件'; button.disabled = busy;
+    button.onclick = () => add();
+    const hint = document.createElement('span'); hint.textContent = '可拖入 Excel / Word / PDF · 单文件 ≤ 32 MB';
+    hint.title = '支持 xlsx、docx、pdf、pptx、csv、txt、md；每次最多 10 个、合计 64 MB。不支持旧版 xls/doc 和宏文件。';
+    row.append(button, hint);
+    list = document.createElement('div'); list.className = 'dsh-document-list';
+    status = document.createElement('div'); status.className = 'dsh-document-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    bar.append(row, list, status); card.insertAdjacentElement('beforebegin', bar); redraw();
+  };
+  const observer = new MutationObserver(() => {
+    if (!scheduled) { scheduled = true; requestAnimationFrame(mount); }
+  });
+  const drop = (event) => {
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (!files.length || files.every((file) => file.type.startsWith('image/'))) return;
+    event.preventDefault(); event.stopImmediatePropagation(); mount();
+    if (!bar) return;
+    if (files.some((file) => file.type.startsWith('image/'))) return message('图片与文档请分两次添加；本次未导入。', true);
+    void add(files);
+  };
+  const dragover = (event) => {
+    if (Array.from(event.dataTransfer?.types || []).includes('Files')) {
+      event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
+    }
+  };
+  const onInput = (event) => { if (event.target === composer() && list) redraw(); };
+  document.addEventListener('drop', drop, true);
+  document.addEventListener('dragover', dragover, true);
+  document.addEventListener('input', onInput);
+  observer.observe(document.body, { childList: true, subtree: true }); mount();
+  window.__DSH_DOCUMENT_INTAKE__ = Object.freeze({ installed: true, isPending: () => busy, dispose: () => {
+    observer.disconnect(); document.removeEventListener('drop', drop, true); document.removeEventListener('dragover', dragover, true); document.removeEventListener('input', onInput); bar?.remove();
+  } });
+  return true;
+})();

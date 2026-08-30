@@ -42,17 +42,18 @@ const isSafeHarnessUrl = (value) => {
 
 const firstExistingFile = (candidates) => candidates.find((candidate) => candidate && fs.existsSync(candidate));
 
-const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir }) => {
+const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName = 'dsh-desktop-shell-env' }) => {
+  if (!['dsh-desktop-shell-env', 'dsh-desktop-credentials'].includes(expectedName)) throw new Error('Invalid fixed desktop plugin.');
   const sourceManifestPath = path.join(sourceDir, 'package.json');
   const sourceModulePath = path.join(sourceDir, 'index.mjs');
   const manifest = JSON.parse(await fsp.readFile(sourceManifestPath, 'utf8'));
-  if (manifest.name !== 'dsh-desktop-shell-env' || manifest.exports !== './index.mjs') {
+  if (manifest.name !== expectedName || manifest.exports !== './index.mjs') {
     const error = new Error('DSH Desktop 的固定工具环境桥接组件清单无效。请重新安装应用。');
     error.code = 'HARNESS_SHELL_ENV_PLUGIN_INVALID';
     throw error;
   }
 
-  const targetDir = path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env');
+  const targetDir = path.join(homeDir, 'profiles', 'node_modules', expectedName);
   try {
     const stat = await fsp.lstat(targetDir);
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -380,8 +381,10 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(this.options.homeDir, { recursive: true });
     await fsp.mkdir(this.options.launchDir, { recursive: true });
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir } = resolveHarnessRuntimePaths(this.options);
+    const runtime = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir } = runtime;
     await provisionDesktopShellEnvPlugin({ homeDir: this.options.homeDir, sourceDir: shellEnvPluginDir });
+    this.credentialHost = await this.options.createCredentialHost?.({ homeDir: this.options.homeDir, runtime, provisionPlugin: provisionDesktopShellEnvPlugin });
 
     this.stopRequested = false;
     this.outputBuffer = '';
@@ -409,13 +412,16 @@ class HarnessSupervisor extends EventEmitter {
         this.options.wikiHistorySourcePath || path.join(path.dirname(this.options.homeDir), 'wiki-history-source.json')
       );
       environment.DSH_DESKTOP_NODE = nodePath;
-      this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
+      delete environment.DSH_DESKTOP_CREDENTIAL_MODULE;
+      if (this.credentialHost) environment.DSH_DESKTOP_CREDENTIAL_MODULE = this.credentialHost.providerModule;
+      this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', this.credentialHost?.patchPath || patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,
         env: environment,
         windowsHide: true,
         shell: false,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: this.credentialHost ? ['ignore', 'pipe', 'pipe', 'ipc'] : ['ignore', 'pipe', 'pipe']
       });
+      this.credentialHost?.attach(this.child);
     } catch (error) {
       this._fail(error);
       return this.readyPromise;

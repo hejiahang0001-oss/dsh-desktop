@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -79,6 +79,9 @@
       "assets/workbench-network.js",
       "assets/harness-localization.js",
       "assets/harness-reliable-interrupt.js",
+      "assets/document-intake.js",
+      "assets/composer-text-bridge.js",
+      "assets/document-intake.css",
       "electron/extension-center.cjs",
       "electron/side-chat.cjs",
       "electron/side-chat-preload.cjs",
@@ -161,6 +164,11 @@
           "index.mjs",
           "package.json"
         ]
+      },
+      {
+        "from": "runtime/dsh-desktop-credentials",
+        "to": "harness-plugins/dsh-desktop-credentials",
+        "filter": ["index.mjs", "package.json"]
       },
       {
         "from": "resources/skills",

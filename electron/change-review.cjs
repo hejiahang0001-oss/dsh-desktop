@@ -175,6 +175,14 @@ class GitChangeReviewer {
     return this.getAvailability();
   }
 
+  protectUserPaths(paths) {
+    if (!this.available) return;
+    for (const reportedPath of paths) {
+      const resolved = this.resolveChangePath(reportedPath);
+      this.protectedPaths.add(pathKey(resolved.repoPath));
+    }
+  }
+
   resolveChangePath(reportedPath) {
     if (!this.available) {
       const message = this.reason === 'git-unavailable'

@@ -1,6 +1,16 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
+  documents: Object.freeze({
+    getState: () => ipcRenderer.invoke('documents:get-state'),
+    choose: (context) => ipcRenderer.invoke('documents:choose', context),
+    importFiles: (files, context) => {
+      if (!Array.isArray(files) || files.length < 1 || files.length > 10) return Promise.resolve({ ok: false, message: '每次最多添加 10 个文件。' });
+      const paths = files.map((file) => webUtils.getPathForFile(file));
+      if (paths.some((value) => !value)) return Promise.resolve({ ok: false, message: '请从本机资源管理器拖入文件，或点击添加文件。' });
+      return ipcRenderer.invoke('documents:import', paths, context);
+    }
+  }),
   app: Object.freeze({
     getInfo: () => ipcRenderer.invoke('app:get-info')
   }),

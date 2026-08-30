@@ -46,8 +46,14 @@ const managedCredentialConfigured = (document) => String(document || '')
   .split(/\r?\n/)
   .some((line) => /^\s*DEEPSEEK_API_KEY\s*:\s*\S/.test(line));
 
-const getDeepSeekCredentialStatus = async ({ env = process.env, credentialFile } = {}) => {
+const getDeepSeekCredentialStatus = async ({ env = process.env, credentialFile, protectedStatus } = {}) => {
   const environmentIgnored = typeof env.DEEPSEEK_API_KEY === 'string' && env.DEEPSEEK_API_KEY.length > 0;
+  if (protectedStatus?.encrypted === true) return credentialStatus(
+    protectedStatus.configured ? 'configured' : 'missing', 'windows-dpapi',
+    protectedStatus.configured ? 'software-managed' : 'software-not-configured',
+    protectedStatus.configured ? '软件 Key 已由 Windows 账户加密保护。' : '尚未配置软件 Key；保存后由当前 Windows 账户加密保护。',
+    { environmentIgnored, encrypted: true }
+  );
 
   if (credentialFile) {
     try {

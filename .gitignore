@@ -13,6 +13,7 @@ node_modules/
 
 # Local application/runtime data and credentials.
 **/.credentials.yaml
+**/.credentials.dpapi.json*
 **/settings.yaml
 **/*.log
 .env
