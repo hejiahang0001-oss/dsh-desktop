@@ -239,3 +239,15 @@ test('package manifest excludes the duplicate app PTY and unused xterm developme
     '!node_modules/@xterm/addon-fit/lib/*.mjs'
   ]) assert.ok(manifest.build.files.includes(pattern), pattern);
 });
+test('packaged desktop plugins include their host-only session module', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-host-plugin-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const name of ['dsh-desktop-shell-env', 'dsh-desktop-credentials', 'dsh-desktop-tools']) {
+    for (const file of ['index.mjs', 'package.json']) writeFile(path.join(root, 'resources', 'harness-plugins', name, file), '{}');
+  }
+  const incomplete = await inspectPackageLayout(root);
+  assert.equal(incomplete.requiredDesktopPluginsReady, false);
+  assert.deepEqual(incomplete.desktopPluginsMissing, ['dsh-desktop-tools/session-control.mjs']);
+  writeFile(path.join(root, 'resources', 'harness-plugins', 'dsh-desktop-tools', 'session-control.mjs'), '// host-only module');
+  assert.equal((await inspectPackageLayout(root)).requiredDesktopPluginsReady, true);
+});

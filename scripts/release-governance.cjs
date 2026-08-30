@@ -317,7 +317,17 @@ const inspectPackageLayout = async (rootPath) => {
     && harnessRuntime.commit === REQUIRED_HARNESS_COMMIT
     && harnessRuntime.packageCount === REQUIRED_HARNESS_PACKAGE_COUNT
     && harnessRuntime.provenanceVersion === 1;
+  const requiredDesktopPlugins = ['dsh-desktop-shell-env/index.mjs', 'dsh-desktop-shell-env/package.json',
+    'dsh-desktop-credentials/index.mjs', 'dsh-desktop-credentials/package.json',
+    'dsh-desktop-tools/index.mjs', 'dsh-desktop-tools/session-control.mjs', 'dsh-desktop-tools/package.json'];
+  const desktopPluginsMissing = [];
+  for (const relative of requiredDesktopPlugins) {
+    const info = await fsp.lstat(path.join(root, 'resources', 'harness-plugins', relative)).catch(() => null);
+    if (!info?.isFile() || info.isSymbolicLink()) desktopPluginsMissing.push(relative);
+  }
   return {
+    requiredDesktopPluginsReady: desktopPluginsMissing.length === 0,
+    desktopPluginsMissing,
     redundantAppRuntime,
     terminalRuntime,
     requiredTerminalFilesReady: REQUIRED_TERMINAL_FILES.every((name) => terminalPaths.has(name)),
@@ -375,6 +385,7 @@ const main = async () => {
     && packageLayout.requiredPowerpointSkillFilesReady
     && packageLayout.requiredWikiSkillFilesReady
     && packageLayout.requiredHarnessRuntimeReady
+    && packageLayout.requiredDesktopPluginsReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,

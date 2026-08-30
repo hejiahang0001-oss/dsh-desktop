@@ -180,7 +180,7 @@
       {
         "from": "runtime/dsh-desktop-tools",
         "to": "harness-plugins/dsh-desktop-tools",
-        "filter": ["index.mjs", "package.json"]
+        "filter": ["index.mjs", "session-control.mjs", "package.json"]
       },
       {
         "from": "resources/skills",
