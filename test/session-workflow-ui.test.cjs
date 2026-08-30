@@ -13,3 +13,9 @@ test('session workflow distinguishes queue, steer, stop and explicit queue conti
   assert.match(script, /尚不代表已执行完成/);
   assert.doesNotMatch(script, /innerHTML|eval\(|fetch\(/);
 });
+test('compact document and workflow bars preserve composer room at high zoom', () => {
+  const css = fs.readFileSync('assets/document-intake.css', 'utf8');
+  assert.match(css, /@media\(max-height:600px\)/);
+  assert.match(css, /\.dsh-document-intake\{margin:2px auto/);
+  assert.match(css, /\.dsh-session-workflow \.dsh-document-status\{margin-top:0\}/);
+});
