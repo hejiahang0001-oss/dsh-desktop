@@ -35,7 +35,11 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   assert.match(assembler, /koffiPackage\.version !== '3\.1\.1'/);
 });
 
-test('assembled Harness runtime carries exact provenance and no linked paths', () => {
+test('assembled Harness runtime carries exact provenance and no linked paths', (context) => {
+  if (!fs.existsSync(path.join(runtimeRoot, 'harness-runtime.json'))) {
+    context.skip('The source-built Harness runtime is intentionally not stored in Git.');
+    return;
+  }
   const provenance = JSON.parse(fs.readFileSync(path.join(runtimeRoot, 'harness-runtime.json'), 'utf8'));
   const dsh = JSON.parse(fs.readFileSync(path.join(runtimeRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'));
   const koffi = JSON.parse(fs.readFileSync(path.join(runtimeRoot, 'node_modules', 'koffi', 'package.json'), 'utf8'));
