@@ -1,6 +1,6 @@
 # DSH Desktop V1.0.5
 
-Pre-release candidate: session continuity and source-preserving worktree handoff. Stable V0.5.4 is unchanged.
+Product Latest milestone / GitHub Pre-release: session continuity and source-preserving worktree handoff. Stable V0.5.4 is unchanged.
 
 - Local per-session text drafts and document references persist across reloads. Attachment metadata is isolated by session/workspace, stale writes are rejected, and clearing a draft stays cleared. Rich image/chip serialization is not claimed. Closing the normal window flushes the last input before destruction.
 - Foreground status distinguishes running, queued, steering, awaiting confirmation and turn outcomes. Queue, interrupt-and-continue, stop-current-turn and resume-retained-queue have separate actions; accepting a message is not reported as completing it. Stopping a turn retains its queue without automatically restarting it; the explicit resume action processes existing messages instead of submitting duplicates.
