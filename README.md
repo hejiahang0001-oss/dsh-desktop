@@ -79,7 +79,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.0.1 product Latest candidate** makes Git review states trustworthy, removes stale Office version copy, exposes command failures with retry, and keeps network/proxy settings reachable when Harness startup fails. The local candidate produces `DSH-Desktop-Setup-1.0.1.exe` and `DSH-Desktop-Portable-1.0.1.exe`; the published V1.0.0 Pre-release and V0.5.4 Stable remain unchanged until V1.0.1 passes the release gates.
+**[V1.0.1 product Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1)** makes Git review states trustworthy, removes stale Office version copy, exposes command failures with retry, and keeps network/proxy settings reachable when Harness startup fails. The published Pre-release provides `DSH-Desktop-Setup-1.0.1.exe` and `DSH-Desktop-Portable-1.0.1.exe`; its public assets pass exact size and SHA-256 re-download verification. V0.5.4 Stable remains unchanged.
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 
@@ -160,7 +160,7 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-V1.0.1 产品 Latest 候选版修正 Git 状态误导、Office 旧版本文案、命令失败静默和 Harness 启动失败时无法进入网络/代理设置的问题。本地候选生成 `DSH-Desktop-Setup-1.0.1.exe` 安装版与 `DSH-Desktop-Portable-1.0.1.exe` 便携版；通过发布门禁前，已发布的 V1.0.0 Pre-release 与 V0.5.4 Stable 均保持不变。
+[V1.0.1 产品 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1) 已作为 GitHub Pre-release 发布，修正 Git 状态误导、Office 旧版本文案、命令失败静默和 Harness 启动失败时无法进入网络/代理设置的问题。公开安装版与便携版均通过匿名回下载的文件大小和 SHA-256 复核；V0.5.4 Stable 保持不变。
 
 发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
 

@@ -2,7 +2,7 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
-## V1.0.1 trust-state and installed-candidate evidence (local, unpublished)
+## V1.0.1 trust-state, installed, and publication evidence
 
 - Git review now reports explicit unavailable, non-repository, status-read-failed, clean, and changed states. Untracked-only repositories remain changed; repository discovery and status failure are separate, and Git-dependent actions fail closed without blocking chat, Office, Wiki, preview, or terminal work.
 - Office and About version copy is dynamic. Command-palette failures remain visible with bounded retry controls, never make an unverified blanket claim that no modification occurred, and trap keyboard focus inside the visible failure dialog; native menu accelerators reuse the same visible recovery path. Network/proxy settings are available from the disconnected Harness status page and diagnostics while keeping the fixed trusted-window and credential-free proxy policy.
@@ -12,7 +12,7 @@ This page records versioned local engineering evidence without making the README
 - Silent overwrite exits 0 and Windows registers `DSH Desktop 1.0.1`. Installed and unpacked `app.asar` both hash to `2172A13C10954B2DA5D712370AA2B469845170D2CE46063058279BC6CC96838D`.
 - The 31 credential-free semantic files remain byte-identical before the redo, after final overwrite, and after installed validation; each snapshot hashes to `122F4C7E55FBE1883BB8E04C66FA3C3C2DDAF214D35107A5989BE97CBF055395`. Backup `backups/pre-v1.0.1-20260830-170338` retains the V1.0.0 rollback assets; `backups/pre-v1.0.1-redo-20260830-191216` retains the superseded first V1.0.1 candidate, governance report, release notes, and credential-free semantic snapshot.
 - The final local installer is 188,708,650 bytes with SHA-256 `4D35BABFC97413D9184B20CA4FDC4C4C78092F17A0407DD2D36BCB5F737F75CA`; its 194,760-byte blockmap hashes to `C1588B977DC64376E533A0B6DD3C9655E2CF78A44538CFE45CB99063592F71B6`. The 188,017,150-byte portable executable hashes to `AEFEE2C66764BA551CBC845528662771696C62FAC0F60099A225FDB407F90941`; the three-entry checksum manifest passes 3/3.
-- This evidence is local only. No V1.0.1 PR, CI run, GitHub Pre-release, or public re-download verification is claimed; V1.0.0 remains the GitHub product Pre-release and V0.5.4 remains Stable.
+- Implementation PR [#60](https://github.com/hejiahang0001-oss/dsh-desktop/pull/60) merged as `b76e850330b9f3e037277a7f6f9d645387fd8841`; PR CI run `33310280781` and main CI run `33310326991` pass all jobs. [V1.0.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.1) is a non-draft GitHub Pre-release targeting that merge commit. All four public assets report `uploaded` and matching GitHub digests; credential-free public re-download passes 4/4 exact size and SHA-256 checks, and the downloaded checksum manifest passes 3/3. V0.5.4 remains Stable and the repository's formal `Latest release`.
 
 ## V1.0.0 Harness upstream compatibility and release evidence (published)
 
