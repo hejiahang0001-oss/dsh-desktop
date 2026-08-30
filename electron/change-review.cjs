@@ -112,7 +112,8 @@ class GitChangeReviewer {
     const result = await this.run('git', ['-C', cwd, ...args], {
       windowsHide: true,
       encoding: 'utf8',
-      maxBuffer: 4 * 1024 * 1024
+      maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
     });
     return result?.stdout ?? '';
   }
