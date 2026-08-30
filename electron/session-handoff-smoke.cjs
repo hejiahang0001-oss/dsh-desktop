@@ -36,7 +36,10 @@ async function runHandoffSmoke({ window, dock, supervisor, selected, workspacePa
     await evaluate('window.__DSH_CONTINUITY__.flush()'); const draft = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
     const index = git(workspacePath, ['write-tree']), status = git(workspacePath, ['status', '--porcelain']), childPid = supervisor.child.pid;
     await dock.act('select', 'worktrees'); const surface = dock.surfaces.get('worktrees');
-    const run = () => surface.webContents.executeJavaScript('worktreesAPI.handoff()', true);
+    const run = async () => {
+      await waitFor(() => surface.webContents.executeJavaScript('worktreesAPI.getState().then(s=>s.handoffAvailable)', true), 'authoritative idle gate');
+      return surface.webContents.executeJavaScript('worktreesAPI.handoff()', true);
+    };
     const out = await run(); if (!out.ok) throw new Error(out.message);
     await mount(); await waitFor(() => evaluate('window.__DSH_CONTINUITY__?.ready()'), 'target draft');
     checks.outward = out.sessionId !== selected.sessionId && out.workspacePath !== workspacePath;

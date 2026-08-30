@@ -18,7 +18,7 @@
     operationActive = busy;
     createButton.disabled = busy || currentState?.available !== true || currentState?.status === 'busy' || currentState?.counts?.managed >= currentState?.limits?.managed;
     refreshButton.disabled = busy;
-    handoffButton.disabled = busy || currentState?.available !== true;
+    handoffButton.disabled = busy || currentState?.handoffAvailable !== true;
     for (const button of document.querySelectorAll('.worktree-actions button')) button.disabled = busy || button.dataset.disabled === 'true';
     list.setAttribute('aria-busy', busy ? 'true' : 'false');
   };
@@ -64,7 +64,8 @@
     repositoryPath.textContent = state.repository?.root || '当前工作区不是可管理的 Git 仓库';
     repositoryPath.title = state.repository?.root || '';
     createButton.disabled = operationActive || state.available !== true || state.status === 'busy' || state.counts?.managed >= state.limits?.managed;
-    handoffButton.disabled = operationActive || state.available !== true;
+    handoffButton.disabled = operationActive || state.handoffAvailable !== true;
+    handoffButton.title = state.handoffAvailable ? '交接当前已空闲的会话' : '等待内核确认空闲及仓库操作结束；状态会自动刷新';
     const handoffs = document.getElementById('handoff-list'); empty(handoffs);
     const phaseLabels = { preparing: '准备中', copying: '复制代码中', forking: '保存关联会话中', ready: '可继续', returned: '已返回', failed: '需要处理', interrupted: '上次中断，未自动重试' };
     for (const record of (state.handoffs || []).slice().reverse()) {
@@ -165,4 +166,13 @@
     status.textContent = '工作树状态暂时不可用。';
     list.setAttribute('aria-busy', 'false');
   });
+  const statusTimer = setInterval(() => {
+    if (!operationActive && !document.hidden) void api.getState().then((state) => {
+      if (operationActive) return;
+      currentState = state;
+      handoffButton.disabled = state.handoffAvailable !== true;
+      handoffButton.title = state.handoffAvailable ? '交接当前已空闲的会话' : '等待内核确认空闲及仓库操作结束；状态会自动刷新';
+    }).catch(() => {});
+  }, 4000);
+  window.addEventListener('beforeunload', () => clearInterval(statusTimer), { once: true });
 })();
