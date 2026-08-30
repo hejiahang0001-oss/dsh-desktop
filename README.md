@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.5.4.exe"><strong>Download for Windows</strong></a>
+  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-1.1.0.exe"><strong>Download for Windows</strong></a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#中文说明">中文说明</a>
   · <a href="DSH_DESKTOP_ITERATION_PLAN.md">Roadmap</a>
@@ -71,7 +71,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 
 ## Quick start
 
-1. Download [`DSH-Desktop-Setup-0.5.4.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-0.5.4.exe).
+1. Download [`DSH-Desktop-Setup-1.1.0.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-1.1.0.exe).
 2. Install and launch DSH Desktop. The current installer is not code-signed, so Windows SmartScreen may show a warning.
 3. Open **Project → Open code repository…** or press `Ctrl+O`.
 4. Open **Model** to configure your DeepSeek API key, then start a Harness session.
@@ -80,13 +80,13 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**[V1.1.0 Latest (Pre-release)](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. It retains the `DSH-Desktop-Setup-1.0.5.exe` milestone's per-session text/document drafts, queue/steer/stop feedback and protected worktree handoff. V0.5.4 Stable remains unchanged. See [background task boundaries](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
+**[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
-**Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
+**[V1.0.5 previous version](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.5)** is retained as the preceding build, not a second Stable. Only V1.0.5 and V1.1.0 release records and installation artifacts are retained after this cleanup; source tags, history and test records remain available. Back up application data before downgrading; retaining an installer does not guarantee future data-format compatibility.
 
 ### Release channels
 
-- **Stable:** V0.5.4 remains the production baseline and GitHub `Latest release`. Stable changes only after the maintainer explicitly approves a tested Latest build for promotion.
+- **Stable:** V1.1.0 is the stable baseline and GitHub `Latest release`, explicitly promoted by the maintainer on 2026-08-31. Stable changes only after explicit approval of a tested Latest build.
 - **Latest:** each planned iteration overwrites the maintainer's installed build after validation. It is published as a GitHub Pre-release only after all release-blocking security gates pass. Latest can advance without replacing Stable.
 - If a Latest build regresses, users can reinstall Stable without removing application data.
 
@@ -161,9 +161,9 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-[V1.1.0 已发布为 Latest 测试版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)，在 Excel/Word/PDF 入口、软件 Key 加密、审查批注、一体化工作台和会话交接基础上，增加独立后台任务、定时计划、运行历史和恢复。入口为“任务与子代理 → 独立后台任务”。托盘运行时有效，完全退出后不执行；任务失败或结果不明不会自动重发。独立任务需要 Git；普通文档拖入不需要 Git。工作树检出全部已提交文件，不是内容脱敏；软件托管 Key 和未提交资料不复制。安装与公开下载验收状态见[执行进度](PROGRESS.md)。V0.5.4 Stable 保持不变。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)。
+[V1.1.0 已按维护者指令晋升为 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)，在 Excel/Word/PDF 入口、软件 Key 加密、审查批注、一体化工作台和会话交接基础上，增加独立后台任务、定时计划、运行历史和恢复。入口为“任务与子代理 → 独立后台任务”。托盘运行时有效，完全退出后不执行；任务失败或结果不明不会自动重发。独立任务需要 Git；普通文档拖入不需要 Git。工作树检出全部已提交文件，不是内容脱敏；软件托管 Key 和未提交资料不复制。安装与公开下载验收状态见[执行进度](PROGRESS.md)。本次沿用已验证的原安装包，仅保留 V1.1.0 和上一版 V1.0.5 的发布与安装产物，源码历史和测试记录不删除。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)；回退前应备份数据。
 
-发布通道规则：V0.5.4 固定为当前 Stable 和 GitHub `Latest release`；后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。
+发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
