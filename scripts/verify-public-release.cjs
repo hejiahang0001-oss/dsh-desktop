@@ -1,7 +1,7 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { Readable } = require('node:stream');
+const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const fs = require('node:fs');
 
@@ -15,14 +15,21 @@ async function verify(version, root = path.resolve(__dirname, '..')) {
   for (const name of names) {
     const localPath = path.join(root, 'dist', name), destination = path.join(downloadRoot, name);
     const expected = await hashFile(localPath), bytes = (await fsp.stat(localPath)).size;
-    let error;
+    let error, restart = false;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const response = await fetch(`https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v${version}/${name}`, { signal: AbortSignal.timeout(180000) });
+        const existing = await fsp.stat(destination).catch(() => null);
+        if (existing?.size === bytes && await hashFile(destination) === expected) { rows.push({ name, bytes, sha256: expected, ok: true }); error = null; break; }
+        const offset = !restart && existing?.size < bytes ? existing.size : 0;
+        const response = await fetch(`https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v${version}/${name}`, { signal: AbortSignal.timeout(900000), headers: offset ? { Range: `bytes=${offset}-` } : {} });
         if (!response.ok) throw new Error(`Public download HTTP ${response.status}`);
-        await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(destination));
+        const resumed = response.status === 206 && offset > 0;
+        if (resumed && !response.headers.get('content-range')?.startsWith(`bytes ${offset}-`)) throw new Error('Unexpected public download range.');
+        let received = resumed ? offset : 0;
+        const limit = new Transform({ transform(chunk, _encoding, callback) { received += chunk.length; callback(received > bytes ? new Error('Public artifact exceeded its expected length.') : null, chunk); } });
+        await pipeline(Readable.fromWeb(response.body), limit, fs.createWriteStream(destination, { flags: resumed ? 'a' : 'w' }));
         const actual = await hashFile(destination), actualBytes = (await fsp.stat(destination)).size;
-        if (actual !== expected || actualBytes !== bytes) throw new Error(`Downloaded artifact differs: ${name}`);
+        if (actual !== expected || actualBytes !== bytes) { restart = true; throw new Error(`Downloaded artifact differs: ${name}`); }
         rows.push({ name, bytes, sha256: actual, ok: true }); error = null; break;
       } catch (failure) { error = failure; }
     }

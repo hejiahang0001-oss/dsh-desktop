@@ -1,0 +1,9 @@
+:root { color-scheme: dark; font: 12px/1.4 "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif; background: #20201f; color: #eae9e6; }
+* { box-sizing: border-box; } body { margin: 0; height: 42px; border-top: 1px solid #494742; overflow: hidden; }
+nav, #dock-tabs, .secondary, .actions { display: flex; align-items: center; gap: 3px; } nav { height: 100%; padding: 3px 8px; gap: 10px; } .actions { margin-left: auto; }
+button, select { min-height: 30px; border: 1px solid transparent; border-radius: 4px; padding: 4px 7px; font: inherit; color: inherit; background: transparent; cursor: pointer; white-space: nowrap; }
+button:hover, select:hover { background: #35332f; } button[aria-selected="true"] { color: #9acbff; background: #263f58; border-color: #466988; }
+select { background: #20201f; } button:focus-visible, select:focus-visible { outline: 2px solid #83bfff; outline-offset: -2px; } button:disabled { opacity: .45; cursor: default; }
+#dock-status:not(:empty) { position: absolute; right: 180px; top: 0; max-width: 40%; padding: 9px; color: #ffbdaf; background: #462c28; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+@media (forced-colors: active) { button[aria-selected="true"] { border: 2px solid Highlight; } }
+@media (max-width: 900px) { nav { gap: 3px; padding: 3px; } button, select { padding: 4px 5px; font-size: 11px; } }

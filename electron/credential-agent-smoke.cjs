@@ -1,6 +1,6 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, createHash } = require('node:crypto');
 const { DocumentIntake, documentReference } = require('./document-intake.cjs');
 const { synchronizeHarnessWorkspace } = require('./harness-workspace-sync.cjs');
 const { establishHarnessSession, createAuthenticatedHarnessFetch } = require('./harness-supervisor.cjs');
@@ -15,8 +15,11 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
   try {
     if (!source || !path.isAbsolute(source)) throw new Error('真实验收需要显式凭据源路径。');
     await fsp.mkdir(homeDir, { recursive: true }); await fsp.mkdir(workspacePath, { recursive: true }); await fsp.mkdir(externalPath, { recursive: true });
-    if (await fsp.stat(path.join(homeDir, '.credentials.dpapi.json')).then(() => true, () => false)) throw new Error('请使用新的隔离验收目录，禁止覆盖既有凭据。');
-    await fsp.copyFile(source, path.join(homeDir, '.credentials.yaml'), 1);
+    const encryptedSource = path.basename(source) === '.credentials.dpapi.json';
+    const sourceDigest = createHash('sha256').update(await fsp.readFile(source)).digest('hex');
+    const vaultExists = await fsp.stat(path.join(homeDir, '.credentials.dpapi.json')).then(() => true, () => false);
+    if (encryptedSource ? !vaultExists : vaultExists) throw new Error('测试凭据目录状态不正确，请使用新的完整隔离配置。');
+    if (!encryptedSource) await fsp.copyFile(source, path.join(homeDir, '.credentials.yaml'), 1);
     const { createZip, documentEntries, readZip, normalizeSpec: wordSpec } = require(runtime.docxToolPath);
     const { workbookEntries, normalizeSpec: excelSpec } = require(runtime.xlsxToolPath);
     const token = `DOC_${randomBytes(6).toString('hex')}`;
@@ -65,14 +68,13 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     }
     const migrated = !await fsp.stat(path.join(homeDir, '.credentials.yaml')).then(() => true, () => false);
     const status = supervisor.credentialHost?.status();
-    const text = await fsp.readFile(source, 'utf8');
-    const secretValues = text.split(/\r?\n/).map((line) => /^\s*DEEPSEEK_API_KEY\s*:\s*['"]?([^'"\s#]+)/.exec(line)?.[1]).filter(Boolean);
     const checks = [path.join(homeDir, '.credentials.dpapi.json'), path.join(smokeRoot, 'logs', 'harness.log')];
-    let noPlaintext = secretValues.length > 0;
-    for (const file of checks) { const content = await fsp.readFile(file, 'utf8'); noPlaintext &&= !secretValues.some((secret) => content.includes(secret)); }
-    result = { ok: observed?.excelTotal === left + right && observed?.wordMarker === token && migrated && status?.encrypted && noPlaintext,
+    let noPlaintext = status?.configured === true;
+    for (const file of checks) { const content = await fsp.readFile(file, 'utf8'); noPlaintext &&= supervisor.credentialHost.redact(content) === content; }
+    const originalUnchanged = createHash('sha256').update(await fsp.readFile(source)).digest('hex') === sourceDigest;
+    result = { ok: observed?.excelTotal === left + right && observed?.wordMarker === token && migrated && status?.encrypted && noPlaintext && originalUnchanged,
       version, realModel: true, excelReadVerified: observed?.excelTotal === left + right, wordReadVerified: observed?.wordMarker === token,
-      legacyRemovedAfterEncryption: migrated, encryptedStatus: status, noPlaintextInVaultOrLog: noPlaintext, sourceCredentialUnmodified: true,
+      legacyRemovedAfterEncryption: !encryptedSource && migrated, encryptedSource, encryptedStatus: status, noPlaintextInVaultOrLog: noPlaintext, sourceCredentialUnmodified: originalUnchanged,
       boundary: 'XLSX and DOCX real reads; PDF import/render is separate, OCR not included' };
   } catch (error) { result = { ok: false, version, error: String(error.message).replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]') }; }
   finally { await supervisor?.stop(); await fsp.mkdir(path.dirname(output), { recursive: true }); await fsp.writeFile(output, `${JSON.stringify(result, null, 2)}\n`); }

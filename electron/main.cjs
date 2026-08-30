@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, safeStorage, screen, session, shell, Tray } = require('electron');
+const { app, BrowserWindow, WebContentsView, desktopCapturer, dialog, ipcMain, Menu, Notification, safeStorage, screen, session, shell, Tray } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -105,11 +105,16 @@ const { SideChatController, SideChatError } = require('./side-chat.cjs');
 const { DocumentIntakeController } = require('./document-intake-controller.cjs');
 const { contextKey } = require('./document-intake-controller.cjs');
 const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs');
+const { NativeWorkbenchDock } = require('./native-workbench-dock.cjs');
+const { DockLayoutStore, TOOLS: DOCK_TOOLS } = require('./dock-layout.cjs');
+const { TerminalReadBroker } = require('./terminal-read-broker.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setName('DSH Desktop');
 
 let mainWindow;
+let nativeDock;
+let dockLayoutStore;
 let terminalWindow;
 let contextSourcesWindow;
 let pluginHealthWindow;
@@ -289,6 +294,7 @@ const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const documentIntakeSmokeTarget = process.argv.find((argument) => argument.startsWith('--document-intake-smoke-file='));
 const reviewSmokeTarget = process.argv.find((argument) => argument.startsWith('--review-smoke-file='));
+const dockSmokeTarget = process.argv.find((argument) => argument.startsWith('--dock-smoke-file='));
 const credentialAgentSmokeTarget = process.argv.find((argument) => argument.startsWith('--credential-agent-smoke-file='));
 const ipcSecuritySmokeTarget = process.argv.find((argument) => argument.startsWith('--ipc-security-smoke-file='));
 const pdfSmokeTarget = process.argv.find((argument) => argument.startsWith('--pdf-smoke-file='));
@@ -309,6 +315,7 @@ const isolatedSmokeTarget = [
   harnessSmokeTarget,
   documentIntakeSmokeTarget,
   reviewSmokeTarget,
+  dockSmokeTarget,
   credentialAgentSmokeTarget,
   ipcSecuritySmokeTarget,
   pdfSmokeTarget,
@@ -327,6 +334,17 @@ const isolatedSmokeTarget = [
 if (isolatedSmokeTarget) {
   const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
   app.setPath('userData', `${path.resolve(outputPath)}.user-data`);
+  const source = process.argv.find((argument) => argument.startsWith('--smoke-credential-source='))?.slice('--smoke-credential-source='.length);
+  if (source && path.basename(source) === '.credentials.dpapi.json') {
+    if (!path.isAbsolute(source) || fs.lstatSync(source).isSymbolicLink()) throw new Error('加密测试凭据源无效。');
+    const profile = path.dirname(path.dirname(source));
+    const localState = path.join(profile, 'Local State');
+    if (!fs.lstatSync(localState).isFile() || fs.lstatSync(localState).isSymbolicLink()) throw new Error('缺少加密配置所属的 Chromium 状态。');
+    const target = app.getPath('userData');
+    fs.mkdirSync(path.join(target, 'harness'), { recursive: true });
+    fs.copyFileSync(localState, path.join(target, 'Local State'), fs.constants.COPYFILE_EXCL);
+    fs.copyFileSync(source, path.join(target, 'harness', '.credentials.dpapi.json'), fs.constants.COPYFILE_EXCL);
+  }
 }
 
 const parseWindowSize = (value) => {
@@ -350,7 +368,7 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
     launchDir,
     logFile: path.join(dataRoot, 'logs', 'harness.log'),
     env: harnessProxyEnvironment,
-    createCredentialHost: (options) => createDesktopCredentialHost({ ...options, rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged, crypto: safeStorage })
+    createCredentialHost: (options) => createDesktopCredentialHost({ ...options, rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged, crypto: safeStorage, terminalReadBroker })
   });
   instance.on('state', (state) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('harness:state', state);
@@ -507,6 +525,7 @@ const startHarnessForWindow = async ({ restart = false } = {}) => {
       await waitForHarnessSessionSelection(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
     }
     void refreshDesktopDiagnostics();
+    if (nativeDock && dockLayoutStore.getState().open) await openDockTool(dockLayoutStore.getState().active);
     startAgentPolling();
     return { ok: true, url };
   } catch (error) {
@@ -831,6 +850,7 @@ const installReliableInterrupt = async (assets) => Boolean(
 const installWorkbenchPanel = async () => {
   if (!harnessUiReady()) return false;
   try {
+    await fitWorkbenchSidePanels();
     const assets = await loadWorkbenchPanelAssets();
     await mainWindow.webContents.insertCSS(assets.css, { cssOrigin: 'author' });
     await mainWindow.webContents.executeJavaScript(getWorkbenchPanelBootstrapScript(getWorkbenchState()), true);
@@ -844,6 +864,7 @@ const installWorkbenchPanel = async () => {
     const reliableInterruptInstalled = await installReliableInterrupt(assets);
     await mainWindow.webContents.executeJavaScript(assets.composerTextScript, true);
     const documentsInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.documentsScript, true));
+    if (nativeDock) { await mainWindow.webContents.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8')); nativeDock.layout(); }
     return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled
       && networkInstalled && commandInstalled && reliableInterruptInstalled && documentsInstalled;
   } catch {
@@ -853,6 +874,7 @@ const installWorkbenchPanel = async () => {
 
 const applyWorkbenchPanelLayout = async ({ focus = false, focusTarget = 'review' } = {}) => {
   if (!harnessUiReady()) return false;
+  await fitWorkbenchSidePanels(focusTarget);
   const applied = Boolean(await mainWindow.webContents.executeJavaScript(
     getWorkbenchPanelLayoutScript(getWorkbenchState()),
     true
@@ -869,7 +891,10 @@ const applyWorkbenchPanelLayout = async ({ focus = false, focusTarget = 'review'
 };
 
 const setReviewPanelOpen = async (open, { focus = false } = {}) => {
-  const state = await workbenchStore.setReviewPanelOpen(Boolean(open));
+  await workbenchStore.setReviewPanelOpen(Boolean(open));
+  await fitWorkbenchSidePanels('review');
+  const state = getWorkbenchState();
+  await persistProjectPanels();
   installApplicationMenu();
   if (harnessUiReady()) {
     const applied = await applyWorkbenchPanelLayout({ focus: focus && state.reviewPanelOpen });
@@ -880,12 +905,16 @@ const setReviewPanelOpen = async (open, { focus = false } = {}) => {
 
 const setReviewPanelWidth = async (width) => {
   const state = await workbenchStore.setReviewPanelWidth(width);
+  await persistProjectPanels();
   if (harnessUiReady()) await applyWorkbenchPanelLayout();
   return state;
 };
 
 const setFilePanelOpen = async (open, { focus = false } = {}) => {
-  const state = await workbenchStore.setFilePanelOpen(Boolean(open));
+  await workbenchStore.setFilePanelOpen(Boolean(open));
+  await fitWorkbenchSidePanels('files');
+  const state = getWorkbenchState();
+  await persistProjectPanels();
   installApplicationMenu();
   if (harnessUiReady()) {
     const applied = await applyWorkbenchPanelLayout({
@@ -899,6 +928,7 @@ const setFilePanelOpen = async (open, { focus = false } = {}) => {
 
 const setFilePanelWidth = async (width) => {
   const state = await workbenchStore.setFilePanelWidth(width);
+  await persistProjectPanels();
   if (harnessUiReady()) await applyWorkbenchPanelLayout();
   return state;
 };
@@ -907,6 +937,7 @@ const setPreviewPanelOpen = async (open, { focus = false, stopOnClose = true } =
   const nextOpen = Boolean(open);
   if (!nextOpen && stopOnClose) await previewManager?.stop();
   const state = await workbenchStore.setPreviewPanelOpen(nextOpen);
+  await persistProjectPanels();
   installApplicationMenu();
   if (harnessUiReady()) {
     const applied = await applyWorkbenchPanelLayout({
@@ -921,11 +952,14 @@ const setPreviewPanelOpen = async (open, { focus = false, stopOnClose = true } =
 const applyUiZoomFactor = (factor = getWorkbenchState().uiZoomFactor) => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   mainWindow.webContents.setZoomFactor(factor);
+  nativeDock?.layout();
+  if (nativeDock && harnessUiReady()) void applyWorkbenchPanelLayout().catch(() => {});
   return true;
 };
 
 const setUiZoomFactor = async (factor) => {
   const state = await workbenchStore.setUiZoomFactor(factor);
+  await persistProjectPanels();
   applyUiZoomFactor(state.uiZoomFactor);
   installApplicationMenu();
   return state;
@@ -936,6 +970,8 @@ const adjustUiZoomFactor = (delta) => setUiZoomFactor(getWorkbenchState().uiZoom
 const resetWorkbenchLayout = async () => {
   if (getWorkbenchState().previewPanelOpen) await previewManager?.stop();
   const state = await workbenchStore.resetLayout();
+  if (dockLayoutStore) await dockLayoutStore.update({ open: false, active: 'terminal', height: 330, panels: state });
+  nativeDock?.layout();
   applyUiZoomFactor(state.uiZoomFactor);
   installApplicationMenu();
   if (harnessUiReady()) {
@@ -1273,6 +1309,59 @@ const documentIntakeController = new DocumentIntakeController({
   }
 });
 const terminalIpcAllowed = (event) => isTrustedMainFrameEvent(event, terminalWindow?.webContents, terminalUrlAllowed);
+const nativeParent = (surface) => surface?.getDialogParent?.() || surface || mainWindow;
+const terminalReadBroker = new TerminalReadBroker({
+  getContext: () => documentIntakeController.getContext(),
+  getSnapshot: () => terminalRunner?.getSnapshot(),
+  redact: (text) => supervisor?.credentialHost?.redact(text) || '',
+  confirm: async ({ preview, chars, workspacePath }, signal) => (await dialog.showMessageBox(mainWindow, {
+    type: 'question', title: '允许 AI 读取当前终端输出？',
+    message: `将最近 ${chars} 个字符交给当前会话的模型？`,
+    detail: `工作区：${workspacePath}\n只读，不会执行命令，不读取剪贴板。已尽量遮蔽已知凭据，请确认下面没有敏感业务数据：\n\n${preview}`,
+    buttons: ['取消', '允许本次读取'], defaultId: 0, cancelId: 0, noLink: true, signal
+  })).response === 1
+});
+const createToolSurface = (id, options) => nativeDock ? nativeDock.create(id, options) : new BrowserWindow(options);
+const persistProjectPanels = () => dockLayoutStore?.update({ panels: getWorkbenchState() }) || Promise.resolve();
+const fitWorkbenchSidePanels = async (preferred = 'review') => {
+  if (!nativeDock || !mainWindow || mainWindow.isDestroyed() || !workbenchStore) return;
+  const state = getWorkbenchState();
+  const available = mainWindow.getContentSize()[0] / mainWindow.webContents.getZoomFactor();
+  if (state.filePanelOpen && state.reviewPanelOpen && available < state.filePanelWidth + state.reviewPanelWidth + 560) {
+    await workbenchStore.applyProjectLayout({ ...state, ...(preferred === 'files' ? { reviewPanelOpen: false } : { filePanelOpen: false }) });
+    await persistProjectPanels();
+  }
+};
+const openDockTool = async (id) => {
+  if (!DOCK_TOOLS.includes(id)) throw new Error('未知工作台工具。');
+  const actions = { terminal: openTerminalWindow, office: openOfficeCenterWindow, tasks: openTasksSubagentsWindow,
+    extensions: openPluginHealthWindow, wiki: openWikiCenterWindow, worktrees: openWorktreesWindow };
+  return actions[id]();
+};
+const ensureNativeDock = async () => {
+  if (nativeDock || !mainWindow || mainWindow.isDestroyed()) return nativeDock;
+  dockLayoutStore = new DockLayoutStore(path.join(app.getPath('userData'), 'workbench-dock.json'));
+  await dockLayoutStore.init(); dockLayoutStore.activate(getWorkspaceState().activePath);
+  if (dockLayoutStore.getPanels()) { await workbenchStore.applyProjectLayout(dockLayoutStore.getPanels()); applyUiZoomFactor(); }
+  nativeDock = new NativeWorkbenchDock({ window: mainWindow, WebContentsView, BrowserWindow, rootDir, store: dockLayoutStore,
+    surfaceCss: await fsp.readFile(path.join(rootDir, 'assets', 'docked-surfaces.css'), 'utf8'),
+    onSelect: openDockTool,
+    onPanel: async (id) => {
+      if (!harnessUiReady()) throw new Error('请等待工作区连接完成。');
+      const state = getWorkbenchState();
+      if (id === 'files') return setFilePanelOpen(!state.filePanelOpen, { focus: true });
+      if (id === 'review') return setReviewPanelOpen(!state.reviewPanelOpen, { focus: true });
+      if (id === 'preview') return setPreviewPanelOpen(!state.previewPanelOpen, { focus: true });
+      throw new Error('未知工作台面板。');
+    }
+  });
+  await nativeDock.init();
+  mainWindow.on('resize', () => { if (harnessUiReady()) void applyWorkbenchPanelLayout().catch(() => {}); });
+  return nativeDock;
+};
+const dockIpcAllowed = (event) => isTrustedMainFrameEvent(event, nativeDock?.bar?.webContents, (url) => localFileUrlMatches(url, path.join(rootDir, 'workbench-dock.html')));
+ipcMain.handle('dock:get-state', (event) => { if (!dockIpcAllowed(event)) throw new Error('工作台来源未通过校验。'); return nativeDock.state(); });
+ipcMain.handle('dock:act', (event, action, value) => { if (!dockIpcAllowed(event)) throw new Error('工作台来源未通过校验。'); return nativeDock.act(action, value); });
 const terminalOwnedBy = (event) => terminalIpcAllowed(event) && isFrameOwner(event, terminalOwner);
 const contextSourcesIpcAllowed = (event) => isTrustedMainFrameEvent(
   event,
@@ -1487,7 +1576,7 @@ const startTerminalSession = async (size = {}) => {
     cancelId: 1,
     noLink: true
   };
-  const parent = terminalWindow && !terminalWindow.isDestroyed() ? terminalWindow : mainWindow;
+  const parent = nativeParent(terminalWindow && !terminalWindow.isDestroyed() ? terminalWindow : mainWindow);
   const result = parent
     ? await dialog.showMessageBox(parent, options)
     : await dialog.showMessageBox(options);
@@ -1502,7 +1591,7 @@ const startTerminalSession = async (size = {}) => {
 };
 
 const createTerminalWindow = async () => {
-  const created = new BrowserWindow({
+  const created = createToolSurface('terminal', {
     width: 980,
     height: 620,
     minWidth: 720,
@@ -1682,7 +1771,7 @@ const getPluginHealthState = async () => {
 };
 
 const createPluginHealthWindow = async () => {
-  const created = new BrowserWindow({
+  const created = createToolSurface('extensions', {
     width: 960,
     height: 720,
     minWidth: 700,
@@ -1738,7 +1827,7 @@ const getOfficeCenterState = () => inspectOfficeCenter({
 });
 
 const createOfficeCenterWindow = async () => {
-  const created = new BrowserWindow({
+  const created = createToolSurface('office', {
     width: 1030,
     height: 760,
     minWidth: 720,
@@ -1853,7 +1942,7 @@ const getWikiCenterState = async () => {
 };
 
 const createWikiCenterWindow = async () => {
-  const created = new BrowserWindow({
+  const created = createToolSurface('wiki', {
     width: 1080,
     height: 820,
     minWidth: 760,
@@ -1902,7 +1991,7 @@ const openWikiCenterWindow = async () => {
 
 const chooseWikiVault = async () => {
   if (!wikiSettingsStore) return { ok: false, message: 'Wiki 设置存储不可用。' };
-  const selected = await dialog.showOpenDialog(wikiCenterWindow, {
+  const selected = await dialog.showOpenDialog(nativeParent(wikiCenterWindow), {
     title: '选择本地 Wiki 知识库目录',
     buttonLabel: '使用此目录',
     properties: ['openDirectory', 'createDirectory']
@@ -1919,7 +2008,7 @@ const chooseWikiVault = async () => {
 const initializeSelectedWikiVault = async () => {
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先选择知识库目录。', state: await getWikiCenterState() };
-  const confirmation = await dialog.showMessageBox(wikiCenterWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(wikiCenterWindow), {
     type: 'question',
     title: '初始化 Wiki 知识库',
     message: '只创建缺失的基础目录和文件，继续吗？',
@@ -2199,7 +2288,7 @@ const saveWikiCapture = async (payload) => {
   try {
     const preview = wikiRuntime.buildCapturePreview(resolved.vaultPath, resolved.capture);
     const sensitive = preview.sensitive.map((item) => item.label).join('、');
-    const confirmation = await dialog.showMessageBox(wikiCenterWindow, {
+    const confirmation = await dialog.showMessageBox(nativeParent(wikiCenterWindow), {
       type: sensitive ? 'warning' : 'question',
       title: sensitive ? '确认保存可能敏感的结论' : '确认保存 Wiki 结论',
       message: `保存“${preview.title}”到当前知识库？`,
@@ -2220,7 +2309,7 @@ const saveWikiCapture = async (payload) => {
 };
 
 const createWorktreesWindow = async () => {
-  const created = new BrowserWindow({
+  const created = createToolSurface('worktrees', {
     width: 1040,
     height: 740,
     minWidth: 700,
@@ -2418,7 +2507,7 @@ const publishTasksSubagentsState = async () => {
 };
 
 const createTasksSubagentsWindow = async () => {
-  const created = new BrowserWindow({
+  const created = createToolSurface('tasks', {
     width: 1040,
     height: 760,
     minWidth: 720,
@@ -2714,7 +2803,7 @@ const performPromptSubagent = async (id, text) => {
 
 const performInterruptSubagent = async (id) => {
   if (!tasksSubagentsController || !harnessUiReady()) throw new TasksSubagentsError('harness-unavailable', 'Harness 页面尚未就绪。');
-  const confirmation = await dialog.showMessageBox(tasksSubagentsWindow || mainWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(tasksSubagentsWindow), {
     type: 'warning',
     title: '中断子代理当前轮次',
     message: '要向 Harness 发送中断请求吗？',
@@ -2760,7 +2849,7 @@ const performPluginToggle = async ({ profileId, packageName, enable }) => {
     return { ok: false, message: '扩展状态已变化或健康门禁未通过，请刷新后重试。', state: before };
   }
   const action = enable ? '启用' : '关闭';
-  const confirmation = await dialog.showMessageBox(pluginHealthWindow || mainWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(pluginHealthWindow), {
     type: 'warning',
     title: `${action} Profile 外部扩展`,
     message: `确认${action} ${packageName}？`,
@@ -2853,7 +2942,7 @@ const performPluginInstall = async ({ profileId, catalogId, action = 'install' }
       : action === 'uninstall'
         ? `将移除已审核版本 ${target.installedVersion}；提交后仍可用“回退”恢复。`
         : '将恢复最近一次提交前的插件版本、启用状态和 Profile 清单；当前状态会成为新的可回退点。';
-  const confirmation = await dialog.showMessageBox(pluginHealthWindow || mainWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(pluginHealthWindow), {
     type: 'warning',
     title: selectedAction.title,
     message: `确认${selectedAction.verb} ${catalogItem.displayName}？`,
@@ -2953,7 +3042,7 @@ const performWorktreeCreate = async () => {
   if (!before.available || before.status !== 'ready' || before.counts.managed >= before.limits.managed) {
     return { ok: false, message: before.message || '当前仓库不能创建更多隔离工作树。', state: before };
   }
-  const confirmation = await dialog.showMessageBox(worktreesWindow || mainWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(worktreesWindow), {
     type: 'info',
     title: '新建隔离工作树',
     message: '确认从当前提交创建新的隔离分支和目录？',
@@ -2989,7 +3078,7 @@ const performWorktreeActivate = async (id) => {
   }
   const item = resolved.item;
   if (!item.canActivate) return { ok: false, message: '所选工作树当前不能切换。', state: await getWorktreeState() };
-  const confirmation = await dialog.showMessageBox(worktreesWindow || mainWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(worktreesWindow), {
     type: 'warning',
     title: '切换工作树',
     message: `确认切换到 ${item.branch || item.directoryName}？`,
@@ -3024,7 +3113,7 @@ const performWorktreeRemove = async (id) => {
   const recoveryDetail = preview.status.clean
     ? `工作树没有未提交修改；分支 ${preview.branch} 和提交 ${preview.headShort} 会保留。`
     : `检测到 ${preview.status.changed} 项未提交修改（暂存 ${preview.status.staged}、未暂存 ${preview.status.unstaged}、新文件 ${preview.status.untracked}）。软件会先建立私有恢复点；只有恢复点和最终状态复核都成功后才移除目录。`;
-  const confirmation = await dialog.showMessageBox(worktreesWindow || mainWindow, {
+  const confirmation = await dialog.showMessageBox(nativeParent(worktreesWindow), {
     type: 'warning',
     title: '安全回收隔离工作树',
     message: `确认回收 ${preview.branch} 的工作树目录？`,
@@ -3926,7 +4015,11 @@ const activateWorkspace = async (workspacePath) => {
     if (terminalRunner?.isActive()) await terminalRunner.stop();
     await previewManager?.stop();
     await terminalSettlePromise;
+    await persistProjectPanels();
     const workspace = await workspaceStore.activate(workspacePath);
+    dockLayoutStore?.activate(workspace.activePath);
+    if (dockLayoutStore?.getPanels()) { await workbenchStore.applyProjectLayout(dockLayoutStore.getPanels()); applyUiZoomFactor(); }
+    nativeDock?.layout();
     dshHistorySelectionCatalog.refresh([], '');
     await discardPreparedDshHistorySource();
     if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) contextSourcesWindow.close();
@@ -5143,6 +5236,7 @@ const createWindow = async () => {
     });
   });
   mainWindow.on('closed', () => {
+    nativeDock?.destroy(); nativeDock = undefined;
     stopAgentPolling();
     closeSideChatWindow();
     if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
@@ -5155,6 +5249,7 @@ const createWindow = async () => {
 
   applyWindowTitle();
   await mainWindow.loadFile(statusPage);
+  if (!isolatedSmokeTarget) await ensureNativeDock();
   void startHarnessForWindow();
 };
 
@@ -5675,7 +5770,7 @@ const runHarnessSmoke = async (target) => {
   await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 };
 
-const runDocumentIntakeSmoke = async (target, { review = false } = {}) => {
+const runDocumentIntakeSmoke = async (target, { review = false, dock = false } = {}) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = app.getPath('userData');
   const workspacePath = path.join(smokeRoot, 'workspace');
@@ -5716,6 +5811,29 @@ const runDocumentIntakeSmoke = async (target, { review = false } = {}) => {
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
     for (const name of ['composer-text-bridge.js', 'document-intake.js']) await evaluate(await fsp.readFile(path.join(rootDir, 'assets', name), 'utf8'));
     await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
+    if (dock) {
+      workspaceSyncDiagnostics = selected;
+      workbenchStore = new WorkbenchStore({ filePath: path.join(smokeRoot, 'workbench-state.json') }); await workbenchStore.init();
+      harnessRuntimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
+      changeReviewer = new GitChangeReviewer(); await changeReviewer.activate(workspacePath);
+      workspaceFiles = new WorkspaceFiles(); await workspaceFiles.activate(workspacePath);
+      previewManager = new PreviewManager(); await previewManager.activate(workspacePath);
+      terminalRunner = new TerminalRunner({ workspacePath, ...resolveTerminalRuntime({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged }) });
+      bindTerminalRunner(terminalRunner);
+      pluginHealthCatalog = new PluginHealthCatalog({ harnessHome: path.join(smokeRoot, 'harness'), dshPackageDir: path.resolve(path.dirname(harnessRuntimePaths.dshBinPath), '..') });
+      tasksSubagentsController = new TasksSubagentsController({ getOrigin: () => harnessOrigin, getWebContents: () => wc, apiCall: authenticatedHarnessApi });
+      worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
+      wikiRuntime = require(harnessRuntimePaths.wikiToolPath); wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: path.join(smokeRoot, 'wiki-settings.json') }); await wikiSettingsStore.init();
+      await ensureNativeDock();
+      await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8'));
+      if (!await installWorkbenchPanel()) throw new Error('完整工作台未安装。');
+      await supervisor.credentialHost.verifyReady(harnessOrigin, harnessFetch);
+      const { runNativeDockSmoke } = require('./native-dock-ui-smoke.cjs');
+      result = await runNativeDockSmoke({ window: mainWindow, dock: nativeDock, terminal: terminalRunner, broker: terminalReadBroker, version: app.getVersion(), target: resolvedTarget,
+        sessionId: selected.sessionId, origin: harnessOrigin, api: authenticatedHarnessApi, realModel: process.argv.includes('--smoke-real-model') });
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
     if (review) {
       const { prepareReviewFixture, runReviewUiSmoke } = require('./review-ui-smoke.cjs');
       await prepareReviewFixture(workspacePath);
@@ -5769,6 +5887,7 @@ const runDocumentIntakeSmoke = async (target, { review = false } = {}) => {
       upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
+    if (dock) { await terminalRunner?.stop(); nativeDock?.destroy(); nativeDock = undefined; }
     mainWindow?.destroy(); mainWindow = undefined;
     await supervisor?.stop(); harnessOrigin = null; clearHarnessAuthentication();
     await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
@@ -6734,6 +6853,10 @@ app.whenReady().then(async () => {
     allowQuit = true; app.quit(); return;
   }
 
+  if (dockSmokeTarget) {
+    await runDocumentIntakeSmoke(dockSmokeTarget.slice('--dock-smoke-file='.length), { dock: true });
+    allowQuit = true; app.quit(); return;
+  }
   if (reviewSmokeTarget) {
     await runDocumentIntakeSmoke(reviewSmokeTarget.slice('--review-smoke-file='.length), { review: true });
     allowQuit = true; app.quit(); return;

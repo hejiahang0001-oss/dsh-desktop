@@ -11,6 +11,7 @@ const FIXED_STATE_FILES = Object.freeze([
   'wiki-settings.json',
   'Preferences',
   'workbench-state.json',
+  'workbench-dock.json',
   'worktrees/ownership.json',
   'worktrees/ownership.json.bak',
   'harness/.anonymous-user-id',

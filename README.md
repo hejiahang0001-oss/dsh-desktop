@@ -79,7 +79,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.0.3 candidate** adds scoped Git review and line-comment feedback. Candidate artifacts are `DSH-Desktop-Setup-1.0.3.exe` and `DSH-Desktop-Portable-1.0.3.exe`. V1.0.2 document intake and encrypted credentials have passed installed acceptance; public asset upload is underway. V0.5.4 Stable remains unchanged. See [credential migration and rollback boundaries](docs/KEY_STORAGE.md).
+**V1.0.4 candidate** adds a native-isolated workbench and confirmed read-only terminal tool. Candidate artifacts are `DSH-Desktop-Setup-1.0.4.exe` and `DSH-Desktop-Portable-1.0.4.exe`. V1.0.3 scoped review has passed installed acceptance; public asset upload is underway. V1.0.2 public assets are verified. V0.5.4 Stable remains unchanged. See [credential migration and rollback boundaries](docs/KEY_STORAGE.md).
 
 **Stable V0.5.4** remains the production baseline. It links newly created code checkpoints to the selected completed Harness turn and keeps code recovery and official conversation branching as two explicit actions.
 

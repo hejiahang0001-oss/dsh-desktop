@@ -115,6 +115,10 @@ class WorkbenchStore {
     return this.getState();
   }
 
+  async applyProjectLayout(layout) {
+    this.state = normalizeWorkbenchState(layout); await this._persist(); return this.getState();
+  }
+
   getState() {
     return { ...this.state };
   }
