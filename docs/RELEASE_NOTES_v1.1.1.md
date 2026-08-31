@@ -19,8 +19,10 @@ The default JSONL storage and custom SQLite profiles are distinct: upstream SQLi
 
 ## Validation
 
-Packaging, installed-app, real-model and public-download acceptance is tracked in [PROGRESS.md](../PROGRESS.md). Only completed gates there count as verified; V1.1.0 remains the recommended Stable download.
+Windows validation: 408 source tests, 8 installed-app interaction suites, isolated PTY and 4 real-model suites passed. Overwrite installation preserved 34 semantic files, the encrypted software Key and Local State. Background tasks, interruption/queue, session handoff and real XLSX/DOCX reads were exercised. One native screenshot attempt failed before model admission; a fresh-profile repeat passed without changing the binaries or capture assertions.
+
+All four public assets were downloaded anonymously in full and matched the local sizes and SHA-256 hashes; all three checksum-manifest entries matched. V1.1.0 Stable and V1.0.5 retain their original release identities, targets and eight assets. Evidence is tracked in [PROGRESS.md](https://github.com/hejiahang0001-oss/dsh-desktop/blob/main/PROGRESS.md). V1.1.0 remains the recommended Stable download. Multi-day use, another computer's intranet/proxy and a real-model Plan approval were not revalidated in this release.
 
 ## 中文说明
 
-本版用于跟随 Harness alpha.2，发布到 Latest 测试通道，不更换 V1.1.0 Stable。重点验证历史会话、文档拖入、草稿、插话/队列、后台任务和软件 Key。自定义 SQLite 存储不在迁移承诺内，具体完成的检查见执行进度。
+本版已跟随 Harness alpha.2 完成覆盖安装，发布到 Latest 测试通道，不更换 V1.1.0 Stable。历史会话、文档拖入、草稿、插话/队列、后台任务和软件 Key 已纳入回归，4 个公开附件匿名下载校验通过。自定义 SQLite 存储不在迁移承诺内，具体完成的检查见执行进度。
