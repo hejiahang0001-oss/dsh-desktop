@@ -19,7 +19,9 @@ The default JSONL storage and custom SQLite profiles are distinct: upstream SQLi
 
 ## Validation
 
-Packaging, installed-app, real-model and public-download acceptance is tracked in [PROGRESS.md](../PROGRESS.md). Only completed gates there count as verified; V1.1.0 remains the recommended Stable download.
+Windows validation: 408 source tests, 8 installed-app interaction suites, isolated PTY and 4 real-model suites passed. Overwrite installation preserved 34 semantic files, the encrypted software Key and Local State. Background tasks, interruption/queue, session handoff and real XLSX/DOCX reads were exercised. One native screenshot attempt failed before model admission; a fresh-profile repeat passed without changing the binaries or capture assertions.
+
+Public-download acceptance is tracked in [PROGRESS.md](https://github.com/hejiahang0001-oss/dsh-desktop/blob/main/PROGRESS.md). Only completed gates there count as verified; V1.1.0 remains the recommended Stable download. Multi-day use, another computer's intranet/proxy and a real-model Plan approval were not revalidated in this release.
 
 ## 中文说明
 
