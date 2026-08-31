@@ -24,7 +24,7 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; the V1.1.1 Latest candidate pins `dsh-v0.1.2-alpha.2` at `0a53fb55bea101816fa226bb964ae2bed71c343b`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; V1.1.1 Latest pins `dsh-v0.1.2-alpha.2` at `0a53fb55bea101816fa226bb964ae2bed71c343b`.
 
 ## Why DSH Desktop
 
@@ -82,7 +82,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
-**V1.1.1 Latest candidate** follows Harness alpha.2. The candidate installer is `DSH-Desktop-Setup-1.1.1.exe`; validation and publication status are recorded in [PROGRESS.md](PROGRESS.md). See the [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.2.md) and [release notes](docs/RELEASE_NOTES_v1.1.1.md). This does not promote or replace Stable.
+**[V1.1.1 Latest / Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)** follows Harness alpha.2, including namespaced queue errors and Session-based background permission checks. Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/DSH-Desktop-Setup-1.1.1.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/DSH-Desktop-Portable-1.1.1.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/SHA256SUMS-v1.1.1.txt). Installed-app, real-model and public-download evidence is recorded in [PROGRESS.md](PROGRESS.md). See the [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.2.md) and [release notes](docs/RELEASE_NOTES_v1.1.1.md). This does not promote or replace Stable.
 
 **[V1.0.5 previous version](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.5)** is retained, not a second Stable. The 2026-08-31 cleanup retained V1.0.5 and V1.1.0; future Latest iterations can add new releases. Source tags, history and test records remain available. Back up application data before downgrading; retaining an installer does not guarantee future data-format compatibility.
 
@@ -166,6 +166,8 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 [V1.1.0 已按维护者指令晋升为 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)，在 Excel/Word/PDF 入口、软件 Key 加密、审查批注、一体化工作台和会话交接基础上，增加独立后台任务、定时计划、运行历史和恢复。入口为“任务与子代理 → 独立后台任务”。托盘运行时有效，完全退出后不执行；任务失败或结果不明不会自动重发。独立任务需要 Git；普通文档拖入不需要 Git。工作树检出全部已提交文件，不是内容脱敏；软件托管 Key 和未提交资料不复制。安装与公开下载验收状态见[执行进度](PROGRESS.md)。本次沿用已验证的原安装包，仅保留 V1.1.0 和上一版 V1.0.5 的发布与安装产物，源码历史和测试记录不删除。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)；回退前应备份数据。
 
 发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
+
+当前产品 Latest 为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核升级到 Harness `0.1.2-alpha.2`，已完成本机覆盖安装、数据保留及真实模型验收。此前“只保留 V1.1.0 和 V1.0.5”是一次性清理范围，本次新增 Latest 不删除这两个保留版本。安装包仍未签名；自定义 SQLite 迁移、其他电脑的内网代理和多日稳定性不在本次验证承诺内。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
