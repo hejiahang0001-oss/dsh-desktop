@@ -125,7 +125,7 @@ test('support backup validation rejects tampering and unsafe destinations', asyn
 test('diagnostic report omits raw paths, credentials, proxy values, session text, and logs', () => {
   const report = createRedactedDiagnosticReport({
     appInfo: { version: '0.7.0', platform: 'win32', packaged: true },
-    runtime: { electron: '43.4.1', node: '24.19.0', harness: '0.1.2-alpha.1', pnpm: '11.19.0' },
+    runtime: { electron: '43.4.1', node: '24.19.0', harness: '0.1.2-alpha.2', pnpm: '11.19.0' },
     workspace: { displayName: 'C:\\Users\\secret\\project-sk-folder-secret-1234567890', activePath: 'C:\\Users\\secret\\repo', isFallback: false },
     diagnostics: {
       harnessStatus: 'https://user:pass@status.example',

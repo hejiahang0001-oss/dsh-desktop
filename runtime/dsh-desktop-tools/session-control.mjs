@@ -54,7 +54,7 @@ export async function sessionControl(ctx, operation, request) {
     const preset = permissions?.resolve('workspace-write');
     if (!agent || preset?.sandbox !== 'workspace-write' || preset?.approval !== 'ask') throw new Error('后台权限预设不满足工作区写入和逐项审批要求，未发送任务。');
     permissions.set(agent.session, 'workspace-write');
-    if (permissions.current(agent.session.events) !== 'workspace-write') throw new Error('后台权限设置未通过校验。');
+    if (permissions.current(agent.session) !== 'workspace-write') throw new Error('后台权限设置未通过校验。');
     await ctx.sessionPersistence.ensureMaterialized(agent.session);
     const workspace = await ctx.workspaceRegistry.create(sourcePath);
     await workspace.attachSession(created.sessionId);
@@ -71,7 +71,7 @@ export async function sessionControl(ctx, operation, request) {
       if (!(await workspaceActivity(ctx, sourcePath, request.sessionId)).idle) throw new Error('任务目录的另一会话已经开始工作，未提交任务。');
       const agent = ctx.agents.get(request.sessionId), permissions = agent?.ctx.get('permissionPresets');
       const preset = permissions?.resolve('workspace-write');
-      if (!agent || preset?.sandbox !== 'workspace-write' || preset?.approval !== 'ask' || permissions.current(agent.session.events) !== 'workspace-write') throw new Error('后台会话权限发生变化；未提交任务。');
+      if (!agent || preset?.sandbox !== 'workspace-write' || preset?.approval !== 'ask' || permissions.current(agent.session) !== 'workspace-write') throw new Error('后台会话权限发生变化；未提交任务。');
       if (state.running || state.pending || observation.events.some((e) => e.type === 'user/message' && e.data.source?.kind === 'user')) throw new Error('后台会话已有工作；未重复提交。');
       if (!/^[a-f0-9-]{36}$/i.test(request.requestId || '') || typeof request.text !== 'string' || !request.text.trim() || request.text.length > 8000 || request.text.includes('\0')) throw new Error('后台任务输入无效。');
       return await ctx.sessionController.prompt({ sessionId: request.sessionId, requestId: request.requestId, mode: 'queue', clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,

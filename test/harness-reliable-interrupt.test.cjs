@@ -123,6 +123,24 @@ test('idle retained queue is resumed atomically and a switched session never rem
   assert.equal(changed.calls.some((entry) => ['desktop.resumeQueue', 'session.updateQueue', 'session.prompt'].includes(entry.method)), false);
 });
 
+test('queue promotion recognizes alpha.2 namespaced races without resending a message', async () => {
+  for (const code of ['session/queue-item-not-found', 'queue-item-not-found']) {
+    const { controller, calls } = fixture({ running: false });
+    controller.resumeQueue = async () => { throw Object.assign(new Error('item consumed'), { code }); };
+    await assert.rejects(controller.interruptQueued(), (error) => (
+      error instanceof ReliableInterruptError && error.code === 'queue-race'
+    ));
+    assert.equal(calls.some((entry) => entry.method === 'session.prompt'), false);
+  }
+});
+
+test('queue promotion does not misclassify unrelated remote errors', async () => {
+  const { controller } = fixture({ running: false });
+  const failure = Object.assign(new Error('forbidden'), { code: 'session/forbidden' });
+  controller.resumeQueue = async () => { throw failure; };
+  await assert.rejects(controller.interruptQueued(), (error) => error === failure);
+});
+
 test('queue snapshot reads one bounded authoritative WebSocket baseline', async () => {
   class FakeWebSocket {
     constructor(url) {

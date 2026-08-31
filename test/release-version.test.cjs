@@ -28,6 +28,13 @@ test('release-facing files follow the package version', () => {
   assert.match(read('PROGRESS.md'), new RegExp(`V${version.replaceAll('.', '\\.')}`));
 });
 
+test('update dialog does not hard-code a superseded Stable version', () => {
+  const main = read('electron/main.cjs');
+  const dialog = main.slice(main.indexOf('const checkForUpdatesFromUser ='), main.indexOf('const checkForUpdatesFromUser =') + 4000);
+  assert.match(dialog, /Stable 通道保持独立，仅在明确确认后更新/);
+  assert.doesNotMatch(dialog, /V\d+\.\d+\.\d+ Stable/);
+});
+
 test('the current release pins the reviewed Electron 43 runtime and reports it in packaged smoke', () => {
   const manifest = JSON.parse(read('package.json'));
   const fetchScript = read('scripts/fetch-electron-runtime.ps1');

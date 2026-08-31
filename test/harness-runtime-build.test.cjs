@@ -4,8 +4,8 @@ const path = require('node:path');
 const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '..');
-const VERSION = '0.1.2-alpha.1';
-const COMMIT = 'cd5ef8148158c3a752a658978873241fdf8e2bbc';
+const VERSION = '0.1.2-alpha.2';
+const COMMIT = '0a53fb55bea101816fa226bb964ae2bed71c343b';
 const runtimeRoot = path.join(ROOT, 'vendor', `harness-hoisted-${VERSION}`);
 
 test('V1 runtime recipe pins the official source identity and narrow build policy', () => {
@@ -19,7 +19,7 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   assert.match(manifest.scripts['runtime:deploy'], /build-harness-runtime\.ps1/);
   assert.deepEqual(runtimeManifest.dshDesktop, {
     repository: 'https://github.com/deepseek-ai/deepseek-harness.git',
-    tag: 'dsh-v0.1.2-alpha.1',
+    tag: 'dsh-v0.1.2-alpha.2',
     commit: COMMIT,
     package: '@deepseek-ai/dsh',
     packageVersion: VERSION,
@@ -30,7 +30,7 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   assert.match(buildScript, /verify-built-package-invariants/);
   assert.match(buildScript, /status --porcelain --untracked-files=no/);
   assert.doesNotMatch(buildScript, /dangerously-allow-all-builds/);
-  assert.match(assembler, /EXPECTED_DSH_PACKAGES = 241/);
+  assert.match(assembler, /EXPECTED_DSH_PACKAGES = 245/);
   assert.match(assembler, /EXPECTED_VENDOR_PACKAGES = 9/);
   assert.match(assembler, /koffiPackage\.version !== '3\.1\.1'/);
 });
@@ -46,10 +46,10 @@ test('assembled Harness runtime carries exact provenance and no linked paths', (
   assert.equal(dsh.version, VERSION);
   assert.equal(koffi.version, '3.1.1');
   assert.equal(provenance.harness.commit, COMMIT);
-  assert.equal(provenance.harness.tag, 'dsh-v0.1.2-alpha.1');
+  assert.equal(provenance.harness.tag, 'dsh-v0.1.2-alpha.2');
   assert.equal(provenance.build.node, 'v24.19.0');
   assert.equal(provenance.build.pnpm, '11.7.0');
-  assert.equal(provenance.build.packageCount, 250);
+  assert.equal(provenance.build.packageCount, 254);
 
   const queue = [runtimeRoot];
   let entries = 0;
