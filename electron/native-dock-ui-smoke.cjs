@@ -15,7 +15,13 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
   };
   const act = (action, value) => dock.bar.webContents.executeJavaScript(`dockAPI.act(${JSON.stringify(action)},${JSON.stringify(value)})`, true);
   const shot = async (label) => {
+    // Windows STARTUPINFO can suppress the first ShowWindow during a hidden
+    // test launch. Restore visibility before requiring a real composed frame.
+    if (window.isMinimized()) window.restore();
+    window.show();
+    await waitFor(() => window.isVisible(), 'native capture visibility');
     window.focus(); await delay(400);
+    await fsp.writeFile(`${target}.${label}.window.json`, JSON.stringify({ visible: window.isVisible(), minimized: window.isMinimized(), bounds: window.getBounds(), mediaSourceId: window.getMediaSourceId() }));
     const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1920, height: 1400 } });
     const source = sources.find((item) => item.id === window.getMediaSourceId());
     if (!source || source.thumbnail.isEmpty()) throw new Error('Native composed-window capture unavailable');

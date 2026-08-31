@@ -24,7 +24,7 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview; V1.1.0 keeps source tag `dsh-v0.1.2-alpha.1` pinned at commit `cd5ef8148158c3a752a658978873241fdf8e2bbc`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; the V1.1.1 Latest candidate pins `dsh-v0.1.2-alpha.2` at `0a53fb55bea101816fa226bb964ae2bed71c343b`.
 
 ## Why DSH Desktop
 
@@ -82,7 +82,9 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
-**[V1.0.5 previous version](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.5)** is retained as the preceding build, not a second Stable. Only V1.0.5 and V1.1.0 release records and installation artifacts are retained after this cleanup; source tags, history and test records remain available. Back up application data before downgrading; retaining an installer does not guarantee future data-format compatibility.
+**V1.1.1 Latest candidate** follows Harness alpha.2. The candidate installer is `DSH-Desktop-Setup-1.1.1.exe`; validation and publication status are recorded in [PROGRESS.md](PROGRESS.md). See the [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.2.md) and [release notes](docs/RELEASE_NOTES_v1.1.1.md). This does not promote or replace Stable.
+
+**[V1.0.5 previous version](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.5)** is retained, not a second Stable. The 2026-08-31 cleanup retained V1.0.5 and V1.1.0; future Latest iterations can add new releases. Source tags, history and test records remain available. Back up application data before downgrading; retaining an installer does not guarantee future data-format compatibility.
 
 ### Release channels
 
@@ -123,7 +125,7 @@ The pinned runtime includes the complete official dependency closure required by
 ## Security and current limits
 
 - The Windows installer is not code-signed yet.
-- Harness credentials are currently stored by Harness `0.1.2-alpha.1` in `.credentials.yaml` under the user data directory and rely on Windows user-directory ACLs; Credential Manager/DPAPI integration is not complete.
+- Software-managed DeepSeek credentials use encrypted `.credentials.dpapi.json` storage and take priority over environment variables; ordinary backups exclude credential files. Keys require re-entry on another Windows account or computer. See [Key storage and migration](docs/KEY_STORAGE.md).
 - The source-tagged upstream is alpha software. DSH Desktop reports tool failures and never switches to Full Access automatically; real V1.0 validation covers authenticated startup, Workspace/session mapping, Side Chat, Office/Wiki Skill discovery, and direct plus queued interruption, but it cannot prove every upstream plugin path.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
 - V0.5.20 Word editing performs exact replacement inside one OOXML text node; it does not guess across mixed-format runs, convert `.doc`, or provide tracked changes, comments, equations, or arbitrary Word DOM editing. Embedded images are limited to bounded workspace PNG/JPEG files.

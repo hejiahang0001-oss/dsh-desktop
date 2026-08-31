@@ -205,23 +205,23 @@ test('package layout requires exact Harness source-build provenance', async (con
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const harnessRoot = path.join(root, 'resources', 'harness');
   writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), JSON.stringify({
-    name: '@deepseek-ai/dsh', version: '0.1.2-alpha.1'
+    name: '@deepseek-ai/dsh', version: '0.1.2-alpha.2'
   }));
   writeFile(path.join(harnessRoot, 'harness-runtime.json'), JSON.stringify({
     version: 1,
     harness: {
       name: '@deepseek-ai/dsh',
-      version: '0.1.2-alpha.1',
-      commit: 'cd5ef8148158c3a752a658978873241fdf8e2bbc'
+      version: '0.1.2-alpha.2',
+      commit: '0a53fb55bea101816fa226bb964ae2bed71c343b'
     },
-    build: { packageCount: 250 }
+    build: { packageCount: 254 }
   }));
   assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, true);
 
   writeFile(path.join(harnessRoot, 'harness-runtime.json'), JSON.stringify({
     version: 1,
-    harness: { name: '@deepseek-ai/dsh', version: '0.1.2-alpha.1', commit: 'wrong' },
-    build: { packageCount: 250 }
+    harness: { name: '@deepseek-ai/dsh', version: '0.1.2-alpha.2', commit: 'wrong' },
+    build: { packageCount: 254 }
   }));
   assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
 });

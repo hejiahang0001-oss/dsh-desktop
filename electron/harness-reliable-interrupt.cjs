@@ -300,7 +300,9 @@ class ReliableInterruptController {
       const receipt = await this.resumeQueue({ sessionId, workspacePath: this.getWorkspacePath(), itemId: item.id });
       if (receipt?.accepted !== true) throw new ReliableInterruptError('queue-unconfirmed', '未确认排队消息已受理，请刷新状态；未重复发送。');
     } catch (error) {
-      if (error?.code === 'queue-item-not-found') throw new ReliableInterruptError('queue-race', '排队消息已离开队列，请查看回复；未重复发送。');
+      if (['session/queue-item-not-found', 'queue-item-not-found'].includes(error?.code)) {
+        throw new ReliableInterruptError('queue-race', '排队消息已离开队列，请查看回复；未重复发送。');
+      }
       throw error;
     }
     return Object.freeze({

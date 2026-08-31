@@ -38,7 +38,10 @@ function taskSdk(f, preset = { sandbox: 'workspace-write', approval: 'ask' }) {
   f.ctx.sessionController.list = async () => ({ items: [...f.entries].map(([id, s]) => ({ sessionId: id, cwd: s.header.cwd, running: f.agents.get(id)?.status === 'running' })) });
   f.ctx.sessionController.create = async (request) => {
     const session = { id: request.sessionId, header: { id: request.sessionId, cwd: request.cwd }, events: [], [Symbol.dispose]() {} };
-    const permissions = { resolve: () => preset, current: () => session.events.findLast((e) => e.type === 'permission/preset')?.data.preset, set: (_s, name) => session.events.push({ type: 'permission/preset', data: { preset: name } }) };
+    const permissions = { resolve: () => preset, current: (observed) => {
+      assert.equal(observed, session, 'alpha.2 permission projection requires the Session, not its event array');
+      return observed.events.findLast((e) => e.type === 'permission/preset')?.data.preset;
+    }, set: (_s, name) => session.events.push({ type: 'permission/preset', data: { preset: name } }) };
     f.entries.set(session.id, session); f.agents.set(session.id, { session, status: 'idle', inbox: { hasPending: false }, ctx: { get: (name) => name === 'permissionPresets' ? permissions : undefined }, cancel() { this.status = 'idle'; } });
     return { sessionId: session.id };
   };
@@ -53,6 +56,15 @@ test('background SDK pins workspace-write plus ask and rejects duplicate work an
   const bad = await sdkFixture(t); taskSdk(bad, { sandbox: 'danger-full-access', approval: 'never' });
   await assert.rejects(bad.sessionControl(bad.ctx, 'task-create', { ...request, workspacePath: bad.target }), /权限预设/);
 });
+test('alpha.2 permission revalidation rejects a widened Session before prompt admission', async (t) => {
+  const f = await sdkFixture(t), sent = taskSdk(f);
+  const request = { sessionId: `session-${randomUUID()}`, workspacePath: f.target, requestId: randomUUID(), text: 'test' };
+  await f.sessionControl(f.ctx, 'task-create', request);
+  f.entries.get(request.sessionId).events.push({ type: 'permission/preset', data: { preset: 'danger-full-access' } });
+  await assert.rejects(f.sessionControl(f.ctx, 'task-prompt', request), /权限发生变化/);
+  assert.equal(sent(), 0);
+});
+
 test('background SDK rejects occupied directories and attributes outcomes only to the exact request turn', async (t) => {
   const f = await sdkFixture(t); taskSdk(f); f.agents.get(f.id).status = 'running';
   const request = { sessionId: `session-${randomUUID()}`, workspacePath: f.source, requestId: randomUUID() };

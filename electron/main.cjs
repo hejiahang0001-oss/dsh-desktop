@@ -3601,7 +3601,7 @@ const checkForUpdatesFromUser = () => {
         type: 'info',
         title: '已是当前产品 Latest',
         message: `当前版本 V${result.currentVersion} 暂无更高的公开版本。`,
-        detail: '检查更新不会自动下载或安装；V0.5.4 Stable 通道保持独立。',
+        detail: '检查更新不会自动下载或安装；Stable 通道保持独立，仅在明确确认后更新。',
         buttons: ['确定'],
         defaultId: 0,
         cancelId: 0,
@@ -4785,7 +4785,7 @@ function installApplicationMenu() {
             type: 'info',
             title: `关于 DSH Desktop V${app.getVersion()}`,
             message: `DSH Desktop V${app.getVersion()}`,
-            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.1'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
+            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.2'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
             buttons: ['确定'],
             defaultId: 0,
             cancelId: 0
@@ -5815,6 +5815,7 @@ const runPdfSmoke = async (target) => {
       };
     })()`, true);
     smokeWindow.showInactive();
+    if (!smokeWindow.isVisible()) smokeWindow.showInactive();
     await new Promise((resolve) => setTimeout(resolve, 1800));
     const sources = await desktopCapturer.getSources({
       types: ['window'],
@@ -6039,7 +6040,12 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       throw new Error(`界面条件超时：${code}`);
     };
     await waitFor('Boolean(document.querySelector("[data-composer-input][contenteditable=true]"))');
-    mainWindow.show(); mainWindow.focus(); wc.focus();
+    mainWindow.show();
+    // A hidden Windows launcher may consume the first ShowWindow call.
+    // Native child views and composed captures require an actually shown host.
+    if (!mainWindow.isVisible()) mainWindow.show();
+    if (!mainWindow.isVisible()) throw new Error('Smoke host window is not visible');
+    mainWindow.focus(); wc.focus();
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="继续")?.click()');
     await new Promise((resolve) => setTimeout(resolve, 200));
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
@@ -6330,16 +6336,16 @@ const runPluginHealthSmoke = async (target) => {
   try {
     await writeSmokePackage(dshPackageDir, {
       name: '@deepseek-ai/dsh',
-      version: '0.1.2-alpha.1',
+      version: '0.1.2-alpha.2',
       dependencies: Object.fromEntries([
-        ['@deepseek-ai/dsh-base', '0.1.2-alpha.1'],
-        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.1'])
+        ['@deepseek-ai/dsh-base', '0.1.2-alpha.2'],
+        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.2'])
       ])
     });
-    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.1', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
     for (const name of capabilityPackageNames) {
       const packageDir = path.join(installRoot, '@deepseek-ai', name);
-      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.1' });
+      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.2' });
       await linkSmokePackage(fallbackRoot, `@deepseek-ai/${name}`, packageDir);
     }
     await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });
@@ -6449,6 +6455,11 @@ const runOfficeCenterSmoke = async (target) => {
       sessionId: 'session-33333333-3333-4333-8333-333333333333'
     });
     await createOfficeCenterWindow();
+    // Hidden Windows launchers may consume the first ShowWindow call.
+    officeCenterWindow.show();
+    if (!officeCenterWindow.isVisible()) officeCenterWindow.show();
+    if (!officeCenterWindow.isVisible()) throw new Error('Office smoke window is not visible');
+    officeCenterWindow.focus();
     const renderedInTime = await officeCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
       const deadline = Date.now() + 10000;
       const check = () => {

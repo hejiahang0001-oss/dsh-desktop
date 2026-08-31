@@ -41,11 +41,11 @@ test('Harness Remote caller uses the official slash endpoint and exact empty arg
 
 test('extension center maps the official inventory into four fixed capability surfaces', () => {
   const state = buildExtensionCenter({
-    runtimeVersion: '0.1.2-alpha.1',
+    runtimeVersion: '0.1.2-alpha.2',
     runtimeCapabilities: {
-      skills: { status: 'ready', version: '0.1.2-alpha.1' },
-      mcp: { status: 'ready', version: '0.1.2-alpha.1' },
-      pluginInventory: { status: 'ready', version: '0.1.2-alpha.1' }
+      skills: { status: 'ready', version: '0.1.2-alpha.2' },
+      mcp: { status: 'ready', version: '0.1.2-alpha.2' },
+      pluginInventory: { status: 'ready', version: '0.1.2-alpha.2' }
     },
     profiles: [{ dependencies: [{ name: '@example/one' }] }],
     inventory: { entries: [
@@ -66,8 +66,8 @@ test('extension center maps the official inventory into four fixed capability su
 
 test('installed MCP capability remains ready without claiming a configured server', () => {
   const state = buildExtensionCenter({
-    runtimeVersion: '0.1.2-alpha.1',
-    runtimeCapabilities: { mcp: { status: 'ready', version: '0.1.2-alpha.1' } },
+    runtimeVersion: '0.1.2-alpha.2',
+    runtimeCapabilities: { mcp: { status: 'ready', version: '0.1.2-alpha.2' } },
     inventory: { entries: [{ moduleName: '@deepseek-ai/dsh-skill', enabled: true, fiberPhase: 'active' }] }
   });
   const mcp = state.surfaces.find((item) => item.id === 'mcp');
@@ -77,7 +77,7 @@ test('installed MCP capability remains ready without claiming a configured serve
 });
 
 test('extension center fails closed when live Harness inventory is unavailable', () => {
-  const state = buildExtensionCenter({ runtimeVersion: '0.1.2-alpha.1', inventoryError: 'Harness 尚未就绪。' });
+  const state = buildExtensionCenter({ runtimeVersion: '0.1.2-alpha.2', inventoryError: 'Harness 尚未就绪。' });
   assert.equal(state.available, false);
   assert.equal(state.surfaces.find((item) => item.id === 'skills').status, 'unavailable');
   assert.equal(state.surfaces.find((item) => item.id === 'plugins').manageable, true);

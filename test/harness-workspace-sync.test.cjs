@@ -142,6 +142,25 @@ test('legacy prompt and history calls use the official Remote wire shape', async
   });
 });
 
+test('alpha.2 Remote failures retain namespaced codes and details without retry or result unwrapping', async () => {
+  for (const code of ['session/not-found', 'session/queue-item-not-found', 'gateway/arguments-invalid', 'workspace/invalid-path']) {
+    let calls = 0;
+    await assert.rejects(callHarnessApi('http://127.0.0.1:54321', 'session.prompt', {
+      sessionId: SESSION_ID, content: [{ type: 'text', text: 'do not retry' }]
+    }, {
+      fetchImpl: async (_url, options) => {
+        calls += 1;
+        const request = JSON.parse(options.body);
+        return new Response(JSON.stringify({ type: 'server-response', rpcId: request.rpcId,
+          result: { ok: false, error: { code, message: 'remote rejection', details: { sessionId: SESSION_ID } } }
+        }));
+      }
+    }), (error) => error instanceof HarnessWorkspaceSyncError && error.code === code
+      && error.message === 'remote rejection' && error.details.sessionId === SESSION_ID);
+    assert.equal(calls, 1);
+  }
+});
+
 test('session selection is a fixed localStorage write with a validated id', async () => {
   const scripts = [];
   const webContents = {
