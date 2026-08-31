@@ -134,6 +134,24 @@ test('queue promotion recognizes alpha.2 namespaced races without resending a me
   }
 });
 
+test('sidebar-selected session resolves its own workspace instead of the desktop launch directory', async () => {
+  const { controller, calls } = fixture({ running: false });
+  controller.getWorkspacePath = () => 'C:\\stale-launch-directory';
+  controller.resolveContext = async () => ({ sessionId: SESSION_ID, workspacePath: 'C:\\repo' });
+  assert.equal((await controller.interruptQueued()).accepted, true);
+  assert.equal(calls.at(-1).payload.workspacePath, 'C:\\repo');
+  assert.equal(calls.some((call) => call.method === 'session.prompt'), false);
+});
+
+test('a context change after reading the queue never cancels or promotes into another workspace', async () => {
+  const { controller, calls } = fixture();
+  let workspacePath = 'C:\\repo';
+  controller.resolveContext = async () => ({ sessionId: SESSION_ID, workspacePath });
+  controller.readQueue = async () => { workspacePath = 'C:\\different'; return [{ id: 'queued', placement: 'queued' }]; };
+  await assert.rejects(controller.interruptQueued(), /工作区|会话/);
+  assert.equal(calls.some((call) => ['session.cancel', 'session.prompt', 'desktop.resumeQueue'].includes(call.method)), false);
+});
+
 test('queue promotion does not misclassify unrelated remote errors', async () => {
   const { controller } = fixture({ running: false });
   const failure = Object.assign(new Error('forbidden'), { code: 'session/forbidden' });

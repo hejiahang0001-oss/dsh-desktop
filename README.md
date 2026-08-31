@@ -28,6 +28,8 @@
 
 ## Why DSH Desktop
 
+V1.1.2 is currently an unpublished hotfix candidate (`DSH-Desktop-Setup-1.1.2.exe`) for cross-workspace interruption and document dragging. Validation status is tracked in [PROGRESS.md](PROGRESS.md); the public downloads below remain unchanged until acceptance is complete.
+
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
 - **Native workspace flow** — open a local Git repository with `Ctrl+O`, remember recent repositories, and bind the matching Harness workspace and session.

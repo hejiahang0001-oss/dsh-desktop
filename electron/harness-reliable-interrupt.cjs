@@ -165,6 +165,7 @@ class ReliableInterruptController {
     getOrigin,
     getWebContents,
     getWorkspacePath,
+    resolveContext,
     resumeQueue,
     apiCall = callHarnessApi,
     readQueue = readHarnessQueueSnapshot,
@@ -174,6 +175,7 @@ class ReliableInterruptController {
     this.getOrigin = getOrigin;
     this.getWebContents = getWebContents;
     this.getWorkspacePath = getWorkspacePath;
+    this.resolveContext = resolveContext;
     this.resumeQueue = resumeQueue;
     this.apiCall = apiCall;
     this.readQueue = readQueue;
@@ -206,12 +208,24 @@ class ReliableInterruptController {
     if (summary.origin === 'subagent') {
       throw new ReliableInterruptError('subagent-session', '子代理请在任务面板中使用补充消息或中断。');
     }
-    const workspacePath = this.getWorkspacePath?.();
+    const context = this.resolveContext ? await this.resolveContext() : null;
+    if (context && context.sessionId !== sessionId) {
+      throw new ReliableInterruptError('session-changed', '当前会话已切换，插话未发送。');
+    }
+    const workspacePath = context ? context.workspacePath : this.getWorkspacePath?.();
     if (typeof workspacePath !== 'string' || !workspacePath || typeof summary.cwd !== 'string'
       || pathKey(summary.cwd) !== pathKey(workspacePath)) {
       throw new ReliableInterruptError('workspace-mismatch', '当前会话与桌面工作区不一致，请刷新后重试。');
     }
     return summary;
+  }
+
+  async _assertContext(sessionId, workspacePath) {
+    const context = this.resolveContext ? await this.resolveContext()
+      : { sessionId, workspacePath: this.getWorkspacePath?.() };
+    if (context?.sessionId !== sessionId || pathKey(context.workspacePath) !== pathKey(workspacePath)) {
+      throw new ReliableInterruptError('session-changed', '会话或工作区已切换，未继续插话；原消息保留。');
+    }
   }
 
   async interruptAndPrompt(value, { maxIdleChecks = DEFAULT_IDLE_CHECKS } = {}) {
@@ -246,6 +260,7 @@ class ReliableInterruptController {
     if (await this._selectedSession() !== sessionId) {
       throw new ReliableInterruptError('session-changed', '处理插话期间会话已经切换，消息未发送。');
     }
+    await this._assertContext(sessionId, initial.cwd);
 
     const mode = interrupted && idleConfirmed ? 'steer' : 'queue';
     const receipt = await this._call('session.prompt', {
@@ -279,6 +294,7 @@ class ReliableInterruptController {
     if (!item || typeof item.id !== 'string' || item.id.length > 160) {
       throw new ReliableInterruptError('queue-empty', '当前没有可继续的排队消息，请刷新状态。');
     }
+    await this._assertContext(sessionId, initial.cwd);
     let idleConfirmed = initial.running !== true;
     if (!idleConfirmed) {
       const cancellation = await this._call('session.cancel', { sessionId });
@@ -292,12 +308,13 @@ class ReliableInterruptController {
     if (await this._selectedSession() !== sessionId) {
       throw new ReliableInterruptError('session-changed', '处理插话期间会话已经切换；消息已保留在原会话。');
     }
+    await this._assertContext(sessionId, initial.cwd);
     // Promote the exact pending item atomically inside Harness. Never remove
     // then resubmit content: a transport failure in between could lose a task.
     try {
       if (!idleConfirmed) throw new ReliableInterruptError('cancel-pending', '当前回合尚未停止；原队列保留，请稍后继续。');
       if (!this.resumeQueue) throw new ReliableInterruptError('queue-unavailable', '桌面队列恢复组件尚未就绪。');
-      const receipt = await this.resumeQueue({ sessionId, workspacePath: this.getWorkspacePath(), itemId: item.id });
+      const receipt = await this.resumeQueue({ sessionId, workspacePath: initial.cwd, itemId: item.id });
       if (receipt?.accepted !== true) throw new ReliableInterruptError('queue-unconfirmed', '未确认排队消息已受理，请刷新状态；未重复发送。');
     } catch (error) {
       if (['session/queue-item-not-found', 'queue-item-not-found'].includes(error?.code)) {

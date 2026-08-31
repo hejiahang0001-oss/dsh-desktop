@@ -1,7 +1,7 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
-async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, version, target, origin, api }) {
+async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, version, target, origin, api, crossWorkspace = false }) {
   const wc = window.webContents, evaluate = (code) => wc.executeJavaScript(code, true), checks = {};
   await evaluate('window.__DSH_SMOKE_NOTICES__=[];new MutationObserver(()=>{const t=document.querySelector(".dsh-session-workflow .dsh-document-status")?.textContent;if(t&&window.__DSH_SMOKE_NOTICES__.at(-1)!==t)window.__DSH_SMOKE_NOTICES__.push(t)}).observe(document.body,{subtree:true,childList:true,characterData:true})');
   const inspect = () => supervisor.credentialHost.sessionControl.request('inspect', { workspacePath, sessionId: selected.sessionId });
@@ -29,10 +29,17 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   const marker = `DSH_FLOW_${randomBytes(8).toString('hex')}`;
   await start(); await type(`取消之前的重复输出任务，现在只做这件事：把 ${marker} 写入当前工作区 queue-result.txt，然后结束。不要继续此前任务。`); await click('排队发送');
   await wait(async () => (await inspect()).pending > 0 && !(await evaluate('window.__DSH_COMPOSER_TEXT__.read()')).trim(), 'queue persisted and editor cleared'); checks.queued = true;
-  await click('停止当前回合');
-  await wait(async () => !(await inspect()).running, 'current turn stopped', 60000);
-  checks.queueRetainedAfterStop = (await inspect()).pending > 0;
-  if (checks.queueRetainedAfterStop) {
+  if (crossWorkspace) {
+    await wait(() => evaluate('Array.from(document.querySelectorAll("button")).some(b=>["插话发送","Steer queued message"].includes(b.getAttribute("aria-label"))&&!b.disabled)'), 'up-arrow available');
+    await evaluate('Array.from(document.querySelectorAll("button")).find(b=>["插话发送","Steer queued message"].includes(b.getAttribute("aria-label"))&&!b.disabled).click()');
+    await wait(() => evaluate('document.getElementById("dsh-reliable-interrupt-status")?.dataset.state === "success"'), 'up-arrow accepted', 15000);
+    checks.upArrowAcceptedAcrossWorkspace = true;
+  } else {
+    await click('停止当前回合');
+    await wait(async () => !(await inspect()).running, 'current turn stopped', 60000);
+    checks.queueRetainedAfterStop = (await inspect()).pending > 0;
+  }
+  if (!crossWorkspace && checks.queueRetainedAfterStop) {
     await evaluate('window.__DSH_WORKFLOW__.refresh()');
     await click('继续排队消息');
     await wait(() => evaluate('window.__DSH_SMOKE_NOTICES__.some(t=>t.includes("继续处理原排队消息的请求已受理"))'), 'resume receipt', 10000);

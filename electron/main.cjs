@@ -104,6 +104,7 @@ const { WorkspaceStore } = require('./workspace-store.cjs');
 const { SideChatController, SideChatError } = require('./side-chat.cjs');
 const { DocumentIntakeController } = require('./document-intake-controller.cjs');
 const { contextKey } = require('./document-intake-controller.cjs');
+const { resolveHarnessSessionContext } = require('./harness-session-context.cjs');
 const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs');
 const { NativeWorkbenchDock } = require('./native-workbench-dock.cjs');
 const { DockLayoutStore, TOOLS: DOCK_TOOLS } = require('./dock-layout.cjs');
@@ -1324,17 +1325,9 @@ const documentIntakeController = new DocumentIntakeController({
   getPersistence: getContinuityStore,
   getContext: async () => {
     if (!harnessUiReady()) throw new Error('请等待工作区连接完成后添加文件。');
-    const workspacePath = getWorkspaceState().activePath;
-    if (!workspacePath) throw new Error('请先选择工作区。');
-    const sessionId = await readHarnessSessionSelection(mainWindow.webContents);
-    if (sessionId) {
-      const listing = await authenticatedHarnessApi(harnessOrigin, 'session.list', {});
-      const selected = listing.items?.find((item) => item.sessionId === sessionId);
-      if (!selected || selected.origin === 'subagent' || pathKey(selected.cwd) !== pathKey(workspacePath)) {
-        throw new Error('当前会话与工作区尚未同步，请等待同步后重试。');
-      }
-    }
-    return { workspacePath, sessionId };
+    if (workspaceActivationPromise) throw new Error('正在切换桌面工作区，请稍后重试。');
+    return resolveHarnessSessionContext({ origin: harnessOrigin, webContents: mainWindow.webContents,
+      fallbackWorkspacePath: getWorkspaceState().activePath, apiCall: authenticatedHarnessApi });
   },
   chooseFiles: async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -6023,7 +6016,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     harnessOrigin = authentication.origin;
     harnessFetch = createAuthenticatedHarnessFetch(authentication);
     harnessAuthCookie = authentication.cookie;
-    const selected = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath, fetchImpl: harnessFetch });
+    let selected = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath, fetchImpl: harnessFetch });
     mainWindow = new BrowserWindow({ width: 1280, height: 880, show: false, webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true
     } });
@@ -6051,6 +6044,20 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
     for (const name of ['composer-text-bridge.js', 'document-intake.js']) await evaluate(await fsp.readFile(path.join(rootDir, 'assets', name), 'utf8'));
     await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
+    if (process.argv.includes('--smoke-cross-workspace')) {
+      const sidebarPath = path.join(smokeRoot, 'sidebar-workspace'); await fsp.mkdir(sidebarPath, { recursive: true });
+      const other = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath: sidebarPath, fetchImpl: harnessFetch });
+      await waitFor('Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).some(row=>row.textContent.includes("sidebar-workspace"))');
+      // Upstream deliberately displays every blank session as “New Session”,
+      // even after rename. Use the workspace's actual New Session button;
+      // the official navigation reuses its already-created blank session.
+      await evaluate('(()=>{const row=Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).find(row=>row.textContent.includes("sidebar-workspace"));Array.from(row.querySelectorAll("button")).at(-1).click()})()');
+      await waitFor(`JSON.parse(localStorage.getItem('dsh.sessions.current')||'{}').sessionId === ${JSON.stringify(other.sessionId)}`);
+      if (getWorkspaceState().activePath !== workspacePath) throw new Error('Cross-workspace test must retain the original native launch workspace');
+      selected = other;
+      const context = await documentIntakeController.getContext();
+      if (context.workspacePath !== sidebarPath || context.sessionId !== selected.sessionId) throw new Error('Selected sidebar workspace was not resolved');
+    }
     if (continuity) {
       documentIntakeController.chooseFiles = async () => [source];
       documentIntakeController.confirmImport = async () => true;
@@ -6072,6 +6079,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       tasksSubagentsController = new TasksSubagentsController({ getOrigin: () => harnessOrigin, getWebContents: () => wc, apiCall: authenticatedHarnessApi });
       reliableInterruptController = new ReliableInterruptController({ getOrigin: () => harnessOrigin, getWebContents: () => wc,
         getWorkspacePath: () => getWorkspaceState().activePath, apiCall: authenticatedHarnessApi,
+        resolveContext: () => documentIntakeController.getContext(),
         resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
         readQueue: (origin, id, options) => readHarnessQueueSnapshotFromWebContents(wc, origin, id, options) });
       worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
@@ -6098,7 +6106,8 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       }
       if (dock && process.argv.includes('--smoke-workflow')) {
         if (!process.argv.includes('--smoke-real-model')) throw new Error('Workflow acceptance requires the real model flag.');
-        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi });
+        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath: selected.workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi,
+          crossWorkspace: process.argv.includes('--smoke-cross-workspace') });
         if (!result.ok) process.exitCode = 1;
         return;
       }
@@ -6144,8 +6153,31 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     nativeFileResult = await evaluate('(async()=>{const state=await desktopAPI.documents.getState(); return desktopAPI.documents.importFiles(Array.from(document.getElementById("dsh-smoke-native-file").files),state.context)})()');
     await evaluate('document.querySelector(".dsh-document-chip button").click()');
     await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
-    await evaluate('var dropped=new DataTransfer(); dropped.items.add(document.getElementById("dsh-smoke-native-file").files[0]); document.dispatchEvent(new DragEvent("drop",{dataTransfer:dropped,bubbles:true,cancelable:true}))');
+    const dragPoint = await evaluate('(()=>{const r=document.querySelector("[data-composer-card]").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
+    const dragData = { items: [], files: [source], dragOperationsMask: 1 };
+    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'dragEnter', ...dragPoint, data: dragData });
+    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'dragOver', ...dragPoint, data: dragData });
+    await waitFor('document.querySelector(".dsh-document-drop-hint")?.hidden === false');
+    const imageOverlayAbsent = await evaluate('!Array.from(document.querySelectorAll("[role=status]")).some(el=>/Drop images here|图片拖动到此处即可添加|拖入图片/.test(el.textContent))');
+    if (!imageOverlayAbsent) throw new Error('Document drag activated the upstream image-only overlay');
+    await fsp.writeFile(`${resolvedTarget}.drag.png`, (await wc.capturePage()).toPNG());
+    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'drop', ...dragPoint, data: dragData });
     await waitFor('window.__DSH_COMPOSER_TEXT__.read().includes("参考资料") && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    if (!await evaluate('document.querySelector(".dsh-document-drop-hint")?.hidden === true')) throw new Error('Drag feedback was not cleared after drop');
+    const runtime = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
+    const word = require(runtime.docxToolPath), excel = require(runtime.xlsxToolPath);
+    const officeFixtures = [
+      ['拖入表格.xlsx', word.createZip(excel.workbookEntries(excel.normalizeSpec({ sheets: [{ name: '数据', rows: [['项目', '金额'], ['测试', 123]] }] })))],
+      ['拖入文档.docx', word.createZip(word.documentEntries(word.normalizeSpec({ title: '拖拽验证', sections: [{ kind: 'paragraph', text: '这是隔离测试文件。' }] })))],
+      ['拖入资料.pdf', buildPdfSmokeDocument()]
+    ];
+    const officePaths = [];
+    for (const [name, bytes] of officeFixtures) { const file = path.join(smokeRoot, name); await fsp.writeFile(file, bytes); officePaths.push(file); }
+    const officeDrag = { items: [], files: officePaths, dragOperationsMask: 1 };
+    for (const type of ['dragEnter', 'dragOver', 'drop']) await wc.debugger.sendCommand('Input.dispatchDragEvent', { type, ...dragPoint, data: officeDrag });
+    await waitFor('document.querySelectorAll(".dsh-document-chip").length === 4 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    const officeSourceUnchanged = (await Promise.all(officePaths.map(async (file, index) => (await fsp.readFile(file)).equals(officeFixtures[index][1])))).every(Boolean);
+    if (!officeSourceUnchanged) throw new Error('Document drag modified an original fixture');
     const fake = await evaluate('(async()=>{const state=await desktopAPI.documents.getState();return desktopAPI.documents.importFiles([new File(["x"],"fake.csv")],state.context)})()');
     await wc.debugger.sendCommand('Fetch.enable', { patterns: [{ urlPattern: '*api/session/prompt', requestStage: 'Request' }] });
     await fsp.writeFile(`${resolvedTarget}.before-send.png`, (await wc.capturePage()).toPNG());
@@ -6165,6 +6197,9 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       inputKind: 'Lexical contenteditable', chooseInserted: chosen.includes('参考资料'), removalPreservedDraft: !removed.includes('参考资料') && removed.includes('保留这段草稿'),
       nativeFileImported: Boolean(nativeFileResult.ok), syntheticFileRejected: fake.ok === false, originalUnchanged,
       nativeFileDropInserted: true,
+      completeNativeDragLifecycle: true, imageOverlayAbsent, crossWorkspace: process.argv.includes('--smoke-cross-workspace'),
+      officeFormatsDragged: ['xlsx', 'docx', 'pdf'], officeSourceUnchanged,
+      selectedWorkspaceConfirmed: (await documentIntakeController.getContext()).workspacePath === selected.workspacePath,
       upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
@@ -7341,6 +7376,7 @@ app.whenReady().then(async () => {
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
     getWorkspacePath: () => getWorkspaceState().activePath,
+    resolveContext: () => documentIntakeController.getContext(),
     resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
     apiCall: authenticatedHarnessApi,
     readQueue: (origin, sessionId, options) => readHarnessQueueSnapshotFromWebContents(
