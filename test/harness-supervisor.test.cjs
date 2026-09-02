@@ -137,7 +137,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   const packageDir = path.join(
     nodeModules,
     '.pnpm',
-    '@deepseek-ai+dsh@0.1.2-alpha.2_test',
+    '@deepseek-ai+dsh@0.1.2-alpha.5_test',
     'node_modules',
     '@deepseek-ai',
     'dsh',

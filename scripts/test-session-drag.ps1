@@ -28,7 +28,7 @@ foreach ($case in $Cases) {
   Write-Output "Started $case PID=$($taskProcess.Id)"
   $taskProcess.WaitForExit(); $taskProcess.Refresh()
   if (!(Test-Path -LiteralPath $target)) { throw "No result for $case; exit=$($taskProcess.ExitCode)" }
-  $result = Get-Content -Raw -LiteralPath $target | ConvertFrom-Json
+  $result = Get-Content -Raw -Encoding utf8 -LiteralPath $target | ConvertFrom-Json
   $entry = [ordered]@{name=$case; exitCode=$taskProcess.ExitCode; ok=$result.ok; result=$target}
   $summary += $entry
   $summary | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputRoot 'summary.json') -Encoding utf8

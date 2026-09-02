@@ -4778,7 +4778,7 @@ function installApplicationMenu() {
             type: 'info',
             title: `关于 DSH Desktop V${app.getVersion()}`,
             message: `DSH Desktop V${app.getVersion()}`,
-            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.2'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
+            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.5'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
             buttons: ['确定'],
             defaultId: 0,
             cancelId: 0
@@ -6371,16 +6371,16 @@ const runPluginHealthSmoke = async (target) => {
   try {
     await writeSmokePackage(dshPackageDir, {
       name: '@deepseek-ai/dsh',
-      version: '0.1.2-alpha.2',
+      version: '0.1.2-alpha.5',
       dependencies: Object.fromEntries([
-        ['@deepseek-ai/dsh-base', '0.1.2-alpha.2'],
-        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.2'])
+        ['@deepseek-ai/dsh-base', '0.1.2-alpha.5'],
+        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.5'])
       ])
     });
-    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.5', dsh: { bundle: { patch: './cordis.patch.yml' } } });
     for (const name of capabilityPackageNames) {
       const packageDir = path.join(installRoot, '@deepseek-ai', name);
-      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.2' });
+      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.5' });
       await linkSmokePackage(fallbackRoot, `@deepseek-ai/${name}`, packageDir);
     }
     await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });
@@ -6516,11 +6516,19 @@ const runOfficeCenterSmoke = async (target) => {
       enabledButtons: document.querySelectorAll('.invoke:not(:disabled)').length,
       text: document.body.innerText
     })`, true);
+    await officeCenterWindow.webContents.executeJavaScript(
+      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
     const screenshot = await officeCenterWindow.webContents.capturePage();
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
     await officeCenterWindow.webContents.executeJavaScript('window.scrollTo(0, document.documentElement.scrollHeight)', true);
     await new Promise((resolve) => setTimeout(resolve, 100));
+    await officeCenterWindow.webContents.executeJavaScript(
+      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
     const integrationScreenshot = await officeCenterWindow.webContents.capturePage();
     const integrationScreenshotPath = `${resolvedTarget}.integration.png`;
     const integrationScreenshotSize = integrationScreenshot.getSize();

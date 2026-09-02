@@ -115,8 +115,9 @@ export async function sessionControl(ctx, operation, request) {
     const preset = sourceAgent ? ctx.agentPresets.composedPreset(sourceAgent.ctx)
       : observation.projections?.values?.agentPreset || observation.header.agentPreset;
     if (typeof preset !== 'string' || !preset) throw new Error('源会话的 Agent 预设尚不可确认。');
-    const handle = await ctx.agents.create({ sessionId: request.childId, seed: observation.events, meta: {
-      cwd: targetPath, parentSession: request.sessionId, seedLength: observation.events.length,
+    const handle = await ctx.agents.create({ sessionId: request.childId, seed: observation.events,
+      inheritedEventCount: observation.events.length, meta: {
+      cwd: targetPath, parentSession: request.sessionId, isSeeded: true,
       agentPreset: preset
     }, agentOptions: ctx.agentDefaultModel.currentSelection(),
     setup: (agentCtx) => sourceAgent ? void ctx.agentPresets.composeFrom(agentCtx, sourceAgent.ctx) : ctx.agentPresets.mount(agentCtx, preset).then(() => {}) });
@@ -129,7 +130,7 @@ export async function sessionControl(ctx, operation, request) {
     // Public Session.create appends one empty end-seed boundary when needed.
     // Validate the exact inherited prefix, metadata AND the allowed boundary.
     if (pathKey(verified.meta.cwd) !== pathKey(targetPath) || verified.meta.parentSession !== request.sessionId
-      || verified.meta.seedLength !== observation.events.length || digest(inherited) !== state.historyHash
+      || verified.meta.isSeeded !== true || verified.inheritedEventCount !== observation.events.length || digest(inherited) !== state.historyHash
       || appended.length > 1 || appended.some((event) => event.type !== 'session/end-seed' || Object.keys(event.data).length)) throw new Error('交接持久化校验失败；原会话和目标目录均保留。');
     return { ...state, sessionId: child.id, sourceSessionId: request.sessionId, workspacePath: targetPath, workspaceId: workspace.id, inheritedEvents: observation.events.length };
   } finally { observation[Symbol.dispose](); }

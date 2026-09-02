@@ -24,10 +24,10 @@ async function sdkFixture(t) {
   let createOptions;
   const ctx = {
     sessions: { get: (key) => entries.get(key) },
-    agents: { get: (key) => agents.get(key), create: async (options) => { createOptions = options; await options.setup({}); const session = { id: options.sessionId, header: { id: options.sessionId, ...options.meta }, events: [...structuredClone(options.seed), { type: 'session/end-seed', seq: options.seed.length, data: {} }] }; entries.set(session.id, session); return { agent: { session } }; } },
+    agents: { get: (key) => agents.get(key), create: async (options) => { createOptions = options; await options.setup({}); const session = { id: options.sessionId, header: { id: options.sessionId, ...options.meta }, inheritedEventCount: options.inheritedEventCount, events: [...structuredClone(options.seed), { type: 'session/end-seed', seq: options.seed.length, data: {} }] }; entries.set(session.id, session); return { agent: { session } }; } },
     agentPresets: { composedPreset: () => 'standard', composeFrom() {}, mount: async () => {} }, agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'model' }) },
     sessionQuery: { observeSession: async (key) => { const value = entries.get(key); if (!value) throw new Error('missing'); return value; } },
-    sessionController: { control: async function* () { yield { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } }; }, inspect: async (key) => ({ meta: entries.get(key).header, events: entries.get(key).events }) },
+    sessionController: { control: async function* () { yield { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } }; }, inspect: async (key) => ({ meta: entries.get(key).header, inheritedEventCount: entries.get(key).inheritedEventCount, events: entries.get(key).events }) },
     sessionPersistence: { ensureMaterialized: async () => {} }, workspaceRegistry: { create: async () => ({ id: 'workspace', attachSession: async () => {} }) }
   };
   const { sessionControl } = await import(pathToFileURL(path.resolve('runtime/dsh-desktop-tools/session-control.mjs')).href);
@@ -56,7 +56,7 @@ test('background SDK pins workspace-write plus ask and rejects duplicate work an
   const bad = await sdkFixture(t); taskSdk(bad, { sandbox: 'danger-full-access', approval: 'never' });
   await assert.rejects(bad.sessionControl(bad.ctx, 'task-create', { ...request, workspacePath: bad.target }), /权限预设/);
 });
-test('alpha.2 permission revalidation rejects a widened Session before prompt admission', async (t) => {
+test('permission revalidation rejects a widened Session before prompt admission', async (t) => {
   const f = await sdkFixture(t), sent = taskSdk(f);
   const request = { sessionId: `session-${randomUUID()}`, workspacePath: f.target, requestId: randomUUID(), text: 'test' };
   await f.sessionControl(f.ctx, 'task-create', request);
@@ -80,7 +80,8 @@ test('SDK handoff creates composed Agent with immutable inherited history and pe
   const state = await f.sessionControl(f.ctx, 'inspect', request);
   const childId = `session-${randomUUID()}`; const result = await f.sessionControl(f.ctx, 'fork', { ...request, childId, targetPath: f.target, historyHash: state.historyHash });
   assert.equal(result.sessionId, childId); assert.equal(JSON.stringify(f.events), original); assert.equal(f.created().meta.cwd, f.target); assert.equal(f.created().meta.agentPreset, 'standard');
-  assert.equal(f.created().meta.parentSession, f.id); assert.equal(f.created().meta.seedLength, 1);
+  assert.equal(f.created().meta.parentSession, f.id); assert.equal(f.created().meta.isSeeded, true);
+  assert.equal(f.created().inheritedEventCount, 1); assert.equal('seedLength' in f.created().meta, false);
 });
 test('SDK handoff rejects foreign cwd, changed history, pending and subagent ownership', async (t) => {
   const f = await sdkFixture(t), request = { sessionId: f.id, workspacePath: f.source, targetPath: f.target, childId: `session-${randomUUID()}`, historyHash: 'bad' };

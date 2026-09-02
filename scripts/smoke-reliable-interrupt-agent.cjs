@@ -112,7 +112,7 @@ const main = async () => {
     if (initial?.accepted !== true) throw new Error('Harness 未接受初始长回复消息。');
     await waitForRunning(apiCall, origin, workspace.sessionId);
 
-    const WebSocket = require(path.join(rootDir, 'vendor', 'harness-hoisted-0.1.2-alpha.2', 'node_modules', 'ws'));
+    const WebSocket = require(path.join(rootDir, 'vendor', 'harness-hoisted-0.1.2-alpha.5', 'node_modules', 'ws'));
     class AuthenticatedWebSocket extends WebSocket {
       constructor(url) {
         super(url, { headers: { cookie: authentication.cookie.header } });

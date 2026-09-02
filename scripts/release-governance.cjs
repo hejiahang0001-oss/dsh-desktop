@@ -47,9 +47,9 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 ]);
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
-const REQUIRED_HARNESS_VERSION = '0.1.2-alpha.2';
-const REQUIRED_HARNESS_COMMIT = '0a53fb55bea101816fa226bb964ae2bed71c343b';
-const REQUIRED_HARNESS_PACKAGE_COUNT = 254;
+const REQUIRED_HARNESS_VERSION = '0.1.2-alpha.5';
+const REQUIRED_HARNESS_COMMIT = 'db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5';
+const REQUIRED_HARNESS_PACKAGE_COUNT = 251;
 
 const normalize = (value) => value.replaceAll('\\', '/');
 

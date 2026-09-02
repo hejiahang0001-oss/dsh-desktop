@@ -7,6 +7,19 @@ const { establishHarnessSession, createAuthenticatedHarnessFetch } = require('./
 const { callHarnessApi } = require('./harness-workspace-sync.cjs');
 const { callHarnessRemote, sanitizePluginInventory } = require('./extension-center.cjs');
 
+const selectSmokePermission = async (apiCall, origin, sessionId, fetchImpl) => {
+  const receipt = await callHarnessRemote(origin, 'commands', 'execute', {
+    agentId: sessionId, line: '/permission danger-full-access', images: []
+  }, { fetchImpl });
+  if (!receipt || receipt.result?.kind !== 'success') throw new Error('真实验收没有接受隔离目录的 Full Access 权限。');
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const history = await apiCall(origin, 'session.history', { sessionId, maxMessages: 1 });
+    if (history?.projections?.values?.permissions?.currentValue === 'danger-full-access') return;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error('真实验收没有确认隔离目录的 Full Access 权限。');
+};
+
 const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSupervisor, runtime, version }) => {
   const homeDir = path.join(smokeRoot, 'harness');
   const workspacePath = path.join(smokeRoot, 'workspace');
@@ -42,7 +55,12 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     if (!credentialPlugins.some((entry) => entry.moduleName === 'dsh-desktop-credentials' && entry.fiberPhase === 'active')
       || credentialPlugins.some((entry) => entry.moduleName === '@deepseek-ai/dsh-credentials-local' && entry.enabled)) throw new Error(`凭据组件未达到安全就绪状态：${JSON.stringify(credentialPlugins)}`);
     const workspace = await synchronizeHarnessWorkspace({ origin, workspacePath, fetchImpl });
-    const prompt = ['请读取以下两个真实文件，只使用本机工具，不安装依赖，不访问网络。',
+    // This is an isolated, generated workspace. Windows' upstream confined
+    // PowerShell runner can exit with 0xC0000005; select Full Access explicitly
+    // so this credential/Office acceptance does not stall on an unattended
+    // escalation. Normal product sessions are never changed by this smoke.
+    await selectSmokePermission(apiCall, origin, workspace.sessionId, fetchImpl);
+    const prompt = ['/excel-xlsx 请使用软件内置的 Excel/Word Skills 读取以下两个真实文件，只使用本机工具，不安装依赖，不访问网络。',
       'Excel 的金额列求和，Word 取出 DOC_ 开头的文档标记。将结果写到工作区 intake-result.json，格式是 {"excelTotal": 数字, "wordMarker": "标记"}。',
       '可使用软件内置的 Word/Excel 工具或 Node.js 从 OOXML ZIP 读取，不能猜测文件内容。除结果文件外不要修改文件。',
       ...imported.items.map(documentReference)].join('\n');
@@ -75,7 +93,7 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     result = { ok: observed?.excelTotal === left + right && observed?.wordMarker === token && migrated && status?.encrypted && noPlaintext && originalUnchanged,
       version, realModel: true, excelReadVerified: observed?.excelTotal === left + right, wordReadVerified: observed?.wordMarker === token,
       legacyRemovedAfterEncryption: !encryptedSource && migrated, encryptedSource, encryptedStatus: status, noPlaintextInVaultOrLog: noPlaintext, sourceCredentialUnmodified: originalUnchanged,
-      boundary: 'XLSX and DOCX real reads; PDF import/render is separate, OCR not included' };
+      permissionPreset: 'danger-full-access', boundary: 'isolated generated workspace with explicit Full Access; XLSX and DOCX real reads; PDF import/render is separate, OCR not included' };
   } catch (error) { result = { ok: false, version, error: String(error.message).replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]') }; }
   finally { await supervisor?.stop(); await fsp.mkdir(path.dirname(output), { recursive: true }); await fsp.writeFile(output, `${JSON.stringify(result, null, 2)}\n`); }
   return result;

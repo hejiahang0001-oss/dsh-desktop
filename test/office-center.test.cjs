@@ -72,3 +72,9 @@ test('Office center accepts no arbitrary skill identifier', () => {
   assert.equal(isOfficeSkillId('word-docx'), false);
   assert.equal(isOfficeSkillId('../shell'), false);
 });
+
+test('Office smoke waits for compositor paint before both screenshots', () => {
+  const main = fs.readFileSync(path.resolve(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+  const smoke = main.slice(main.indexOf('const runOfficeCenterSmoke ='), main.indexOf('const runWikiCenterSmoke ='));
+  assert.equal((smoke.match(/requestAnimationFrame\(\(\) => requestAnimationFrame\(resolve\)\)/g) || []).length, 2);
+});

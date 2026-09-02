@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const EXPECTED_HARNESS_VERSION = '0.1.2-alpha.2';
-const EXPECTED_DSH_PACKAGES = 245;
+const EXPECTED_HARNESS_VERSION = '0.1.2-alpha.5';
+const EXPECTED_DSH_PACKAGES = 242;
 const EXPECTED_VENDOR_PACKAGES = 9;
 const MAX_PACK_OUTPUT = 1024 * 1024;
 const MAX_RUNTIME_ENTRIES = 60_000;
