@@ -23,6 +23,8 @@ test('tasks and subagents window is local-only, narrow, accessible, and packaged
   assert.match(main, /defaultId: 0/);
   assert.match(main, /restored\?\.subagentAddress\?\.parentSessionId/);
   assert.match(main, /runTasksSubagentsSmoke/);
+  assert.match(main, /const getCurrentWorkflow = async \(\) =>/);
+  assert.match(main, /const workflow = await getCurrentWorkflow\(\)/);
   for (const channel of ['get-state', 'refresh', 'open', 'prompt', 'interrupt']) {
     assert.match(preload, new RegExp(`tasks-subagents:${channel}`));
   }

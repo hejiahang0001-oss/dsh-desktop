@@ -24,18 +24,18 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.3 candidate pins `dsh-v0.1.2-alpha.5` at `db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.4 candidate pins `dsh-v0.1.2-alpha.5` at `db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5`.
 
 ## Why DSH Desktop
 
-V1.1.3 is currently an unpublished Latest candidate (`DSH-Desktop-Setup-1.1.3.exe`). It includes the V1.1.2 cross-workspace interruption/document-drag fixes, follows Harness alpha.5, and has passed packaged plus overwrite-installed acceptance on the maintainer machine. Validation status is tracked in [PROGRESS.md](PROGRESS.md); public downloads remain unchanged until explicit publication approval.
+V1.1.4 is an unpublished, locally installed Latest candidate (`DSH-Desktop-Setup-1.1.4.exe`). It follows Harness alpha.5 and removes the desktop's duplicate queue/steer/stop interception so those interactions use the official implementation. Office document intake and desktop-only safety/product surfaces remain. Source, packaged and installed acceptance passed on the maintainer machine; public downloads remain unchanged until explicit publication approval.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
 - **Native workspace flow** — open a local Git repository with `Ctrl+O`, remember recent repositories, and bind the matching Harness workspace and session.
 - **Persistent sessions** — create, search, resume, rename, archive, and branch sessions while keeping Harness as the source of truth.
 - **Agent visibility and control** — see whether the agent is idle, running, waiting for approval, or unavailable; stop or redirect a running turn from native menus.
-- **Reliable running-turn correction** — press `Ctrl+Enter` with a plain-text correction to request cancellation of the current official Harness turn before the complete correction is submitted; queued-message interruption also preserves the authoritative full text.
+- **Official running-turn controls** — let Harness own normal queue submission, the queued-message up-arrow, `Ctrl+Enter` steer and Stop; desktop menus only focus or invoke the matching official control and do not maintain a second queue protocol.
 - **Authenticated upstream compatibility** — exchange the Harness one-time loopback token for a same-origin browser session, redact it from public state and logs, and use the official Remote HTTP and `session/control` protocols without exposing arbitrary endpoints to the Renderer.
 - **Persistent Git review panel** — keep a bounded real Diff beside Harness, resize or hide the panel, and accept or reject one file or a safe batch while protecting pre-existing edits.
 - **Native Git delivery center** — inspect the active repository, branch, upstream, ahead/behind counts, staged and unstaged work, recent commits, and public GitHub PR checks; create a local commit only from already-staged content after a second fingerprint check and native confirmation.
@@ -82,7 +82,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.3 local Latest candidate** follows Harness alpha.5 and supersedes the unpublished V1.1.2 package candidate. It is not a GitHub release yet and does not change Stable. See the [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.5.md) and [candidate release notes](docs/RELEASE_NOTES_v1.1.3.md).
+**V1.1.4 local Latest candidate** follows Harness alpha.5 and uses the official controls after removing duplicate desktop queue/steer/stop behavior. It has passed source, packaged and overwrite-installed acceptance, is not a GitHub release yet, and does not change Stable. See the [overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.4.md), [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.5.md), and [candidate release notes](docs/RELEASE_NOTES_v1.1.4.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
@@ -171,7 +171,7 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 
 发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
-当前公开产品 Latest 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`。本地 V1.1.3 候选已升级到 alpha.5 并保留 V1.1.2 的插话/拖拽修复，尚未公开发布。此前“只保留 V1.1.0 和 V1.0.5”是一次性清理范围，本次新增 Latest 不删除这两个保留版本。安装包仍未签名；自定义 SQLite 迁移、其他电脑的内网代理和多日稳定性不在本次验证承诺内。
+当前公开产品 Latest 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`。本机已覆盖安装本地 V1.1.4，沿用 alpha.5，排队、插话和停止改为完全使用官方实现，保留 Office 文件拖拽及桌面独有能力；源码、打包态和安装态验收均已通过，但尚未公开发布。安装包为 `dist/DSH-Desktop-Setup-1.1.4.exe`。此前“只保留 V1.1.0 和 V1.0.5”是一次性清理范围，本次新增 Latest 不删除这两个保留版本。安装包仍未签名；自定义 SQLite 迁移、其他电脑的内网代理和多日稳定性不在本次验证承诺内。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；

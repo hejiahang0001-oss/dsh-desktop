@@ -41,7 +41,7 @@ function summary(ctx, observation, control, withHistory = true) {
     liveJobs: jobs.filter((job) => ['running', 'stopping'].includes(job.status)).length, turnOpen, lastTurnReason };
 }
 export async function sessionControl(ctx, operation, request) {
-  if (!['inspect', 'status', 'workspace-status', 'fork', 'resume-queue', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
+  if (!['inspect', 'status', 'workspace-status', 'fork', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
   const sourcePath = await canonicalDirectory(request.workspacePath);
   if (operation === 'workspace-status') return workspaceActivity(ctx, sourcePath);
   if (operation === 'task-create') {
@@ -92,18 +92,6 @@ export async function sessionControl(ctx, operation, request) {
       // Native user action on a dedicated task session; never other sessions.
       agent.cancel({ kind: 'user' }, { keepInbox: false });
       return { accepted: true };
-    }
-    if (operation === 'resume-queue') {
-      const agent = ctx.agents.get(request.sessionId);
-      if (!agent || !agent.inbox.nextTurn.some((item) => item.id === request.itemId)) throw new Error('排队消息已离开队列；未重复发送。');
-      if (agent.status === 'running') throw new Error('当前回合尚未停止，请稍后继续队列。');
-      // Public Agent/Inbox APIs, one synchronous host operation: reinsert the
-      // last existing item in the same position and wake FIFO processing.
-      // No text reconstruction, new message identity or transport gap.
-      const tail = agent.inbox.nextTurn.at(-1);
-      agent.inbox.remove(tail.id);
-      agent.followup(tail);
-      return { accepted: true, sessionId: request.sessionId };
     }
     if (state.running || state.pending || state.liveJobs || state.approvals || state.turnOpen || ctx.agents.get(request.sessionId)?.inbox?.hasPending) throw new Error('请先结束执行、排队消息、审批和后台命令，再交接会话。');
     if (request.historyHash !== state.historyHash || !validId(request.childId) || request.childId === request.sessionId || pathKey(sourcePath) === pathKey(targetPath)) throw new Error('会话或交接目标已变化，请重新确认。');

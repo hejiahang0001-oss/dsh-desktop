@@ -55,11 +55,6 @@ const {
   waitForHarnessSessionSelection
 } = require('./harness-workspace-sync.cjs');
 const {
-  ReliableInterruptController,
-  ReliableInterruptError,
-  readHarnessQueueSnapshotFromWebContents
-} = require('./harness-reliable-interrupt.cjs');
-const {
   invokeHarnessCommandAction,
   invokeHarnessUiAction,
   isAgentActionSettled,
@@ -157,7 +152,6 @@ let workspaceActivationPromise = null;
 let sideChatController;
 let gitDeliveryManager;
 let updatePreferenceStore;
-let reliableInterruptController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
 let pluginInstallPromise = null;
@@ -289,7 +283,6 @@ const workbenchCheckpointScriptPath = path.join(rootDir, 'assets', 'workbench-ch
 const workbenchNetworkCssPath = path.join(rootDir, 'assets', 'workbench-network.css');
 const workbenchNetworkScriptPath = path.join(rootDir, 'assets', 'workbench-network.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
-const harnessReliableInterruptScriptPath = path.join(rootDir, 'assets', 'harness-reliable-interrupt.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
 let workbenchFilesCss = '';
@@ -303,7 +296,6 @@ let workbenchCheckpointScript = '';
 let workbenchNetworkCss = '';
 let workbenchNetworkScript = '';
 let harnessLocalizationScript = '';
-let harnessReliableInterruptScript = '';
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const documentIntakeSmokeTarget = process.argv.find((argument) => argument.startsWith('--document-intake-smoke-file='));
@@ -862,7 +854,6 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchNetworkCss) workbenchNetworkCss = await fsp.readFile(workbenchNetworkCssPath, 'utf8');
   if (!workbenchNetworkScript) workbenchNetworkScript = await fsp.readFile(workbenchNetworkScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
-  if (!harnessReliableInterruptScript) harnessReliableInterruptScript = await fsp.readFile(harnessReliableInterruptScriptPath, 'utf8');
   return {
     css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}\n${documentsCss}`,
     documentsScript,
@@ -873,14 +864,9 @@ const loadWorkbenchPanelAssets = async () => {
     checkpointScript: workbenchCheckpointScript,
     networkScript: workbenchNetworkScript,
     commandScript: workbenchCommandScript,
-    localizationScript: harnessLocalizationScript,
-    reliableInterruptScript: harnessReliableInterruptScript
+    localizationScript: harnessLocalizationScript
   };
 };
-
-const installReliableInterrupt = async (assets) => Boolean(
-  await mainWindow.webContents.executeJavaScript(assets.reliableInterruptScript, true)
-);
 
 const installWorkbenchPanel = async () => {
   if (!harnessUiReady()) return false;
@@ -896,14 +882,12 @@ const installWorkbenchPanel = async () => {
     const checkpointInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.checkpointScript, true));
     const networkInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.networkScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
-    const reliableInterruptInstalled = await installReliableInterrupt(assets);
     await mainWindow.webContents.executeJavaScript(assets.composerTextScript, true);
     const documentsInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.documentsScript, true));
     await mainWindow.webContents.executeJavaScript(await fsp.readFile(path.join(rootDir, 'assets', 'session-continuity.js'), 'utf8'), true);
-    await mainWindow.webContents.executeJavaScript(await fsp.readFile(path.join(rootDir, 'assets', 'session-workflow.js'), 'utf8'), true);
     if (nativeDock) { await mainWindow.webContents.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8')); nativeDock.layout(); }
     return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled
-      && networkInstalled && commandInstalled && reliableInterruptInstalled && documentsInstalled;
+      && networkInstalled && commandInstalled && documentsInstalled;
   } catch {
     return false;
   }
@@ -2543,6 +2527,31 @@ const openGitDeliveryWindow = async () => {
   }
   await createGitDeliveryWindow();
   return { ok: true, reused: false };
+};
+
+// Read-only execution metadata for the native Tasks/Subagents catalog. This
+// does not submit, steer, stop, or mutate the official Harness queue.
+const getCurrentWorkflow = async () => {
+  try {
+    if (!harnessUiReady() || worktreeOperationPromise) return { available: false };
+    const context = await documentIntakeController.getContext();
+    const value = await supervisor.credentialHost.sessionControl.request('status', context);
+    if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
+    return {
+      available: true,
+      sessionId: value.sessionId,
+      running: value.running,
+      queued: value.queued,
+      steering: value.steering,
+      pending: value.pending,
+      approvals: value.approvals,
+      jobs: value.liveJobs,
+      turnOpen: value.turnOpen,
+      lastTurnReason: value.lastTurnReason
+    };
+  } catch {
+    return { available: false };
+  }
 };
 
 const getTasksSubagentsState = async () => {
@@ -5322,54 +5331,9 @@ ipcMain.handle('git-delivery:open-window', (event) => (
     ? openGitDeliveryWindow()
     : { ok: false, message: 'Git 交付中心请求来源未通过安全校验。' }
 ));
-const getCurrentWorkflow = async () => {
-  try {
-    if (!harnessUiReady() || worktreeOperationPromise) return { available: false };
-    const context = await documentIntakeController.getContext();
-    const value = await supervisor.credentialHost.sessionControl.request('status', context);
-    if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
-    return { available: true, sessionId: value.sessionId, running: value.running, queued: value.queued, steering: value.steering,
-      pending: value.pending, approvals: value.approvals, jobs: value.liveJobs, turnOpen: value.turnOpen, lastTurnReason: value.lastTurnReason };
-  } catch { return { available: false }; }
-};
-ipcMain.handle('harness:workflow-state', (event) => harnessIpcAllowed(event) ? getCurrentWorkflow() : { available: false });
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
-ipcMain.handle('harness:interrupt-queued', async (event) => {
-  if (!harnessIpcAllowed(event) || !reliableInterruptController) {
-    return { ok: false, accepted: false, message: '排队插话请求未通过安全校验。' };
-  }
-  try {
-    const receipt = await reliableInterruptController.interruptQueued();
-    setTimeout(() => { void refreshAgentDiagnostics(); }, 120);
-    return receipt;
-  } catch (error) {
-    return {
-      ok: false,
-      accepted: false,
-      reason: error instanceof ReliableInterruptError ? error.code : 'interrupt-failed',
-      message: error?.message || '排队插话失败，消息仍保留。'
-    };
-  }
-});
-ipcMain.handle('harness:interrupt-and-prompt', async (event, text) => {
-  if (!harnessIpcAllowed(event) || !reliableInterruptController || typeof text !== 'string') {
-    return { ok: false, accepted: false, message: '插话请求未通过安全校验。' };
-  }
-  try {
-    const receipt = await reliableInterruptController.interruptAndPrompt(text);
-    setTimeout(() => { void refreshAgentDiagnostics(); }, 120);
-    return receipt;
-  } catch (error) {
-    return {
-      ok: false,
-      accepted: false,
-      reason: error instanceof ReliableInterruptError ? error.code : 'interrupt-failed',
-      message: error?.message || '插话发送失败，草稿已保留。'
-    };
-  }
-});
 ipcMain.handle('harness:restart', (event) => (
   desktopIpcAllowed(event) ? startHarnessForWindow({ restart: true }) : { ok: false, reason: 'untrusted' }
 ));
@@ -5916,12 +5880,6 @@ const runHarnessSmoke = async (target) => {
       secure: false
     });
     await smokeHarnessWindow.loadURL(authentication.origin);
-    const queueSnapshot = await readHarnessQueueSnapshotFromWebContents(
-      smokeHarnessWindow.webContents,
-      authentication.origin,
-      workspaceSync.sessionId,
-      { timeoutMs: 5000 }
-    );
     const liveInventory = await callHarnessRemote(authentication.origin, 'pluginInventory', 'list', {}, { fetchImpl: smokeFetch });
     const runtimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
     const runtimeCatalog = new PluginHealthCatalog({
@@ -5943,7 +5901,6 @@ const runHarnessSmoke = async (target) => {
         && sideChat.sourceSessionId === workspaceSync.sessionId
         && sideChat.sideSessionId !== workspaceSync.sessionId
         && sideChat.permission === 'workspace-write'
-        && Array.isArray(queueSnapshot)
         && extensionCenter.available
         && pluginSurface?.total > 0
         && skillSurface?.total > 0
@@ -5968,9 +5925,9 @@ const runHarnessSmoke = async (target) => {
         independent: sideChat.sideSessionId !== sideChat.sourceSessionId,
         permission: sideChat.permission
       },
-      reliableInterrupt: {
-        controlStream: 'ready',
-        queuedItems: queueSnapshot.length
+      officialInteraction: {
+        owner: 'deepseek-harness',
+        queueSteerStop: true
       },
       extensionCenter: {
         source: extensionCenter.source,
@@ -6077,11 +6034,6 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       bindTerminalRunner(terminalRunner);
       pluginHealthCatalog = new PluginHealthCatalog({ harnessHome: path.join(smokeRoot, 'harness'), dshPackageDir: path.resolve(path.dirname(harnessRuntimePaths.dshBinPath), '..') });
       tasksSubagentsController = new TasksSubagentsController({ getOrigin: () => harnessOrigin, getWebContents: () => wc, apiCall: authenticatedHarnessApi });
-      reliableInterruptController = new ReliableInterruptController({ getOrigin: () => harnessOrigin, getWebContents: () => wc,
-        getWorkspacePath: () => getWorkspaceState().activePath, apiCall: authenticatedHarnessApi,
-        resolveContext: () => documentIntakeController.getContext(),
-        resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
-        readQueue: (origin, id, options) => readHarnessQueueSnapshotFromWebContents(wc, origin, id, options) });
       worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
       if (handoff || process.argv.includes('--smoke-background')) { checkpointManager = new GitCheckpointManager(); checkpointDiagnostics = await checkpointManager.activate(workspacePath); }
       wikiRuntime = require(harnessRuntimePaths.wikiToolPath); wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: path.join(smokeRoot, 'wiki-settings.json') }); await wikiSettingsStore.init();
@@ -7379,20 +7331,6 @@ app.whenReady().then(async () => {
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
     apiCall: authenticatedHarnessApi
-  });
-  reliableInterruptController = new ReliableInterruptController({
-    getOrigin: () => harnessOrigin,
-    getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
-    getWorkspacePath: () => getWorkspaceState().activePath,
-    resolveContext: () => documentIntakeController.getContext(),
-    resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
-    apiCall: authenticatedHarnessApi,
-    readQueue: (origin, sessionId, options) => readHarnessQueueSnapshotFromWebContents(
-      mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined,
-      origin,
-      sessionId,
-      options
-    )
   });
   sideChatController = new SideChatController({ getOrigin: () => harnessOrigin, apiCall: authenticatedHarnessApi });
   try { await initializeBackgroundTasks(); backgroundTasks.start(); }

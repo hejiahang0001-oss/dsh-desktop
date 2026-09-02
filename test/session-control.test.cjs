@@ -94,14 +94,3 @@ test('an orphan approval is no longer pending after the durable interrupted turn
   const f = await sdkFixture(t); f.events.push({ type: 'approval/asked', seq: 1, data: { id: 'ask' } }, { type: 'turn/end', seq: 2, data: { reason: { kind: 'interrupted' } } });
   const state = await f.sessionControl(f.ctx, 'inspect', { sessionId: f.id, workspacePath: f.source }); assert.equal(state.approvals, 0); assert.equal(state.lastTurnReason, 'interrupted');
 });
-test('host queue resume preserves every exact message and FIFO order without creating a new identity', async (t) => {
-  const f = await sdkFixture(t), agent = f.agents.get(f.id), first = { id: 'first', content: [{ type: 'text', text: 'a' }] }, last = { id: 'last', content: [{ type: 'image', data: 'retained' }] };
-  agent.inbox.nextTurn = [first, last];
-  agent.inbox.remove = (id) => { agent.inbox.nextTurn = agent.inbox.nextTurn.filter((m) => m.id !== id); };
-  agent.followup = (message) => { agent.inbox.nextTurn.push(message); agent.status = 'running'; };
-  const request = { sessionId: f.id, workspacePath: f.source, itemId: first.id };
-  assert.equal((await f.sessionControl(f.ctx, 'resume-queue', request)).accepted, true);
-  assert.deepEqual(agent.inbox.nextTurn, [first, last]); assert.equal(agent.inbox.nextTurn[1], last);
-  await assert.rejects(f.sessionControl(f.ctx, 'resume-queue', request), /尚未停止/);
-  assert.deepEqual(agent.inbox.nextTurn, [first, last]);
-});
