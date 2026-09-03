@@ -20,3 +20,15 @@ test('the native workbench and fixed read-only plugin are packaged, not remote s
   assert.doesNotMatch(tool, /child_process|execFile\s*\(|clipboard\.(?:read|write)|writeFile\s*\(/);
   assert.match(read('electron/harness-supervisor.cjs'), /DSH_DESKTOP_TOOL_MODULE/);
 });
+test('native dock uses a compact semantic toolbar at narrow widths', () => {
+  const html = read('workbench-dock.html');
+  const css = read('assets/workbench-dock.css');
+  const source = read('assets/workbench-dock.js');
+  assert.match(html, /class="secondary" role="group" aria-label="辅助面板"/);
+  assert.match(css, /--dock-surface:/);
+  assert.match(css, /#dock-tabs[^}]*overflow-x:\s*auto/s);
+  assert.match(css, /\.secondary[^}]*border-inline-start:/s);
+  assert.match(css, /prefers-contrast:\s*more/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  assert.match(source, /button\.dataset\.opened/);
+});

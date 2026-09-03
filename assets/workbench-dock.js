@@ -20,7 +20,7 @@
   const render = (state) => {
     status.textContent = state.error || '';
     document.getElementById('dock-size').value = String(state.height <= 280 ? 240 : state.height < 430 ? 360 : 500);
-    for (const button of tabs.children) { const selected = state.open && state.active === button.dataset.tool; button.setAttribute('aria-selected', String(selected)); button.tabIndex = state.active === button.dataset.tool ? 0 : -1; }
+    for (const button of tabs.children) { const selected = state.open && state.active === button.dataset.tool; button.dataset.opened = String(state.opened.includes(button.dataset.tool)); button.setAttribute('aria-selected', String(selected)); button.tabIndex = state.active === button.dataset.tool ? 0 : -1; }
     document.getElementById('dock-collapse').disabled = !state.open;
     document.getElementById('dock-detach').disabled = !state.open || !state.opened.includes(state.active);
     document.getElementById('dock-detach').textContent = state.floating ? '↙' : '↗';

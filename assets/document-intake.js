@@ -79,8 +79,9 @@
     const row = document.createElement('div'); row.className = 'dsh-document-actions';
     button = document.createElement('button'); button.type = 'button'; button.textContent = '＋ 添加文件'; button.disabled = busy;
     button.onclick = () => add();
-    const hint = document.createElement('span'); hint.textContent = '可拖入 Excel / Word / PDF · 单文件 ≤ 32 MB';
+    const hint = document.createElement('span'); hint.id = 'dsh-document-intake-hint'; hint.textContent = '可拖入 Excel / Word / PDF · 单文件 ≤ 32 MB';
     hint.title = '支持 xlsx、docx、pdf、pptx、csv、txt、md；每次最多 10 个、合计 64 MB。不支持旧版 xls/doc 和宏文件。';
+    button.setAttribute('aria-describedby', hint.id);
     row.append(button, hint);
     list = document.createElement('div'); list.className = 'dsh-document-list';
     status = document.createElement('div'); status.className = 'dsh-document-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');

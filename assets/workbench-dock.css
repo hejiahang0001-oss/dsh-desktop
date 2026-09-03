@@ -1,9 +1,163 @@
-:root { color-scheme: dark; font: 12px/1.4 "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif; background: #20201f; color: #eae9e6; }
-* { box-sizing: border-box; } body { margin: 0; height: 42px; border-top: 1px solid #494742; overflow: hidden; }
-nav, #dock-tabs, .secondary, .actions { display: flex; align-items: center; gap: 3px; } nav { height: 100%; padding: 3px 8px; gap: 10px; } .actions { margin-left: auto; }
-button, select { min-height: 30px; border: 1px solid transparent; border-radius: 4px; padding: 4px 7px; font: inherit; color: inherit; background: transparent; cursor: pointer; white-space: nowrap; }
-button:hover, select:hover { background: #35332f; } button[aria-selected="true"] { color: #9acbff; background: #263f58; border-color: #466988; }
-select { background: #20201f; } button:focus-visible, select:focus-visible { outline: 2px solid #83bfff; outline-offset: -2px; } button:disabled { opacity: .45; cursor: default; }
-#dock-status:not(:empty) { position: absolute; right: 180px; top: 0; max-width: 40%; padding: 9px; color: #ffbdaf; background: #462c28; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
-@media (forced-colors: active) { button[aria-selected="true"] { border: 2px solid Highlight; } }
-@media (max-width: 900px) { nav { gap: 3px; padding: 3px; } button, select { padding: 4px 5px; font-size: 11px; } }
+:root {
+  color-scheme: dark;
+  --dock-surface: #20201f;
+  --dock-surface-raised: #292826;
+  --dock-hover: #35332f;
+  --dock-selected: #263f58;
+  --dock-selected-border: #466988;
+  --dock-text: #eae9e6;
+  --dock-muted: #aaa7a0;
+  --dock-border: #494742;
+  --dock-accent: #9acbff;
+  --dock-danger: #ffbdaf;
+  --dock-focus: #83bfff;
+  font: 12px/1.4 "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif;
+  background: var(--dock-surface);
+  color: var(--dock-text);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  position: relative;
+  height: 42px;
+  margin: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--dock-border);
+  background: var(--dock-surface);
+}
+
+nav,
+#dock-tabs,
+.secondary,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+nav {
+  height: 100%;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+#dock-tabs {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+#dock-tabs::-webkit-scrollbar { display: none; }
+
+.secondary {
+  flex: 0 0 auto;
+  padding-inline-start: 8px;
+  border-inline-start: 1px solid var(--dock-border);
+}
+
+.actions {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+button,
+select {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button:hover,
+select:hover { background: var(--dock-hover); }
+
+button[aria-selected="true"] {
+  border-color: var(--dock-selected-border);
+  color: var(--dock-accent);
+  background: var(--dock-selected);
+}
+
+#dock-tabs button[data-opened="true"]:not([aria-selected="true"]) {
+  position: relative;
+  padding-inline-end: 14px;
+}
+
+#dock-tabs button[data-opened="true"]:not([aria-selected="true"])::after {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--dock-muted);
+  content: "";
+  transform: translateY(-50%);
+}
+
+select {
+  border-color: color-mix(in srgb, var(--dock-border) 72%, transparent);
+  background: var(--dock-surface-raised);
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--dock-focus);
+  outline-offset: -2px;
+}
+
+button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+#dock-status:not(:empty) {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 168px;
+  max-width: min(42%, 480px);
+  min-height: 30px;
+  padding: 6px 9px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--dock-danger) 42%, transparent);
+  border-radius: 6px;
+  color: var(--dock-danger);
+  background: #462c28;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (max-width: 1100px) {
+  nav { gap: 4px; padding-inline: 4px; }
+  button, select { padding-inline: 6px; }
+  .secondary { padding-inline-start: 4px; }
+}
+
+@media (max-width: 900px) {
+  button, select { padding-inline: 5px; font-size: 11px; }
+  #dock-status:not(:empty) { right: 132px; max-width: 36%; }
+}
+
+@media (prefers-contrast: more) {
+  body, .secondary { border-color: var(--dock-text); }
+  button, select { border-color: var(--dock-border); }
+  button[aria-selected="true"] { border-width: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #dock-tabs { scroll-behavior: auto; }
+}
+
+@media (forced-colors: active) {
+  body, .secondary { border-color: CanvasText; }
+  button[aria-selected="true"] { border: 2px solid Highlight; }
+  #dock-tabs button[data-opened="true"]::after { background: CanvasText; }
+}

@@ -24,11 +24,11 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.4 candidate pins `dsh-v0.1.2-alpha.5` at `db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.5 candidate pins `dsh-v0.1.2-alpha.5` at `db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5`.
 
 ## Why DSH Desktop
 
-V1.1.4 is an unpublished, locally installed Latest candidate (`DSH-Desktop-Setup-1.1.4.exe`). It follows Harness alpha.5 and removes the desktop's duplicate queue/steer/stop interception so those interactions use the official implementation. Office document intake and desktop-only safety/product surfaces remain. Source, packaged and installed acceptance passed on the maintainer machine; public downloads remain unchanged until explicit publication approval.
+V1.1.5 is an unpublished, locally installed Latest candidate (`DSH-Desktop-Setup-1.1.5.exe`). It keeps the Harness alpha.5 ownership cleanup from V1.1.4 and refines the desktop workbench: the bottom toolbar is denser and clearer, Office attachments read as part of the composer, empty review states no longer expose irrelevant bulk actions, and keyboard focus/contrast behavior is more visible. Source, unpacked and installed acceptance passed on the maintainer machine; public downloads remain unchanged until explicit publication approval.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
@@ -82,7 +82,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.4 local Latest candidate** follows Harness alpha.5 and uses the official controls after removing duplicate desktop queue/steer/stop behavior. It has passed source, packaged and overwrite-installed acceptance, is not a GitHub release yet, and does not change Stable. See the [overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.4.md), [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.5.md), and [candidate release notes](docs/RELEASE_NOTES_v1.1.4.md).
+**V1.1.5 local Latest candidate** keeps Harness alpha.5 and the official interaction controls, then focuses on desktop UI density, visual grouping and accessible focus/contrast states. It has passed source, unpacked and overwrite-installed acceptance, is not a GitHub release, and does not change Stable. See the [V1.1.5 candidate release notes](docs/RELEASE_NOTES_v1.1.5.md), [V1.1.4 overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.4.md), and [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.5.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 

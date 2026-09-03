@@ -40,3 +40,11 @@ test('compact desktop smoke size and isolated terminal window budget are explici
   assert.doesNotMatch(files, /dsh-terminal-effective-height/);
   assert.doesNotMatch(preview, /dsh-terminal-effective-height/);
 });
+
+test('the official composer receives restrained desktop focus and contrast treatment', () => {
+  const layout = read('assets/workbench-native-layout.css');
+  assert.match(layout, /\[data-composer-card\]:focus-within/);
+  assert.match(layout, /prefers-contrast:\s*more/);
+  assert.match(layout, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(layout, /backdrop-filter/);
+});

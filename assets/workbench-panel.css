@@ -199,6 +199,7 @@ html[data-dsh-review-open="true"] #dsh-workbench-review {
 .dsh-review-button:hover:not(:disabled) { background: var(--dsh-panel-subtle); }
 .dsh-review-button[data-action="accept"] { color: #fff; border-color: var(--dsh-panel-accent); background: var(--dsh-panel-accent); }
 .dsh-review-button[data-action="accept"]:hover:not(:disabled) { background: #085ba9; }
+.dsh-review-button[data-action="accept"]:disabled { color: var(--dsh-panel-muted); border-color: var(--dsh-panel-border); background: var(--dsh-panel-subtle); }
 .dsh-review-button[data-action="reject"] { color: var(--dsh-panel-danger); }
 .dsh-review-button:disabled { cursor: not-allowed; opacity: .48; }
 .dsh-review-live { min-height: 16px; margin: 0; overflow: hidden; color: var(--dsh-panel-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -240,20 +241,20 @@ html[data-dsh-review-open="true"] #dsh-workbench-review {
 @media (prefers-reduced-motion: reduce) {
   html[data-dsh-review-open="true"] #root,
   #dsh-workbench-review { transition: none; }
+  #dsh-workbench-review * { scroll-behavior: auto !important; }
 }
 
-.dsh-reliable-interrupt-status {
-  min-height: 18px;
-  margin: 0 4px 6px;
-  color: var(--dsh-panel-muted);
-  font: 11px/1.45 system-ui, sans-serif;
+@media (prefers-contrast: more) {
+  #dsh-workbench-review { border-inline-start-width: 2px; }
+  .dsh-review-file[aria-selected="true"],
+  .dsh-review-button:focus-visible,
+  .dsh-review-icon-button:focus-visible { outline-width: 3px; }
 }
 
-.dsh-reliable-interrupt-status:empty { display: none; }
-.dsh-reliable-interrupt-status[data-state="pending"] { color: var(--dsh-panel-warning); }
-.dsh-reliable-interrupt-status[data-state="success"] { color: var(--dsh-panel-success); }
-.dsh-reliable-interrupt-status[data-state="error"] { color: var(--dsh-panel-danger); }
-[data-composer-card][data-dsh-interrupt-pending="true"] { opacity: .78; }
+@media (forced-colors: active) {
+  .dsh-review-file[aria-selected="true"],
+  .dsh-review-button[data-action="accept"] { border: 2px solid Highlight; }
+}
 
 .dsh-review-scopes { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--dsh-panel-border); }
 .dsh-review-scopes select, .dsh-review-comments textarea { max-width: 100%; color: inherit; background: var(--dsh-panel-raised); border: 1px solid var(--dsh-panel-border); border-radius: 5px; padding: 5px; font: inherit; }

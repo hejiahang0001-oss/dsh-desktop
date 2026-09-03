@@ -26,6 +26,16 @@ test('upstream editing bridge preserves rich chips and checks session immediatel
   assert.match(intake, /aria-live', 'polite/);
   assert.match(intake, /原文件和已导入副本未删除/);
 });
+test('document intake is visually grouped with the composer and exposes its hint to assistive technology', () => {
+  const intake = read('assets/document-intake.js');
+  const css = read('assets/document-intake.css');
+  assert.match(intake, /hint\.id = 'dsh-document-intake-hint'/);
+  assert.match(intake, /aria-describedby', hint\.id/);
+  assert.match(css, /--dsh-document-surface:/);
+  assert.match(css, /\.dsh-document-intake:focus-within/);
+  assert.match(css, /prefers-contrast:\s*more/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+});
 test('encrypted credentials component is a fixed packaged bridge and migration follows runtime verification', () => {
   const main = read('electron/desktop-credential-host.cjs');
   assert.match(main, /deferMigration: true/);
