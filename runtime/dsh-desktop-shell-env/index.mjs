@@ -14,16 +14,20 @@ const VARIABLES = Object.freeze({
   DSH_DESKTOP_WIKI_HISTORY_SOURCE: 'Absolute path to the short-lived desktop-owned DSH history source.'
 });
 
-export function apply(ctx) {
+export function resolveDesktopShellEnvironment(environment = process.env) {
   const values = {};
   for (const key of Object.keys(VARIABLES)) {
-    const value = process.env[key];
+    const value = environment[key];
     if (typeof value !== 'string' || !path.isAbsolute(value)) {
       throw new Error(`dsh-desktop-shell-env: ${key} is not an absolute desktop-owned path`);
     }
     values[key] = path.resolve(value);
   }
-  const frozen = Object.freeze(values);
+  return Object.freeze(values);
+}
+
+export function apply(ctx, environment = process.env) {
+  const frozen = resolveDesktopShellEnvironment(environment);
   ctx.shellEnv.register({
     name: 'dsh-desktop-runtime',
     variables: Object.freeze(Object.fromEntries(Object.entries(VARIABLES).map(([key, description]) => [key, Object.freeze({ description })]))),

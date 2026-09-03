@@ -24,11 +24,11 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.6 candidate pins `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Pre-release pins alpha.2; local V1.1.7 install candidate pins `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
 
 ## Why DSH Desktop
 
-V1.1.6 is an unpublished local install candidate (`DSH-Desktop-Setup-1.1.6.exe`). It upgrades the fixed source runtime to Harness rc.1, confirms that the exact alpha.5-to-rc.1 delta is package-version-only, and tightens packaged-runtime isolation, prerelease compatibility, complete payload provenance, legal notices and required-plugin health gates. Source, final package, real-model interaction and checksum acceptance pass; overwrite-installed acceptance remains a separate gate that requires confirmation immediately before replacing the running V1.1.5. Public downloads remain unchanged until explicit publication approval.
+V1.1.7 is an unpublished local install candidate (`DSH-Desktop-Setup-1.1.7.exe`) that retains Harness rc.1 and closes Windows lifecycle gaps: single-instance focus, durable exit state, registered-mutation drain, full owned-process cleanup and correct executable identity. Its final Setup, Portable and blockmap pass package identity, complete application/resource binding, single-instance and real-resource safe-exit checks. It has not replaced the installed V1.1.5 and is not a public download.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
@@ -82,18 +82,18 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.6 local install candidate** pins Harness rc.1 and preserves the official interaction ownership established in V1.1.4. The complete source suite, final unpacked matrix, real-model Queue/Steer/Stop and document-drag acceptance, package provenance and checksum verification pass. Setup and Portable are available locally, but overwrite installation and installed-app validation have not been performed. It is not a GitHub release and does not change Stable. See the [V1.1.6 candidate release notes](docs/RELEASE_NOTES_v1.1.6.md), [V1.1.6 overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.6.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
+**V1.1.7 local install candidate** retains Harness rc.1 and adds single-instance focus, safe-exit journaling, owned Harness/terminal/preview cleanup and correct Windows executable identity. The final package starts real Harness, PowerShell PTY and managed-preview resources, exits them through the normal application path with no process or port residue, and retains an identical complete package fingerprint before and after the run. It is not installed or published and does not change Stable. See the [V1.1.7 release notes](docs/RELEASE_NOTES_v1.1.7.md), [V1.1.6 overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.6.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
-**[V1.1.1 Latest / Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)** follows Harness alpha.2, including namespaced queue errors and Session-based background permission checks. Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/DSH-Desktop-Setup-1.1.1.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/DSH-Desktop-Portable-1.1.1.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/SHA256SUMS-v1.1.1.txt). Installed-app, real-model and public-download evidence is recorded in [PROGRESS.md](PROGRESS.md). See the [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.2.md) and [release notes](docs/RELEASE_NOTES_v1.1.1.md). This does not promote or replace Stable.
+**[Public V1.1.1 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)** follows Harness alpha.2, including namespaced queue errors and Session-based background permission checks. Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/DSH-Desktop-Setup-1.1.1.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/DSH-Desktop-Portable-1.1.1.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.1/SHA256SUMS-v1.1.1.txt). Installed-app, real-model and public-download evidence is recorded in [PROGRESS.md](PROGRESS.md). See the [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.2.md) and [release notes](docs/RELEASE_NOTES_v1.1.1.md). This does not promote or replace Stable.
 
 **[V1.0.5 previous version](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.5)** is retained, not a second Stable. The 2026-08-31 cleanup retained V1.0.5 and V1.1.0; future Latest iterations can add new releases. Source tags, history and test records remain available. Back up application data before downgrading; retaining an installer does not guarantee future data-format compatibility.
 
 ### Release channels
 
 - **Stable:** V1.1.0 is the stable baseline and GitHub `Latest release`, explicitly promoted by the maintainer on 2026-08-31. Stable changes only after explicit approval of a tested Latest build.
-- **Latest:** each planned iteration overwrites the maintainer's installed build after validation. It is published as a GitHub Pre-release only after all release-blocking security gates pass. Latest can advance without replacing Stable.
+- **Latest:** each planned iteration may overwrite the maintainer's installed build only after validation and an immediate explicit confirmation before the overwrite action. It is published as a GitHub Pre-release only after all release-blocking security gates pass and publication is separately confirmed. Latest can advance without replacing Stable.
 - If a Latest build regresses, users can reinstall Stable without removing application data.
 
 ```text
@@ -169,9 +169,9 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 
 [V1.1.0 已按维护者指令晋升为 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)，在 Excel/Word/PDF 入口、软件 Key 加密、审查批注、一体化工作台和会话交接基础上，增加独立后台任务、定时计划、运行历史和恢复。入口为“任务与子代理 → 独立后台任务”。托盘运行时有效，完全退出后不执行；任务失败或结果不明不会自动重发。独立任务需要 Git；普通文档拖入不需要 Git。工作树检出全部已提交文件，不是内容脱敏；软件托管 Key 和未提交资料不复制。安装与公开下载验收状态见[执行进度](PROGRESS.md)。本次沿用已验证的原安装包，仅保留 V1.1.0 和上一版 V1.0.5 的发布与安装产物，源码历史和测试记录不删除。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)；回退前应备份数据。
 
-发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
+发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证通过且覆盖动作前获得维护者即时明确确认后才覆盖当前电脑中的旧版；通过全部发布安全门禁并另行确认后，才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
-当前公开产品 Latest 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`。本地 V1.1.6 候选固定为 Harness `0.1.2-rc.1`；官方从 alpha.5 到 rc.1 只有包版本变化，排队、插话和停止继续完全使用官方实现，Office 文件拖拽及桌面独有能力不删除。源码 411/411、最终解包交互 8/8、真实模型 3/3、包内容治理和三项文件校验均已通过；Setup 与 Portable 已生成，但尚未覆盖当前 V1.1.5 或执行安装态验收。此前“只保留 V1.1.0 和 V1.0.5”是一次性清理范围，本次新增本地候选不删除这两个保留版本。安装包仍未签名；自定义 SQLite 迁移、其他电脑的内网代理和多日稳定性不在本次验证承诺内。
+当前公开 Pre-release 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`；GitHub 正式 `Latest release` / Stable 仍是 V1.1.0。本地 V1.1.7 候选固定为 Harness `0.1.2-rc.1`，继续完全使用官方 Queue/Steer/Stop，并完成 Windows 单实例、退出日志、所有权清理和产品版本身份收口。最终包内 130 个应用文件和 24,358 个资源逐项一致；真实 Harness、PowerShell PTY 和预览服务经正常退出后没有进程或端口残留，三项分发文件校验通过。它尚未覆盖当前 V1.1.5，也未推送或发布 GitHub。安装器仍未签名；PE/VersionInfo 与包树哈希不构成 Authenticode Publisher 信任或 Electron 分发供应链认证。自定义 SQLite 迁移、其他电脑的内网代理和 24 小时老化不在本版验证承诺内。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；

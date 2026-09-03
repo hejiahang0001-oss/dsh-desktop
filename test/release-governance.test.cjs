@@ -159,20 +159,63 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.equal(report.pnpmRuntime.wrapperValid, false);
 });
 
-test('package layout binds the inspected app.asar to the V1.1.6 desktop manifest', async (context) => {
+test('package layout binds the inspected app.asar to the V1.1.7 desktop manifest', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-app-version-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const appRoot = path.join(root, 'app-source');
-  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.6' }));
+  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.7' }));
   fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   const ready = await inspectPackageLayout(root);
-  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.6' });
+  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.7' });
   assert.equal(ready.requiredPackagedAppReady, true);
 
   writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.5' }));
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   assert.equal((await inspectPackageLayout(root)).requiredPackagedAppReady, false);
+});
+
+test('package layout requires the exact bundled Harness watchdog host', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-harness-host-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = path.resolve(__dirname, '..', 'electron', 'harness-process-host.cjs');
+  const target = path.join(root, 'resources', 'harness-host', 'harness-process-host.cjs');
+
+  assert.equal((await inspectPackageLayout(root)).requiredHarnessProcessHostReady, false);
+  writeFile(target, fs.readFileSync(source));
+  const ready = await inspectPackageLayout(root);
+  assert.equal(ready.requiredHarnessProcessHostReady, true);
+  assert.equal(ready.harnessProcessHost.sha256, ready.harnessProcessHost.expectedSha256);
+
+  fs.appendFileSync(target, '\n// drifted packaged host\n');
+  assert.equal((await inspectPackageLayout(root)).requiredHarnessProcessHostReady, false);
+});
+
+test('package layout requires the exact PTY host and bundled Node runtime', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-terminal-host-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const terminalSource = path.resolve(__dirname, '..', 'electron', 'terminal-pty-host.cjs');
+  const terminalTarget = path.join(root, 'resources', 'terminal', 'terminal-pty-host.cjs');
+  const nodeSource = path.resolve(__dirname, '..', 'vendor', 'runtime', 'win32-x64', 'node.exe');
+  const nodeTarget = path.join(root, 'resources', 'runtime', 'node.exe');
+
+  let report = await inspectPackageLayout(root);
+  assert.equal(report.requiredTerminalProcessHostReady, false);
+  assert.equal(report.requiredNodeRuntimeReady, false);
+
+  writeFile(terminalTarget, fs.readFileSync(terminalSource));
+  fs.mkdirSync(path.dirname(nodeTarget), { recursive: true });
+  fs.linkSync(nodeSource, nodeTarget);
+  report = await inspectPackageLayout(root);
+  assert.equal(report.requiredTerminalProcessHostReady, true);
+  assert.equal(report.requiredNodeRuntimeReady, true);
+  assert.equal(report.terminalProcessHost.sha256, report.terminalProcessHost.expectedSha256);
+  assert.equal(report.nodeRuntime.sha256, report.nodeRuntime.expectedSha256);
+
+  fs.appendFileSync(terminalTarget, '\n// drifted PTY host\n');
+  assert.equal((await inspectPackageLayout(root)).requiredTerminalProcessHostReady, false);
+  fs.unlinkSync(nodeTarget);
+  assert.equal((await inspectPackageLayout(root)).requiredNodeRuntimeReady, false);
 });
 
 test('package layout requires the fixed bundled pnpm files, version, and offline wrapper', async (context) => {

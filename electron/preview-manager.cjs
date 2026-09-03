@@ -15,6 +15,7 @@ const MAX_PREVIEW_URL_CHARS = 2048;
 const MAX_STATIC_FILE_BYTES = 32 * 1024 * 1024;
 const DEFAULT_PROBE_TIMEOUT_MS = 1800;
 const DEFAULT_MONITOR_INTERVAL_MS = 2500;
+const DEFAULT_CLOSE_TIMEOUT_MS = 2500;
 const BLOCKED_STATIC_DIRECTORIES = new Set(['.git', 'node_modules']);
 const HTML_EXTENSIONS = new Set(['.htm', '.html']);
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
@@ -139,6 +140,8 @@ class PreviewManager extends EventEmitter {
   constructor({
     workspacePath,
     probe = probeLoopback,
+    createServer = http.createServer,
+    closeTimeoutMs = DEFAULT_CLOSE_TIMEOUT_MS,
     monitorIntervalMs = DEFAULT_MONITOR_INTERVAL_MS,
     maxStaticFileBytes = MAX_STATIC_FILE_BYTES
   } = {}) {
@@ -146,9 +149,13 @@ class PreviewManager extends EventEmitter {
     this.workspacePath = '';
     this.workspaceRealPath = '';
     this.server = null;
+    this.serverClose = null;
     this.monitor = null;
-    this.monitorBusy = false;
+    this.monitorBusy = null;
+    this.generation = 0;
     this.probe = probe;
+    this.createServer = createServer;
+    this.closeTimeoutMs = Math.max(25, Math.min(10000, Number(closeTimeoutMs) || DEFAULT_CLOSE_TIMEOUT_MS));
     this.reservedOrigins = [];
     this.monitorIntervalMs = Math.max(500, Number(monitorIntervalMs) || DEFAULT_MONITOR_INTERVAL_MS);
     this.maxStaticFileBytes = Math.max(1024, Number(maxStaticFileBytes) || MAX_STATIC_FILE_BYTES);
@@ -167,19 +174,116 @@ class PreviewManager extends EventEmitter {
   }
 
   isActive() {
-    return ['starting', 'ready', 'offline'].includes(this.state.status);
+    return Boolean(this.server) || ['starting', 'ready', 'offline'].includes(this.state.status);
+  }
+
+  _isCurrentGeneration(generation) {
+    return this.generation === generation;
+  }
+
+  async _closeOwnedServer(server) {
+    if (!server) return;
+    if (this.serverClose?.server === server) return this.serverClose.promise;
+    let operation;
+    operation = new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        callback(value);
+      };
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try {
+          server.closeAllConnections?.();
+        } catch {
+          // The server is already closing; the bounded failure below remains authoritative.
+        }
+        reject(new PreviewError(
+          'PREVIEW_CLOSE_TIMEOUT',
+          `本机预览服务未能在 ${this.closeTimeoutMs} 毫秒内关闭，已强制断开其连接。`
+        ));
+      }, this.closeTimeoutMs);
+      const onClosed = (error) => {
+        if (!error || error.code === 'ERR_SERVER_NOT_RUNNING') {
+          finish(resolve);
+          return;
+        }
+        finish(
+          reject,
+          new PreviewError('PREVIEW_CLOSE_FAILED', `本机预览服务关闭失败：${error.message || error}`)
+        );
+      };
+      try {
+        server.close(onClosed);
+        try {
+          server.closeIdleConnections?.();
+        } catch {
+          // A concurrent close can make this optional acceleration unavailable.
+        }
+      } catch (error) {
+        onClosed(error);
+      }
+    }).finally(() => {
+      if (this.serverClose?.promise === operation) this.serverClose = null;
+    });
+    this.serverClose = { server, promise: operation };
+    return operation;
+  }
+
+  async _stopGeneration(generation) {
+    const monitor = this.monitor;
+    this.monitor = null;
+    if (monitor) clearInterval(monitor);
+    this.monitorBusy = null;
+    const server = this.server;
+    try {
+      await this._closeOwnedServer(server);
+    } catch (error) {
+      if (this._isCurrentGeneration(generation) && this.server === server) {
+        this._setState({
+          status: 'failed',
+          owned: true,
+          checkedAt: new Date().toISOString(),
+          error: error.message
+        });
+      }
+      throw error;
+    }
+    if (this.server === server) this.server = null;
+    if (!this._isCurrentGeneration(generation)) return this.getState();
+    return this._setState({
+      status: this.state.status === 'idle' ? 'idle' : 'stopped',
+      mode: 'none',
+      source: '',
+      url: '',
+      displayUrl: '',
+      filePath: '',
+      port: null,
+      owned: false,
+      checkedAt: new Date().toISOString(),
+      error: ''
+    });
   }
 
   async activate(workspacePath = this.workspacePath) {
     if (typeof workspacePath !== 'string' || !path.isAbsolute(workspacePath)) {
       throw new PreviewError('PREVIEW_WORKSPACE_INVALID', '应用预览工作区必须是绝对目录。');
     }
-    await this.stop();
+    const generation = this.generation + 1;
+    this.generation = generation;
+    await this._stopGeneration(generation);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     const resolved = path.resolve(workspacePath);
     const state = await fsp.stat(resolved);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     if (!state.isDirectory()) throw new PreviewError('PREVIEW_WORKSPACE_INVALID', '应用预览工作区不是目录。');
+    const realPath = await fsp.realpath(resolved);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     this.workspacePath = resolved;
-    this.workspaceRealPath = await fsp.realpath(resolved);
+    this.workspaceRealPath = realPath;
     return this._setState({ status: 'idle', workspacePath: resolved, error: '' });
   }
 
@@ -256,26 +360,54 @@ class PreviewManager extends EventEmitter {
   }
 
   async openFile(relativePath) {
-    await this.stop();
+    const generation = this.generation + 1;
+    this.generation = generation;
+    await this._stopGeneration(generation);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     const resolved = this._resolve(relativePath);
     await this._assertNoLinkTraversal(resolved);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     const fileState = await fsp.lstat(resolved.absolutePath);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     if (!fileState.isFile()) throw new PreviewError('PREVIEW_NOT_FILE', '所选 HTML 路径不是普通文件。');
     this._setState({ status: 'starting', mode: 'static', source: 'workspace-html', filePath: resolved.relativePath, owned: true, error: '' });
-    const server = http.createServer((request, response) => { void this._serve(request, response); });
+    const server = this.createServer((request, response) => { void this._serve(request, response); });
     this.server = server;
     server.on('error', (error) => {
-      if (this.server !== server) return;
-      this.server = null;
-      this._setState({ status: 'failed', error: error.message, owned: false });
+      if (!this._isCurrentGeneration(generation) || this.server !== server) return;
+      this._setState({ status: 'failed', error: error.message, owned: true });
     });
-    await new Promise((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
+    const listening = await new Promise((resolve, reject) => {
+      const cleanup = () => {
+        server.off('listening', onListening);
+        server.off('error', onError);
+        server.off('close', onClose);
+      };
+      const onListening = () => {
+        cleanup();
+        resolve(true);
+      };
+      const onError = (error) => {
+        cleanup();
+        reject(error);
+      };
+      const onClose = () => {
+        cleanup();
+        if (!this._isCurrentGeneration(generation) || this.server !== server) resolve(false);
+        else reject(new PreviewError('PREVIEW_LISTEN_CLOSED', '本机预览端口在启动完成前关闭。'));
+      };
+      server.once('listening', onListening);
+      server.once('error', onError);
+      server.once('close', onClose);
       server.listen(0, '127.0.0.1');
     });
+    if (!listening || !this._isCurrentGeneration(generation) || this.server !== server) return this.getState();
     const address = server.address();
-    if (!address || typeof address === 'string') throw new PreviewError('PREVIEW_PORT_FAILED', '无法取得本机预览端口。');
+    if (!address || typeof address === 'string') {
+      await this._closeOwnedServer(server);
+      if (this.server === server) this.server = null;
+      throw new PreviewError('PREVIEW_PORT_FAILED', '无法取得本机预览端口。');
+    }
     const encodedPath = resolved.relativePath.split('/').map(encodeURIComponent).join('/');
     const url = `http://127.0.0.1:${address.port}/${encodedPath}`;
     return this._setState({
@@ -293,60 +425,52 @@ class PreviewManager extends EventEmitter {
   }
 
   async connect(value, { reservedOrigins = [] } = {}) {
-    await this.stop();
+    const generation = this.generation + 1;
+    this.generation = generation;
+    await this._stopGeneration(generation);
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     const url = normalizeLoopbackUrl(value, { reservedOrigins });
-    this.reservedOrigins = [...reservedOrigins];
+    const operationReservedOrigins = [...reservedOrigins];
+    this.reservedOrigins = operationReservedOrigins;
     this._setState({ status: 'starting', mode: 'external', source: 'local-server', url, displayUrl: url, owned: false, error: '' });
-    const result = await this.probe(url, { reservedOrigins: this.reservedOrigins });
+    const result = await this.probe(url, { reservedOrigins: operationReservedOrigins });
+    if (!this._isCurrentGeneration(generation)) return this.getState();
     if (!result.ok) {
       return this._setState({ status: 'offline', checkedAt: new Date().toISOString(), error: result.error?.message || '本机服务当前不可访问。' });
     }
     const state = this._setState({ status: 'ready', checkedAt: new Date().toISOString(), error: '' });
-    this.monitor = setInterval(() => { void this._monitorExternal(); }, this.monitorIntervalMs);
+    this.monitor = setInterval(() => { void this._monitorExternal(generation); }, this.monitorIntervalMs);
     this.monitor.unref?.();
     return state;
   }
 
-  async _monitorExternal() {
-    if (this.monitorBusy || this.state.mode !== 'external' || !this.state.url) return;
-    this.monitorBusy = true;
+  async _monitorExternal(generation = this.generation) {
+    if (!this._isCurrentGeneration(generation) || this.monitorBusy === generation || this.state.mode !== 'external' || !this.state.url) return;
+    const url = this.state.url;
+    const reservedOrigins = [...this.reservedOrigins];
+    this.monitorBusy = generation;
     try {
-      const result = await this.probe(this.state.url, { reservedOrigins: this.reservedOrigins });
+      const result = await this.probe(url, { reservedOrigins });
+      if (!this._isCurrentGeneration(generation) || this.state.mode !== 'external' || this.state.url !== url) return;
       const status = result.ok ? 'ready' : 'offline';
       const error = result.ok ? '' : result.error?.message || '本机服务当前不可访问。';
       if (status !== this.state.status || error !== this.state.error) {
         this._setState({ status, checkedAt: new Date().toISOString(), error });
       }
     } finally {
-      this.monitorBusy = false;
+      if (this.monitorBusy === generation) this.monitorBusy = null;
     }
   }
 
   async stop() {
-    if (this.monitor) clearInterval(this.monitor);
-    this.monitor = null;
-    this.monitorBusy = false;
-    const server = this.server;
-    this.server = null;
-    if (server) {
-      await new Promise((resolve) => server.close(() => resolve()));
-    }
-    return this._setState({
-      status: this.state.status === 'idle' ? 'idle' : 'stopped',
-      mode: 'none',
-      source: '',
-      url: '',
-      displayUrl: '',
-      filePath: '',
-      port: null,
-      owned: false,
-      checkedAt: new Date().toISOString(),
-      error: ''
-    });
+    const generation = this.generation + 1;
+    this.generation = generation;
+    return this._stopGeneration(generation);
   }
 }
 
 module.exports = {
+  DEFAULT_CLOSE_TIMEOUT_MS,
   DEFAULT_MONITOR_INTERVAL_MS,
   DEFAULT_PROBE_TIMEOUT_MS,
   MAX_PREVIEW_URL_CHARS,

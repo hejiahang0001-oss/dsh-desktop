@@ -131,11 +131,15 @@ test('managed worktree creation is generated, isolated, and leaves unmanaged wor
     (error) => error?.code === 'remove-not-allowed'
   );
 
+  fs.writeFileSync(path.join(fixture.repository, 'README.md'), '# uncommitted source change\n');
+  fs.writeFileSync(path.join(fixture.repository, 'untracked-secret.txt'), 'not copied\n');
   const created = await manager.create({ workspacePath: fixture.repository });
   assert.equal(created.ok, true);
   assert.equal(created.branch, 'dsh/worktree-20260825-060708-a1b2c3');
   assert.equal(created.path.startsWith(path.resolve(fixture.managedRoot)), true);
   assert.equal(fs.existsSync(path.join(created.path, 'README.md')), true);
+  assert.equal(fs.readFileSync(path.join(created.path, 'README.md'), 'utf8').replaceAll('\r\n', '\n'), '# fixture\n');
+  assert.equal(fs.existsSync(path.join(created.path, 'untracked-secret.txt')), false);
   const item = created.state.worktrees.find((candidate) => candidate.id === created.createdId);
   assert.equal(item.managed, true);
   assert.equal(item.owner, 'DSH Desktop');

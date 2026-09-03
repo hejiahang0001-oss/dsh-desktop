@@ -1,5 +1,21 @@
 # DSH Desktop 执行进度
 
+## V1.1.7 Windows 生命周期与版本身份（2026-09-04，本地可安装候选已验收，未覆盖安装，未发布）
+
+- 已加入正式配置单实例锁和重复启动聚焦；隔离验收配置使用独立数据目录，不影响已安装的 V1.1.5。
+- 已建立不含路径、正文或凭据的生命周期日志，区分启动、运行、安全退出、退出失败和干净结束；下一次启动只依据可验证日志提示异常恢复，不按旧 PID 或端口误杀其他进程。
+- 安全退出先关闭辅助窗口并封锁新操作，再等待 Harness 启动、文档导入、Git 审查、预览、Wiki 写入、工作区、插件、工作树、检查点、后台任务和交付操作，最后结束真实 PTY、托管预览与 Harness 进程树。任一步失败均不写“干净退出”。
+- 正在运行或等待确认的前台 Agent 也纳入退出二次确认，避免菜单退出静默中断工具写入；已有文件不会被误述为自动回滚。
+- Harness 与 PTY 增加父进程租约、进程树清理和竞态处理；托管预览在关闭超时后仍保留所有权，后续可再次清理。
+- Windows EXE 资源现分别写入 DSH Desktop 产品名与 V1.1.7；发布治理再绑定 Harness host、PTY host 和内置 Node 的精确哈希。
+- 最终源码门禁 469/469、零失败/跳过，生命周期/退出/版本/资源聚焦回归通过；生产依赖审计无已知漏洞，JavaScript 语法和 `git diff --check` 通过。环境插件测试曾因并发修改 `process.env` 在 Windows 出现一次进程级崩溃，改为显式注入环境后 100 次独立进程与最终全量均通过。
+- 最终 `app.asar` 的 130/130 个文件与源码一致；15 组 `extraResources` 加打包器生成的 `app-update.yml`、`elevate.exe` 共 24,358/24,358 个资源无缺失、多余或内容差异。两个生成文件分别绑定精确更新字段，以及 electron-builder 26.8.1 / NSIS 3.0.4.1 的 PE、大小和 SHA-256。构建证据指纹为 `17066a48e1ec762d55bf10b0c7c6fbc22d4f6141e79f19da4316a5af7ae61297`。
+- 最终单实例黑盒通过：第二次启动聚焦首实例，两进程正常退出；Windows ProductName/FileVersion/ProductVersion 分别为 `DSH Desktop`、`1.1.7`、`1.1.7.0`。
+- 最终安全退出黑盒先确认真实 Harness、PowerShell PTY 和托管预览均活动，再走正常退出；Windows Job 共观察 80 个进程，结束时 `activeProcesses=0`，Harness/终端残留、软件拥有端口和生命周期临时文件均为 0，双份日志为同一 run 的 `clean / explicit-exit`，退出前后包指纹完全一致。
+- 发布治理 `packageReady=true`、零重解析点；相对公开 V1.1.1 blockmap 可复用 94.4176%。Setup 为 188,644,117 字节、SHA-256 `6A605453561FD4A66A1DD809783E2A6826CF36E34F2A3E83894494DF58371074`；Portable 为 187,951,593 字节、SHA-256 `D9FF042E2480ACF229DAF347C280D9434A6DBEA705ADDEA11DF3DE1D6BE0B5B2`；blockmap 为 195,076 字节、SHA-256 `152BD66C59518CAB6BDEBA03480517E9168A96BE82E949A5861401C0592918EC`；清单 3/3 匹配。候选位于 `artifacts/v1.1.7-release-candidate`。
+- 安装器仍未签名，可信自动安装保持关闭；PE 结构、VersionInfo 和包树哈希只证明本候选身份与内容一致，不构成 Authenticode Publisher 信任或 Electron 分发供应链认证。
+- 本机已安装 V1.1.5 不变；未执行覆盖安装或安装态数据保留验收，未推送、未建 PR、未创建 GitHub Release。V1.1.0 Stable 和公开 V1.1.1 Pre-release 均未修改。
+
 ## V1.1.6 Harness rc.1 适配（2026-09-04，本地可安装候选已验收，未覆盖安装，未发布）
 
 - 固定官方 tag `dsh-v0.1.2-rc.1`、commit `a66e4702047846cdaa10c66c9d3df3951f5ea70d`，继续使用官方 pnpm `11.7.0` 和冻结 lockfile；V1.1.0 Stable 与公开 V1.1.1 Pre-release 不动。

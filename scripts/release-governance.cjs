@@ -1,10 +1,14 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const { execFile } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const path = require('node:path');
+const { promisify } = require('node:util');
 const zlib = require('node:zlib');
 const { extractFile } = require('@electron/asar');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
+
+const execFileAsync = promisify(execFile);
 
 const MAX_BLOCKMAP_COMPRESSED_BYTES = 8 * 1024 * 1024;
 const MAX_BLOCKMAP_RAW_BYTES = 64 * 1024 * 1024;
@@ -51,7 +55,7 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.6';
+const REQUIRED_DESKTOP_VERSION = '1.1.7';
 const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
 const REQUIRED_HARNESS_TAG = 'dsh-v0.1.2-rc.1';
 const REQUIRED_HARNESS_VERSION = '0.1.2-rc.1';
@@ -83,10 +87,13 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', 'd91b60ac0539846626ef85bd0579d503aa1c2f66de0549b97b241124ae364fa6']
+  ['THIRD_PARTY_LICENSES.md', 'b802f0313de7e5f81ac53be68b6bb9261d91039ac1ca7ef6d92a1f411902814e']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');
+const HARNESS_PROCESS_HOST_RELATIVE = normalize(path.join('resources', 'harness-host', 'harness-process-host.cjs'));
+const TERMINAL_PROCESS_HOST_RELATIVE = normalize(path.join('resources', 'terminal', 'terminal-pty-host.cjs'));
+const NODE_RUNTIME_RELATIVE = normalize(path.join('resources', 'runtime', 'node.exe'));
 
 const validateBlockmap = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || value.version !== '2') throw new Error('Blockmap invalid: unsupported root.');
@@ -220,6 +227,36 @@ const inspectPeFile = async (filePath) => {
   }
 };
 
+const parseVersionInfoReport = (value) => {
+  const lines = String(value || '').replace(/^\uFEFF/u, '').split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try { return JSON.parse(lines[index]); } catch { /* Continue to an earlier output line. */ }
+  }
+  return null;
+};
+
+const inspectWindowsExecutableIdentity = async (root) => {
+  const executablePath = path.join(root, 'DSH Desktop.exe');
+  const info = await fsp.lstat(executablePath).catch(() => null);
+  if (!info?.isFile() || info.isSymbolicLink() || info.size <= 0) {
+    return { ok: false, present: false, error: 'DSH Desktop.exe is missing or unsafe.' };
+  }
+  const scriptPath = path.resolve(__dirname, 'verify-windows-version-info.ps1');
+  try {
+    const result = await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', scriptPath,
+      '-ExecutablePath', executablePath,
+      '-ExpectedVersion', REQUIRED_DESKTOP_VERSION
+    ], { encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+    return { ...(parseVersionInfoReport(result.stdout) || {}), ok: true, present: true };
+  } catch (error) {
+    const report = parseVersionInfoReport(error?.stdout);
+    return { ...(report || {}), ok: false, present: true, error: report ? 'Executable identity did not match.' : (error?.message || String(error)) };
+  }
+};
+
 const inspectPackageLayout = async (rootPath) => {
   const root = path.resolve(rootPath);
   const redundantRoots = [
@@ -278,6 +315,9 @@ const inspectPackageLayout = async (rootPath) => {
     unexpectedDeepSeekPackages: [],
     mismatchedPackages: []
   };
+  const harnessProcessHost = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
+  const terminalProcessHost = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
+  const nodeRuntime = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
   const harnessVendorPackages = new Set();
   const harnessAuxiliaryPackages = new Set();
   const harnessReleasePackages = [];
@@ -349,6 +389,21 @@ const inspectPackageLayout = async (rootPath) => {
         harnessRuntime.files += 1;
         harnessRuntime.bytes += info.size;
       }
+      if (relative === HARNESS_PROCESS_HOST_RELATIVE) {
+        harnessProcessHost.present = true;
+        harnessProcessHost.bytes = info.size;
+        harnessProcessHost.sha256 = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      }
+      if (relative === TERMINAL_PROCESS_HOST_RELATIVE) {
+        terminalProcessHost.present = true;
+        terminalProcessHost.bytes = info.size;
+        terminalProcessHost.sha256 = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      }
+      if (relative === NODE_RUNTIME_RELATIVE) {
+        nodeRuntime.present = true;
+        nodeRuntime.bytes = info.size;
+        nodeRuntime.sha256 = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      }
       if (relative.startsWith(`${legalPrefix}/`)) {
         const legalRelative = relative.slice(legalPrefix.length + 1);
         legalPaths.add(legalRelative);
@@ -387,6 +442,27 @@ const inspectPackageLayout = async (rootPath) => {
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
+  try {
+    harnessProcessHost.expectedSha256 = createHash('sha256')
+      .update(await fsp.readFile(path.resolve(__dirname, '..', 'electron', 'harness-process-host.cjs')))
+      .digest('hex');
+  } catch {
+    harnessProcessHost.expectedSha256 = '';
+  }
+  try {
+    terminalProcessHost.expectedSha256 = createHash('sha256')
+      .update(await fsp.readFile(path.resolve(__dirname, '..', 'electron', 'terminal-pty-host.cjs')))
+      .digest('hex');
+  } catch {
+    terminalProcessHost.expectedSha256 = '';
+  }
+  try {
+    nodeRuntime.expectedSha256 = createHash('sha256')
+      .update(await fsp.readFile(path.resolve(__dirname, '..', 'vendor', 'runtime', 'win32-x64', 'node.exe')))
+      .digest('hex');
+  } catch {
+    nodeRuntime.expectedSha256 = '';
+  }
   const packagedApp = { name: '', version: '' };
   try {
     const packagedManifestBytes = extractFile(path.join(root, 'resources', 'app.asar'), 'package.json');
@@ -485,11 +561,26 @@ const inspectPackageLayout = async (rootPath) => {
     const info = await fsp.lstat(path.join(root, 'resources', 'harness-plugins', relative)).catch(() => null);
     if (!info?.isFile() || info.isSymbolicLink()) desktopPluginsMissing.push(relative);
   }
+  const executableIdentity = await inspectWindowsExecutableIdentity(root);
   return {
     packagedApp,
+    executableIdentity,
     requiredPackagedAppReady: packagedApp.name === REQUIRED_DESKTOP_NAME && packagedApp.version === REQUIRED_DESKTOP_VERSION,
+    requiredExecutableIdentityReady: executableIdentity.ok === true,
     requiredDesktopPluginsReady: desktopPluginsMissing.length === 0,
     desktopPluginsMissing,
+    harnessProcessHost,
+    requiredHarnessProcessHostReady: harnessProcessHost.present
+      && harnessProcessHost.bytes > 0
+      && harnessProcessHost.sha256 === harnessProcessHost.expectedSha256,
+    terminalProcessHost,
+    requiredTerminalProcessHostReady: terminalProcessHost.present
+      && terminalProcessHost.bytes > 0
+      && terminalProcessHost.sha256 === terminalProcessHost.expectedSha256,
+    nodeRuntime,
+    requiredNodeRuntimeReady: nodeRuntime.present
+      && nodeRuntime.bytes > 0
+      && nodeRuntime.sha256 === nodeRuntime.expectedSha256,
     redundantAppRuntime,
     terminalRuntime,
     requiredTerminalFilesReady: REQUIRED_TERMINAL_FILES.every((name) => terminalPaths.has(name)),
@@ -541,9 +632,12 @@ const main = async () => {
   });
   const packageReady = packageLayout.redundantAppRuntime.files === 0
     && packageLayout.requiredPackagedAppReady
+    && packageLayout.requiredExecutableIdentityReady
     && packageLayout.terminalRuntime.foreignPlatformFiles === 0
     && packageLayout.terminalRuntime.pdbFiles === 0
     && packageLayout.requiredTerminalFilesReady
+    && packageLayout.requiredTerminalProcessHostReady
+    && packageLayout.requiredNodeRuntimeReady
     && packageLayout.requiredPnpmFilesReady
     && packageLayout.requiredPnpmVersionReady
     && packageLayout.pnpmRuntime.wrapperValid
@@ -553,6 +647,7 @@ const main = async () => {
     && packageLayout.requiredWikiSkillFilesReady
     && packageLayout.requiredLegalNoticesReady
     && packageLayout.requiredHarnessRuntimeReady
+    && packageLayout.requiredHarnessProcessHostReady
     && packageLayout.requiredDesktopPluginsReady
     && packageLayout.reparsePoints === 0;
   const report = {
@@ -588,6 +683,7 @@ module.exports = {
   MAX_BLOCKMAP_COMPRESSED_BYTES,
   MAX_BLOCKMAP_RAW_BYTES,
   MAX_PACKAGE_FILES,
+  NODE_RUNTIME_RELATIVE,
   REQUIRED_PNPM_FILES,
   REQUIRED_PNPM_VERSION,
   REQUIRED_DESKTOP_VERSION,
@@ -600,6 +696,7 @@ module.exports = {
   REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256,
   REQUIRED_HARNESS_VERSION,
   REQUIRED_TERMINAL_FILES,
+  TERMINAL_PROCESS_HOST_RELATIVE,
   REQUIRED_WIKI_SKILL_FILES,
   REQUIRED_EXCEL_SKILL_FILES,
   REQUIRED_WORD_SKILL_FILES,
@@ -607,6 +704,7 @@ module.exports = {
   compareBlockmaps,
   decodeBlockmap,
   inspectPackageLayout,
+  inspectWindowsExecutableIdentity,
   parsePeCertificateTable,
   validateBlockmap
 };

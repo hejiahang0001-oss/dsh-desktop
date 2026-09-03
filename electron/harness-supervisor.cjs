@@ -177,6 +177,16 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'HARNESS_RUNTIME_MISSING';
     throw error;
   }
+  let version = '';
+  try {
+    const dshManifest = JSON.parse(fs.readFileSync(path.resolve(path.dirname(dshBinPath), '..', 'package.json'), 'utf8'));
+    if (dshManifest.name !== '@deepseek-ai/dsh' || dshManifest.version !== HARNESS_VERSION) throw new Error('version mismatch');
+    version = dshManifest.version;
+  } catch {
+    const error = new Error('固定的 DeepSeek Harness 版本身份无效。请重新安装应用。');
+    error.code = 'HARNESS_RUNTIME_VERSION_INVALID';
+    throw error;
+  }
   if (!patchPath) {
     const error = new Error('找不到 DSH Desktop 的 Harness 中文语言补丁。请重新安装应用。');
     error.code = 'HARNESS_PATCH_MISSING';
@@ -209,7 +219,7 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
     error.code = 'BUNDLED_WIKI_SKILL_MISSING';
     throw error;
   }
-  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir };
+  return { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version };
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -292,6 +302,104 @@ const createAuthenticatedHarnessFetch = ({ origin, cookie, fetchImpl = globalThi
   };
 };
 
+const hasChildExited = (child) => Boolean(child) && (
+  (child.exitCode !== null && child.exitCode !== undefined)
+  || (child.signalCode !== null && child.signalCode !== undefined)
+);
+
+const waitForChildExit = (child, timeoutMs) => {
+  if (hasChildExited(child)) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let timer = null;
+    const finish = (exited) => {
+      if (timer) clearTimeout(timer);
+      child.off('exit', onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    child.once('exit', onExit);
+    timer = setTimeout(() => finish(hasChildExited(child)), timeoutMs);
+  });
+};
+
+const createLifecycleError = (message, code) => {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+};
+
+const taskkillProcessTree = (pid, { spawnImpl = spawn, timeoutMs = 5000 } = {}) => {
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return Promise.reject(createLifecycleError('Harness 进程号无效，无法安全结束进程树。', 'HARNESS_STOP_PID_INVALID'));
+  }
+  return new Promise((resolve, reject) => {
+    let taskkill;
+    let timer = null;
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (taskkill) {
+        taskkill.off('error', onError);
+        taskkill.off('exit', onExit);
+      }
+      if (error) reject(error);
+      else resolve();
+    };
+    const onError = (cause) => {
+      const error = createLifecycleError(`无法调用 taskkill 结束 Harness 进程树：${cause?.message || cause}`, 'HARNESS_STOP_TREE_FAILED');
+      error.cause = cause;
+      finish(error);
+    };
+    const onExit = (code, signal) => {
+      if (code === 0) {
+        finish();
+        return;
+      }
+      finish(createLifecycleError(
+        `taskkill 未能结束 Harness 进程树（code=${code ?? 'null'}, signal=${signal || 'none'}）。`,
+        'HARNESS_STOP_TREE_FAILED'
+      ));
+    };
+    try {
+      taskkill = spawnImpl('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        shell: false,
+        stdio: 'ignore'
+      });
+      taskkill.once('error', onError);
+      taskkill.once('exit', onExit);
+      timer = setTimeout(() => {
+        try {
+          taskkill.kill();
+        } catch {
+          // The taskkill helper may already be gone.
+        }
+        finish(createLifecycleError('结束 Harness 进程树超时。', 'HARNESS_STOP_TREE_TIMEOUT'));
+      }, timeoutMs);
+    } catch (cause) {
+      onError(cause);
+    }
+  });
+};
+
+const resolveHarnessProcessHostPath = (options) => {
+  const candidate = options.isPackaged
+    ? path.join(options.resourcesPath, 'harness-host', 'harness-process-host.cjs')
+    : path.resolve(options.processHostPath || path.join(__dirname, 'harness-process-host.cjs'));
+  try {
+    const stat = fs.lstatSync(candidate);
+    if (stat.isFile() && !stat.isSymbolicLink()) return candidate;
+  } catch {
+    // Report one bounded product error below.
+  }
+  throw createLifecycleError(
+    '找不到 DSH Desktop 固定的 Harness 进程托管组件。请重新安装应用。',
+    'HARNESS_PROCESS_HOST_MISSING'
+  );
+};
+
 class HarnessSupervisor extends EventEmitter {
   constructor(options) {
     super();
@@ -301,8 +409,11 @@ class HarnessSupervisor extends EventEmitter {
     this.readyPromise = null;
     this.resolveReady = null;
     this.rejectReady = null;
+    this.readyGeneration = 0;
     this.startTimer = null;
-    this.stopRequested = false;
+    this.generation = 0;
+    this.activeGeneration = 0;
+    this.stopRequestedGeneration = 0;
     this.state = Object.freeze({ status: 'idle', url: null, pid: null, error: null });
   }
 
@@ -343,52 +454,100 @@ class HarnessSupervisor extends EventEmitter {
     }
   }
 
-  _handleOutput(source, chunk) {
+  _isCurrentGeneration(generation, child = null) {
+    return this.activeGeneration === generation && (!child || this.child === child);
+  }
+
+  _isLaunchAllowed(generation) {
+    return this.activeGeneration === generation && this.stopRequestedGeneration !== generation;
+  }
+
+  _settleReady(generation, outcome, value) {
+    if (this.readyGeneration !== generation) return false;
+    const settle = outcome === 'resolve' ? this.resolveReady : this.rejectReady;
+    if (!settle) return false;
+    this.resolveReady = null;
+    this.rejectReady = null;
+    settle(value);
+    return true;
+  }
+
+  _handleOutput(source, chunk, generation = this.activeGeneration, child = this.child) {
+    if (!this._isCurrentGeneration(generation, child)) return;
     const text = chunk.toString('utf8');
     void this._appendLog(source, text);
     this.outputBuffer = `${this.outputBuffer}${text}`.slice(-16384);
     const url = parseHarnessUrl(this.outputBuffer);
-    if (!url || this.state.status === 'running') return;
+    if (!url || this.state.status !== 'starting' || this.stopRequestedGeneration === generation) return;
     clearTimeout(this.startTimer);
-    this._setState({ status: 'running', url, pid: this.child?.pid || null, error: null });
-    this.resolveReady?.(url);
-    this.resolveReady = null;
-    this.rejectReady = null;
+    this._setState({ status: 'running', url, pid: child?.pid || null, error: null });
+    this._settleReady(generation, 'resolve', url);
   }
 
-  _fail(error) {
+  _fail(error, generation = this.activeGeneration, child = null) {
+    if (!this._isCurrentGeneration(generation, child)) return false;
+    if (this.stopRequestedGeneration === generation && ['stopping', 'stopped'].includes(this.state.status)) return false;
     clearTimeout(this.startTimer);
     const message = error?.message || String(error);
     this._setState({ status: 'failed', url: null, pid: this.child?.pid || null, error: message });
-    this.rejectReady?.(error instanceof Error ? error : new Error(message));
-    this.resolveReady = null;
-    this.rejectReady = null;
+    this._settleReady(generation, 'reject', error instanceof Error ? error : new Error(message));
+    return true;
+  }
+
+  _failOwnedChild(error, generation = this.activeGeneration, child = this.child) {
+    if (!this._fail(error, generation, child)) return false;
+    const processNeverStarted = !Number.isSafeInteger(child?.pid) || child.pid <= 0;
+    if ((processNeverStarted || hasChildExited(child)) && this._isCurrentGeneration(generation, child)) {
+      this.child = null;
+      this._setState({ pid: null });
+    }
+    return true;
   }
 
   reportFailure(error) {
-    this._fail(error);
+    this._fail(error, this.activeGeneration, this.child);
   }
 
-  async start() {
-    if (this.state.status === 'running') return this.state.url;
+  start() {
+    if (this.state.status === 'running') return Promise.resolve(this.state.url);
     if (this.readyPromise && this.state.status === 'starting') return this.readyPromise;
+    if (this.child) {
+      return Promise.reject(createLifecycleError(
+        '已有 Harness 进程尚未结束，请先停止或重启后再试。',
+        'HARNESS_PROCESS_STILL_ACTIVE'
+      ));
+    }
 
-    await fsp.mkdir(this.options.homeDir, { recursive: true });
-    await fsp.mkdir(this.options.launchDir, { recursive: true });
-    await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
-    const runtime = resolveHarnessRuntimePaths(this.options);
-    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir } = runtime;
-    await provisionDesktopShellEnvPlugin({ homeDir: this.options.homeDir, sourceDir: shellEnvPluginDir });
-    this.credentialHost = await this.options.createCredentialHost?.({ homeDir: this.options.homeDir, runtime, provisionPlugin: provisionDesktopShellEnvPlugin });
-
-    this.stopRequested = false;
+    const generation = ++this.generation;
+    this.activeGeneration = generation;
+    this.stopRequestedGeneration = 0;
     this.outputBuffer = '';
-    this._setState({ status: 'starting', url: null, pid: null, error: null });
     this.readyPromise = new Promise((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
     });
+    this.readyGeneration = generation;
+    const readyPromise = this.readyPromise;
+    this._setState({ status: 'starting', url: null, pid: null, error: null });
+    void this._launch(generation).catch((error) => this._fail(error, generation));
+    return readyPromise;
+  }
 
+  async _launch(generation) {
+    await fsp.mkdir(this.options.homeDir, { recursive: true });
+    await fsp.mkdir(this.options.launchDir, { recursive: true });
+    await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
+    if (!this._isLaunchAllowed(generation)) return;
+    const runtime = resolveHarnessRuntimePaths(this.options);
+    const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir } = runtime;
+    const processHostPath = resolveHarnessProcessHostPath(this.options);
+    await provisionDesktopShellEnvPlugin({ homeDir: this.options.homeDir, sourceDir: shellEnvPluginDir });
+    if (!this._isLaunchAllowed(generation)) return;
+    const credentialHost = await this.options.createCredentialHost?.({ homeDir: this.options.homeDir, runtime, provisionPlugin: provisionDesktopShellEnvPlugin });
+    if (!this._isLaunchAllowed(generation)) return;
+    this.credentialHost = credentialHost;
+
+    let child;
     try {
       const environment = buildHarnessEnvironment({
         overrides: this.options.env,
@@ -408,82 +567,132 @@ class HarnessSupervisor extends EventEmitter {
       );
       environment.DSH_DESKTOP_NODE = nodePath;
       delete environment.DSH_DESKTOP_CREDENTIAL_MODULE;
-      if (this.credentialHost) environment.DSH_DESKTOP_CREDENTIAL_MODULE = this.credentialHost.providerModule;
+      if (credentialHost) environment.DSH_DESKTOP_CREDENTIAL_MODULE = credentialHost.providerModule;
       delete environment.DSH_DESKTOP_TOOL_MODULE;
-      if (this.credentialHost?.toolsModule) environment.DSH_DESKTOP_TOOL_MODULE = this.credentialHost.toolsModule;
-      this.child = spawn(nodePath, [dshBinPath, 'web', '--patch', this.credentialHost?.patchPath || patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
+      if (credentialHost?.toolsModule) environment.DSH_DESKTOP_TOOL_MODULE = credentialHost.toolsModule;
+      const spawnImpl = this.options.spawnImpl || spawn;
+      child = spawnImpl(nodePath, [processHostPath, dshBinPath, 'web', '--patch', credentialHost?.patchPath || patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,
         env: environment,
         windowsHide: true,
         shell: false,
-        stdio: this.credentialHost ? ['ignore', 'pipe', 'pipe', 'ipc'] : ['ignore', 'pipe', 'pipe']
+        stdio: credentialHost ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe']
       });
-      this.credentialHost?.attach(this.child);
+      this.child = child;
+      credentialHost?.attach(child);
     } catch (error) {
-      this._fail(error);
-      return this.readyPromise;
+      this._failOwnedChild(error, generation, child || this.child);
+      return;
     }
 
-    this._setState({ pid: this.child.pid || null });
-    this.child.stdout.on('data', (chunk) => this._handleOutput('stdout', chunk));
-    this.child.stderr.on('data', (chunk) => this._handleOutput('stderr', chunk));
-    this.child.once('error', (error) => this._fail(error));
-    this.child.once('exit', (code, signal) => {
+    this._setState({ pid: child.pid || null });
+    const onStdout = (chunk) => this._handleOutput('stdout', chunk, generation, child);
+    const onStderr = (chunk) => this._handleOutput('stderr', chunk, generation, child);
+    const onError = (error) => this._failOwnedChild(error, generation, child);
+    child.stdout.on('data', onStdout);
+    child.stderr.on('data', onStderr);
+    child.once('error', onError);
+    child.once('exit', (code, signal) => {
+      child.stdout.off('data', onStdout);
+      child.stderr.off('data', onStderr);
+      if (!this._isCurrentGeneration(generation, child)) return;
       clearTimeout(this.startTimer);
-      const wasStopping = this.stopRequested;
       this.child = null;
-      if (wasStopping) {
+      if (this.stopRequestedGeneration === generation) {
         this._setState({ status: 'stopped', url: null, pid: null, error: null });
         return;
       }
       const error = new Error(`Harness 已退出（code=${code ?? 'null'}, signal=${signal || 'none'}）。`);
-      this._fail(error);
+      this._fail(error, generation);
       this._setState({ pid: null });
     });
 
     this.startTimer = setTimeout(() => {
+      if (!this._isCurrentGeneration(generation, child)) return;
       const error = new Error(`Harness 在 ${this.options.startTimeoutMs / 1000} 秒内未就绪。`);
-      this._fail(error);
-      void this.stop();
+      this._fail(error, generation, child);
+      void this.stop().catch(() => undefined);
     }, this.options.startTimeoutMs);
     this.startTimer.unref?.();
-    return this.readyPromise;
   }
 
   async stop() {
     clearTimeout(this.startTimer);
+    const generation = this.activeGeneration;
     const child = this.child;
+    if (generation && this.state.status === 'starting') {
+      this._settleReady(generation, 'reject', createLifecycleError(
+        'Harness 启动已由停止请求取消。',
+        'HARNESS_START_ABORTED'
+      ));
+    }
+    this.stopRequestedGeneration = generation;
     if (!child) {
       this._setState({ status: 'stopped', url: null, pid: null, error: null });
       return;
     }
 
-    this.stopRequested = true;
     this._setState({ status: 'stopping', url: null, pid: child.pid || null, error: null });
-    await new Promise((resolve) => {
-      let finished = false;
-      const done = () => {
-        if (finished) return;
-        finished = true;
-        resolve();
-      };
-      child.once('exit', done);
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        done();
-        return;
+    try {
+      await this._stopProcessTree(child);
+    } catch (error) {
+      if (this._isCurrentGeneration(generation, child)) {
+        const message = error?.message || String(error);
+        this._setState({ status: 'failed', url: null, pid: child.pid || null, error: message });
       }
-      const forceTimer = setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {
-          // The process may already be gone.
+      throw error;
+    }
+
+    if (this._isCurrentGeneration(generation, child)) {
+      this.child = null;
+      this._setState({ status: 'stopped', url: null, pid: null, error: null });
+    }
+  }
+
+  async _stopProcessTree(child) {
+    if (typeof this.options.stopTree === 'function') {
+      await this.options.stopTree(child);
+    } else if ((this.options.platform || process.platform) === 'win32') {
+      try {
+        await taskkillProcessTree(child.pid, {
+          spawnImpl: this.options.taskkillSpawnImpl || spawn,
+          timeoutMs: this.options.stopTimeoutMs
+        });
+      } catch (error) {
+        if (!hasChildExited(child)) throw error;
+      }
+    } else {
+      try {
+        if (child.kill('SIGTERM') === false && !hasChildExited(child)) {
+          throw createLifecycleError('Harness 拒绝了停止请求。', 'HARNESS_STOP_TREE_FAILED');
         }
-        setTimeout(done, 500).unref?.();
-      }, this.options.stopTimeoutMs);
-      forceTimer.unref?.();
-    });
+      } catch (error) {
+        if (!hasChildExited(child)) throw error;
+      }
+      if (await waitForChildExit(child, this.options.stopTimeoutMs)) return;
+      try {
+        if (child.kill('SIGKILL') === false && !hasChildExited(child)) {
+          throw createLifecycleError('Harness 拒绝了强制停止请求。', 'HARNESS_STOP_TREE_FAILED');
+        }
+      } catch (error) {
+        if (!hasChildExited(child)) throw error;
+      }
+    }
+
+    if (await waitForChildExit(child, this.options.stopTimeoutMs)) return;
+    const error = createLifecycleError(
+      `Harness 进程树在 ${this.options.stopTimeoutMs / 1000} 秒内未退出。`,
+      'HARNESS_STOP_TIMEOUT'
+    );
+    if ((this.options.platform || process.platform) !== 'win32' && typeof this.options.stopTree !== 'function') {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // Preserve the timeout as the authoritative stop failure.
+      }
+      if (await waitForChildExit(child, 500)) return;
+    }
+    throw error;
   }
 
   async restart() {
@@ -503,6 +712,7 @@ module.exports = {
   parseHarnessCookie,
   parseHarnessUrl,
   probeHarness,
+  resolveHarnessProcessHostPath,
   resolvePnpmDshBin,
   resolveHarnessRuntimePaths,
   provisionDesktopShellEnvPlugin,

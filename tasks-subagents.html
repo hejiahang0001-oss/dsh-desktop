@@ -59,7 +59,7 @@
               <label id="background-interval-label" hidden>间隔（分钟）<input id="background-interval" type="number" min="15" max="1440" value="60"></label>
               <label>每日最多运行次数<input id="background-limit" type="number" min="1" max="96" value="3" required></label>
             </div>
-            <p class="background-note">从当前 Git 仓库已提交内容建立目录，不复制未提交文件或依赖，不自动合并。使用模型额度；仅工作区写入，敏感操作仍需确认。不要同时手动修改任务目录。</p>
+            <p class="background-note">从当前 Git 提交建立目录；未提交和未跟踪文件、软件托管 Key 不复制。提交中已跟踪的文件会正常检出，包括依赖或误提交的凭据；工作树不是内容脱敏。新会话仍可通过桌面凭据桥使用 Key。使用模型额度；仅工作区写入，敏感操作仍需确认。</p>
             <button id="background-submit" type="submit">创建并确认计划</button>
           </form>
         </details>

@@ -1,9 +1,10 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
+  "copyright": "Copyright © 2026 DSH Desktop contributors",
   "license": "MIT",
   "packageManager": "pnpm@11.19.0",
   "private": true,
@@ -17,6 +18,9 @@
     "validate:controlled-plugin-install": "node scripts/validate-controlled-plugin-install.cjs",
     "release:governance": "node scripts/release-governance.cjs",
     "smoke:packaged-terminal": "node scripts/smoke-packaged-terminal.cjs",
+    "smoke:packaged-lifecycle": "node scripts/smoke-packaged-lifecycle.cjs",
+    "smoke:packaged-safe-exit": "node scripts/smoke-packaged-safe-exit.cjs",
+    "verify:windows-identity": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-windows-version-info.ps1 -ExecutablePath \"dist\\win-unpacked\\DSH Desktop.exe\"",
     "pack:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --dir --win --x64",
     "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis portable --x64"
   },
@@ -132,6 +136,10 @@
         "to": "terminal/terminal-pty-host.cjs"
       },
       {
+        "from": "electron/harness-process-host.cjs",
+        "to": "harness-host/harness-process-host.cjs"
+      },
+      {
         "from": "node_modules/pnpm",
         "to": "pnpm/package",
         "filter": [
@@ -200,8 +208,9 @@
       }
     ],
     "win": {
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "verifyUpdateCodeSignature": false,
+      "legalTrademarks": "Independent community project; not affiliated with or endorsed by DeepSeek.",
       "target": [
         {
           "target": "nsis",
