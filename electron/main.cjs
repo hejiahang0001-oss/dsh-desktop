@@ -16,7 +16,7 @@ const {
   resolveControlledPnpmRuntime
 } = require('./controlled-plugin-installer.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
-const { buildExtensionCenter, callHarnessRemote } = require('./extension-center.cjs');
+const { buildExtensionCenter, callHarnessRemote, requiredInventoryModulesActive } = require('./extension-center.cjs');
 const { inspectOfficeCenter, isOfficeSkillId } = require('./office-center.cjs');
 const { extractWikiSessionCandidates, selectCaptureCandidate } = require('./wiki-center.cjs');
 const {
@@ -4787,7 +4787,7 @@ function installApplicationMenu() {
             type: 'info',
             title: `关于 DSH Desktop V${app.getVersion()}`,
             message: `DSH Desktop V${app.getVersion()}`,
-            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.5'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
+            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || HARNESS_VERSION}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
             buttons: ['确定'],
             defaultId: 0,
             cancelId: 0
@@ -5896,6 +5896,12 @@ const runHarnessSmoke = async (target) => {
     const pluginSurface = extensionCenter.surfaces.find((item) => item.id === 'plugins');
     const hookSurface = extensionCenter.surfaces.find((item) => item.id === 'hooks');
     const mcpSurface = extensionCenter.surfaces.find((item) => item.id === 'mcp');
+    const requiredHarnessActiveModules = [
+      '@deepseek-ai/dsh-api-session-controller',
+      '@deepseek-ai/dsh-api-workspace-controller',
+      '@deepseek-ai/dsh-session-log-export'
+    ];
+    const requiredHarnessModulesReady = requiredInventoryModulesActive(liveInventory, requiredHarnessActiveModules);
     result = {
       ok: sideChat.kind === 'fresh'
         && sideChat.sourceSessionId === workspaceSync.sessionId
@@ -5903,6 +5909,10 @@ const runHarnessSmoke = async (target) => {
         && sideChat.permission === 'workspace-write'
         && extensionCenter.available
         && pluginSurface?.total > 0
+        && pluginSurface?.failed === 0
+        && pluginSurface?.transitional === 0
+        && runtimeState.runtime?.status === 'healthy'
+        && requiredHarnessModulesReady
         && skillSurface?.total > 0
         && mcpSurface?.status === 'ready'
         && mcpSurface?.total === 0
@@ -5939,6 +5949,7 @@ const runHarnessSmoke = async (target) => {
           misdirected: runtimeState.runtime?.misdirected || 0
         },
         plugins: { total: pluginSurface?.total || 0, active: pluginSurface?.active || 0, failed: pluginSurface?.failed || 0 },
+        requiredActiveModules: { ready: requiredHarnessModulesReady, packages: requiredHarnessActiveModules },
         skills: { total: skillSurface?.total || 0, active: skillSurface?.active || 0 },
         mcp: { status: mcpSurface?.status || 'unknown', version: mcpSurface?.version || '', total: mcpSurface?.total || 0, active: mcpSurface?.active || 0 },
         hooks: hookSurface?.status || 'unknown'
@@ -6323,16 +6334,16 @@ const runPluginHealthSmoke = async (target) => {
   try {
     await writeSmokePackage(dshPackageDir, {
       name: '@deepseek-ai/dsh',
-      version: '0.1.2-alpha.5',
+      version: HARNESS_VERSION,
       dependencies: Object.fromEntries([
-        ['@deepseek-ai/dsh-base', '0.1.2-alpha.5'],
-        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.5'])
+        ['@deepseek-ai/dsh-base', HARNESS_VERSION],
+        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, HARNESS_VERSION])
       ])
     });
-    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.5', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: HARNESS_VERSION, dsh: { bundle: { patch: './cordis.patch.yml' } } });
     for (const name of capabilityPackageNames) {
       const packageDir = path.join(installRoot, '@deepseek-ai', name);
-      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.5' });
+      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: HARNESS_VERSION });
       await linkSmokePackage(fallbackRoot, `@deepseek-ai/${name}`, packageDir);
     }
     await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });

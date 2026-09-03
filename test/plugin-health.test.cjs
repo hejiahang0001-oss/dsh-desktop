@@ -22,7 +22,13 @@ test('plugin health catalog audits fixed closure and profile dependencies withou
   const installRoot = path.join(root, 'runtime', 'node_modules');
   const dshDir = path.join(installRoot, '@deepseek-ai', 'dsh');
   const baseDir = path.join(installRoot, '@deepseek-ai', 'dsh-base');
-  writePackage(dshDir, { name: '@deepseek-ai/dsh', version: '0.1.2-alpha.2', dependencies: { '@deepseek-ai/dsh-base': '0.1.2-alpha.2', '@deepseek-ai/dsh-skill': '0.1.2-alpha.2', '@deepseek-ai/dsh-mcp-client': '0.1.2-alpha.2', '@deepseek-ai/dsh-host-plugin-inventory': '0.1.2-alpha.2' } });
+  writePackage(dshDir, {
+    name: '@deepseek-ai/dsh',
+    version: '0.1.2-alpha.2',
+    dependencies: { '@deepseek-ai/dsh-base': '0.1.2-alpha.2', '@deepseek-ai/dsh-skill': '0.1.2-alpha.2', '@deepseek-ai/dsh-mcp-client': '0.1.2-alpha.2', '@deepseek-ai/dsh-host-plugin-inventory': '0.1.2-alpha.2' },
+    peerDependencies: { 'optional-native-accelerator': '^1.0.0' },
+    peerDependenciesMeta: { 'optional-native-accelerator': { optional: true } }
+  });
   writePackage(baseDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
   for (const name of ['dsh-skill', 'dsh-mcp-client', 'dsh-host-plugin-inventory']) {
     writePackage(path.join(installRoot, '@deepseek-ai', name), { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.2' });
@@ -86,6 +92,27 @@ test('plugin health catalog reports missing fallback and blocks dependency links
   assert.equal(state.profiles[0].status, 'degraded');
   assert.equal(state.profiles[0].dependencies[0].status, 'blocked');
   assert.equal(state.profiles[0].bundles[1].status, 'blocked');
+});
+
+test('plugin health catalog reports a declared runtime dependency that cannot be resolved', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-plugin-health-unresolved-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const installRoot = path.join(root, 'runtime', 'node_modules');
+  const dshDir = path.join(installRoot, '@deepseek-ai', 'dsh');
+  writePackage(dshDir, {
+    name: '@deepseek-ai/dsh',
+    version: 'test',
+    dependencies: { '@deepseek-ai/dsh-missing': 'test' }
+  });
+  const harnessHome = path.join(root, 'home');
+  linkPackage(path.join(harnessHome, 'profiles', 'node_modules'), '@deepseek-ai/dsh', dshDir);
+
+  const state = await new PluginHealthCatalog({ harnessHome, dshPackageDir: dshDir }).scan();
+  assert.equal(state.runtime.status, 'degraded');
+  assert.equal(state.runtime.expected, 2);
+  assert.equal(state.runtime.healthy, 1);
+  assert.equal(state.runtime.missing, 1);
+  assert.deepEqual(state.runtime.issues, [{ name: '@deepseek-ai/dsh-missing', status: 'missing' }]);
 });
 
 test('plugin health catalog exposes only bounded compatibility evidence and blocks an invalid patch', async (context) => {

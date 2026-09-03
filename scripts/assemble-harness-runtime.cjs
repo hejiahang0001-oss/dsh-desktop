@@ -1,9 +1,11 @@
 const { spawn } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
 
-const EXPECTED_HARNESS_VERSION = '0.1.2-alpha.5';
+const EXPECTED_HARNESS_VERSION = '0.1.2-rc.1';
 const EXPECTED_DSH_PACKAGES = 242;
 const EXPECTED_VENDOR_PACKAGES = 9;
 const MAX_PACK_OUTPUT = 1024 * 1024;
@@ -193,6 +195,7 @@ const main = async () => {
     throw new Error(`Expected ${releasePackages.length} tarballs, got ${archives.length}.`);
   }
   await hydratePackages({ archives, expectedPackages: releasePackages, runtimeRoot });
+  fs.rmSync(packRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
 
   const dshPackage = readJson(path.join(runtimeRoot, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'));
   const koffiPackage = readJson(path.join(runtimeRoot, 'node_modules', 'koffi', 'package.json'));
@@ -212,9 +215,16 @@ const main = async () => {
       node: process.version,
       pnpm: readJson(path.join(path.dirname(pnpmPath), '..', 'package.json')).version,
       packageCount: releasePackages.length,
+      packageInventorySha256: createHash('sha256')
+        .update(`${releasePackages.map(({ manifest }) => `${manifest.name}@${manifest.version}`).sort((left, right) => left.localeCompare(right, 'en')).join('\n')}\n`)
+        .digest('hex'),
       dependencyResolution: 'upstream-frozen-lockfile',
       packagePayload: 'upstream-pnpm-pack',
-      installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local']
+      installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local'],
+      // Only node_modules is shipped as the executable Harness payload. The
+      // pnpm deploy staging files at runtimeRoot are build inputs, not package
+      // resources, so binding them would make an intact package look altered.
+      runtimePayload: inspectHarnessRuntimePayload(path.join(runtimeRoot, 'node_modules'))
     }
   };
   fs.writeFileSync(path.join(runtimeRoot, 'harness-runtime.json'), `${JSON.stringify(provenance, null, 2)}\n`, 'utf8');

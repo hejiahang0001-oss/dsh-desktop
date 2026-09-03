@@ -24,11 +24,11 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.5 candidate pins `dsh-v0.1.2-alpha.5` at `db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Latest pins alpha.2; local V1.1.6 candidate pins `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
 
 ## Why DSH Desktop
 
-V1.1.5 is an unpublished, locally installed Latest candidate (`DSH-Desktop-Setup-1.1.5.exe`). It keeps the Harness alpha.5 ownership cleanup from V1.1.4 and refines the desktop workbench: the bottom toolbar is denser and clearer, Office attachments read as part of the composer, empty review states no longer expose irrelevant bulk actions, and keyboard focus/contrast behavior is more visible. Source, unpacked and installed acceptance passed on the maintainer machine; public downloads remain unchanged until explicit publication approval.
+V1.1.6 is an unpublished local install candidate (`DSH-Desktop-Setup-1.1.6.exe`). It upgrades the fixed source runtime to Harness rc.1, confirms that the exact alpha.5-to-rc.1 delta is package-version-only, and tightens packaged-runtime isolation, prerelease compatibility, complete payload provenance, legal notices and required-plugin health gates. Source, final package, real-model interaction and checksum acceptance pass; overwrite-installed acceptance remains a separate gate that requires confirmation immediately before replacing the running V1.1.5. Public downloads remain unchanged until explicit publication approval.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
@@ -82,7 +82,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.5 local Latest candidate** keeps Harness alpha.5 and the official interaction controls, then focuses on desktop UI density, visual grouping and accessible focus/contrast states. It has passed source, unpacked and overwrite-installed acceptance, is not a GitHub release, and does not change Stable. See the [V1.1.5 candidate release notes](docs/RELEASE_NOTES_v1.1.5.md), [V1.1.4 overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.4.md), and [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-alpha.5.md).
+**V1.1.6 local install candidate** pins Harness rc.1 and preserves the official interaction ownership established in V1.1.4. The complete source suite, final unpacked matrix, real-model Queue/Steer/Stop and document-drag acceptance, package provenance and checksum verification pass. Setup and Portable are available locally, but overwrite installation and installed-app validation have not been performed. It is not a GitHub release and does not change Stable. See the [V1.1.6 candidate release notes](docs/RELEASE_NOTES_v1.1.6.md), [V1.1.6 overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.6.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
@@ -118,7 +118,7 @@ Open repository → run or approve the agent in Harness
 → open Tools → Create or edit Excel workbook to invoke the bundled /excel-xlsx Skill
 → open Tools → Create or edit PowerPoint presentation to invoke the bundled /powerpoint-pptx Skill
 → press Ctrl+Shift+S to fork the completed main turn into an isolated Side Chat window
-→ while an Agent is running, press Ctrl+Enter to stop the current turn and submit a plain-text correction
+→ while an Agent is running, press Ctrl+Enter to steer the official turn, or use the official Stop control
 → press Ctrl+, to choose direct, Windows system, or custom HTTP(S) proxy and test connectivity
 → reload, open in the browser, stop, and visibly distinguish owned from external ports
 → accept/stage or reject one file or a safe batch
@@ -130,7 +130,7 @@ The pinned runtime includes the complete official dependency closure required by
 
 - The Windows installer is not code-signed yet.
 - Software-managed DeepSeek credentials use encrypted `.credentials.dpapi.json` storage and take priority over environment variables; ordinary backups exclude credential files. Keys require re-entry on another Windows account or computer. See [Key storage and migration](docs/KEY_STORAGE.md).
-- The source-tagged upstream is alpha software. DSH Desktop reports tool failures and never switches to Full Access automatically; real V1.0 validation covers authenticated startup, Workspace/session mapping, Side Chat, Office/Wiki Skill discovery, and direct plus queued interruption, but it cannot prove every upstream plugin path.
+- Stable and the public Pre-release still embed alpha upstream builds; the current unpublished local candidate uses Harness rc.1, which remains a developer preview rather than a stable API guarantee. DSH Desktop reports tool failures and never switches to Full Access automatically; real validation covers authenticated startup, Workspace/session mapping, Side Chat, Office/Wiki Skill discovery, and official queue plus steer controls, but it cannot prove every upstream plugin path.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
 - V0.5.20 Word editing performs exact replacement inside one OOXML text node; it does not guess across mixed-format runs, convert `.doc`, or provide tracked changes, comments, equations, or arbitrary Word DOM editing. Embedded images are limited to bounded workspace PNG/JPEG files.
 - V0.5.21 Excel supports bounded `.xlsx` creation, CSV import, explicit cell updates, formulas, styles, filters, frozen panes, and reconciliation. It does not execute macros, external links, connections, query tables, Power Query, arbitrary scripts, or legacy `.xls`; unsupported or risky content fails strict inspection.
@@ -171,7 +171,7 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 
 发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证后直接覆盖维护者电脑中的旧版，通过全部发布安全门禁后才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
-当前公开产品 Latest 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`。本机已覆盖安装本地 V1.1.4，沿用 alpha.5，排队、插话和停止改为完全使用官方实现，保留 Office 文件拖拽及桌面独有能力；源码、打包态和安装态验收均已通过，但尚未公开发布。安装包为 `dist/DSH-Desktop-Setup-1.1.4.exe`。此前“只保留 V1.1.0 和 V1.0.5”是一次性清理范围，本次新增 Latest 不删除这两个保留版本。安装包仍未签名；自定义 SQLite 迁移、其他电脑的内网代理和多日稳定性不在本次验证承诺内。
+当前公开产品 Latest 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`。本地 V1.1.6 候选固定为 Harness `0.1.2-rc.1`；官方从 alpha.5 到 rc.1 只有包版本变化，排队、插话和停止继续完全使用官方实现，Office 文件拖拽及桌面独有能力不删除。源码 411/411、最终解包交互 8/8、真实模型 3/3、包内容治理和三项文件校验均已通过；Setup 与 Portable 已生成，但尚未覆盖当前 V1.1.5 或执行安装态验收。此前“只保留 V1.1.0 和 V1.0.5”是一次性清理范围，本次新增本地候选不删除这两个保留版本。安装包仍未签名；自定义 SQLite 迁移、其他电脑的内网代理和多日稳定性不在本次验证承诺内。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；

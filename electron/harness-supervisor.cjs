@@ -7,8 +7,8 @@ const path = require('node:path');
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]{24,256}|http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
-const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE']);
-const HARNESS_VERSION = '0.1.2-alpha.5';
+const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DSH_BIN', 'DSH_DESKTOP_PATCH']);
+const HARNESS_VERSION = '0.1.2-rc.1';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
 const redactHarnessLog = (value) => stripAnsi(value).replace(
@@ -128,38 +128,32 @@ const resolvePnpmDshBin = (nodeModulesDir) => {
 
 const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = process.env }) => {
   const nodeName = process.platform === 'win32' ? 'node.exe' : 'bin/node';
-  const nodePath = firstExistingFile([
-    env.DSH_DESKTOP_NODE,
-    isPackaged && path.join(resourcesPath, 'runtime', nodeName),
-    path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, nodeName)
-  ]);
+  const nodePath = firstExistingFile(isPackaged
+    ? [path.join(resourcesPath, 'runtime', nodeName)]
+    : [env.DSH_DESKTOP_NODE, path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, nodeName)]);
 
   const dshRelative = path.join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   const packagedNodeModules = path.join(resourcesPath, 'harness', 'node_modules');
   const hoistedNodeModules = path.join(rootDir, 'vendor', `harness-hoisted-${HARNESS_VERSION}`, 'node_modules');
   const vendorNodeModules = path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, 'node_modules');
-  const dshBinPath = firstExistingFile([
-    env.DSH_DESKTOP_DSH_BIN,
-    isPackaged && resolvePnpmDshBin(packagedNodeModules),
-    isPackaged && path.join(resourcesPath, 'harness', dshRelative),
-    path.join(hoistedNodeModules, '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
-    resolvePnpmDshBin(vendorNodeModules),
-    path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, dshRelative),
-    path.join(rootDir, dshRelative)
-  ]);
-  const patchPath = firstExistingFile([
-    env.DSH_DESKTOP_PATCH,
-    isPackaged && path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml'),
-    path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
-  ]);
-  const shellEnvPluginDir = firstExistingFile([
-    isPackaged && path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-shell-env'),
-    path.join(rootDir, 'runtime', 'dsh-desktop-shell-env')
-  ]);
-  const bundledSkillDir = firstExistingFile([
-    isPackaged && path.join(resourcesPath, 'skills'),
-    path.join(rootDir, 'resources', 'skills')
-  ]);
+  const dshBinPath = firstExistingFile(isPackaged
+    ? [path.join(resourcesPath, 'harness', dshRelative)]
+    : [
+        env.DSH_DESKTOP_DSH_BIN,
+        path.join(hoistedNodeModules, '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+        resolvePnpmDshBin(vendorNodeModules),
+        path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, dshRelative),
+        path.join(rootDir, dshRelative)
+      ]);
+  const patchPath = firstExistingFile(isPackaged
+    ? [path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml')]
+    : [env.DSH_DESKTOP_PATCH, path.join(rootDir, 'config', 'dsh-desktop.patch.yml')]);
+  const shellEnvPluginDir = firstExistingFile(isPackaged
+    ? [path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-shell-env')]
+    : [path.join(rootDir, 'runtime', 'dsh-desktop-shell-env')]);
+  const bundledSkillDir = firstExistingFile(isPackaged
+    ? [path.join(resourcesPath, 'skills')]
+    : [path.join(rootDir, 'resources', 'skills')]);
   const docxToolPath = bundledSkillDir && firstExistingFile([
     path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs')
   ]);

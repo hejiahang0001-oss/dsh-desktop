@@ -32,6 +32,13 @@ test('extension center is local-only, official-inventory-backed, metadata-only, 
   assert.match(main, /rendered\.surfaceRows === 4/);
   assert.match(main, /Date\.now\(\) \+ 15000/);
   assert.match(main, /plugin-health-smoke-timeout/);
+  assert.match(main, /pluginSurface\?\.failed === 0/);
+  assert.match(main, /runtimeState\.runtime\?\.status === 'healthy'/);
+  for (const packageName of [
+    '@deepseek-ai/dsh-api-session-controller',
+    '@deepseek-ai/dsh-api-workspace-controller',
+    '@deepseek-ai/dsh-session-log-export'
+  ]) assert.ok(main.includes(packageName), packageName);
   assert.match(main, /!rendered\.text\.includes\('hidden-plugin-config-marker'\)/);
   assert.match(main, /rendered\.text\.includes\('兼容已验证'\)/);
   assert.match(preload, /plugin-health:get-state/);

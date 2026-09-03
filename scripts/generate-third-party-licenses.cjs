@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
-const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.2-alpha.5', 'node_modules');
+const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.2-rc.1', 'node_modules');
 const directPackageRoots = [
   path.join(root, 'node_modules', 'pnpm'),
   path.join(root, 'node_modules', 'node-pty'),
@@ -71,7 +71,7 @@ const lines = [
   '',
   '## Runtime provenance',
   '',
-  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.2-alpha.5`, source tag `dsh-v0.1.2-alpha.5`, commit `db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5`.',
+  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.2-rc.1`, source tag `dsh-v0.1.2-rc.1`, commit `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.',
   '- Node.js: `v24.19.0`; its official `LICENSE` file is bundled beside `node.exe`.',
   '- Electron: `43.4.1`; Electron and Chromium notices are emitted by the Windows packaging runtime.',
   '- pnpm: `11.19.0` is bundled for controlled extension lifecycle operations; `11.7.0` is used only to reproduce the upstream Harness source build.',

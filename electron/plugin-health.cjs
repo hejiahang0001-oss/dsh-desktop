@@ -106,24 +106,35 @@ const runtimeClosure = async (dshPackageDir, installRoot) => {
   const anchor = path.join(dshPackageDir, 'package.json');
   const rootManifest = await readJsonObject(anchor);
   const packages = new Map([[rootManifest.name || '@deepseek-ai/dsh', dshPackageDir]]);
+  const unresolved = new Set();
   const queue = [{ anchor, manifest: rootManifest }];
   while (queue.length > 0 && packages.size < MAX_PACKAGES) {
     const current = queue.shift();
+    const requiredPeers = Object.keys(current.manifest.peerDependencies || {})
+      .filter((name) => current.manifest.peerDependenciesMeta?.[name]?.optional !== true);
     const names = uniquePackageNames([
       ...Object.keys(current.manifest.dependencies || {}),
-      ...Object.keys(current.manifest.peerDependencies || {})
+      ...requiredPeers
     ]);
     for (const name of names) {
-      if (packages.has(name) || packages.size >= MAX_PACKAGES) continue;
+      if (packages.has(name) || (packages.size + unresolved.size >= MAX_PACKAGES && !unresolved.has(name))) continue;
       const candidate = await packageDirFromAnchor(current.anchor, name);
       const realDir = candidate ? await realpathOrNull(candidate) : null;
-      if (!realDir || !isInsideOrEqual(installRoot, realDir)) continue;
+      if (!realDir || !isInsideOrEqual(installRoot, realDir)) {
+        unresolved.add(name);
+        continue;
+      }
       let manifest;
-      try { manifest = await readJsonObject(path.join(realDir, 'package.json')); } catch { continue; }
+      try { manifest = await readJsonObject(path.join(realDir, 'package.json')); } catch {
+        unresolved.add(name);
+        continue;
+      }
       packages.set(name, realDir);
+      unresolved.delete(name);
       queue.push({ anchor: path.join(realDir, 'package.json'), manifest });
     }
   }
+  for (const name of unresolved) packages.set(name, null);
   return packages;
 };
 
@@ -155,6 +166,11 @@ const inspectFallback = async ({ fallbackRoot, expected }) => {
   let misdirected = 0;
   const issues = [];
   for (const [name, expectedTarget] of expected) {
+    if (!expectedTarget) {
+      missing += 1;
+      if (issues.length < 12) issues.push(immutable({ name, status: 'missing' }));
+      continue;
+    }
     const link = path.join(fallbackRoot, name);
     const info = await lstatOrNull(link);
     if (!info) {

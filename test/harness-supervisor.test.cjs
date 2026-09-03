@@ -43,6 +43,8 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
   const baseEnv = {
     PATH: 'runtime-path',
     deepseek_api_key: 'legacy-secret',
+    dsh_desktop_dsh_bin: 'C:\\stale-dsh-bin.js',
+    dsh_desktop_patch: 'C:\\stale-patch.yml',
     http_proxy: 'http://inherited-proxy:8080',
     NO_PROXY: '*'
   };
@@ -61,6 +63,8 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
   });
 
   assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DEEPSEEK_API_KEY'), false);
+  assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DSH_DESKTOP_DSH_BIN'), false);
+  assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DSH_DESKTOP_PATCH'), false);
   assert.equal(environment.DSH_TEST_FLAG, 'kept');
   assert.equal(environment.HTTP_PROXY, 'http://software-proxy:7890');
   assert.equal(environment.HTTPS_PROXY, 'http://software-proxy:7890');
@@ -129,7 +133,7 @@ test('runtime resolver prefers explicit, existing paths', () => {
   assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office });
 });
 
-test('packaged runtime resolves DSH from the real pnpm package path', () => {
+test('packaged runtime resolves DSH only from the fixed top-level package path', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-packaged-runtime-test-'));
   const resourcesPath = path.join(root, 'resources');
   const nodePath = path.join(resourcesPath, 'runtime', 'node.exe');
@@ -137,7 +141,7 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   const packageDir = path.join(
     nodeModules,
     '.pnpm',
-    '@deepseek-ai+dsh@0.1.2-alpha.5_test',
+    '@deepseek-ai+dsh@0.1.2-rc.1_test',
     'node_modules',
     '@deepseek-ai',
     'dsh',
@@ -158,6 +162,12 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
   fs.mkdirSync(shellEnvPluginDir, { recursive: true });
   fs.writeFileSync(path.join(shellEnvPluginDir, 'package.json'), JSON.stringify({ name: 'dsh-desktop-shell-env', exports: './index.mjs' }));
   fs.writeFileSync(path.join(shellEnvPluginDir, 'index.mjs'), '// test');
+  const externalNodePath = path.join(root, 'external-node.exe');
+  const externalDshPath = path.join(root, 'external-bin.js');
+  const externalPatchPath = path.join(root, 'external.patch.yml');
+  fs.writeFileSync(externalNodePath, 'untrusted');
+  fs.writeFileSync(externalDshPath, 'untrusted');
+  fs.writeFileSync(externalPatchPath, '[]');
   const bundledSkillDir = path.join(resourcesPath, 'skills');
   const docxToolPath = path.join(bundledSkillDir, 'word-docx', 'scripts', 'word-docx.cjs');
   const xlsxToolPath = path.join(bundledSkillDir, 'excel-xlsx', 'scripts', 'excel-xlsx.cjs');
@@ -177,9 +187,61 @@ test('packaged runtime resolves DSH from the real pnpm package path', () => {
     rootDir: root,
     resourcesPath,
     isPackaged: true,
-    env: {}
+    env: {
+      DSH_DESKTOP_NODE: externalNodePath,
+      DSH_DESKTOP_DSH_BIN: externalDshPath,
+      DSH_DESKTOP_PATCH: externalPatchPath
+    }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: pnpmBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir });
+});
+
+test('packaged runtime fails closed instead of falling back to external overrides', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-packaged-runtime-missing-test-'));
+  const rootDir = path.join(root, 'app.asar');
+  const resourcesPath = path.join(root, 'resources');
+  const nodePath = path.join(resourcesPath, 'runtime', 'node.exe');
+  const dshPath = path.join(resourcesPath, 'harness', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+  const patchPath = path.join(resourcesPath, 'harness-config', 'dsh-desktop.patch.yml');
+  const externalNodePath = path.join(root, 'external-node.exe');
+  const externalDshPath = path.join(root, 'external-bin.js');
+  const externalPatchPath = path.join(root, 'external.patch.yml');
+  for (const target of [nodePath, dshPath, patchPath, externalNodePath, externalDshPath, externalPatchPath]) {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, target.endsWith('.yml') ? '[]' : 'test');
+  }
+  for (const target of [
+    path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'node.exe' : 'bin/node'),
+    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.2-rc.1', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
+  ]) {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, target.endsWith('.yml') ? '[]' : 'untrusted root fallback');
+  }
+  const shellEnvPluginDir = path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-shell-env');
+  fs.mkdirSync(shellEnvPluginDir, { recursive: true });
+  fs.writeFileSync(path.join(shellEnvPluginDir, 'package.json'), JSON.stringify({ name: 'dsh-desktop-shell-env', exports: './index.mjs' }));
+  fs.writeFileSync(path.join(shellEnvPluginDir, 'index.mjs'), '// test');
+  writeBundledOfficeSkills(root);
+  const resolve = () => resolveHarnessRuntimePaths({
+    rootDir,
+    resourcesPath,
+    isPackaged: true,
+    env: {
+      DSH_DESKTOP_NODE: externalNodePath,
+      DSH_DESKTOP_DSH_BIN: externalDshPath,
+      DSH_DESKTOP_PATCH: externalPatchPath
+    }
+  });
+  for (const [target, code] of [
+    [nodePath, 'NODE_RUNTIME_MISSING'],
+    [dshPath, 'HARNESS_RUNTIME_MISSING'],
+    [patchPath, 'HARNESS_PATCH_MISSING']
+  ]) {
+    fs.rmSync(target);
+    assert.throws(resolve, (error) => error?.code === code);
+    fs.writeFileSync(target, target.endsWith('.yml') ? '[]' : 'test');
+  }
 });
 
 test('runtime resolver fails closed when the desktop language patch is missing', () => {

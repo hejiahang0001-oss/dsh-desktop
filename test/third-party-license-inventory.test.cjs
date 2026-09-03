@@ -8,9 +8,9 @@ const root = path.resolve(__dirname, '..');
 test('V1 license inventory is fixed to the packaged Harness and desktop runtime', () => {
   const script = fs.readFileSync(path.join(root, 'scripts', 'generate-third-party-licenses.cjs'), 'utf8');
   const inventory = fs.readFileSync(path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md'), 'utf8');
-  assert.match(script, /harness-hoisted-0\.1\.2-alpha\.5/);
+  assert.match(script, /harness-hoisted-0\.1\.2-rc\.1/);
   assert.match(script, /Expected 530 packaged JavaScript packages/);
-  assert.match(inventory, /@deepseek-ai\/dsh@0\.1\.2-alpha\.5/);
+  assert.match(inventory, /@deepseek-ai\/dsh@0\.1\.2-rc\.1/);
   assert.match(inventory, /JavaScript packages inventoried: \*\*530\*\*/);
   assert.match(inventory, /no package in this fixed set is missing a declared license identifier/);
   assert.match(inventory, /Node\.js: `v24\.19\.0`/);

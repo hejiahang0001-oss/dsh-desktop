@@ -40,30 +40,33 @@ const classifyDependencySource = (value) => {
 };
 
 const parseVersion = (value) => {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(String(value || '').trim());
-  return match ? match.slice(1, 4).map(Number) : null;
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(String(value || '').trim());
+  return match ? { core: match.slice(1, 4).map(Number), prerelease: match[4] || '' } : null;
 };
 
 const compareVersion = (left, right) => {
   for (let index = 0; index < 3; index += 1) {
-    if (left[index] !== right[index]) return left[index] < right[index] ? -1 : 1;
+    if (left.core[index] !== right.core[index]) return left.core[index] < right.core[index] ? -1 : 1;
   }
   return 0;
 };
 
 const satisfiesSingleRange = (version, rawRange) => {
   const range = rawRange.trim();
-  if (range === '' || range === '*' || /^x(?:\.x){0,2}$/i.test(range)) return true;
   const exact = parseVersion(range);
-  if (exact) return compareVersion(version, exact) === 0;
+  if (exact) {
+    return compareVersion(version, exact) === 0 && version.prerelease === exact.prerelease;
+  }
+  if (version.prerelease) return null;
+  if (range === '' || range === '*' || /^x(?:\.x){0,2}$/i.test(range)) return true;
   const prefixed = /^(\^|~)(\d+\.\d+\.\d+)$/.exec(range);
   if (prefixed) {
     const base = parseVersion(prefixed[2]);
     if (compareVersion(version, base) < 0) return false;
-    if (prefixed[1] === '~') return version[0] === base[0] && version[1] === base[1];
-    if (base[0] > 0) return version[0] === base[0];
-    if (base[1] > 0) return version[0] === 0 && version[1] === base[1];
-    return version[0] === 0 && version[1] === 0 && version[2] === base[2];
+    if (prefixed[1] === '~') return version.core[0] === base.core[0] && version.core[1] === base.core[1];
+    if (base.core[0] > 0) return version.core[0] === base.core[0];
+    if (base.core[1] > 0) return version.core[0] === 0 && version.core[1] === base.core[1];
+    return version.core[0] === 0 && version.core[1] === 0 && version.core[2] === base.core[2];
   }
   const comparators = range.split(/\s+/).filter(Boolean);
   if (comparators.length > 0 && comparators.every((item) => /^(?:>=|<=|>|<)\d+\.\d+\.\d+$/.test(item))) {

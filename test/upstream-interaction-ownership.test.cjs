@@ -1,14 +1,34 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
+const path = require('node:path');
 
 const read = (file) => fs.readFileSync(file, 'utf8');
+const projectRoot = path.resolve(__dirname, '..');
 
-test('official Harness owns queue, steer and stop interaction', () => {
-  const root = 'vendor/harness-source-0.1.2-alpha.5/packages/client/ui-conversation/src/client';
-  const inputBar = read(`${root}/skeleton/InputBar.tsx`);
-  const inputHub = read(`${root}/input/hub.ts`);
-  const submission = read(`${root}/input/submission-policy.ts`);
+test('official Harness owns queue, steer and stop interaction', (context) => {
+  const runtimeManifest = JSON.parse(read(path.join(projectRoot, 'runtime', 'harness', 'package.json')));
+  const identity = runtimeManifest.dshDesktop;
+  assert.equal(identity.packageVersion, runtimeManifest.version);
+  assert.equal(identity.tag, `dsh-v${runtimeManifest.version}`);
+  assert.match(identity.commit, /^[0-9a-f]{40}$/);
+  const sourceRoot = path.join(projectRoot, 'vendor', `harness-source-${runtimeManifest.version}`);
+  if (!fs.existsSync(sourceRoot)) {
+    context.skip('The ignored upstream source checkout is available only during local compatibility validation.');
+    return;
+  }
+  const sourceManifest = JSON.parse(read(path.join(sourceRoot, 'package.json')));
+  assert.equal(sourceManifest.version, runtimeManifest.version);
+  const git = (...args) => execFileSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' }).trim();
+  assert.equal(git('rev-parse', 'HEAD'), identity.commit);
+  assert.equal(git('rev-parse', `${identity.tag}^{commit}`), identity.commit);
+  assert.equal(git('remote', 'get-url', 'origin'), identity.repository);
+  assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+  const clientRoot = path.join(sourceRoot, 'packages', 'client', 'ui-conversation', 'src', 'client');
+  const inputBar = read(path.join(clientRoot, 'skeleton', 'InputBar.tsx'));
+  const inputHub = read(path.join(clientRoot, 'input', 'hub.ts'));
+  const submission = read(path.join(clientRoot, 'input', 'submission-policy.ts'));
 
   assert.match(inputBar, /keyboard\.steerQueue\(\)/);
   assert.match(inputHub, /updateQueue\(item\.id, \{ kind: 'steer' \}\)/);

@@ -1,10 +1,11 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
   "license": "MIT",
+  "packageManager": "pnpm@11.19.0",
   "private": true,
   "scripts": {
     "start": "node scripts/start-electron.cjs",
@@ -20,6 +21,7 @@
     "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis portable --x64"
   },
   "devDependencies": {
+    "@electron/asar": "3.4.1",
     "electron": "43.4.1",
     "electron-builder": "26.8.1",
     "harness-build-pnpm": "npm:pnpm@11.7.0",
@@ -118,11 +120,11 @@
         ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.2-alpha.5/node_modules",
+        "from": "vendor/harness-hoisted-0.1.2-rc.1/node_modules",
         "to": "harness/node_modules"
       },
       {
-        "from": "vendor/harness-hoisted-0.1.2-alpha.5/harness-runtime.json",
+        "from": "vendor/harness-hoisted-0.1.2-rc.1/harness-runtime.json",
         "to": "harness/harness-runtime.json"
       },
       {
@@ -187,6 +189,14 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "LICENSE",
+        "to": "legal/LICENSE.txt"
+      },
+      {
+        "from": "docs/THIRD_PARTY_LICENSES.md",
+        "to": "legal/THIRD_PARTY_LICENSES.md"
       }
     ],
     "win": {

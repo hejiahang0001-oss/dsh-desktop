@@ -28,7 +28,7 @@ test('PowerPoint capability is visible in the native Tools menu and command pale
 
 test('Harness receives only the desktop-owned absolute PowerPoint runtime path', () => {
   const supervisor = read('electron/harness-supervisor.cjs');
-  assert.match(supervisor, /SOFTWARE_MANAGED_RUNTIME = new Set\(\['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE'\]\)/);
+  assert.match(supervisor, /SOFTWARE_MANAGED_RUNTIME = new Set\(\['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DSH_BIN', 'DSH_DESKTOP_PATCH'\]\)/);
   assert.match(supervisor, /path\.join\(bundledSkillDir, 'powerpoint-pptx', 'scripts', 'powerpoint-pptx\.cjs'\)/);
   assert.match(supervisor, /environment\.DSH_DESKTOP_PPTX_TOOL = pptxToolPath/);
   assert.match(supervisor, /BUNDLED_POWERPOINT_SKILL_MISSING/);
