@@ -32,6 +32,9 @@ jobs:
           npm install --global pnpm@11.19.0
           pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Fetch pinned bundled Node runtime
+        run: ./scripts/fetch-node-runtime.ps1
+
       - name: Run test suite
         env:
           TEMP: ${{ runner.temp }}
