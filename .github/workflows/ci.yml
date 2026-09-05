@@ -27,6 +27,11 @@ jobs:
           git config --global user.name "DSH Desktop CI"
           git config --global user.email "dsh-desktop-ci@users.noreply.github.com"
 
+      - name: Install pinned test dependencies
+        run: |
+          npm install --global pnpm@11.19.0
+          pnpm install --frozen-lockfile --ignore-scripts
+
       - name: Run test suite
         env:
           TEMP: ${{ runner.temp }}
