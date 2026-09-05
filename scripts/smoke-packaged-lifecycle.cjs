@@ -7,7 +7,7 @@ const path = require('node:path');
 const execFileAsync = promisify(execFile);
 const root = path.resolve(__dirname, '..');
 const executable = path.join(root, 'dist', 'win-unpacked', 'DSH Desktop.exe');
-const output = path.resolve(process.argv[2] || path.join(root, 'artifacts', `v1.1.7-lifecycle-${Date.now()}`, 'lifecycle.json'));
+const output = path.resolve(process.argv[2] || path.join(root, 'artifacts', `v1.1.8-lifecycle-${Date.now()}`, 'lifecycle.json'));
 const ready = `${output}.ready.json`;
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));

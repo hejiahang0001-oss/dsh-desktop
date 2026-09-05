@@ -10,6 +10,12 @@ const scriptPath = path.join(root, 'scripts', 'smoke-packaged-safe-exit.cjs');
 const mainPath = path.join(root, 'electron', 'main.cjs');
 const source = fs.readFileSync(scriptPath, 'utf8');
 const main = fs.readFileSync(mainPath, 'utf8');
+const removeTemporaryTree = (target) => fs.promises.rm(target, {
+  recursive: true,
+  force: true,
+  maxRetries: 5,
+  retryDelay: 100
+});
 const {
   assertNoReparsePath,
   createExclusiveRunDirectory,
@@ -40,7 +46,7 @@ const waitForPidExit = async (pid, timeoutMs = 5000) => {
 
 test('safe-exit driver creates a fresh exclusive directory and writes authorization atomically', async (context) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-safe-exit-security-'));
-  context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  context.after(() => removeTemporaryTree(temporary));
   const artifacts = path.join(temporary, 'artifacts');
   const first = await createExclusiveRunDirectory(artifacts);
   const marker = path.join(first, 'keep.txt');
@@ -59,7 +65,7 @@ test('safe-exit driver creates a fresh exclusive directory and writes authorizat
 
 test('safe-exit paths reject Windows junctions and reparse points', { skip: process.platform !== 'win32' }, async (context) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-safe-exit-link-'));
-  context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  context.after(() => removeTemporaryTree(temporary));
   const target = path.join(temporary, 'target');
   const junction = path.join(temporary, 'junction');
   fs.mkdirSync(target);
@@ -94,6 +100,16 @@ test('safe-exit process snapshot walks every descendant, not only named services
   assert.match(source, /readyState\.identity\?\.product !== buildEvidence\.package\.version/);
 });
 
+test('Job guardian waits for stdio close and consumes a final unterminated frame', () => {
+  assert.match(source, /guardian\.once\('close'/);
+  assert.doesNotMatch(source, /guardian\.once\('exit'/);
+  assert.match(source, /consumeGuardianBuffer\(true\)/);
+  assert.match(source, /const line = buffer\.trim\(\)/);
+  assert.match(source, /const guardianExit = await jobLaunch\.close\(\)/);
+  assert.match(source, /guardianExit\.code === 0/);
+  assert.match(source, /guardianExit\.signal === null/);
+});
+
 test('packaged app consumes and validates one-time authorization before selecting userData', () => {
   const authorization = main.indexOf('const safeExitSmokeAuthorization =');
   const setPath = main.indexOf("app.setPath('userData'");
@@ -103,12 +119,19 @@ test('packaged app consumes and validates one-time authorization before selectin
   assert.match(main, /timingSafeEqual/);
   assert.match(validation, /process\.kill\(authorization\.driverPid, 0\)/);
   assert.match(validation, /expiry <= now/);
+  assert.match(validation, /authorization\.continuationTimeoutMs !== SAFE_EXIT_CONTINUATION_TIMEOUT_MS/);
+  assert.match(validation, /continuationTimeoutMs: authorization\.continuationTimeoutMs/);
   assert.match(validation, /userDataPath/);
   assert.match(validation, /fs\.existsSync/);
   assert.match(validation, /fs\.mkdirSync\(userDataPath, \{ recursive: false \}\)/);
   assert.match(validation, /--smoke-credential-source=/);
   assert.match(validation, /fs\.unlinkSync\(consumedPath\)/);
   assert.match(main, /FileAttributes\]::ReparsePoint/);
+  assert.match(main, /const SAFE_EXIT_CONTINUATION_TIMEOUT_MS = 180_000/);
+  assert.match(main, /timeoutMs: safeExitSmokeAuthorization\.continuationTimeoutMs/);
+  assert.doesNotMatch(main, /SAFE_EXIT_CONTINUATION_TIMEOUT_MS\s*=\s*Number\(process\.env/);
+  assert.match(source, /continuationTimeoutMs: SAFE_EXIT_CONTINUATION_TIMEOUT_MS/);
+  assert.match(source, /readyState\.continuationTimeoutMs !== SAFE_EXIT_CONTINUATION_TIMEOUT_MS/);
 });
 
 test('safe-exit cleanup keeps exact identity checks independent from continuation cleanup', () => {
@@ -155,7 +178,7 @@ test('suspended Job launch owns detached descendants from process creation and k
   let descendantPid = 0;
   context.after(async () => {
     await job?.close().catch(() => undefined);
-    fs.rmSync(temporary, { recursive: true, force: true });
+    await removeTemporaryTree(temporary);
   });
   const childCode = [
     "const { spawn } = require('node:child_process')",
@@ -206,7 +229,7 @@ test('driver termination makes the guardian close its Job and every detached des
   context.after(async () => {
     for (const identity of captured.reverse()) await terminateProcessHandle(identity).catch(() => undefined);
     try { driver.kill(); } catch { /* The driver already exited. */ }
-    fs.rmSync(temporary, { recursive: true, force: true });
+    await removeTemporaryTree(temporary);
   });
   await waitForFile(driverStateFile);
   const state = JSON.parse(fs.readFileSync(driverStateFile, 'utf8'));
@@ -229,7 +252,7 @@ test('Job guardian reports the root exit and proves the complete Job became empt
   let job;
   context.after(async () => {
     await job?.close().catch(() => undefined);
-    fs.rmSync(temporary, { recursive: true, force: true });
+    await removeTemporaryTree(temporary);
   });
   job = await launchWindowsJob({
     executablePath: process.execPath,

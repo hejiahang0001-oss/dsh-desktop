@@ -7,6 +7,7 @@ const { promisify } = require('node:util');
 const zlib = require('node:zlib');
 const { extractFile } = require('@electron/asar');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
+const { inspectReleasePayloadBinding } = require('./release-payload-binding.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -55,7 +56,7 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.7';
+const REQUIRED_DESKTOP_VERSION = '1.1.8';
 const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
 const REQUIRED_HARNESS_TAG = 'dsh-v0.1.2-rc.1';
 const REQUIRED_HARNESS_VERSION = '0.1.2-rc.1';
@@ -87,7 +88,7 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', 'b802f0313de7e5f81ac53be68b6bb9261d91039ac1ca7ef6d92a1f411902814e']
+  ['THIRD_PARTY_LICENSES.md', '165837b5a2670868ceedc7e19f24e2e4d08a4002bd27067283b85a5677d6b534']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -611,26 +612,41 @@ const main = async () => {
   const previousBlockmapPath = readArgument('previous-blockmap');
   const currentBlockmapPath = readArgument('current-blockmap');
   const installerPath = readArgument('installer');
+  const portablePath = readArgument('portable');
   const unpackedRoot = readArgument('unpacked-root');
   const outputPath = readArgument('output');
-  if (!previousBlockmapPath || !currentBlockmapPath || !installerPath || !unpackedRoot || !outputPath) {
-    throw new Error('Usage: node scripts/release-governance.cjs --previous-blockmap=<file> --current-blockmap=<file> --installer=<exe> --unpacked-root=<dir> --output=<json>');
+  if (!previousBlockmapPath || !currentBlockmapPath || !installerPath || !portablePath || !unpackedRoot || !outputPath) {
+    throw new Error('Usage: node scripts/release-governance.cjs --previous-blockmap=<file> --current-blockmap=<file> --installer=<exe> --portable=<exe> --unpacked-root=<dir> --output=<json>');
   }
-  const [previousBuffer, currentBuffer, signature, packageLayout] = await Promise.all([
+  const manifest = JSON.parse(await fsp.readFile(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+  const [previousBuffer, currentBuffer, signature, packageLayout, payloadBinding] = await Promise.all([
     fsp.readFile(path.resolve(previousBlockmapPath)),
     fsp.readFile(path.resolve(currentBlockmapPath)),
     inspectPeFile(path.resolve(installerPath)),
-    inspectPackageLayout(path.resolve(unpackedRoot))
+    inspectPackageLayout(path.resolve(unpackedRoot)),
+    inspectReleasePayloadBinding({
+      installerPath: path.resolve(installerPath),
+      portablePath: path.resolve(portablePath),
+      unpackedRoot: path.resolve(unpackedRoot),
+      expectedVersion: manifest.version
+    })
   ]);
   const differential = compareBlockmaps(decodeBlockmap(previousBuffer), decodeBlockmap(currentBuffer));
   if (differential.currentBytes !== signature.bytes) throw new Error('Current blockmap size does not match the installer.');
-  const manifest = JSON.parse(await fsp.readFile(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+  const manifestBinding = {
+    expected: { name: manifest.name, version: manifest.version },
+    packaged: packageLayout.packagedApp,
+    matches: packageLayout.packagedApp?.name === manifest.name
+      && packageLayout.packagedApp?.version === manifest.version
+  };
   const verifyUpdateCodeSignature = manifest.build?.win?.verifyUpdateCodeSignature === true;
   const updateReadiness = assessAutomaticUpdate({
     signatureStatus: signature.status,
     verifyUpdateCodeSignature
   });
-  const packageReady = packageLayout.redundantAppRuntime.files === 0
+  const packageReady = payloadBinding.accepted === true
+    && manifestBinding.matches
+    && packageLayout.redundantAppRuntime.files === 0
     && packageLayout.requiredPackagedAppReady
     && packageLayout.requiredExecutableIdentityReady
     && packageLayout.terminalRuntime.foreignPlatformFiles === 0
@@ -654,7 +670,9 @@ const main = async () => {
     version: 1,
     packageVersion: manifest.version,
     packageReady,
+    manifestBinding,
     packageLayout,
+    payloadBinding,
     differential: {
       ...differential,
       eligible: differential.reuseRatio >= 0.8

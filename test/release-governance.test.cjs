@@ -159,15 +159,15 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.equal(report.pnpmRuntime.wrapperValid, false);
 });
 
-test('package layout binds the inspected app.asar to the V1.1.7 desktop manifest', async (context) => {
+test('package layout binds the inspected app.asar to the V1.1.8 desktop manifest', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-app-version-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const appRoot = path.join(root, 'app-source');
-  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.7' }));
+  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.8' }));
   fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   const ready = await inspectPackageLayout(root);
-  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.7' });
+  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.8' });
   assert.equal(ready.requiredPackagedAppReady, true);
 
   writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.5' }));

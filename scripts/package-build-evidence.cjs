@@ -18,7 +18,7 @@ const DEFAULT_GENERATED_RESOURCE_POLICY = Object.freeze({
     updaterCacheDirName: 'dsh-desktop-updater'
   }),
   elevate: Object.freeze({
-    electronBuilderVersion: '26.8.1',
+    electronBuilderVersion: '26.11.1',
     nsisVersion: '3.0.4.1',
     bytes: 107_520,
     sha256: '9b1fbf0c11c520ae714af8aa9af12cfd48503eedecd7398d8992ee94d1b4dc37'

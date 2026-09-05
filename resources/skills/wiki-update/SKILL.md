@@ -4,7 +4,7 @@ description: Incrementally distill the active DSH Desktop project into the confi
 user-invocable: true
 disable-model-invocation: false
 metadata:
-  version: 0.6.5
+  version: 1.1.8
 ---
 
 # Wiki project update
@@ -19,6 +19,27 @@ Use this Skill when the user wants to synchronize knowledge from the active DSH 
 - Git improves change evidence when available, but is optional. Never install Git or initialize a repository for this workflow.
 - If the configured Wiki is outside the active workspace and Harness blocks the write, stop and ask the user to acknowledge Full Access through the official permission control. Never switch to `danger-full-access` on the user's behalf and never bypass the permission failure.
 - Do not copy raw credentials, hidden prompts, full histories, or generated dependency files into the Wiki.
+
+## Release knowledge mode
+
+Use this mode when the user asks to preserve what a DSH Desktop version changed, or when a versioned capability is being completed. It is still the same project preview, validation, confirmation, transaction, archive, and rollback flow below; do not create a second Wiki engine or bypass the normal confirmation.
+
+Maintain exactly these six release pages under the project path returned by `project-preview`:
+
+- `references/releases/version-overview.md` — released, local-candidate, installed, public Pre-release, and Stable identities kept separate.
+- `references/releases/capability-evolution.md` — user-visible capability changes by version, without turning plans into completed facts.
+- `references/releases/harness-compatibility.md` — pinned Harness tag/version/commit, desktop ownership boundary, overlap decisions, and verified compatibility evidence.
+- `references/releases/release-channels.md` — local build, installed build, GitHub Pre-release, GitHub Latest, and Stable promotion status.
+- `references/releases/iteration-standards.md` — current iteration, review, packaging, confirmation, and rollback rules.
+- `references/releases/validation-evidence.md` — commands or scenarios actually run, observed results, remaining unverified checks, and artifact hashes when available.
+
+Prefix each path with `projects/<project-id>/`, using the exact project id from the preview. On the first release-knowledge sync, create all six pages in one validated transaction. If the project overview does not exist yet, include the required overview in that same transaction; it is the project entry page and does not replace or count as one of the six release pages. On later syncs, read and merge every existing target before saving. If an existing target was edited by a person, preserve the human text and reconcile it against current source evidence; never replace it with a generated summary merely to restore a preferred format.
+
+Use only release evidence that is present in the bounded inventory, normally `package.json`, `README.md`, `PROGRESS.md`, `DSH_DESKTOP_ITERATION_PLAN.md`, `CONTRIBUTING.md`, `docs/DEVELOPMENT_PLAYBOOK.md`, `docs/VALIDATION.md`, the current version's release note, and the matching Harness upstream/overlap record. A file is not authorized merely because it is named here: it must also be returned by the current `project-preview`. Do not scan build output, installers, logs outside the inventory, GitHub, or the network from this mode. Do not infer publication, installation, Stable promotion, soak duration, second-computer validation, or test success from a plan or version number.
+
+Before asking for confirmation, show the six target paths and a compact evidence table that distinguishes `verified now`, `recorded evidence`, `planned`, and `not verified`. Save all six or none. If any target, source, preview token, or expected SHA-256 is stale, stop and repeat preview/read/merge/validate rather than overwriting the newer page.
+
+Set the top-level specification field `"mode": "release-knowledge"` for this workflow. The validator enforces all six release paths in one transaction, requires the project overview on first sync, rejects extra pages, and rejects evidence outside the bounded release allowlist.
 
 ## Workflow
 
@@ -56,6 +77,8 @@ Merge new evidence into the current page. Do not replace reviewed or verified co
   }]
 }
 ```
+
+Omit `mode` for an ordinary project knowledge sync.
 
 Use the SHA-256 returned by `project-page` instead of `null` when updating an existing page. Every source must be an exact path returned by `project-preview`.
 

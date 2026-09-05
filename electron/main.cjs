@@ -365,6 +365,8 @@ const tokenMatches = (expected, supplied) => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
+const SAFE_EXIT_CONTINUATION_TIMEOUT_MS = 180_000;
+
 const consumeSafeExitAuthorizationSync = (smokeTarget) => {
   if (!app.isPackaged) throw new Error('安全退出验收只允许打包应用使用。');
   if (process.argv.some((argument) => argument.startsWith('--smoke-credential-source='))) {
@@ -406,6 +408,7 @@ const consumeSafeExitAuthorizationSync = (smokeTarget) => {
     || path.resolve(authorization.output || '') !== output
     || !Number.isSafeInteger(authorization.driverPid)
     || authorization.driverPid <= 0
+    || authorization.continuationTimeoutMs !== SAFE_EXIT_CONTINUATION_TIMEOUT_MS
     || !Number.isFinite(expiry)
     || expiry <= now
     || expiry > now + 120_000) {
@@ -418,7 +421,12 @@ const consumeSafeExitAuthorizationSync = (smokeTarget) => {
   }
   fs.mkdirSync(userDataPath, { recursive: false });
   assertNoSmokeReparsePathSync(userDataPath);
-  return Object.freeze({ output, userDataPath, driverPid: authorization.driverPid });
+  return Object.freeze({
+    output,
+    userDataPath,
+    driverPid: authorization.driverPid,
+    continuationTimeoutMs: authorization.continuationTimeoutMs
+  });
 };
 
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
@@ -2183,13 +2191,65 @@ const inspectWikiSkills = async () => Promise.all(WIKI_SKILLS.map(async (skill) 
 
 const unavailableWikiCenterState = (message = 'Wiki 中心尚未完成初始化。') => ({
   available: false,
+  appVersion: app.getVersion(),
   vault: { configured: false, ready: false, status: 'unconfigured', vaultPath: '', missing: [], pageCount: 0, message },
   skills: WIKI_SKILLS.map((skill) => ({ ...skill, status: 'missing' })),
-  harness: { status: 'waiting' },
+  harness: { status: 'waiting', version: harnessRuntimePaths?.version || HARNESS_VERSION },
   session: { available: false },
   project: { available: false, status: 'waiting', name: '', path: '' },
-  history: { available: false, status: 'waiting' }
+  history: { available: false, status: 'waiting' },
+  recovery: { available: false, manualOnly: false, label: '', message: '' }
 });
+
+const inspectWikiRecovery = async (vault) => {
+  if (!vault?.configured || typeof vault.vaultPath !== 'string' || !path.isAbsolute(vault.vaultPath)
+    || typeof wikiRuntime?.readWikiRecoveryProtection !== 'function') {
+    return { available: false, label: '', message: '' };
+  }
+  try {
+    const protection = vault.recovery || await wikiRuntime.readWikiRecoveryProtection(vault.vaultPath);
+    if (!protection) return { available: false, label: '', message: '' };
+    if (protection.invalid === true) {
+      return {
+        available: true,
+        label: '人工处理无法验证的恢复保护',
+        message: '恢复保护记录无法安全校验。可打开知识库目录人工核对；软件不会自动移动或删除保护记录。',
+        archivePath: '',
+        archive: '',
+        operation: 'recovery-clear',
+        createdAt: '',
+        type: 'invalid-recovery',
+        invalidClearGuard: protection.code === 'unsafe-recovery-clear-guard',
+        id: '',
+        digest: ''
+      };
+    }
+    const type = protection.type || (protection.lockProtected ? 'retained-lock' : 'marker');
+    const id = type === 'marker' ? protection.id : type === 'retained-lock' ? protection.lockToken : protection.guardToken;
+    const digest = type === 'marker' ? protection.markerSha256 : type === 'retained-lock' ? protection.lockSha256 : protection.guardSha256;
+    const clearGuard = type === 'clear-guard';
+    return {
+      available: Boolean(id && digest && (clearGuard || (protection.archivePath && protection.archive))),
+      label: clearGuard
+        ? (protection.archivePath ? '继续中断的恢复清理' : '重置中断的恢复清理')
+        : '处理本次恢复事务',
+      message: type === 'clear-guard'
+        ? (protection.archivePath
+            ? '上一次恢复保护清理未完整完成。请核对事务副本后继续；软件保持写入保护。'
+            : '上一次恢复保护清理在移动现场前中断。可安全重置清理状态，再核对原恢复事务。')
+        : `检测到 ${protection.operation} 回退未完整完成。打开本次事务副本进行人工核对；软件不会自动覆盖并发修改。`,
+      archivePath: protection.archivePath,
+      archive: protection.archive,
+      operation: protection.operation,
+      createdAt: protection.createdAt,
+      type,
+      id,
+      digest
+    };
+  } catch {
+    return { available: false, label: '', message: '' };
+  }
+};
 
 const getWikiCenterState = async () => {
   if (!wikiRuntime || !wikiSettingsStore) return unavailableWikiCenterState();
@@ -2208,11 +2268,20 @@ const getWikiCenterState = async () => {
     && agentDiagnostics.pendingCount === 0
     && agentDiagnostics.queuedCount === 0;
   const projectAvailable = vault.ready && typeof getWorkspaceState().activePath === 'string' && path.isAbsolute(getWorkspaceState().activePath);
+  const recovery = await inspectWikiRecovery(vault);
+  vault.sourceFreshness = {
+    status: projectAvailable ? 'unknown' : 'unavailable',
+    checkedAt: '',
+    message: projectAvailable
+      ? (vault.lastSyncAt ? '尚未检查当前项目是否有新变化。' : '尚无成功同步记录；请先检查当前项目。')
+      : '当前工作区或知识库尚不可检查。'
+  };
   return {
     available: vault.ready && skills.every((skill) => skill.status === 'ready'),
+    appVersion: app.getVersion(),
     vault,
     skills,
-    harness: { status: harnessReady ? 'ready' : 'waiting' },
+    harness: { status: harnessReady ? 'ready' : 'waiting', version: harnessRuntimePaths?.version || HARNESS_VERSION },
     session: { available: sessionAvailable },
     project: {
       available: projectAvailable,
@@ -2223,8 +2292,115 @@ const getWikiCenterState = async () => {
     history: {
       available: projectAvailable && harnessReady,
       status: projectAvailable && harnessReady ? 'ready' : 'waiting'
+    },
+    recovery: {
+      available: recovery.available,
+      manualOnly: recovery.type === 'invalid-recovery',
+      label: recovery.label,
+      message: recovery.message
     }
   };
+};
+
+const recoverSelectedWikiVault = async () => {
+  if (appIsClosing()) return applicationClosingResult({ state: await getWikiCenterState() });
+  const state = await getWikiCenterState();
+  const recovery = await inspectWikiRecovery(state.vault);
+  if (!recovery.available) {
+    return { ok: false, message: '当前没有可直接打开的恢复副本；请按页面提示重新选择目录或补齐结构。', state };
+  }
+  if (recovery.type === 'invalid-recovery') {
+    const invalidDetail = recovery.invalidClearGuard
+      ? '软件不会自动删除或重命名无法证明阶段的保护记录。打开知识库目录后，请先备份整个目录，再核对根目录固定文件 .dsh-wiki-recovery-clear.lock 及相关恢复现场；不要直接删除该文件。'
+      : '软件不会自动删除或重命名无法验证的恢复记录。打开知识库目录后，请先备份整个目录，再核对恢复提示和 _staging 中的保护现场；不要直接删除未知文件。';
+    const { response } = await dialog.showMessageBox(wikiCenterWindow || mainWindow, {
+      type: 'warning',
+      title: '人工处理无法验证的 Wiki 恢复保护',
+      message: '恢复保护记录无法安全校验，Wiki 写入仍被阻止。',
+      detail: invalidDetail,
+      buttons: ['打开知识库目录', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    if (response !== 0) return { ok: false, message: '已取消；Wiki 写入保护保持不变。', state: await getWikiCenterState() };
+    const refreshed = await getWikiCenterState();
+    const current = await inspectWikiRecovery(refreshed.vault);
+    if (current.type !== 'invalid-recovery'
+      || typeof refreshed.vault?.vaultPath !== 'string' || !path.isAbsolute(refreshed.vault.vaultPath)
+      || pathKey(refreshed.vault.vaultPath) !== pathKey(state.vault.vaultPath)) {
+      return { ok: false, message: '恢复保护状态或知识库目录已变化，未打开目录；请重新检查。', state: refreshed };
+    }
+    let vaultInfo;
+    try { vaultInfo = await fsp.lstat(refreshed.vault.vaultPath); } catch {}
+    if (!vaultInfo?.isDirectory() || vaultInfo.isSymbolicLink()) {
+      return { ok: false, message: '知识库目录当前不可安全打开；Wiki 写入保护保持不变。', state: refreshed };
+    }
+    const openError = await shell.openPath(refreshed.vault.vaultPath);
+    if (openError) return { ok: false, message: `知识库目录打开失败：${openError}`, state: await getWikiCenterState() };
+    return {
+      ok: true,
+      message: '已打开知识库目录；写入保护保持不变。请先备份，再人工核对 .dsh-wiki-recovery-clear.lock 和恢复现场。',
+      state: await getWikiCenterState()
+    };
+  }
+  const interruptedClear = recovery.type === 'clear-guard';
+  const canOpenArchive = Boolean(recovery.archivePath);
+  const { response } = await dialog.showMessageBox(wikiCenterWindow || mainWindow, {
+    type: 'warning',
+    title: interruptedClear ? '处理中断的 Wiki 恢复清理' : '核对 Wiki 恢复事务',
+    message: interruptedClear ? '上一次解除恢复保护时被中断，软件仍保持写入保护。' : '自动回退未能完整完成，软件已保留并发修改。',
+    detail: interruptedClear
+      ? (canOpenArchive
+          ? `恢复副本：${recovery.archive}\n\n先核对副本，再继续上一次安全恢复；不会覆盖人工页面或删除恢复副本。`
+          : '中断发生在恢复现场移动前。重置只会归档本次清理保护记录，并重新显示原恢复事务；不会写入或删除知识页面。')
+      : `恢复副本：${recovery.archive}\n\n先打开副本核对页面。只有在你已人工恢复或确认保留当前内容后，才能解除写入保护；解除保护不会删除恢复副本。`,
+    buttons: [canOpenArchive ? '打开恢复副本' : '保留写入保护', interruptedClear ? (canOpenArchive ? '继续安全恢复' : '重置中断状态') : '已完成核对，解除保护', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  });
+  if (response === 2) return { ok: false, message: '已取消；Wiki 写入保护保持不变。', state };
+  if (response === 1) {
+    const current = await inspectWikiRecovery((await getWikiCenterState()).vault);
+    if (!current.available || current.type !== recovery.type || current.archive !== recovery.archive
+      || current.id !== recovery.id || current.digest !== recovery.digest
+      || typeof wikiRuntime?.clearWikiRecoveryMarker !== 'function') {
+      return { ok: false, message: '恢复标记已变化，未解除保护；请重新检查。', state: await getWikiCenterState() };
+    }
+    try {
+      const cleared = await runWikiMutation(() => wikiRuntime.clearWikiRecoveryMarker(state.vault.vaultPath, {
+        type: current.type,
+        archive: current.archive,
+        id: current.id,
+        digest: current.digest
+      }));
+      const refreshed = await getWikiCenterState();
+      const refreshedRecovery = await inspectWikiRecovery(refreshed.vault);
+      if (cleared?.reset === true && cleared?.cleared === false) {
+        if (refreshedRecovery.type === 'clear-guard') {
+          return { ok: false, message: '中断的清理状态仍受保护；现场没有被修改。', state: refreshed };
+        }
+        return {
+          ok: true,
+          message: refreshedRecovery.available
+            ? '已安全重置中断的清理状态；原恢复事务仍受保护，请再次核对后解除。'
+            : '已安全重置中断的清理状态；当前没有待处理的恢复事务。',
+          state: refreshed
+        };
+      }
+      if (!cleared?.cleared || refreshed.vault.status === 'recovery-required' || refreshedRecovery.available) {
+        return { ok: false, message: '写入保护尚未完整解除；恢复现场和保护记录均已保留。', state: refreshed };
+      }
+      return { ok: true, message: '已解除 Wiki 写入保护；恢复副本仍完整保留。', state: refreshed };
+    } catch (error) {
+      return { ok: false, message: error?.message || '写入保护未解除。', state: await getWikiCenterState() };
+    }
+  }
+  if (!canOpenArchive) return { ok: false, message: '已保留 Wiki 写入保护；知识库没有被修改。', state: await getWikiCenterState() };
+  const openError = await shell.openPath(recovery.archivePath);
+  if (openError) return { ok: false, message: `恢复副本位置打开失败：${openError}`, state: await getWikiCenterState() };
+  return { ok: true, message: `已打开 ${recovery.archive}；DSH Desktop 没有自动覆盖任何知识页面。`, state: await getWikiCenterState() };
 };
 
 const createWikiCenterWindow = async () => {
@@ -2376,9 +2552,14 @@ const previewCurrentProjectWikiSync = async () => {
         removed: preview.delta.removed.length
       },
       existingPages: preview.existingPages.length,
-      message: preview.unchanged
-        ? '当前项目与上次同步清单一致。'
-        : `发现 ${preview.delta.added.length} 个新增、${preview.delta.modified.length} 个修改、${preview.delta.removed.length} 个移除文件。`
+      humanEditedPages: preview.humanEditedPages || [],
+      missingManagedPages: preview.missingManagedPages || [],
+      generatedAt: preview.generatedAt,
+      message: preview.missingManagedPages?.length
+        ? `发现 ${preview.missingManagedPages.length} 个受管 Wiki 页面缺失或不安全；普通同步已停用，请先核对恢复副本。`
+        : preview.unchanged
+        ? `当前项目与上次同步清单一致${preview.humanEditedPages?.length ? `；发现 ${preview.humanEditedPages.length} 个 Wiki 页面有人工作后修改，后续同步会要求先读取合并` : ''}。`
+        : `发现 ${preview.delta.added.length} 个新增、${preview.delta.modified.length} 个修改、${preview.delta.removed.length} 个移除文件${preview.humanEditedPages?.length ? `；${preview.humanEditedPages.length} 个 Wiki 页面需先合并人工修改` : ''}。`
     };
   } catch (error) {
     return { ok: false, message: error?.message || '当前项目增量检查失败。' };
@@ -2485,8 +2666,19 @@ const prepareSelectedDshHistory = async (selection) => {
       limited: preview.limited,
       expiresAt: preview.expiresAt,
       redactions: preview.redactions.map(({ id, label, count }) => ({ id, label, count })),
+      missingManagedPages: preview.missingManagedPages || [],
       sessions: preview.sessions.map(({ title, messageCount, status, limited }) => ({ title, messageCount, status, limited }))
     };
+    if (preview.missingManagedPages?.length) {
+      await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken);
+      if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
+      dshHistoryExpiryTimer = undefined;
+      return {
+        ...result,
+        blocked: true,
+        message: `发现 ${preview.missingManagedPages.length} 个受管历史页面缺失或不安全；请先核对恢复副本，再重新准备。`
+      };
+    }
     if (preview.unchanged) {
       await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken);
       if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
@@ -2510,6 +2702,10 @@ const invokePreparedDshHistory = async () => {
   if (!wikiRuntime || !vaultPath || !sourcePath) return { ok: false, message: '请先在 Wiki 中心准备 DSH 历史。' };
   try {
     const preview = await wikiRuntime.previewDshHistoryIngest(vaultPath, workspacePath, sourcePath);
+    if (preview.missingManagedPages?.length) {
+      await wikiRuntime.clearDshHistorySource(sourcePath, preview.sourceToken).catch(() => undefined);
+      return { ok: false, message: '受管历史页面缺失或不安全；请先核对恢复副本。' };
+    }
     if (preview.unchanged) {
       await wikiRuntime.clearDshHistorySource(sourcePath, preview.sourceToken);
       return { ok: false, message: '所选会话已导入，无需重复处理。' };
@@ -5534,6 +5730,9 @@ ipcMain.handle('wiki-center:choose-vault', (event) => (
 ipcMain.handle('wiki-center:initialize-vault', (event) => (
   wikiCenterIpcAllowed(event) ? initializeSelectedWikiVault() : { ok: false, message: '知识库初始化请求未通过安全校验。' }
 ));
+ipcMain.handle('wiki-center:recover', (event) => (
+  wikiCenterIpcAllowed(event) ? recoverSelectedWikiVault() : { ok: false, message: 'Wiki 恢复请求未通过安全校验。' }
+));
 ipcMain.handle('wiki-center:query', (event, query) => (
   wikiCenterIpcAllowed(event) ? querySelectedWiki(query) : { ok: false, message: 'Wiki 查询请求未通过安全校验。', results: [] }
 ));
@@ -5976,6 +6175,7 @@ const runSafeExitSmoke = async (target) => {
       lifecycleStatus: lifecycle.status,
       singleInstanceLockAcquired,
       quitBypassActive: allowQuit,
+      continuationTimeoutMs: safeExitSmokeAuthorization.continuationTimeoutMs,
       nonce,
       resources: {
         harness: harnessState.status,
@@ -5999,7 +6199,7 @@ const runSafeExitSmoke = async (target) => {
         }
       },
       Boolean,
-      { timeoutMs: 30_000, intervalMs: 50 }
+      { timeoutMs: safeExitSmokeAuthorization.continuationTimeoutMs, intervalMs: 50 }
     );
   } catch (error) {
     process.exitCode = 1;
@@ -7119,6 +7319,33 @@ const runWikiCenterSmoke = async (target) => {
     wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: smokeConfig });
     await fsp.mkdir(smokeVault, { recursive: true });
     await wikiSettingsStore.init();
+    await createWikiCenterWindow();
+    const onboardingRendered = await wikiCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        const onboarding = document.querySelector('#wiki-onboarding');
+        const overview = document.querySelector('#wiki-overview');
+        if (onboarding?.hidden === false && overview?.hidden === true && document.querySelectorAll('.onboarding-steps li').length === 3) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!onboardingRendered) throw new Error('wiki-center-onboarding-smoke-timeout');
+    wikiCenterWindow.showInactive();
+    await wikiCenterWindow.webContents.executeJavaScript(
+      'window.scrollTo(0, 0); new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const onboardingScreenshot = await wikiCenterWindow.webContents.capturePage();
+    const onboardingScreenshotPath = `${resolvedTarget}.onboarding.png`;
+    const onboardingScreenshotSize = onboardingScreenshot.getSize();
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(onboardingScreenshotPath, onboardingScreenshot.toPNG());
+    wikiCenterWindow.destroy();
+    wikiCenterWindow = undefined;
+
     await wikiSettingsStore.setVault(smokeVault);
     await wikiRuntime.initializeWikiVault(smokeVault);
     await fsp.writeFile(path.join(smokeVault, 'concepts', 'wiki-basic.md'), [
@@ -7162,8 +7389,28 @@ const runWikiCenterSmoke = async (target) => {
     const rendered = await wikiCenterWindow.webContents.executeJavaScript(`({
       apiKeys: Object.keys(window.wikiCenterAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
+      versionText: document.querySelector('#app-version')?.textContent || '',
+      onboardingHidden: document.querySelector('#wiki-onboarding')?.hidden === true,
+      overviewHidden: document.querySelector('#wiki-overview')?.hidden === true,
+      structureText: document.querySelector('#health-structure')?.textContent || '',
+      pageCountText: document.querySelector('#health-page-count')?.textContent || '',
+      freshnessText: document.querySelector('#health-freshness')?.textContent || '',
       capabilityRows: document.querySelectorAll('.capability').length,
       resultRows: document.querySelectorAll('.result').length,
+      layout: (() => {
+        const hero = document.querySelector('.toolbar > div');
+        const heading = document.querySelector('.toolbar h1');
+        const intro = document.querySelector('.toolbar p');
+        return {
+          viewportWidth: window.innerWidth,
+          heroWidth: Math.round(hero?.getBoundingClientRect().width || 0),
+          headingWidth: Math.round(heading?.getBoundingClientRect().width || 0),
+          headingScrollWidth: heading?.scrollWidth || 0,
+          introWidth: Math.round(intro?.getBoundingClientRect().width || 0),
+          introScrollWidth: intro?.scrollWidth || 0,
+          bodyScrollWidth: document.body.scrollWidth
+        };
+      })(),
       text: document.body.innerText
     })`, true);
     wikiCenterWindow.showInactive();
@@ -7176,11 +7423,40 @@ const runWikiCenterSmoke = async (target) => {
     const historyScreenshot = await wikiCenterWindow.webContents.capturePage();
     const historyScreenshotPath = `${resolvedTarget}.history.png`;
     const historyScreenshotSize = historyScreenshot.getSize();
+    wikiCenterWindow.setContentSize(760, 740);
+    await wikiCenterWindow.webContents.executeJavaScript('window.scrollTo(0, 0); true', true);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const narrowLayout = await wikiCenterWindow.webContents.executeJavaScript(`(() => {
+      const viewportWidth = window.innerWidth;
+      const required = ['.toolbar', '#wiki-overview', '#vault-panel', '#project-panel', '#query-panel', '#capture-panel'];
+      const clipped = required.filter((selector) => {
+        const element = document.querySelector(selector);
+        if (!element || element.hidden) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.left < -1 || rect.right > viewportWidth + 1;
+      });
+      return { viewportWidth, bodyScrollWidth: document.body.scrollWidth, clipped };
+    })()`, true);
+    const narrowScreenshot = await wikiCenterWindow.webContents.capturePage();
+    const narrowScreenshotPath = `${resolvedTarget}.narrow.png`;
+    const narrowScreenshotSize = narrowScreenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeHistory', 'invokeProjectSync', 'listHistorySessions', 'prepareHistory', 'previewCapture', 'previewProjectSync', 'query', 'saveCapture'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeHistory', 'invokeProjectSync', 'listHistorySessions', 'prepareHistory', 'previewCapture', 'previewProjectSync', 'query', 'recover', 'saveCapture'])
         && rendered.title === 'Wiki 中心'
+        && rendered.versionText === `DSH Desktop V${app.getVersion()} · Harness V${harnessRuntimePaths.version || HARNESS_VERSION}`
+        && rendered.onboardingHidden
+        && !rendered.overviewHidden
+        && rendered.structureText === '结构完整'
+        && Number.parseInt(rendered.pageCountText, 10) >= 1
+        && rendered.freshnessText === '暂不可查'
         && rendered.capabilityRows === 6
         && rendered.resultRows >= 1
+        && rendered.layout.heroWidth >= Math.min(900, rendered.layout.viewportWidth - 220)
+        && rendered.layout.headingScrollWidth <= rendered.layout.headingWidth
+        && rendered.layout.introScrollWidth <= rendered.layout.introWidth
+        && rendered.layout.bodyScrollWidth <= rendered.layout.viewportWidth
+        && narrowLayout.bodyScrollWidth <= narrowLayout.viewportWidth
+        && narrowLayout.clipped.length === 0
         && rendered.text.includes('无 Git Wiki 基础能力')
         && rendered.text.includes('页面：concepts/wiki-basic.md')
         && rendered.text.includes('来源：dsh-smoke:v0.6.5')
@@ -7188,19 +7464,34 @@ const runWikiCenterSmoke = async (target) => {
         && screenshotSize.width > 0
         && screenshotSize.height > 0
         && historyScreenshotSize.width > 0
-        && historyScreenshotSize.height > 0,
+        && historyScreenshotSize.height > 0
+        && narrowScreenshotSize.width > 0
+        && narrowScreenshotSize.height > 0
+        && onboardingScreenshotSize.width > 0
+        && onboardingScreenshotSize.height > 0,
       version: app.getVersion(),
       apiKeys: rendered.apiKeys,
       title: rendered.title,
+      versionText: rendered.versionText,
+      onboardingHidden: rendered.onboardingHidden,
+      overviewHidden: rendered.overviewHidden,
+      structureText: rendered.structureText,
+      pageCountText: rendered.pageCountText,
+      freshnessText: rendered.freshnessText,
       capabilityRows: rendered.capabilityRows,
       resultRows: rendered.resultRows,
+      layout: rendered.layout,
       vaultPath: smokeVault,
       screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height },
-      historyScreenshot: { path: historyScreenshotPath, width: historyScreenshotSize.width, height: historyScreenshotSize.height }
+      historyScreenshot: { path: historyScreenshotPath, width: historyScreenshotSize.width, height: historyScreenshotSize.height },
+      narrowLayout,
+      narrowScreenshot: { path: narrowScreenshotPath, width: narrowScreenshotSize.width, height: narrowScreenshotSize.height },
+      onboardingScreenshot: { path: onboardingScreenshotPath, width: onboardingScreenshotSize.width, height: onboardingScreenshotSize.height }
     };
     await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
     await fsp.writeFile(screenshotPath, screenshot.toPNG());
     await fsp.writeFile(historyScreenshotPath, historyScreenshot.toPNG());
+    await fsp.writeFile(narrowScreenshotPath, narrowScreenshot.toPNG());
   } catch (error) {
     result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
   } finally {

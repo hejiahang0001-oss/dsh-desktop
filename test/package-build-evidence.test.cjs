@@ -19,11 +19,11 @@ const acceptedIdentity = async () => ({
   productName: 'DSH Desktop',
   fileDescription: 'DSH Desktop',
   internalName: 'DSH Desktop',
-  fileVersion: '1.1.7',
-  productVersion: '1.1.7.0',
+  fileVersion: '1.1.8',
+  productVersion: '1.1.8.0',
   companyName: 'DSH Desktop',
   originalFilename: '',
-  expectedVersion: '1.1.7'
+  expectedVersion: '1.1.8'
 });
 
 const write = async (filePath, content) => {
@@ -38,14 +38,14 @@ const createFixture = async (context, { generatedResources = false } = {}) => {
   const packagedRoot = path.join(root, 'packaged');
   const manifest = {
     name: 'dsh-desktop',
-    version: '1.1.7',
+    version: '1.1.8',
     description: 'fixture',
     main: 'electron/main.cjs',
     author: 'DSH Desktop',
     license: 'MIT',
     private: true,
     dependencies: {},
-    devDependencies: { 'electron-builder': '26.8.1' },
+    devDependencies: { 'electron-builder': '26.11.1' },
     build: {
       files: ['electron/**/*', 'assets/session-continuity.js', 'package.json'],
       extraResources: [
@@ -122,7 +122,7 @@ const createFixture = async (context, { generatedResources = false } = {}) => {
     generatedResourcePolicy = {
       appUpdate: DEFAULT_GENERATED_RESOURCE_POLICY.appUpdate,
       elevate: {
-        electronBuilderVersion: '26.8.1',
+        electronBuilderVersion: '26.11.1',
         nsisVersion: '3.0.4.1',
         bytes: elevate.length,
         sha256: sha256(elevate)
@@ -145,7 +145,7 @@ test('package evidence binds the complete app archive and every declared extraRe
   const evidence = await inspectFixture(fixture);
   assert.equal(evidence.accepted, true);
   assert.equal(evidence.schemaVersion, 2);
-  assert.equal(evidence.package.version, '1.1.7');
+  assert.equal(evidence.package.version, '1.1.8');
   assert.equal(evidence.appAsar.tree.matches, true);
   assert.equal(evidence.resourceLayout.matches, true);
   assert.equal(evidence.generatedResources.matches, true);
@@ -168,7 +168,7 @@ test('package evidence verifies electron-builder generated dist resources and fi
   assert.equal(evidence.generatedResources.appUpdate.fields.owner, 'hejiahang0001-oss');
   assert.equal(evidence.generatedResources.elevate.matches, true);
   assert.equal(evidence.generatedResources.elevate.looksLikePe, true);
-  assert.equal(evidence.generatedResources.elevate.producer.electronBuilderVersion, '26.8.1');
+  assert.equal(evidence.generatedResources.elevate.producer.electronBuilderVersion, '26.11.1');
   assert.equal(evidence.generatedResources.elevate.producer.nsisVersion, '3.0.4.1');
   assert.equal(evidence.resourceLayout.matches, true);
   assert.equal(evidence.resourceLayout.unexpected.length, 0);
@@ -210,7 +210,7 @@ test('package evidence rejects altered generated dist metadata and elevate binar
   assert.ok(evidence.resourceLayout.unexpected.includes('elevate.exe'));
 });
 
-test('production generated-resource policy is pinned to electron-builder 26.8.1 and NSIS 3.0.4.1', () => {
+test('production generated-resource policy is pinned to electron-builder 26.11.1 and NSIS 3.0.4.1', () => {
   assert.deepEqual(DEFAULT_GENERATED_RESOURCE_POLICY.appUpdate, {
     owner: 'hejiahang0001-oss',
     repo: 'dsh-desktop',
@@ -218,7 +218,7 @@ test('production generated-resource policy is pinned to electron-builder 26.8.1 
     updaterCacheDirName: 'dsh-desktop-updater'
   });
   assert.deepEqual(DEFAULT_GENERATED_RESOURCE_POLICY.elevate, {
-    electronBuilderVersion: '26.8.1',
+    electronBuilderVersion: '26.11.1',
     nsisVersion: '3.0.4.1',
     bytes: 107_520,
     sha256: '9b1fbf0c11c520ae714af8aa9af12cfd48503eedecd7398d8992ee94d1b4dc37'

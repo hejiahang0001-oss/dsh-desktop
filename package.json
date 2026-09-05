@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -25,15 +25,17 @@
     "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis portable --x64"
   },
   "devDependencies": {
+    "7zip-bin": "5.2.0",
     "@electron/asar": "3.4.1",
     "electron": "43.4.1",
-    "electron-builder": "26.8.1",
+    "electron-builder": "26.11.1",
     "harness-build-pnpm": "npm:pnpm@11.7.0",
     "pnpm": "11.19.0"
   },
   "build": {
     "appId": "com.dsh.desktop",
     "productName": "DSH Desktop",
+    "afterPack": "scripts/after-pack.cjs",
     "asar": true,
     "npmRebuild": false,
     "compression": "store",
@@ -184,12 +186,19 @@
       {
         "from": "runtime/dsh-desktop-credentials",
         "to": "harness-plugins/dsh-desktop-credentials",
-        "filter": ["index.mjs", "package.json"]
+        "filter": [
+          "index.mjs",
+          "package.json"
+        ]
       },
       {
         "from": "runtime/dsh-desktop-tools",
         "to": "harness-plugins/dsh-desktop-tools",
-        "filter": ["index.mjs", "session-control.mjs", "package.json"]
+        "filter": [
+          "index.mjs",
+          "session-control.mjs",
+          "package.json"
+        ]
       },
       {
         "from": "resources/skills",
@@ -209,6 +218,7 @@
     ],
     "win": {
       "signAndEditExecutable": true,
+      "signExecutable": false,
       "verifyUpdateCodeSignature": false,
       "legalTrademarks": "Independent community project; not affiliated with or endorsed by DeepSeek.",
       "target": [

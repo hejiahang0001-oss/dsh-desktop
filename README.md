@@ -24,11 +24,11 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Pre-release pins alpha.2; local V1.1.7 install candidate pins `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Pre-release pins alpha.2; the unpublished local V1.1.8 candidate pins `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
 
 ## Why DSH Desktop
 
-V1.1.7 is an unpublished local install candidate (`DSH-Desktop-Setup-1.1.7.exe`) that retains Harness rc.1 and closes Windows lifecycle gaps: single-instance focus, durable exit state, registered-mutation drain, full owned-process cleanup and correct executable identity. Its final Setup, Portable and blockmap pass package identity, complete application/resource binding, single-instance and real-resource safe-exit checks. It has not replaced the installed V1.1.5 and is not a public download.
+V1.1.8 is an unpublished, unsigned local package candidate (`DSH-Desktop-Setup-1.1.8.exe`) that retains Harness rc.1 and productizes the local Wiki: guided setup, health and provenance, release knowledge and protected recovery. See the [release notes](docs/RELEASE_NOTES_v1.1.8.md) and [validation evidence](docs/VALIDATION.md) for the completed local checks and known limits.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
@@ -56,6 +56,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 - **Editable PowerPoint delivery** — invoke the bundled `/powerpoint-pptx` Skill to create and strictly inspect editable widescreen PPTX presentations with native text, shapes, tables, charts backed by embedded Excel data, workspace PNG/JPEG images, a real slide master, two layouts, and speaker notes, or perform exact rollback-backed text replacement.
 - **Unified Office delivery center** — see Word, Excel, and PowerPoint readiness, supported editable structures, safety boundaries, and fixed invocation actions in one local-only window alongside the worktree, Tasks/Subagents, and extension integration chain.
 - **Selected DSH history to Wiki** — choose up to eight completed ordinary sessions from the active workspace, inspect change and redaction counts, and let `/wiki-history-ingest dsh` distill only user/assistant text after a separate preview, validation, and confirmation flow.
+- **Guided local Wiki center** — configure a Markdown vault through a three-step first run, inspect structure, managed pages, source freshness and verified synchronization, and maintain exactly six provenance-bound release-knowledge pages. Protected recovery never deletes a manifest entry or overwrites a human page automatically; query and mutation stay blocked until the exact recovery state is resolved.
 - **Redacted support and verified backup** — export a support JSON without keys, proxy values, full paths, transcripts, or log text; create and validate a SHA-256 manifest backup of sessions and settings while excluding software credential files, proxy settings, caches, logs, and bundled runtimes. Session content is preserved byte-for-byte and is not redacted.
 - **Controlled extension installation** — install the reviewed `@nonamelego/dsh-catppuccin@0.3.1` catalog entry into the Web Profile with bundled pnpm `11.19.0`, exact-version/integrity checks, disabled lifecycle scripts, native confirmation, credential isolation, health verification, and rollback. No arbitrary package or pnpm command input is exposed.
 - **Isolated Git worktrees** — create a generated DSH-owned branch and worktree, switch the active Harness workspace, and safely reclaim only DSH-owned worktree directories. External worktrees stay read-only; dirty removal creates a private recovery checkpoint and retains the branch.
@@ -82,7 +83,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.7 local install candidate** retains Harness rc.1 and adds single-instance focus, safe-exit journaling, owned Harness/terminal/preview cleanup and correct Windows executable identity. The final package starts real Harness, PowerShell PTY and managed-preview resources, exits them through the normal application path with no process or port residue, and retains an identical complete package fingerprint before and after the run. It is not installed or published and does not change Stable. See the [V1.1.7 release notes](docs/RELEASE_NOTES_v1.1.7.md), [V1.1.6 overlap audit](docs/HARNESS_UPSTREAM_OVERLAP_v1.1.6.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
+**V1.1.8 unpublished local candidate** closes the Wiki productization slice. The final source suite passes 536/536 and the production audit reports 0 known vulnerabilities. Package/source binding, packaged Wiki, unpacked lifecycle and safe-exit checks pass. The installer remains unsigned, with `automaticUpdateReady=false`; Portable cold launch through wrapper exit measured about 3 minutes 56 seconds. No installation or publication occurred. See the [release notes](docs/RELEASE_NOTES_v1.1.8.md), [validation record](docs/VALIDATION.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
@@ -171,7 +172,7 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 
 发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证通过且覆盖动作前获得维护者即时明确确认后才覆盖当前电脑中的旧版；通过全部发布安全门禁并另行确认后，才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
-当前公开 Pre-release 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，内核为 Harness `0.1.2-alpha.2`；GitHub 正式 `Latest release` / Stable 仍是 V1.1.0。本地 V1.1.7 候选固定为 Harness `0.1.2-rc.1`，继续完全使用官方 Queue/Steer/Stop，并完成 Windows 单实例、退出日志、所有权清理和产品版本身份收口。最终包内 130 个应用文件和 24,358 个资源逐项一致；真实 Harness、PowerShell PTY 和预览服务经正常退出后没有进程或端口残留，三项分发文件校验通过。它尚未覆盖当前 V1.1.5，也未推送或发布 GitHub。安装器仍未签名；PE/VersionInfo 与包树哈希不构成 Authenticode Publisher 信任或 Electron 分发供应链认证。自定义 SQLite 迁移、其他电脑的内网代理和 24 小时老化不在本版验证承诺内。
+当前公开 Pre-release 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，Stable 为 V1.1.0。本地 V1.1.8 候选固定 Harness `0.1.2-rc.1`，完成 Wiki 首次引导、健康/来源状态、六页版本知识和受保护恢复；完整源码 536/536、生产依赖审计、包内容与打包态关键验证通过。Portable 基础启动成功，但本机首开到退出约 3 分 56 秒，未验证其双实例生命周期。本轮止于 V1.1.8，没有覆盖安装或 GitHub 发布。安装器仍未签名；详细证据、哈希和未验证范围见[验证记录](docs/VALIDATION.md)。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；

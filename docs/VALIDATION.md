@@ -2,6 +2,30 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V1.1.8 Wiki productization local-candidate evidence
+
+- Closure date: 2026-09-05. Desktop V1.1.8 pins Harness `dsh-v0.1.2-rc.1` / `a66e4702047846cdaa10c66c9d3df3951f5ea70d`. Official Queue/Steer/Stop and software-managed Key priority retain their existing ownership.
+- Wiki provides first-use guidance, vault health/source freshness, session capture, project synchronization, DSH history and six canonical release-knowledge pages. Capture/sync/history/query logging share a vault lock. Recovery uses an append-only checksummed journal, exact directory identities and explicit confirmation; unmanaged project/history pages without a committed SHA-256 cannot be overwritten.
+- The final source suite passes **536/536**, with 0 failures, 0 skips and a 214.2664-second duration using bundled Node. It includes the previously verified 71-test Wiki subset. Evidence: `artifacts/v1.1.8-release-candidate/source-tests-final.log`. The subsequent documentation-only refresh passes the affected release-version checks 5/5 (`release-version-final.log`); no application source changed after the full run.
+- The 2026-09-05 production audit completes with 0 known vulnerabilities at every severity. Evidence: `audit-final.json` and `audit-final-status.json` in the candidate directory. Earlier registry timeouts are historical and no longer the final audit status. Frozen-lockfile installation, changed JavaScript syntax and `git diff --check` pass.
+- electron-builder is pinned to 26.11.1 and 7zip-bin to 5.2.0. Windows resource editing remains enabled with `signExecutable=false`. The after-pack hook removes `default_app.asar` only when its 111,073 bytes and SHA-256 `06d4a28be095a80eff94dbd18edcfac5b5805e1b5538e0fb7cee7c7ae81db76a` match.
+- Package evidence fingerprint: `37254f32d9c8d14ed0e957bccda5543186162f2f7838bae030f32e328773eecd`. The packaged app matches all 130 source files; resources match 24,358/24,358. Final `app.asar`: 1,939,024 bytes, SHA-256 `75491d6cda203d91587da0462f62b538f958688e166ef763d9d333bcdcf65c12`.
+- Setup and Portable were fully extracted and compared against the unpacked directory: each contains 24,433 files and 734,069,182 bytes; tree SHA-256 `66988cc0071f4e083af6aa257e1fb6ad499095141eaedf7b690e66c0b2e59355`. There are no missing, unexpected or mismatched files. Archive identity and before/after stability checks pass.
+- Packaged Wiki CLI/GUI and unpacked two-instance lifecycle checks pass. Wiki renders six capability rows, one query result and no narrow-window clipping. Safe-exit evidence binds the same package fingerprint before and after execution; application and guardian exit 0, Job active-process count is 0, owned-process/port residue is 0, and both lifecycle records are clean.
+- Two smoke-driver defects were corrected: guardian stdout is drained on `close`, and the application continuation wait is fixed at 180,000 ms in the validated one-time authorization. Missing or altered timeout authorization fails closed. This replaces the old 30-second window that could expire during Windows process/port collection.
+- Portable runs the real desktop smoke and exits 0; version V1.1.8, Electron 43.4.1, Chinese locale and safeStorage pass. Measured cold-start-to-exit time is 235,970 ms (about 3 minutes 56 seconds). The earlier Portable two-instance attempts did not pass; their temporary test entry was removed because the SFX wrapper PID is not the inner Electron PID.
+- Governance reports `packageReady=true`. Relative to the V1.1.7 blockmap, reusable bytes are 185,021,925 (98.0643%) and estimated download bytes are 3,652,245. All three Windows executables report DSH Desktop V1.1.8 and remain unsigned, so `automaticUpdateReady=false`.
+- The candidate directory is `artifacts/v1.1.8-release-candidate`. Its three delivery assets match `dist` and `SHA256SUMS-v1.1.8.txt`:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| DSH-Desktop-Setup-1.1.8.exe | 188,674,170 | `26071c1a3efb1ea22ff50f6255a77e8b3ed2103d666f1be50b0a9c5f4440ffc5` |
+| DSH-Desktop-Setup-1.1.8.exe.blockmap | 194,935 | `97c4c819b57cbdc30bd71566adea902376a26cb5c452009d5c52cd70bc013591` |
+| DSH-Desktop-Portable-1.1.8.exe | 187,980,776 | `4f676f1540a0d393e804afa99d06fb8f676e2840e16d0ff83e1589912edfe599` |
+
+- Content hashes detect build/copy drift but do not establish publisher trust if both artifacts and their reference inputs are maliciously replaced. Filesystem identity checks detect observed races; they do not provide kernel-level isolation.
+- This closure delivers a local candidate only. No overwrite installation, GitHub push/publication or Stable change was performed. Installed-app data preservation, Portable two-instance behavior, a second Windows machine and 24-hour aging are not claimed by this evidence.
+
 ## V1.1.7 Windows lifecycle local-candidate evidence
 
 - The complete source suite passes 469/469 with no failures or skips. Focused lifecycle, shutdown, process-host, terminal, preview, executable-identity, package-evidence and generated-resource checks pass; the production dependency audit reports no known vulnerabilities, syntax checks pass and `git diff --check` is clean.

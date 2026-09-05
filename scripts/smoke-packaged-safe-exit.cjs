@@ -14,6 +14,7 @@ const root = path.resolve(__dirname, '..');
 const packageVersion = require(path.join(root, 'package.json')).version;
 const artifactsRoot = path.join(root, 'artifacts');
 const executable = path.join(root, 'dist', 'win-unpacked', 'DSH Desktop.exe');
+const SAFE_EXIT_CONTINUATION_TIMEOUT_MS = 180_000;
 let output = '';
 let ready = '';
 let continuation = '';
@@ -271,29 +272,40 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
   guardian.stderr.setEncoding('utf8');
   guardian.stderr.on('data', (chunk) => { stderr = `${stderr}${chunk}`.slice(-32 * 1024); });
   guardian.stdin.on('error', () => {});
-  guardian.stdout.on('data', (chunk) => {
-    buffer += chunk;
+  const consumeGuardianLine = (line) => {
+    if (!line) return;
+    try {
+      const frame = JSON.parse(line);
+      frames.push(frame);
+      if (frame.type === 'ready') settle(readyFrame, 'resolve', frame);
+      else if (frame.type === 'root-exit') settle(rootExitFrame, 'resolve', frame);
+      else if (frame.type === 'empty') settle(emptyFrame, 'resolve', frame);
+      else if (frame.type === 'error') failPending(new Error(`Packaged Job guardian failed: ${frame.message}`));
+    } catch (error) {
+      failPending(new Error(`Invalid packaged Job guardian frame: ${error.message}`));
+    }
+  };
+  const consumeGuardianBuffer = (final = false) => {
     let newline = buffer.indexOf('\n');
     while (newline >= 0) {
       const line = buffer.slice(0, newline).trim();
       buffer = buffer.slice(newline + 1);
-      if (line) {
-        try {
-          const frame = JSON.parse(line);
-          frames.push(frame);
-          if (frame.type === 'ready') settle(readyFrame, 'resolve', frame);
-          else if (frame.type === 'root-exit') settle(rootExitFrame, 'resolve', frame);
-          else if (frame.type === 'empty') settle(emptyFrame, 'resolve', frame);
-          else if (frame.type === 'error') failPending(new Error(`Packaged Job guardian failed: ${frame.message}`));
-        } catch (error) {
-          failPending(new Error(`Invalid packaged Job guardian frame: ${error.message}`));
-        }
-      }
+      consumeGuardianLine(line);
       newline = buffer.indexOf('\n');
     }
+    if (final) {
+      const line = buffer.trim();
+      buffer = '';
+      consumeGuardianLine(line);
+    }
+  };
+  guardian.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    consumeGuardianBuffer();
   });
   guardian.once('error', failPending);
-  guardian.once('exit', (code, signal) => {
+  guardian.once('close', (code, signal) => {
+    consumeGuardianBuffer(true);
     const result = { code, signal, stderr };
     settle(guardianExit, 'resolve', result);
     if (!closing && (code !== 0 || !readyFrame.settled || !rootExitFrame.settled || !emptyFrame.settled)) {
@@ -596,6 +608,7 @@ const run = async () => {
     token,
     driverPid: process.pid,
     output,
+    continuationTimeoutMs: SAFE_EXIT_CONTINUATION_TIMEOUT_MS,
     expiry: new Date(Date.now() + 120_000).toISOString()
   });
 
@@ -611,7 +624,12 @@ const run = async () => {
   try {
     jobLaunch = await launchWindowsJob({ executablePath: executable, args: appArguments, cwd: path.dirname(executable) });
     appPid = jobLaunch.pid;
-    jobEvidence = { guardianPid: jobLaunch.guardian.pid, rootPid: appPid, creationFileTime: jobLaunch.creationFileTime };
+    jobEvidence = {
+      guardianPid: jobLaunch.guardian.pid,
+      rootPid: appPid,
+      creationFileTime: jobLaunch.creationFileTime,
+      frames: jobLaunch.frames
+    };
     childIdentity = await findProcessIdentity(appPid);
     if (!childIdentity) throw new Error('Could not capture the packaged application process identity.');
     if (childIdentity.creationFileTime !== jobLaunch.creationFileTime) throw new Error('Packaged Job root identity does not match the process table.');
@@ -631,6 +649,9 @@ const run = async () => {
     }
     if (readyState.packaged !== true || readyState.singleInstanceLockAcquired !== true) {
       throw new Error('Safe-exit application did not use the packaged single-instance lifecycle.');
+    }
+    if (readyState.continuationTimeoutMs !== SAFE_EXIT_CONTINUATION_TIMEOUT_MS) {
+      throw new Error('Safe-exit application did not preserve the bounded continuation timeout.');
     }
     if (readyState.quitBypassActive !== false
       || readyState.lifecycleStatus !== 'running'
@@ -720,6 +741,8 @@ const run = async () => {
       jobLaunch.waitForEmpty(15_000)
     ]);
     jobEvidence.empty = emptyJob;
+    const guardianExit = await jobLaunch.close();
+    jobEvidence.guardianExit = guardianExit;
     const harnessIdentitySet = new Set([harnessHostIdentity, ...harnessDescendants]
       .map((entry) => `${entry.pid}/${entry.creationFileTime}`));
     const harnessAliveAfterExit = aliveAfterExit.filter((entry) => harnessIdentitySet.has(`${entry.pid}/${entry.creationFileTime}`));
@@ -756,6 +779,8 @@ const run = async () => {
     });
 
     const accepted = exit.code === 0
+      && guardianExit.code === 0
+      && guardianExit.signal === null
       && aliveAfterExit.length === 0
       && emptyJob.activeProcesses === 0
       && ownedPortResidueAfterExit.length === 0
