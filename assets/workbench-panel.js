@@ -240,10 +240,11 @@
     acceptButton.disabled = !idle || !selectedItem?.canAccept;
     rejectButton.disabled = !idle || !selectedItem?.canReject;
     const changes = diagnostics.changes || {};
+    const hasActionableChanges = changes.canAcceptCount > 0 || changes.canRejectCount > 0;
     acceptAllButton.disabled = !idle || !(changes.canAcceptCount > 0);
     rejectAllButton.disabled = !idle || !(changes.canRejectCount > 0);
     revealFileButton.disabled = !selectedPath;
-    actions.hidden = Boolean(api.reviews && scopeSelect.value !== 'unstaged');
+    actions.hidden = Boolean(api.reviews && scopeSelect.value !== 'unstaged') || !hasActionableChanges;
   };
 
   const selectPath = (pathValue) => {

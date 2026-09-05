@@ -26,6 +26,15 @@ const MAX_PROJECT_TOTAL_ENTRIES = 10000;
 const MAX_PROJECT_PAGES = 12;
 const MAX_PROJECT_PAGE_CHARS = 30000;
 const MAX_PROJECT_TOTAL_PAGE_CHARS = 150000;
+const RELEASE_KNOWLEDGE_PAGE_NAMES = Object.freeze([
+  'version-overview',
+  'capability-evolution',
+  'harness-compatibility',
+  'release-channels',
+  'iteration-standards',
+  'validation-evidence'
+]);
+const RELEASE_KNOWLEDGE_SOURCE = /^(?:package\.json|README\.md|PROGRESS\.md|DSH_DESKTOP_ITERATION_PLAN\.md|CONTRIBUTING\.md|docs\/DEVELOPMENT_PLAYBOOK\.md|docs\/VALIDATION\.md|docs\/RELEASE_NOTES_v\d+\.\d+\.\d+(?:[-.][A-Za-z0-9]+)*\.md|docs\/HARNESS_UPSTREAM(?:_OVERLAP)?_[A-Za-z0-9.-]+\.md)$/u;
 const HISTORY_SOURCE_VERSION = 1;
 const MAX_HISTORY_SOURCE_BYTES = 2 * 1024 * 1024;
 const MAX_HISTORY_SESSIONS = 8;
@@ -36,6 +45,36 @@ const MAX_HISTORY_TOTAL_CHARS = 400000;
 const MAX_HISTORY_PAGES = 10;
 const MAX_HISTORY_PAGE_CHARS = 30000;
 const MAX_HISTORY_TOTAL_PAGE_CHARS = 150000;
+const WIKI_WRITE_LOCK_NAME = '.dsh-wiki-write.lock';
+const WIKI_WRITE_LOCK_MAX_BYTES = 1024;
+const WIKI_WRITE_LOCK_STALE_MS = 5 * 60 * 1000;
+const WIKI_RECOVERY_MARKER_NAME = '.dsh-wiki-recovery-required.json';
+const WIKI_RECOVERY_MARKER_MAX_BYTES = 16 * 1024;
+const WIKI_RECOVERY_CLEAR_GUARD_NAME = '.dsh-wiki-recovery-clear.lock';
+const WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES = 64 * 1024;
+const WIKI_RECOVERY_CLEAR_JOURNAL_MAGIC = 'DSH-WIKI-RECOVERY-CLEAR/1 ';
+const WIKI_WRITE_LOCK_RETRY_DELAYS_MS = Object.freeze([0, 10, 30, 75]);
+const WIKI_WRITE_LOCK_TRANSIENT_CODES = new Set(['EACCES', 'EPERM', 'EBUSY']);
+const WIKI_RECOVERY_ARCHIVE_KINDS = Object.freeze({
+  capture: 'dsh-capture',
+  'project-sync': 'dsh-project-sync',
+  'history-ingest': 'dsh-history-ingest'
+});
+const LEGACY_WIKI_WRITE_LOCKS = Object.freeze([
+  Object.freeze({
+    name: '.dsh-wiki-project-sync.lock',
+    busyCode: 'project-sync-busy',
+    unsafeCode: 'unsafe-project-sync-lock',
+    label: '项目同步'
+  }),
+  Object.freeze({
+    name: '.dsh-wiki-history-ingest.lock',
+    busyCode: 'history-ingest-busy',
+    unsafeCode: 'unsafe-history-lock',
+    label: 'DSH 历史导入'
+  })
+]);
+const vaultWriteLockOwners = new Map();
 const WIKI_DIRECTORIES = Object.freeze([
   'concepts',
   'entities',
@@ -135,6 +174,16 @@ const readBoundedRegularFile = async (filePath, maxBytes) => {
 };
 
 const normalizedPathKey = (value) => path.resolve(value).replace(/\\/g, '/').toLowerCase();
+const policyPathKey = (value) => String(value || '').replace(/\\/g, '/').normalize('NFC').toLocaleLowerCase();
+
+const assertUniquePolicyPaths = (values, code = 'invalid-manifest', message = '知识库清单包含大小写等价的重复路径。') => {
+  const seen = new Set();
+  for (const value of values) {
+    const key = policyPathKey(value);
+    if (!key || seen.has(key)) throw new WikiBasicError(code, message);
+    seen.add(key);
+  }
+};
 
 const isSensitiveProjectPath = (relativePath) => {
   const normalized = String(relativePath || '').replace(/\\/g, '/').toLowerCase();
@@ -290,6 +339,45 @@ const atomicWriteText = async (filePath, text) => {
   }
 };
 
+const writeNewTextAtomically = async (filePath, text) => {
+  const resolved = path.resolve(filePath);
+  const directory = path.dirname(resolved);
+  const temp = `${resolved}.${process.pid}-${randomUUID()}.tmp`;
+  await fsp.mkdir(directory, { recursive: true });
+  let handle;
+  let published = false;
+  let publicationRecovered = false;
+  let cleanupPending = false;
+  try {
+    handle = await fsp.open(temp, 'wx', 0o600);
+    await handle.writeFile(text, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    try {
+      await fsp.link(temp, resolved);
+      published = true;
+    } catch (error) {
+      if (error?.code === 'EEXIST') throw error;
+      const current = await readRollbackTarget(resolved).catch(() => ({ state: 'unavailable' }));
+      if (current.state !== 'file' || current.text !== text) throw error;
+      published = true;
+      publicationRecovered = true;
+    }
+  } finally {
+    await handle?.close().catch(() => undefined);
+    try {
+      await fsp.unlink(temp);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        if (!published) throw error;
+        cleanupPending = true;
+      }
+    }
+  }
+  return { cleanupPending, publicationRecovered };
+};
+
 const writeIfMissing = async (filePath, text) => {
   try {
     const handle = await fsp.open(filePath, 'wx', 0o600);
@@ -352,7 +440,9 @@ const vaultTemplates = (vaultPath, timestamp) => ({
 
 const initializeWikiVault = async (vaultPath, { clock = () => new Date() } = {}) => {
   const resolved = await assertPlainDirectory(vaultPath, { create: true });
+  await assertNoWikiRecoveryClearGuard(resolved);
   for (const directory of WIKI_DIRECTORIES) {
+    await assertNoWikiRecoveryClearGuard(resolved);
     const target = path.join(resolved, directory);
     await fsp.mkdir(target, { recursive: true });
     const info = await fsp.lstat(target);
@@ -364,10 +454,12 @@ const initializeWikiVault = async (vaultPath, { clock = () => new Date() } = {})
   const created = [];
   const preserved = [];
   for (const [relative, text] of Object.entries(vaultTemplates(resolved, timestamp))) {
+    await assertNoWikiRecoveryClearGuard(resolved);
     const target = path.join(resolved, relative);
     if (!pathInside(resolved, target)) throw new WikiBasicError('path-escape', '知识库初始化路径越界。');
     (await writeIfMissing(target, text) ? created : preserved).push(relative.replace(/\\/g, '/'));
   }
+  await assertNoWikiRecoveryClearGuard(resolved);
   return { ok: true, vaultPath: resolved, created, preserved, state: await inspectWikiVault(resolved) };
 };
 
@@ -382,7 +474,7 @@ const walkMarkdown = async (root) => {
       const absolute = path.join(directory, entry.name);
       const relative = path.relative(root, absolute).replace(/\\/g, '/');
       if (entry.isDirectory()) {
-        if (QUERY_EXCLUDED_DIRECTORIES.has(entry.name)) continue;
+        if (QUERY_EXCLUDED_DIRECTORIES.has(policyPathKey(entry.name))) continue;
         await visit(absolute, depth + 1);
       } else if (entry.isFile() && entry.name.toLocaleLowerCase().endsWith('.md')) {
         if (depth === 0 && QUERY_EXCLUDED_FILES.has(entry.name.toLocaleLowerCase())) continue;
@@ -393,6 +485,20 @@ const walkMarkdown = async (root) => {
   };
   await visit(root, 0);
   return { files, limited: files.length >= MAX_SCAN_FILES };
+};
+
+const manifestLastSyncAt = (manifest) => {
+  const timestamps = [];
+  for (const entry of Object.values(manifest?.projects || {})) {
+    if (typeof entry?.updated === 'string' && Number.isFinite(Date.parse(entry.updated))) timestamps.push(entry.updated);
+  }
+  for (const channel of Object.values(manifest?.history || {})) {
+    if (!channel || typeof channel !== 'object' || Array.isArray(channel)) continue;
+    for (const entry of Object.values(channel)) {
+      if (typeof entry?.updated === 'string' && Number.isFinite(Date.parse(entry.updated))) timestamps.push(entry.updated);
+    }
+  }
+  return timestamps.sort((left, right) => Date.parse(right) - Date.parse(left))[0] || '';
 };
 
 const inspectWikiVault = async (vaultPath) => {
@@ -414,14 +520,59 @@ const inspectWikiVault = async (vaultPath) => {
     }
   }
   const scan = await walkMarkdown(resolved);
+  let manifest = {};
+  let manifestValid = true;
+  let recovery = null;
+  let recoveryInvalid = false;
+  if (!missing.includes('.manifest.json')) {
+    try {
+      const opened = await readBoundedRegularFile(path.join(resolved, '.manifest.json'), MAX_MARKDOWN_BYTES);
+      if (!opened) throw new Error('manifest-too-large');
+      manifest = JSON.parse(opened.bytes.toString('utf8'));
+      if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('manifest-invalid');
+      if (manifest.projects !== undefined && (!manifest.projects || typeof manifest.projects !== 'object' || Array.isArray(manifest.projects))) throw new Error('manifest-projects-invalid');
+      if (manifest.history !== undefined && (!manifest.history || typeof manifest.history !== 'object' || Array.isArray(manifest.history))) throw new Error('manifest-history-invalid');
+    } catch {
+      manifestValid = false;
+    }
+  }
+  try {
+    recovery = await readWikiRecoveryProtection(resolved);
+  } catch (error) {
+    recoveryInvalid = true;
+    recovery = {
+      invalid: true,
+      code: oneLine(error?.code || 'invalid-recovery-protection', 80),
+      message: error?.message || 'Wiki 恢复标记无法安全读取。'
+    };
+  }
+  const status = recoveryInvalid
+    ? 'unavailable'
+    : recovery
+      ? 'recovery-required'
+      : missing.length > 0
+        ? 'needs-init'
+        : manifestValid
+          ? 'ready'
+          : 'unavailable';
   return {
     configured: true,
-    status: missing.length === 0 ? 'ready' : 'needs-init',
+    status,
     vaultPath: resolved,
     missing,
     pageCount: scan.files.length,
     limited: scan.limited,
-    message: missing.length === 0 ? '知识库结构完整。' : `还缺少 ${missing.length} 个基础目录或文件。`
+    lastSyncAt: manifestValid ? manifestLastSyncAt(manifest) : '',
+    recovery,
+    message: status === 'ready'
+      ? '知识库结构完整。'
+      : status === 'needs-init'
+        ? `还缺少 ${missing.length} 个基础目录或文件。`
+        : status === 'recovery-required'
+          ? `检测到未完整回退或清理中断的 Wiki 事务；请从 ${recovery.archive || '错误提示中的恢复归档'} 核对人工内容。`
+          : recoveryInvalid
+            ? 'Wiki 恢复标记无法安全读取；页面未被修改。'
+            : '知识库清单无法读取；页面未被修改，请从最近恢复副本核对。'
   };
 };
 
@@ -483,17 +634,43 @@ const excerptAround = (body, terms) => {
   return `${start > 0 ? '…' : ''}${compact.slice(start, start + 320)}${start + 320 < compact.length ? '…' : ''}`;
 };
 
-const appendQueryLog = async (vaultPath, query, resultCount, clock) => {
-  const logPath = path.join(vaultPath, 'log.md');
-  const line = `- [${isoNow(clock)}] QUERY query=${yamlString(oneLine(query, 180))} result_pages=${resultCount} mode=normal escalated=false\n`;
-  await fsp.appendFile(logPath, line, { encoding: 'utf8', mode: 0o600 });
+const wikiWriteInProgress = async (vaultPath) => {
+  try {
+    await fsp.lstat(recoveryClearGuardPath(vaultPath));
+    return true;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') return true;
+  }
+  const staging = path.join(vaultPath, '_staging');
+  for (const name of [WIKI_WRITE_LOCK_NAME, ...LEGACY_WIKI_WRITE_LOCKS.map((item) => item.name)]) {
+    try {
+      await fsp.lstat(path.join(staging, name));
+      return true;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') return true;
+    }
+  }
+  return false;
 };
+
+const busyQueryResult = (query, scanned = 0, limited = false) => ({
+  ok: false,
+  code: 'wiki-read-busy',
+  query: normalizeText(query, MAX_QUERY_LENGTH),
+  results: [],
+  scanned,
+  limited,
+  logged: false,
+  message: 'Wiki 正在更新，为避免读到未提交内容，请稍后重试。'
+});
 
 const queryWiki = async (vaultPath, query, { limit = 8, clock = () => new Date(), log = true } = {}) => {
   const resolved = await assertPlainDirectory(vaultPath);
+  const terms = queryTerms(query);
+  if (await wikiWriteInProgress(resolved)) return busyQueryResult(query);
   const state = await inspectWikiVault(resolved);
   if (state.status !== 'ready') throw new WikiBasicError('vault-not-ready', '知识库尚未初始化，不能执行查询。');
-  const terms = queryTerms(query);
+  if (await wikiWriteInProgress(resolved)) return busyQueryResult(query);
   const scan = await walkMarkdown(resolved);
   const results = [];
   for (const file of scan.files) {
@@ -522,12 +699,24 @@ const queryWiki = async (vaultPath, query, { limit = 8, clock = () => new Date()
       sources: metadata.sources || [],
       lifecycle: oneLine(metadata.lifecycle || 'draft', 32),
       updated: oneLine(metadata.updated || '', 40),
-      score
+      score,
+      _absolute: file.absolute,
+      _sha256: sha256Text(text)
     });
   }
   results.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
   const boundedLimit = Math.min(MAX_RESULTS, Math.max(1, Number.isInteger(limit) ? limit : 8));
-  const selected = results.slice(0, boundedLimit);
+  const selectedInternal = results.slice(0, boundedLimit);
+  if (await wikiWriteInProgress(resolved)) return busyQueryResult(query, scan.files.length, scan.limited);
+  for (const item of selectedInternal) {
+    try {
+      const opened = await readBoundedRegularFile(item._absolute, MAX_MARKDOWN_BYTES);
+      if (!opened || sha256Text(opened.bytes) !== item._sha256) return busyQueryResult(query, scan.files.length, scan.limited);
+    } catch {
+      return busyQueryResult(query, scan.files.length, scan.limited);
+    }
+  }
+  const selected = selectedInternal.map(({ _absolute, _sha256, ...item }) => item);
   let logged = false;
   if (log) {
     try {
@@ -601,10 +790,11 @@ const capturePageText = (preview, timestamp, workspaceName) => {
   return `---\ntitle: ${yamlString(preview.title)}\ncategory: synthesis\ntags: [dsh, session-capture]\nsources:\n  - ${yamlString(source)}\nsource_time: ${preview.sourceTime ?? 'null'}\nsummary: ${yamlString(preview.summary)}\nprovenance:\n  extracted: 0.90\n  inferred: 0.10\n  ambiguous: 0.00\nbase_confidence: 0.42\nlifecycle: draft\nlifecycle_changed: ${date}\ntier: supporting\ncreated: ${timestamp}\nupdated: ${timestamp}\n---\n\n# ${preview.title}\n\n${preview.content}\n\n## 来源\n\n- DSH 会话：${preview.sourceSessionId || '当前会话'}${Number.isInteger(preview.sourceSeq) ? `，事件序号 ${preview.sourceSeq}` : ''}\n- 会话时间：${preview.sourceTime ?? '未记录'}\n- 工作区：${workspaceName || '当前工作区'}\n- 说明：内容由用户在保存前选定并可编辑；原始会话保持只读。\n`;
 };
 
-const saveCapture = async (vaultPath, capture, {
+const saveCaptureLocked = async (vaultPath, capture, {
   confirmedSensitive = false,
   workspaceName = '',
-  clock = () => new Date()
+  clock = () => new Date(),
+  afterPageWrites = async () => undefined
 } = {}) => {
   const resolved = await assertPlainDirectory(vaultPath);
   const state = await inspectWikiVault(resolved);
@@ -628,18 +818,39 @@ const saveCapture = async (vaultPath, capture, {
   const pageText = capturePageText(preview, timestamp, oneLine(workspaceName, 160));
   const nextIndex = updateIndexText(originalIndex, preview.relativePath, preview.title, preview.summary, timestamp);
   const logLine = `- [${timestamp}] CAPTURE type=synthesis page=${yamlString(preview.relativePath)} title=${yamlString(preview.title)} source=${yamlString(preview.sourceSessionId || 'current')}\n`;
+  const archiveRoot = await createWikiTransactionArchive(resolved, 'dsh-capture', timestamp, [
+    { path: 'index.md', text: originalIndex },
+    { path: 'log.md', text: originalLog }
+  ]);
+  await registerActiveWikiTransactionArchive(resolved, archiveRoot, 'capture');
+  const writes = [{ path: preview.relativePath, absolute: preview.absolutePath, exists: false, expectedSha256: null, text: pageText }];
+  const metadataWrites = [
+    { path: 'index.md', absolute: indexPath, exists: true, expectedSha256: sha256Text(originalIndex), text: nextIndex },
+    { path: 'log.md', absolute: logPath, exists: true, expectedSha256: sha256Text(originalLog), text: `${originalLog.trimEnd()}\n${logLine}` }
+  ];
+  const transactionWrites = [...writes, ...metadataWrites];
+  const pageWriteErrors = {
+    staleCode: 'page-exists',
+    staleMessage: '知识库中已有同名页面，请修改标题后再保存。',
+    untrackedCode: 'page-exists',
+    untrackedMessage: '知识库中已有同名页面，请修改标题后再保存。'
+  };
+  const metadataWriteErrors = {
+    staleCode: 'stale-wiki-metadata',
+    staleMessage: 'Wiki 索引或日志在保存期间发生变化，已停止覆盖。',
+    untrackedCode: 'stale-wiki-metadata',
+    untrackedMessage: 'Wiki 索引或日志状态异常，已停止覆盖。'
+  };
   let pageCreated = false;
+  let temporaryCleanupPending = false;
   try {
-    const handle = await fsp.open(preview.absolutePath, 'wx', 0o600);
-    try {
-      await handle.writeFile(pageText, 'utf8');
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
+    const published = await writeExpectedPage(writes[0], pageWriteErrors, { vaultPath: resolved, archiveRoot });
     pageCreated = true;
-    await atomicWriteText(indexPath, nextIndex);
-    await atomicWriteText(logPath, `${originalLog.trimEnd()}\n${logLine}`);
+    temporaryCleanupPending = published.cleanupPending;
+    await afterPageWrites();
+    await writeExpectedPage(metadataWrites[0], metadataWriteErrors, { vaultPath: resolved, archiveRoot });
+    await writeExpectedPage(metadataWrites[1], metadataWriteErrors, { vaultPath: resolved, archiveRoot });
+    await assertTransactionClaimsStable(transactionWrites, 'concurrent-wiki-edit', '检测到 Wiki 文件在事务提交期间被其他程序修改，已停止提交');
     const [verifiedPage, verifiedIndex, verifiedLog] = await Promise.all([
       fsp.readFile(preview.absolutePath, 'utf8'),
       fsp.readFile(indexPath, 'utf8'),
@@ -649,9 +860,15 @@ const saveCapture = async (vaultPath, capture, {
       throw new WikiBasicError('write-verification-failed', '结论页面、索引或日志写入后校验失败。');
     }
   } catch (error) {
-    if (pageCreated) await fsp.unlink(preview.absolutePath).catch(() => undefined);
-    await atomicWriteText(indexPath, originalIndex).catch(() => undefined);
-    await atomicWriteText(logPath, originalLog).catch(() => undefined);
+    if (transactionWrites.some((write) => write.transactionTouched)) {
+      await rollbackWikiTransaction({
+        vaultPath: resolved,
+        archiveRoot,
+        operation: 'capture',
+        writes: transactionWrites.filter((write) => write.transactionTouched),
+        originalError: error
+      });
+    }
     if (error?.code === 'EEXIST') throw new WikiBasicError('page-exists', '知识库中已有同名页面，请修改标题后再保存。');
     throw error;
   }
@@ -661,7 +878,11 @@ const saveCapture = async (vaultPath, capture, {
     path: preview.relativePath,
     vaultPath: resolved,
     sensitive: preview.sensitive,
-    message: '结论页面、索引和日志已更新；原始会话未修改。'
+    archive: path.relative(resolved, archiveRoot).replace(/\\/g, '/'),
+    temporaryCleanupPending,
+    message: temporaryCleanupPending
+      ? '结论已完整保存；一个不可见临时副本仍待系统清理，请勿重复提交。'
+      : '结论页面、索引、日志和恢复副本已更新；原始会话未修改。'
   };
 };
 
@@ -715,25 +936,125 @@ const projectFileDelta = (before, after) => {
 
 const listCurrentProjectPages = async (vaultPath, project, entry) => {
   const configured = Array.isArray(entry?.pages_in_vault) ? entry.pages_in_vault : [];
-  const candidates = new Set([...configured, project.overviewPath]);
+  assertUniquePolicyPaths(configured.filter((item) => typeof item === 'string'));
+  assertUniquePolicyPaths(Object.keys(entry?.page_sha256 && typeof entry.page_sha256 === 'object' ? entry.page_sha256 : {}));
+  const committedHashes = normalizedPageHashes(entry?.page_sha256);
+  const candidateMap = new Map();
+  for (const item of [...configured, project.overviewPath]) {
+    if (typeof item !== 'string') continue;
+    const normalized = item.replace(/\\/g, '/');
+    if (!candidateMap.has(policyPathKey(normalized))) candidateMap.set(policyPathKey(normalized), normalized);
+  }
+  const managed = new Set(configured.map((item) => typeof item === 'string' ? policyPathKey(item) : '').filter(Boolean));
+  if (entry) managed.add(policyPathKey(project.overviewPath));
   const pages = [];
-  for (const relative of candidates) {
-    if (typeof relative !== 'string' || !relative.startsWith(`${project.rootPath}/`) || !relative.endsWith('.md')) continue;
-    const absolute = path.join(vaultPath, relative);
-    if (!pathInside(vaultPath, absolute)) continue;
+  const missingManagedPages = [];
+  for (const relative of candidateMap.values()) {
+    const normalized = typeof relative === 'string' ? relative.replace(/\\/g, '/') : '';
+    if (!normalized.startsWith(`${project.rootPath}/`) || !normalized.endsWith('.md')) {
+      if (managed.has(policyPathKey(normalized))) missingManagedPages.push(normalized.slice(0, 260));
+      continue;
+    }
+    const absolute = path.join(vaultPath, normalized);
+    if (!pathInside(vaultPath, absolute)) {
+      if (managed.has(policyPathKey(normalized))) missingManagedPages.push(normalized);
+      continue;
+    }
     try {
       const info = await fsp.lstat(absolute);
-      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) continue;
+      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) {
+        if (managed.has(policyPathKey(normalized))) missingManagedPages.push(normalized);
+        continue;
+      }
       const opened = await readBoundedRegularFile(absolute, MAX_MARKDOWN_BYTES);
-      if (!opened) continue;
+      if (!opened) {
+        if (managed.has(policyPathKey(normalized))) missingManagedPages.push(normalized);
+        continue;
+      }
       const text = opened.bytes.toString('utf8');
-      pages.push({ path: relative.replace(/\\/g, '/'), sha256: sha256Text(text), size: opened.size });
+      const sha256 = sha256Text(text);
+      const committedSha256 = committedHashes[normalized] || '';
+      if (!managed.has(policyPathKey(normalized)) || !committedSha256) {
+        throw new WikiBasicError('untracked-project-page', `知识库中已有未纳入项目清单的页面 ${normalized}，已停止覆盖。`);
+      }
+      pages.push({
+        path: normalized,
+        sha256,
+        size: opened.size,
+        committedSha256,
+        humanEdited: Boolean(committedSha256 && committedSha256 !== sha256)
+      });
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
+      if (managed.has(policyPathKey(normalized))) missingManagedPages.push(normalized);
     }
   }
   pages.sort((left, right) => left.path.localeCompare(right.path));
-  return pages;
+  missingManagedPages.sort((left, right) => left.localeCompare(right));
+  return { pages, missingManagedPages: [...new Set(missingManagedPages)] };
+};
+
+const inspectReleaseKnowledgePages = async (vaultPath, project, entry, existingPages) => {
+  const releaseRoot = `${project.rootPath}/references/releases`;
+  const referencesDirectory = path.join(vaultPath, ...`${project.rootPath}/references`.split('/'));
+  let releaseDirectory = path.join(referencesDirectory, 'releases');
+  const requiredPaths = RELEASE_KNOWLEDGE_PAGE_NAMES.map((name) => `${releaseRoot}/${name}.md`);
+  const required = new Set(requiredPaths);
+  const actual = [];
+  await assertSafeDirectoryChain(vaultPath, referencesDirectory);
+  try {
+    const aliases = (await fsp.readdir(referencesDirectory, { withFileTypes: true }))
+      .filter((item) => policyPathKey(item.name) === 'releases');
+    if (aliases.length > 1 || (aliases.length === 1 && aliases[0].name !== 'releases')) {
+      throw new WikiBasicError('noncanonical-release-knowledge-directory', '版本知识目录必须使用规范名称 references/releases；请先人工整理大小写变体。');
+    }
+    if (aliases.length === 0) throw Object.assign(new Error('release-directory-missing'), { code: 'ENOENT' });
+    releaseDirectory = path.join(referencesDirectory, aliases[0].name);
+    await assertSafeDirectoryChain(vaultPath, releaseDirectory);
+    const info = await fsp.lstat(releaseDirectory);
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new WikiBasicError('unsafe-release-knowledge-directory', '版本知识目录不能是文件、符号链接或目录联接。');
+    }
+    const seenNames = new Set();
+    for (const item of await fsp.readdir(releaseDirectory, { withFileTypes: true })) {
+      if (item.isSymbolicLink()) throw new WikiBasicError('unsafe-release-knowledge-page', '版本知识目录包含符号链接，已停止同步。');
+      if (!item.isFile() || !item.name.toLocaleLowerCase().endsWith('.md')) continue;
+      const nameKey = policyPathKey(item.name);
+      if (seenNames.has(nameKey)) throw new WikiBasicError('duplicate-release-knowledge-page', '版本知识目录包含大小写等价的重复页面，请先人工整理。');
+      seenNames.add(nameKey);
+      const relative = `${releaseRoot}/${item.name}`;
+      const opened = await readBoundedRegularFile(path.join(releaseDirectory, item.name), MAX_MARKDOWN_BYTES);
+      if (!opened) throw new WikiBasicError('unsafe-release-knowledge-page', `版本知识页面 ${relative} 不是受支持的小型普通文件。`);
+      actual.push({ path: relative, sha256: sha256Text(opened.bytes) });
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  actual.sort((left, right) => left.path.localeCompare(right.path));
+  const actualPaths = new Set(actual.map((item) => item.path));
+  const committedHashes = normalizedPageHashes(entry?.page_sha256);
+  const existing = new Map(existingPages.map((item) => [item.path, item]));
+  const missingPages = requiredPaths.filter((pagePath) => !actualPaths.has(pagePath));
+  const extraPages = actual.filter((item) => !required.has(item.path)).map((item) => item.path);
+  const humanEditedPages = requiredPaths.filter((pagePath) => {
+    const page = existing.get(pagePath);
+    return Boolean(page?.humanEdited || (actualPaths.has(pagePath) && committedHashes[pagePath] && actual.find((item) => item.path === pagePath)?.sha256 !== committedHashes[pagePath]));
+  });
+  const workflowMode = entry?.release_knowledge?.mode || entry?.workflow_mode || '';
+  const established = workflowMode === 'release-knowledge' || actual.length > 0;
+  const complete = missingPages.length === 0 && extraPages.length === 0;
+  return {
+    mode: workflowMode === 'release-knowledge' ? 'release-knowledge' : '',
+    established,
+    complete,
+    healthy: complete && humanEditedPages.length === 0,
+    rootPath: releaseRoot,
+    requiredPaths,
+    actualPages: actual,
+    missingPages,
+    extraPages,
+    humanEditedPages
+  };
 };
 
 const assertSafeDirectoryChain = async (rootPath, directoryPath) => {
@@ -754,58 +1075,1883 @@ const assertSafeDirectoryChain = async (rootPath, directoryPath) => {
   }
 };
 
-const acquireProjectSyncLock = async (vaultPath, allowReclaim = true) => {
+const normalizedPageHashes = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .filter(([pagePath, digest]) => typeof pagePath === 'string' && /^[a-f0-9]{64}$/iu.test(digest || ''))
+    .map(([pagePath, digest]) => [pagePath.replace(/\\/g, '/'), digest.toLowerCase()]));
+};
+
+const sortedPageHashes = (entries) => Object.fromEntries([...entries]
+  .filter(([pagePath, digest]) => typeof pagePath === 'string' && /^[a-f0-9]{64}$/iu.test(digest || ''))
+  .sort(([left], [right]) => left.localeCompare(right)));
+
+const recoveryMarkerPath = (vaultPath) => path.join(vaultPath, '_staging', WIKI_RECOVERY_MARKER_NAME);
+
+const requireSafeRecoveryStaging = async (vaultPath, { create = false, allowMissing = false } = {}) => {
+  const staging = path.join(vaultPath, '_staging');
+  try {
+    await assertSafeDirectoryChain(vaultPath, staging);
+  } catch (error) {
+    if (error?.code === 'unsafe-project-directory') throw new WikiBasicError('unsafe-recovery-staging', 'Wiki 恢复目录不能包含符号链接或目录联接。');
+    throw error;
+  }
+  if (create) await fsp.mkdir(staging, { recursive: true });
+  let info;
+  try {
+    info = await fsp.lstat(staging);
+  } catch (error) {
+    if (allowMissing && error?.code === 'ENOENT') return null;
+    throw error;
+  }
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new WikiBasicError('unsafe-recovery-staging', 'Wiki 恢复目录不能是文件、符号链接或目录联接。');
+  }
+  await assertSafeDirectoryChain(vaultPath, staging);
+  const [realVault, realStaging] = await Promise.all([fsp.realpath(vaultPath), fsp.realpath(staging)]);
+  if (normalizedPathKey(realStaging) !== normalizedPathKey(path.join(realVault, '_staging'))) {
+    throw new WikiBasicError('unsafe-recovery-staging', 'Wiki 恢复目录解析到知识库之外，已停止操作。');
+  }
+  return staging;
+};
+
+const directoryIdentity = async (directoryPath) => {
+  const info = await fsp.lstat(directoryPath, { bigint: true });
+  return {
+    dev: String(info.dev),
+    ino: String(info.ino),
+    birthtimeNs: String(info.birthtimeNs ?? ''),
+    isDirectory: info.isDirectory(),
+    isSymbolicLink: info.isSymbolicLink()
+  };
+};
+
+const regularFileIdentityFromInfo = (info) => ({
+  dev: String(info.dev),
+  ino: String(info.ino),
+  birthtimeNs: String(info.birthtimeNs ?? ''),
+  isFile: info.isFile(),
+  isSymbolicLink: info.isSymbolicLink()
+});
+
+const sameRegularFileIdentity = (left, right) => Boolean(left && right
+  && left.isFile && right.isFile
+  && !left.isSymbolicLink && !right.isSymbolicLink
+  && left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs);
+
+const sameDirectoryIdentity = (left, right) => Boolean(left && right
+  && left.isDirectory && right.isDirectory
+  && !left.isSymbolicLink && !right.isSymbolicLink
+  && left.dev === right.dev && left.ino === right.ino && left.birthtimeNs === right.birthtimeNs);
+
+const assertWriteParentStable = async (write) => {
+  const parent = path.dirname(write.absolute);
+  const current = await directoryIdentity(parent);
+  if (!current.isDirectory || current.isSymbolicLink) {
+    write.unsafeParent = true;
+    throw new WikiBasicError('unsafe-target-directory', `Wiki 目标目录 ${write.path} 不是普通目录，已停止操作。`);
+  }
+  if (!write.parentIdentity) {
+    write.parentIdentity = current;
+    return current;
+  }
+  if (!sameDirectoryIdentity(write.parentIdentity, current)) {
+    write.unsafeParent = true;
+    throw new WikiBasicError('unsafe-target-directory', `Wiki 目标目录 ${write.path} 在写入期间被替换，已保留恢复现场。`);
+  }
+  return current;
+};
+
+const assertClaimedRecoveryStaging = async (vaultPath, claimPath, expectedIdentity) => {
+  if (path.dirname(path.resolve(claimPath)) !== path.resolve(vaultPath)
+    || !path.basename(claimPath).startsWith('_staging-recovery-clear-')) {
+    throw new WikiBasicError('unsafe-recovery-staging', 'Wiki 恢复目录认领位置无效。');
+  }
+  const info = await fsp.lstat(claimPath);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new WikiBasicError('unsafe-recovery-staging', '已认领的 Wiki 恢复目录不是普通目录，已隔离并停止操作。');
+  }
+  const claimedIdentity = await directoryIdentity(claimPath);
+  if (!sameDirectoryIdentity(expectedIdentity, claimedIdentity)) {
+    throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复目录在认领前被替换，已隔离并停止操作。');
+  }
+  await assertSafeDirectoryChain(vaultPath, claimPath);
+  const [realVault, realClaim] = await Promise.all([fsp.realpath(vaultPath), fsp.realpath(claimPath)]);
+  if (normalizedPathKey(realClaim) !== normalizedPathKey(path.join(realVault, path.basename(claimPath)))) {
+    throw new WikiBasicError('unsafe-recovery-staging', '已认领的 Wiki 恢复目录解析到知识库之外，已隔离并停止操作。');
+  }
+  return claimPath;
+};
+
+const assertRetainedRecoveryStaging = async (vaultPath, archivePath, retainedPath, expectedIdentity, token) => {
+  const expectedName = `_cleared-staging-${token}`;
+  if (path.dirname(path.resolve(retainedPath)) !== path.resolve(archivePath)
+    || path.basename(retainedPath) !== expectedName
+    || !pathInside(path.join(vaultPath, '_archives'), retainedPath)) {
+    throw new WikiBasicError('unsafe-recovery-staging', 'Wiki 恢复目录归档位置无效。');
+  }
+  const info = await fsp.lstat(retainedPath);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new WikiBasicError('unsafe-recovery-staging', '已归档的 Wiki 恢复目录不是普通目录，已停止操作。');
+  }
+  const retainedIdentity = await directoryIdentity(retainedPath);
+  if (!sameDirectoryIdentity(expectedIdentity, retainedIdentity)) {
+    throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复目录归档后身份发生变化，已保留保护锁。');
+  }
+  await assertSafeDirectoryChain(vaultPath, retainedPath);
+  const [realArchive, realRetained] = await Promise.all([fsp.realpath(archivePath), fsp.realpath(retainedPath)]);
+  if (normalizedPathKey(realRetained) !== normalizedPathKey(path.join(realArchive, expectedName))) {
+    throw new WikiBasicError('unsafe-recovery-staging', '已归档的 Wiki 恢复目录解析到预期归档之外。');
+  }
+  return retainedPath;
+};
+
+const readWikiRecoveryMarkerFile = async (vault, markerPath) => {
+  if (!pathInside(vault, markerPath)) throw new WikiBasicError('unsafe-recovery-marker', 'Wiki 恢复标记越过知识库范围。');
+  let opened;
+  try {
+    const info = await fsp.lstat(markerPath);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > WIKI_RECOVERY_MARKER_MAX_BYTES) {
+      throw new WikiBasicError('unsafe-recovery-marker', 'Wiki 恢复标记不是安全的小型普通文件。');
+    }
+    opened = await readBoundedRegularFile(markerPath, WIKI_RECOVERY_MARKER_MAX_BYTES);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+  if (!opened) throw new WikiBasicError('unsafe-recovery-marker', 'Wiki 恢复标记超出安全上限。');
+  let marker;
+  try { marker = JSON.parse(opened.bytes.toString('utf8')); } catch {}
+  const kind = WIKI_RECOVERY_ARCHIVE_KINDS[marker?.operation];
+  const expectedPrefix = kind ? `_archives/${kind}/` : '';
+  const failures = Array.isArray(marker?.failures) ? marker.failures : null;
+  if (!marker || marker.version !== 1 || !kind
+    || typeof marker.id !== 'string' || !/^[a-f0-9-]{36}$/iu.test(marker.id)
+    || typeof marker.archive !== 'string' || !marker.archive.startsWith(expectedPrefix)
+    || !/^[A-Za-z0-9-]{20,160}$/u.test(marker.archive.slice(expectedPrefix.length))
+    || typeof marker.createdAt !== 'string' || !Number.isFinite(Date.parse(marker.createdAt))
+    || (marker.originalCode !== undefined && (typeof marker.originalCode !== 'string' || !/^[a-z0-9-]{1,80}$/u.test(marker.originalCode)))
+    || !failures || failures.length < 1 || failures.length > 64
+    || failures.some((item) => typeof item !== 'string' || item.length < 1 || item.length > 300)) {
+    throw new WikiBasicError('unsafe-recovery-marker', 'Wiki 恢复标记内容无效，已禁止自动定位恢复目录。');
+  }
+  const archivePath = path.join(vault, ...marker.archive.split('/'));
+  if (!pathInside(path.join(vault, '_archives'), archivePath)) {
+    throw new WikiBasicError('unsafe-recovery-marker', 'Wiki 恢复标记指向知识库归档范围之外。');
+  }
+  await assertSafeDirectoryChain(vault, archivePath);
+  const archiveInfo = await fsp.lstat(archivePath);
+  if (!archiveInfo.isDirectory() || archiveInfo.isSymbolicLink()) {
+    throw new WikiBasicError('unsafe-recovery-marker', 'Wiki 恢复标记指向的归档目录不可用。');
+  }
+  return {
+    version: 1,
+    id: marker.id,
+    operation: marker.operation,
+    archive: marker.archive,
+    archivePath,
+    createdAt: marker.createdAt,
+    originalCode: marker.originalCode || 'wiki-write-failed',
+    failures: failures.map((item) => oneLine(item, 300)),
+    markerSha256: sha256Text(opened.bytes)
+  };
+};
+
+const readWikiRecoveryMarker = async (vaultPath) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  const staging = await requireSafeRecoveryStaging(vault, { allowMissing: true });
+  if (!staging) return null;
+  return readWikiRecoveryMarkerFile(vault, path.join(staging, WIKI_RECOVERY_MARKER_NAME));
+};
+
+const writeWikiRecoveryMarker = async ({ vaultPath, archiveRoot, operation, originalError, failures }) => {
+  const kind = WIKI_RECOVERY_ARCHIVE_KINDS[operation];
+  if (!kind) throw new WikiBasicError('invalid-recovery-operation', 'Wiki 恢复事务类型无效。');
+  const archive = path.relative(vaultPath, archiveRoot).replace(/\\/g, '/');
+  if (!archive.startsWith(`_archives/${kind}/`)) throw new WikiBasicError('unsafe-recovery-archive', 'Wiki 恢复事务归档路径无效。');
+  const marker = {
+    version: 1,
+    id: randomUUID(),
+    operation,
+    archive,
+    createdAt: isoNow(),
+    originalCode: oneLine(originalError?.code || 'wiki-write-failed', 80).toLowerCase().replace(/[^a-z0-9-]+/g, '-') || 'wiki-write-failed',
+    failures: failures.slice(0, 64).map((item) => oneLine(item, 300))
+  };
+  const staging = await requireSafeRecoveryStaging(vaultPath, { create: true });
+  await assertSafeDirectoryChain(vaultPath, staging);
+  const archiveMarkerPath = path.join(archiveRoot, `_recovery-marker-${marker.id}.json`);
+  const markerText = `${JSON.stringify(marker, null, 2)}\n`;
+  await atomicWriteText(archiveMarkerPath, markerText);
+  try {
+    await writeNewTextAtomically(path.join(staging, WIKI_RECOVERY_MARKER_NAME), markerText);
+  } catch (error) {
+    if (error?.code === 'EEXIST') throw new WikiBasicError('recovery-marker-exists', '已有 Wiki 恢复标记，未覆盖原标记。');
+    throw error;
+  }
+  await requireSafeRecoveryStaging(vaultPath);
+  return marker;
+};
+
+const clearWikiRecoveryMarker = async (vaultPath, expectedProtection) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  const interruptedGuard = await readWikiRecoveryClearGuard(vault);
+  if (interruptedGuard) return resumeWikiRecoveryClearGuard(vault, interruptedGuard, expectedProtection);
+  const guard = await acquireWikiRecoveryClearGuard(vault);
+  let protection = null;
+  let stagingClaim = '';
+  let retainedDirectory = '';
+  let stagingMoved = false;
+  let stagingClaimAttempted = false;
+  let stagingIdentity = null;
+  let freshStagingIdentity = null;
+  let phase = 'created';
+  let benignExit = false;
+  try {
+    const staging = await requireSafeRecoveryStaging(vault, { allowMissing: true });
+    if (!staging) {
+      benignExit = true;
+      await archiveWikiRecoveryClearGuard(guard);
+      return { ok: true, cleared: false };
+    }
+    await assertNoLegacyWikiWriteLocks(staging);
+    stagingIdentity = await directoryIdentity(staging);
+    const rawLock = await readWikiWriteLockAtStaging(staging);
+    const recoverableRawLock = rawLock?.record?.state === 'recovery-required'
+      || (rawLock?.record?.state === 'held' && typeof rawLock.record.archive === 'string' && !processIsActive(Number(rawLock.record.pid) || 0));
+    if (rawLock && !recoverableRawLock) throw new WikiBasicError('wiki-write-busy', 'Wiki 正在写入，不能同时解除恢复保护。');
+    protection = await readWikiRecoveryProtectionAtStaging(vault, staging, rawLock);
+    if (!protection) {
+      if (rawLock) throw new WikiBasicError('wiki-write-busy', 'Wiki 正在写入，不能同时解除恢复保护。');
+      benignExit = true;
+      await archiveWikiRecoveryClearGuard(guard);
+      return { ok: true, cleared: false };
+    }
+    assertExpectedWikiRecoveryProtection(protection, expectedProtection);
+    await writeWikiRecoveryClearGuardRecord(guard, {
+      state: 'clearing',
+      phase: 'protection-validated',
+      archive: protection.archive,
+      protection: wikiRecoveryProtectionIdentity(protection)
+    });
+    phase = 'protection-validated';
+
+    stagingClaim = path.join(vault, `_staging-recovery-clear-${guard.token}`);
+    guard.claimedStaging = path.basename(stagingClaim);
+    await writeWikiRecoveryClearGuardRecord(guard, {
+      state: 'clearing',
+      phase: 'prepared',
+      archive: protection.archive,
+      protection: wikiRecoveryProtectionIdentity(protection),
+      claimedStaging: guard.claimedStaging,
+      stagingIdentity
+    });
+    phase = 'prepared';
+    try {
+      stagingClaimAttempted = true;
+      await fsp.rename(staging, stagingClaim);
+      stagingMoved = true;
+    } catch (error) {
+      const claimInfo = await fsp.lstat(stagingClaim).catch(() => null);
+      const sourceInfo = await fsp.lstat(staging).catch(() => null);
+      if (!claimInfo && sourceInfo) {
+        await requireSafeRecoveryStaging(vault);
+        stagingClaimAttempted = false;
+        throw error;
+      }
+      if (!claimInfo || sourceInfo) throw error;
+      stagingMoved = true;
+    }
+    await assertClaimedRecoveryStaging(vault, stagingClaim, stagingIdentity);
+    const claimedLock = await readWikiWriteLockAtStaging(stagingClaim);
+    const claimedProtection = await readWikiRecoveryProtectionAtStaging(vault, stagingClaim, claimedLock);
+    if (!claimedProtection || !sameWikiRecoveryProtection(protection, claimedProtection)) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复保护在解除期间发生变化，已保留现场。');
+    }
+    phase = 'claimed';
+    await writeWikiRecoveryClearGuardRecord(guard, {
+      state: 'clearing',
+      phase,
+      archive: protection.archive,
+      protection: wikiRecoveryProtectionIdentity(protection),
+      claimedStaging: guard.claimedStaging,
+      stagingIdentity
+    });
+
+    retainedDirectory = path.join(protection.archivePath, `_cleared-staging-${guard.token}`);
+    await assertSafeDirectoryChain(vault, protection.archivePath);
+    try {
+      await fsp.rename(stagingClaim, retainedDirectory);
+      stagingMoved = false;
+    } catch (error) {
+      const retainedInfo = await fsp.lstat(retainedDirectory).catch(() => null);
+      const claimInfo = await fsp.lstat(stagingClaim).catch(() => null);
+      if (!retainedInfo?.isDirectory() || retainedInfo.isSymbolicLink() || claimInfo) throw error;
+      stagingMoved = false;
+    }
+    await assertRetainedRecoveryStaging(vault, protection.archivePath, retainedDirectory, stagingIdentity, guard.token);
+    phase = 'retained';
+    await writeWikiRecoveryClearGuardRecord(guard, {
+      state: 'clearing',
+      phase,
+      archive: protection.archive,
+      protection: wikiRecoveryProtectionIdentity(protection),
+      claimedStaging: guard.claimedStaging,
+      retainedStaging: path.basename(retainedDirectory),
+      stagingIdentity
+    });
+    await fsp.mkdir(path.join(vault, '_staging'));
+    await requireSafeRecoveryStaging(vault);
+    freshStagingIdentity = await directoryIdentity(path.join(vault, '_staging'));
+    phase = 'staging-created';
+    await writeWikiRecoveryClearGuardRecord(guard, {
+      state: 'clearing',
+      phase,
+      archive: protection.archive,
+      protection: wikiRecoveryProtectionIdentity(protection),
+      claimedStaging: guard.claimedStaging,
+      retainedStaging: path.basename(retainedDirectory),
+      stagingIdentity,
+      freshStagingIdentity
+    });
+    forgetRecoveredWikiWriteLock(vault, protection);
+    const retainedGuardPath = await archiveWikiRecoveryClearGuard(guard, protection.archivePath);
+    return {
+      ok: true,
+      cleared: true,
+      archive: protection.archive,
+      protectionType: protection.type,
+      retainedStaging: path.relative(vault, retainedDirectory).replace(/\\/g, '/'),
+      retainedGuard: path.relative(vault, retainedGuardPath).replace(/\\/g, '/')
+    };
+  } catch (error) {
+    if (benignExit) throw error;
+    if (!stagingClaimAttempted) {
+      let archiveError;
+      try {
+        await archiveWikiRecoveryClearGuard(guard, protection?.archivePath || '');
+      } catch (failure) {
+        archiveError = failure;
+      }
+      if (archiveError) throw new AggregateError([error, archiveError], 'Wiki 恢复保护未变更，但临时清理保护锁未能安全归档。');
+      throw error;
+    }
+    let guardError;
+    try {
+      await retainWikiRecoveryClearGuard(guard, {
+        phase,
+        archive: protection?.archive || '',
+        protection: protection ? wikiRecoveryProtectionIdentity(protection) : undefined,
+        claimedStaging: stagingClaim ? path.basename(stagingClaim) : '',
+        retainedStaging: retainedDirectory ? path.basename(retainedDirectory) : '',
+        stagingIdentity: stagingIdentity || undefined,
+        freshStagingIdentity: freshStagingIdentity || undefined,
+        failure: oneLine(error?.code || error?.message || 'recovery-clear-failed', 160)
+      });
+    } catch (failure) {
+      guardError = failure;
+    }
+    if (guardError) throw new AggregateError([error, guardError], 'Wiki 恢复保护解除失败，且清理保护锁未能完整记录。');
+    throw error;
+  }
+};
+
+const createWikiTransactionArchive = async (vaultPath, kind, timestamp, files) => {
+  const transactionId = `${timestamp.replace(/[:.]/g, '-')}-${randomUUID()}`;
+  const archiveRoot = path.join(vaultPath, '_archives', kind, transactionId);
+  await assertSafeDirectoryChain(vaultPath, path.dirname(archiveRoot));
+  await fsp.mkdir(archiveRoot, { recursive: true });
+  await assertSafeDirectoryChain(vaultPath, archiveRoot);
+  for (const file of files) {
+    const target = path.join(archiveRoot, file.path);
+    if (!pathInside(archiveRoot, target)) throw new WikiBasicError('path-escape', '恢复副本路径越过事务归档目录。');
+    await assertSafeDirectoryChain(archiveRoot, path.dirname(target));
+    await atomicWriteText(target, file.text);
+  }
+  return archiveRoot;
+};
+
+const readRollbackTarget = async (filePath) => {
+  try {
+    const info = await fsp.lstat(filePath);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) return { state: 'unsafe' };
+    const opened = await readBoundedRegularFile(filePath, MAX_MARKDOWN_BYTES);
+    return opened ? { state: 'file', text: opened.bytes.toString('utf8') } : { state: 'unsafe' };
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { state: 'missing' };
+    throw error;
+  }
+};
+
+const assertExpectedPageState = async (write, { staleCode, staleMessage, untrackedCode, untrackedMessage }) => {
+  const current = await readRollbackTarget(write.absolute);
+  if (write.exists) {
+    if (current.state !== 'file' || sha256Text(current.text) !== write.expectedSha256) {
+      throw new WikiBasicError(staleCode, staleMessage);
+    }
+    return current.text;
+  }
+  if (current.state !== 'missing') throw new WikiBasicError(untrackedCode, untrackedMessage);
+  return '';
+};
+
+const transactionClaimPath = async (vaultPath, archiveRoot, phase, relativePath) => {
+  const normalized = String(relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!normalized || normalized.includes('..') || normalized.includes('//') || normalized.length > 520) {
+    throw new WikiBasicError('unsafe-transaction-path', 'Wiki 事务文件路径无效。');
+  }
+  const segments = normalized.split('/');
+  const filename = segments.pop();
+  const claim = path.join(archiveRoot, '_claims', phase, ...segments, `${filename}.${randomUUID()}.claim`);
+  if (!pathInside(archiveRoot, claim)) throw new WikiBasicError('path-escape', 'Wiki 事务认领路径越过恢复归档。');
+  await assertSafeDirectoryChain(vaultPath, path.dirname(claim));
+  await fsp.mkdir(path.dirname(claim), { recursive: true });
+  await assertSafeDirectoryChain(vaultPath, path.dirname(claim));
+  try {
+    await fsp.lstat(claim);
+    throw new WikiBasicError('transaction-claim-exists', 'Wiki 事务认领位置已存在，已停止写入。');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  return claim;
+};
+
+const publishRegularClaimIfMissing = async (claimPath, targetPath) => {
+  const claimed = await readRollbackTarget(claimPath);
+  if (claimed.state !== 'file') return { restored: false, reason: `claim-${claimed.state}` };
+  try {
+    await writeNewTextAtomically(targetPath, claimed.text);
+    return { restored: true, text: claimed.text };
+  } catch (error) {
+    if (error?.code === 'EEXIST') return { restored: false, reason: 'target-reappeared' };
+    return { restored: false, reason: error?.code || error?.message || 'claim-publish-failed' };
+  }
+};
+
+const writeExpectedPage = async (write, errors, { vaultPath, archiveRoot } = {}) => {
+  await assertWriteParentStable(write);
+  if (!write.exists) {
+    try {
+      const result = await writeNewTextAtomically(write.absolute, write.text);
+      write.transactionTouched = true;
+      write.published = true;
+      await assertWriteParentStable(write);
+      return result;
+    } catch (error) {
+      if (error?.code === 'EEXIST') throw new WikiBasicError(errors.untrackedCode, errors.untrackedMessage);
+      throw error;
+    }
+  }
+  const resolved = path.resolve(write.absolute);
+  const temp = `${resolved}.${process.pid}-${randomUUID()}.tmp`;
+  let handle;
+  try {
+    handle = await fsp.open(temp, 'wx', 0o600);
+    await handle.writeFile(write.text, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    const claimPath = await transactionClaimPath(vaultPath, archiveRoot, 'prewrite', write.path);
+    write.transactionTouched = true;
+    write.prewriteClaim = claimPath;
+    await assertWriteParentStable(write);
+    try {
+      await fsp.rename(resolved, claimPath);
+    } catch (error) {
+      const [claimedAfterError, liveAfterError] = await Promise.all([
+        readRollbackTarget(claimPath).catch(() => ({ state: 'unavailable' })),
+        readRollbackTarget(resolved).catch(() => ({ state: 'unavailable' }))
+      ]);
+      const claimMatches = claimedAfterError.state === 'file' && sha256Text(claimedAfterError.text) === write.expectedSha256;
+      if (!claimMatches || liveAfterError.state !== 'missing') {
+        if (error?.code === 'ENOENT') throw new WikiBasicError(errors.staleCode, errors.staleMessage);
+        throw error;
+      }
+    }
+    const claimed = await readRollbackTarget(claimPath);
+    if (claimed.state !== 'file' || sha256Text(claimed.text) !== write.expectedSha256) {
+      await publishRegularClaimIfMissing(claimPath, resolved);
+      throw new WikiBasicError(errors.staleCode, errors.staleMessage);
+    }
+    let publicationRecovered = false;
+    await assertWriteParentStable(write);
+    try {
+      await fsp.link(temp, resolved);
+    } catch (error) {
+      if (error?.code === 'EEXIST') throw new WikiBasicError(errors.staleCode, errors.staleMessage);
+      const current = await readRollbackTarget(resolved).catch(() => ({ state: 'unavailable' }));
+      if (current.state !== 'file' || current.text !== write.text) throw error;
+      publicationRecovered = true;
+    }
+    write.published = true;
+    await assertWriteParentStable(write);
+    return { cleanupPending: false, publicationRecovered };
+  } finally {
+    await handle?.close().catch(() => undefined);
+    await fsp.unlink(temp).catch((error) => {
+      if (error?.code !== 'ENOENT') throw error;
+    });
+  }
+};
+
+const assertTransactionClaimsStable = async (writes, code, message) => {
+  for (const write of writes) {
+    if (!write.exists || !write.prewriteClaim) continue;
+    const claimed = await readRollbackTarget(write.prewriteClaim);
+    if (claimed.state !== 'file' || sha256Text(claimed.text) !== write.expectedSha256) {
+      throw new WikiBasicError(code, `${message}（${write.path}）`);
+    }
+  }
+};
+
+const rollbackWikiTransaction = async ({ vaultPath, archiveRoot, operation, writes, originalError }) => {
+  const failures = [];
+  for (const write of [...writes].reverse()) {
+    try {
+      if (!write.transactionTouched) continue;
+      if (write.unsafeParent) throw new Error('target-parent-changed');
+      if (!write.published) {
+        const current = await readRollbackTarget(write.absolute);
+        if (current.state === 'file' && current.text === write.text) {
+          write.published = true;
+        } else {
+          if (current.state === 'unsafe') throw new Error('unpublished-target-unsafe');
+          if (write.exists && write.prewriteClaim && current.state === 'missing') {
+            const restored = await publishRegularClaimIfMissing(write.prewriteClaim, write.absolute);
+            if (!restored.restored) throw new Error(restored.reason || 'prewrite-claim-restore-failed');
+          }
+          continue;
+        }
+      }
+      const rollbackClaim = await transactionClaimPath(vaultPath, archiveRoot, 'rollback', write.path);
+      write.rollbackClaim = rollbackClaim;
+      try {
+        await fsp.rename(write.absolute, rollbackClaim);
+      } catch (error) {
+        const [claimedAfterError, liveAfterError] = await Promise.all([
+          readRollbackTarget(rollbackClaim).catch(() => ({ state: 'unavailable' })),
+          readRollbackTarget(write.absolute).catch(() => ({ state: 'unavailable' }))
+        ]);
+        if (claimedAfterError.state === 'file' && claimedAfterError.text === write.text && liveAfterError.state === 'missing') {
+          // The rename completed even though the platform reported an error.
+        } else {
+          if (error?.code === 'ENOENT') {
+            if (!write.exists) continue;
+            throw new Error('concurrent-target-missing');
+          }
+          throw error;
+        }
+      }
+      const current = await readRollbackTarget(rollbackClaim);
+      if (current.state !== 'file') throw new Error(`concurrent-target-${current.state}`);
+      if (current.text !== write.text) {
+        const preserved = await publishRegularClaimIfMissing(rollbackClaim, write.absolute);
+        if (!preserved.restored) throw new Error(`concurrent-content-${preserved.reason || 'preserve-failed'}`);
+        throw new Error('concurrent-content-preserved');
+      }
+      if (!write.exists) continue;
+      if (!write.prewriteClaim) throw new Error('prewrite-claim-missing');
+      const original = await readRollbackTarget(write.prewriteClaim);
+      if (original.state !== 'file') throw new Error(`prewrite-claim-${original.state}`);
+      const restored = await publishRegularClaimIfMissing(write.prewriteClaim, write.absolute);
+      if (!restored.restored) throw new Error(restored.reason || 'prewrite-claim-restore-failed');
+      if (sha256Text(original.text) !== write.expectedSha256) throw new Error('concurrent-prewrite-content-preserved');
+    } catch (error) {
+      failures.push(`${write.path}: ${error?.code || error?.message || 'restore-failed'}`);
+    }
+  }
+  if (!failures.length) return;
+  const archive = path.relative(vaultPath, archiveRoot).replace(/\\/g, '/');
+  let markerWritten = false;
+  try {
+    await writeWikiRecoveryMarker({ vaultPath, archiveRoot, operation, originalError, failures });
+    markerWritten = true;
+  } catch (error) {
+    failures.push(`${WIKI_RECOVERY_MARKER_NAME}: ${error?.code || error?.message || 'marker-write-failed'}`);
+  }
+  const rollbackError = new WikiBasicError(
+    'rollback-incomplete',
+    `Wiki 写入失败，且自动回退未能完整恢复。请保留现场并从 ${archive} 手动恢复。`
+  );
+  rollbackError.archive = archive;
+  rollbackError.originalCode = originalError?.code || 'wiki-write-failed';
+  rollbackError.rollbackFailures = failures;
+  rollbackError.cause = originalError;
+  rollbackError.retainWriteLock = !markerWritten;
+  throw rollbackError;
+};
+
+const waitForWikiLockRetry = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+
+const retryWikiLockTransient = async (operation) => {
+  let lastError;
+  for (const delayMs of WIKI_WRITE_LOCK_RETRY_DELAYS_MS) {
+    if (delayMs > 0) await waitForWikiLockRetry(delayMs);
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!WIKI_WRITE_LOCK_TRANSIENT_CODES.has(error?.code)) throw error;
+    }
+  }
+  throw lastError;
+};
+
+const readWikiWriteLockRecord = async (lockPath) => {
+  const info = await fsp.lstat(lockPath);
+  if (!info.isFile() || info.isSymbolicLink() || info.size > WIKI_WRITE_LOCK_MAX_BYTES) {
+    throw new WikiBasicError('unsafe-wiki-write-lock', '知识库写入锁不是安全的普通文件，已停止写入。');
+  }
+  const opened = await readBoundedRegularFile(lockPath, WIKI_WRITE_LOCK_MAX_BYTES);
+  if (!opened) throw new WikiBasicError('unsafe-wiki-write-lock', '知识库写入锁超出安全大小，已停止写入。');
+  let record = {};
+  try { record = JSON.parse(opened.bytes.toString('utf8') || '{}'); } catch {}
+  return {
+    info,
+    record: record && typeof record === 'object' && !Array.isArray(record) ? record : {},
+    digest: sha256Text(opened.bytes)
+  };
+};
+
+const readWikiWriteLockAtStaging = async (staging) => {
+  const lockPath = path.join(staging, WIKI_WRITE_LOCK_NAME);
+  try {
+    return await readWikiWriteLockRecord(lockPath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+};
+
+const readWikiRecoveryLockAtStaging = async (vaultPath, staging, current = null) => {
+  const lock = current || await readWikiWriteLockAtStaging(staging);
+  if (!lock) return null;
+  const recoverableCrash = lock.record.state === 'held'
+    && typeof lock.record.archive === 'string'
+    && !processIsActive(Number(lock.record.pid) || 0);
+  if (lock.record.state !== 'recovery-required' && !recoverableCrash) return null;
+  const kind = WIKI_RECOVERY_ARCHIVE_KINDS[lock.record.operation];
+  const archive = typeof lock.record.archive === 'string' ? lock.record.archive.replace(/\\/g, '/') : '';
+  if (!kind || !archive.startsWith(`_archives/${kind}/`)) {
+    throw new WikiBasicError('unsafe-wiki-write-lock', 'Wiki 恢复保护锁缺少有效归档信息，已停止写入。');
+  }
+  const archivePath = path.join(vaultPath, ...archive.split('/'));
+  if (!pathInside(path.join(vaultPath, '_archives'), archivePath)) throw new WikiBasicError('unsafe-wiki-write-lock', 'Wiki 恢复保护锁指向归档范围之外。');
+  await assertSafeDirectoryChain(vaultPath, archivePath);
+  const archiveInfo = await fsp.lstat(archivePath);
+  if (!archiveInfo.isDirectory() || archiveInfo.isSymbolicLink()) {
+    throw new WikiBasicError('unsafe-wiki-write-lock', 'Wiki 恢复保护锁指向的归档目录不可用。');
+  }
+  return {
+    type: 'retained-lock',
+    operation: lock.record.operation,
+    archive,
+    archivePath,
+    createdAt: oneLine(lock.record.started || '', 80),
+    originalCode: oneLine(lock.record.originalCode || (recoverableCrash ? 'interrupted-write' : 'rollback-incomplete'), 80),
+    failures: [recoverableCrash ? '检测到写入进程已结束，DSH 已保留带事务归档的写入锁。' : '恢复标记未能发布，DSH 已保留写入保护锁。'],
+    lockProtected: true,
+    lockToken: oneLine(lock.record.token || '', 80),
+    lockSha256: lock.digest,
+    interrupted: recoverableCrash
+  };
+};
+
+const readWikiRecoveryLock = async (vaultPath) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  const staging = await requireSafeRecoveryStaging(vault, { allowMissing: true });
+  if (!staging) return null;
+  return readWikiRecoveryLockAtStaging(vault, staging);
+};
+
+const recoveryClearGuardPath = (vaultPath) => path.join(vaultPath, WIKI_RECOVERY_CLEAR_GUARD_NAME);
+
+const validRecoveryClearDirectoryIdentity = (identity) => Boolean(identity && typeof identity === 'object' && !Array.isArray(identity)
+  && typeof identity.dev === 'string' && identity.dev.length > 0
+  && typeof identity.ino === 'string' && identity.ino.length > 0
+  && typeof identity.birthtimeNs === 'string'
+  && identity.isDirectory === true && identity.isSymbolicLink === false);
+
+const validRecoveryClearProtectionIdentity = (identity) => Boolean(identity && typeof identity === 'object' && !Array.isArray(identity)
+  && ['marker', 'retained-lock'].includes(identity.type)
+  && typeof identity.archive === 'string' && identity.archive.startsWith('_archives/')
+  && typeof identity.id === 'string' && identity.id.length > 0 && identity.id.length <= 160
+  && typeof identity.digest === 'string' && /^[a-f0-9]{64}$/u.test(identity.digest));
+
+const validateWikiRecoveryClearGuardRecord = async (vaultPath, record, { requirePhase = false } = {}) => {
+  const phases = new Set(['created', 'protection-validated', 'prepared', 'claimed', 'retained', 'staging-created']);
+  if (!record || typeof record !== 'object' || Array.isArray(record)
+    || record.version !== 1
+    || typeof record.token !== 'string' || !/^[a-f0-9-]{36}$/iu.test(record.token)
+    || !Number.isSafeInteger(record.pid) || record.pid <= 0
+    || !['clearing', 'recovery-required'].includes(record.state)
+    || typeof record.started !== 'string' || !Number.isFinite(Date.parse(record.started))
+    || (requirePhase && !phases.has(record.phase))
+    || (record.phase !== undefined && !phases.has(record.phase))
+    || (record.archive !== undefined && typeof record.archive !== 'string')
+    || (record.claimedStaging !== undefined && typeof record.claimedStaging !== 'string')
+    || (record.retainedStaging !== undefined && typeof record.retainedStaging !== 'string')
+    || (record.failure !== undefined && (typeof record.failure !== 'string' || record.failure.length > 160))
+    || (record.resumedAt !== undefined && (typeof record.resumedAt !== 'string' || !Number.isFinite(Date.parse(record.resumedAt))))
+    || (record.protection !== undefined && !validRecoveryClearProtectionIdentity(record.protection))
+    || (record.stagingIdentity !== undefined && !validRecoveryClearDirectoryIdentity(record.stagingIdentity))
+    || (record.freshStagingIdentity !== undefined && !validRecoveryClearDirectoryIdentity(record.freshStagingIdentity))) {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁内容无效。');
+  }
+  let archivePath = '';
+  const archive = typeof record.archive === 'string' ? record.archive.replace(/\\/g, '/') : '';
+  const expectedClaimedStaging = `_staging-recovery-clear-${record.token}`;
+  const expectedRetainedStaging = `_cleared-staging-${record.token}`;
+  if ((record.archive !== undefined && record.archive !== archive)
+    || (record.protection && record.protection.archive !== archive)
+    || (record.claimedStaging !== undefined && record.claimedStaging !== '' && record.claimedStaging !== expectedClaimedStaging)
+    || (record.retainedStaging !== undefined && record.retainedStaging !== '' && record.retainedStaging !== expectedRetainedStaging)
+    || (['protection-validated', 'prepared', 'claimed', 'retained', 'staging-created'].includes(record.phase) && (!record.protection || !archive))
+    || (['prepared', 'claimed', 'retained', 'staging-created'].includes(record.phase) && (!record.stagingIdentity || record.claimedStaging !== expectedClaimedStaging))
+    || (['retained', 'staging-created'].includes(record.phase) && record.retainedStaging !== expectedRetainedStaging)
+    || (record.phase === 'staging-created' && !record.freshStagingIdentity)) {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁阶段信息无效。');
+  }
+  if (archive) {
+    if (!archive.startsWith('_archives/')) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁归档路径无效。');
+    archivePath = path.join(vaultPath, ...archive.split('/'));
+    if (!pathInside(path.join(vaultPath, '_archives'), archivePath)) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁指向归档范围之外。');
+    await assertSafeDirectoryChain(vaultPath, archivePath);
+    const archiveInfo = await fsp.lstat(archivePath);
+    if (!archiveInfo.isDirectory() || archiveInfo.isSymbolicLink()) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁指向的归档目录不可用。');
+  }
+  return { record, archive, archivePath };
+};
+
+const sameRecoveryClearProtectionIdentity = (left, right) => Boolean(left && right
+  && left.type === right.type && left.archive === right.archive
+  && left.id === right.id && left.digest === right.digest);
+
+const assertWikiRecoveryClearRecordContinuation = (previous, current) => {
+  if (!previous) return;
+  const phaseRank = new Map([
+    ['created', 0],
+    ['protection-validated', 1],
+    ['prepared', 2],
+    ['claimed', 3],
+    ['retained', 4],
+    ['staging-created', 5]
+  ]);
+  const stale = previous.token !== current.token
+    || previous.started !== current.started
+    || phaseRank.get(current.phase) < phaseRank.get(previous.phase)
+    || (phaseRank.has(previous.phase) && phaseRank.has(current.phase)
+      && phaseRank.get(current.phase) > phaseRank.get(previous.phase) + 1)
+    || (previous.archive && current.archive !== previous.archive)
+    || (previous.protection && !sameRecoveryClearProtectionIdentity(previous.protection, current.protection))
+    || (previous.claimedStaging && current.claimedStaging !== previous.claimedStaging)
+    || (previous.retainedStaging && current.retainedStaging !== previous.retainedStaging)
+    || (previous.stagingIdentity && !sameDirectoryIdentity(previous.stagingIdentity, current.stagingIdentity))
+    || (previous.freshStagingIdentity && !sameDirectoryIdentity(previous.freshStagingIdentity, current.freshStagingIdentity));
+  if (stale) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志阶段或身份链无效。');
+};
+
+const decodeWikiRecoveryClearJournalFrame = (lineBytes) => {
+  const line = lineBytes.toString('utf8');
+  if (!line.startsWith(WIKI_RECOVERY_CLEAR_JOURNAL_MAGIC) || !line.endsWith('\n')) {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志帧不完整。');
+  }
+  const encoded = line.slice(WIKI_RECOVERY_CLEAR_JOURNAL_MAGIC.length, -1);
+  const separator = encoded.lastIndexOf('.');
+  const payloadText = separator > 0 ? encoded.slice(0, separator) : '';
+  const checksum = separator > 0 ? encoded.slice(separator + 1) : '';
+  if (!/^[A-Za-z0-9_-]+$/u.test(payloadText) || !/^[a-f0-9]{64}$/u.test(checksum)) {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志帧格式无效。');
+  }
+  let payloadBytes;
+  let payload;
+  try {
+    payloadBytes = Buffer.from(payloadText, 'base64url');
+    if (payloadBytes.toString('base64url') !== payloadText || sha256Text(payloadBytes) !== checksum) throw new Error('checksum-mismatch');
+    payload = JSON.parse(payloadBytes.toString('utf8'));
+  } catch {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志帧校验失败。');
+  }
+  const allowedKeys = new Set(['journalVersion', 'sequence', 'previousFrameSha256', 'discardedTail', 'record']);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || Object.keys(payload).some((key) => !allowedKeys.has(key))
+    || payload.journalVersion !== 1
+    || !Number.isSafeInteger(payload.sequence) || payload.sequence <= 0
+    || typeof payload.previousFrameSha256 !== 'string'
+    || (payload.previousFrameSha256 !== '' && !/^[a-f0-9]{64}$/u.test(payload.previousFrameSha256))
+    || !payload.record || typeof payload.record !== 'object' || Array.isArray(payload.record)
+    || (payload.discardedTail !== undefined && (!payload.discardedTail || typeof payload.discardedTail !== 'object'
+      || Array.isArray(payload.discardedTail) || Object.keys(payload.discardedTail).some((key) => !['bytes', 'sha256'].includes(key))
+      || !Number.isSafeInteger(payload.discardedTail.bytes) || payload.discardedTail.bytes <= 0
+      || typeof payload.discardedTail.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(payload.discardedTail.sha256)))) {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志帧负载无效。');
+  }
+  return { payload, frameSha256: sha256Text(lineBytes) };
+};
+
+const parseWikiRecoveryClearJournal = async (vaultPath, bytes) => {
+  const magic = Buffer.from(WIKI_RECOVERY_CLEAR_JOURNAL_MAGIC, 'ascii');
+  let cursor = 0;
+  let lastCompleteOffset = 0;
+  let lastSequence = 0;
+  let lastFrameSha256 = '';
+  let lastRecord = null;
+  let legacy = false;
+
+  if (bytes.length > 0 && !bytes.subarray(0, magic.length).equals(magic)) {
+    const newline = bytes.indexOf(0x0a);
+    if (newline >= 0) {
+      const legacyLine = bytes.subarray(0, newline + 1);
+      let legacyRecord;
+      try { legacyRecord = JSON.parse(legacyLine.toString('utf8')); } catch {}
+      if (!legacyRecord) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁包含完整但无效的日志记录。');
+      const validated = await validateWikiRecoveryClearGuardRecord(vaultPath, legacyRecord);
+      lastRecord = validated.record;
+      lastFrameSha256 = sha256Text(legacyLine);
+      lastCompleteOffset = newline + 1;
+      cursor = lastCompleteOffset;
+      legacy = true;
+    }
+  }
+
+  while (cursor < bytes.length) {
+    let candidate = bytes.indexOf(magic, cursor);
+    if (candidate < 0) {
+      const trailing = bytes.subarray(cursor);
+      if (trailing.includes(0x0a)) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁包含完整但无效的日志记录。');
+      break;
+    }
+    if (bytes.subarray(cursor, candidate).includes(0x0a)) {
+      throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁包含未校验的完整日志记录。');
+    }
+    while (true) {
+      const newline = bytes.indexOf(0x0a, candidate + magic.length);
+      const nested = bytes.indexOf(magic, candidate + magic.length);
+      if (nested >= 0 && (newline < 0 || nested < newline)) {
+        candidate = nested;
+        continue;
+      }
+      if (newline < 0) {
+        candidate = -1;
+        break;
+      }
+      const gap = bytes.subarray(cursor, candidate);
+      const frameBytes = bytes.subarray(candidate, newline + 1);
+      const decoded = decodeWikiRecoveryClearJournalFrame(frameBytes);
+      const { payload } = decoded;
+      if (payload.sequence !== lastSequence + 1 || payload.previousFrameSha256 !== lastFrameSha256) {
+        throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志序号或哈希链无效。');
+      }
+      if (gap.length > 0) {
+        if (!payload.discardedTail || payload.discardedTail.bytes !== gap.length
+          || payload.discardedTail.sha256 !== sha256Text(gap)) {
+          throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志未确认中断尾部。');
+        }
+      } else if (payload.discardedTail !== undefined) {
+        throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志包含多余的尾部确认。');
+      }
+      const validated = await validateWikiRecoveryClearGuardRecord(vaultPath, payload.record, { requirePhase: true });
+      if (!lastRecord && !legacy && validated.record.phase !== 'created') {
+        throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁日志缺少初始阶段。');
+      }
+      assertWikiRecoveryClearRecordContinuation(lastRecord, validated.record);
+      lastRecord = validated.record;
+      lastSequence = payload.sequence;
+      lastFrameSha256 = decoded.frameSha256;
+      lastCompleteOffset = newline + 1;
+      cursor = lastCompleteOffset;
+      break;
+    }
+    if (candidate < 0) break;
+  }
+
+  return {
+    record: lastRecord,
+    uninitialized: !lastRecord,
+    legacy,
+    lastSequence,
+    lastFrameSha256,
+    lastCompleteOffset,
+    trailingBytes: bytes.subarray(lastCompleteOffset)
+  };
+};
+
+const recoveryClearUninitializedToken = (guardIdentity, digest) => {
+  const value = sha256Text(`${digest}:${guardIdentity.dev}:${guardIdentity.ino}:${guardIdentity.birthtimeNs}`);
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-4${value.slice(13, 16)}-8${value.slice(17, 20)}-${value.slice(20, 32)}`;
+};
+
+const readWikiRecoveryClearGuardFile = async (vaultPath, guardPath) => {
+  if (!pathInside(vaultPath, guardPath)) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁越过知识库范围。');
+  let handle;
+  let opened;
+  let guardIdentity;
+  try {
+    handle = await fsp.open(guardPath, 'r');
+    const info = await handle.stat({ bigint: true });
+    if (!info.isFile() || info.isSymbolicLink() || info.size > BigInt(WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES)) {
+      throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁不是安全的小型普通文件。');
+    }
+    guardIdentity = regularFileIdentityFromInfo(info);
+    const buffer = Buffer.alloc(Math.min(WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES + 1, Math.max(1, Number(info.size) + 1)));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES) throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁超出安全上限。');
+    opened = { bytes: buffer.subarray(0, bytesRead), size: bytesRead };
+    const currentInfo = await fsp.lstat(guardPath, { bigint: true });
+    if (!sameRegularFileIdentity(guardIdentity, regularFileIdentityFromInfo(currentInfo))) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复清理保护锁在读取期间被替换。');
+    }
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+  const journal = await parseWikiRecoveryClearJournal(vaultPath, opened.bytes);
+  const digest = sha256Text(opened.bytes);
+  if (journal.uninitialized) {
+    const token = recoveryClearUninitializedToken(guardIdentity, digest);
+    const result = {
+      type: 'clear-guard',
+      operation: 'recovery-clear',
+      archive: '',
+      archivePath: '',
+      createdAt: '',
+      originalCode: 'initial-write-incomplete',
+      failures: ['恢复清理保护锁的首次日志写入未完整完成；知识页面尚未开始移动。'],
+      guardToken: token,
+      guardSha256: digest,
+      guardPid: 0,
+      claimedStaging: '',
+      retainedStaging: '',
+      guardPhase: 'uninitialized',
+      guardState: 'recovery-required'
+    };
+    Object.defineProperties(result, {
+      guardRecord: { value: null, enumerable: false },
+      guardFileIdentity: { value: guardIdentity, enumerable: false },
+      guardJournalUninitialized: { value: true, enumerable: false },
+      guardJournalLegacy: { value: false, enumerable: false },
+      guardJournalSequence: { value: 0, enumerable: false },
+      guardJournalFrameSha256: { value: '', enumerable: false },
+      guardJournalCompleteBytes: { value: 0, enumerable: false }
+    });
+    return result;
+  }
+  const validated = await validateWikiRecoveryClearGuardRecord(vaultPath, journal.record, { requirePhase: !journal.legacy });
+  const { record, archive, archivePath } = validated;
+  const result = {
+    type: 'clear-guard',
+    operation: 'recovery-clear',
+    archive,
+    archivePath,
+    createdAt: record.started,
+    originalCode: oneLine(record.failure || 'recovery-clear-incomplete', 80),
+    failures: [record.state === 'clearing' ? '恢复保护清理仍在进行或被中断。' : '恢复保护清理未完整完成，根目录保护锁仍保留。'],
+    guardToken: record.token,
+    guardSha256: digest,
+    guardPid: record.pid,
+    claimedStaging: oneLine(record.claimedStaging || '', 180),
+    retainedStaging: oneLine(record.retainedStaging || '', 180),
+    guardPhase: oneLine(record.phase || '', 80),
+    guardState: record.state
+  };
+  Object.defineProperties(result, {
+    guardRecord: { value: record, enumerable: false },
+    guardFileIdentity: { value: guardIdentity, enumerable: false },
+    guardJournalUninitialized: { value: false, enumerable: false },
+    guardJournalLegacy: { value: journal.legacy, enumerable: false },
+    guardJournalSequence: { value: journal.lastSequence, enumerable: false },
+    guardJournalFrameSha256: { value: journal.lastFrameSha256, enumerable: false },
+    guardJournalCompleteBytes: { value: journal.lastCompleteOffset, enumerable: false }
+  });
+  return result;
+};
+
+const readWikiRecoveryClearGuard = async (vaultPath) => {
+  try {
+    return await readWikiRecoveryClearGuardFile(vaultPath, recoveryClearGuardPath(vaultPath));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+};
+
+const assertNoWikiRecoveryClearGuard = async (vaultPath) => {
+  try {
+    await fsp.lstat(recoveryClearGuardPath(vaultPath));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  throw new WikiBasicError('wiki-recovery-clear-busy', 'Wiki 正在解除恢复保护或等待人工恢复，当前操作已停止。');
+};
+
+const readWikiRecoveryProtectionAtStaging = async (vaultPath, staging, rawLock = null) => {
+  const marker = await readWikiRecoveryMarkerFile(vaultPath, path.join(staging, WIKI_RECOVERY_MARKER_NAME));
+  if (marker) return { ...marker, type: 'marker' };
+  return readWikiRecoveryLockAtStaging(vaultPath, staging, rawLock);
+};
+
+const readWikiRecoveryProtection = async (vaultPath) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  const clearGuard = await readWikiRecoveryClearGuard(vault);
+  if (clearGuard) return clearGuard;
+  const staging = await requireSafeRecoveryStaging(vault, { allowMissing: true });
+  if (!staging) return null;
+  return readWikiRecoveryProtectionAtStaging(vault, staging);
+};
+
+const wikiRecoveryProtectionIdentity = (protection) => {
+  if (protection?.type === 'marker') return {
+    type: 'marker', archive: protection.archive, id: protection.id, digest: protection.markerSha256
+  };
+  if (protection?.type === 'retained-lock') return {
+    type: 'retained-lock', archive: protection.archive, id: protection.lockToken, digest: protection.lockSha256
+  };
+  if (protection?.type === 'clear-guard') return {
+    type: 'clear-guard', archive: protection.archive, id: protection.guardToken, digest: protection.guardSha256
+  };
+  return { type: '', archive: '', id: '', digest: '' };
+};
+
+const sameWikiRecoveryProtection = (left, right) => {
+  const a = wikiRecoveryProtectionIdentity(left);
+  const b = wikiRecoveryProtectionIdentity(right);
+  return a.type === b.type && a.archive === b.archive && a.id === b.id && a.digest === b.digest;
+};
+
+const sameWikiRecoveryProtectionIdentity = (current, expectedIdentity) => {
+  const identity = wikiRecoveryProtectionIdentity(current);
+  return Boolean(expectedIdentity)
+    && identity.type === expectedIdentity.type
+    && identity.archive === expectedIdentity.archive
+    && identity.id === expectedIdentity.id
+    && identity.digest === expectedIdentity.digest;
+};
+
+const assertExpectedWikiRecoveryProtection = (current, expected) => {
+  const identity = wikiRecoveryProtectionIdentity(current);
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)
+    || expected.type !== identity.type || expected.archive !== identity.archive
+    || expected.id !== identity.id || expected.digest !== identity.digest) {
+    throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复保护已变化，请重新打开并核对。');
+  }
+};
+
+const readWikiRecoveryClearGuardHandle = async (entry) => {
+  if (!entry.handle) throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁已失去写入句柄。');
+  const info = await entry.handle.stat({ bigint: true });
+  const identity = regularFileIdentityFromInfo(info);
+  if (!sameRegularFileIdentity(entry.guardIdentity, identity)
+    || info.size > BigInt(WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES)) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁文件身份已变化。');
+  }
+  const buffer = Buffer.alloc(Math.min(WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES + 1, Math.max(1, Number(info.size) + 1)));
+  const { bytesRead } = await entry.handle.read(buffer, 0, buffer.length, 0);
+  if (bytesRead > WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁内容超出安全上限。');
+  }
+  const currentInfo = await fsp.lstat(entry.guardPath, { bigint: true });
+  if (!sameRegularFileIdentity(entry.guardIdentity, regularFileIdentityFromInfo(currentInfo))) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁目录项已被替换。');
+  }
+  return buffer.subarray(0, bytesRead);
+};
+
+const assertWikiRecoveryClearGuardEntryCurrent = async (entry) => {
+  const bytes = await readWikiRecoveryClearGuardHandle(entry);
+  if (entry.lastDigest && sha256Text(bytes) !== entry.lastDigest) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁内容已变化，已停止操作。');
+  }
+  return bytes;
+};
+
+const encodeWikiRecoveryClearJournalFrame = (entry, record, trailingBytes) => {
+  const payload = {
+    journalVersion: 1,
+    sequence: entry.lastSequence + 1,
+    previousFrameSha256: entry.lastFrameSha256,
+    ...(trailingBytes.length > 0 ? {
+      discardedTail: { bytes: trailingBytes.length, sha256: sha256Text(trailingBytes) }
+    } : {}),
+    record
+  };
+  const payloadBytes = Buffer.from(JSON.stringify(payload), 'utf8');
+  return Buffer.from(
+    `${WIKI_RECOVERY_CLEAR_JOURNAL_MAGIC}${payloadBytes.toString('base64url')}.${sha256Text(payloadBytes)}\n`,
+    'utf8'
+  );
+};
+
+const writeWikiRecoveryClearGuardRecord = async (entry, extra = {}) => {
+  if (!entry.handle) throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁已失去写入句柄。');
+  const definedExtra = Object.fromEntries(Object.entries(extra).filter(([, value]) => value !== undefined));
+  const record = {
+    ...(entry.lastRecord || {}),
+    version: 1,
+    token: entry.token,
+    pid: process.pid,
+    state: 'clearing',
+    started: entry.started,
+    phase: entry.lastRecord?.phase || 'created',
+    ...definedExtra
+  };
+  await validateWikiRecoveryClearGuardRecord(entry.vaultPath, record, { requirePhase: true });
+  assertWikiRecoveryClearRecordContinuation(entry.lastRecord, record);
+  const currentBytes = await assertWikiRecoveryClearGuardEntryCurrent(entry);
+  if (!Number.isSafeInteger(entry.lastCompleteOffset) || entry.lastCompleteOffset < 0
+    || entry.lastCompleteOffset > currentBytes.length) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁日志边界无效。');
+  }
+  const trailingBytes = currentBytes.subarray(entry.lastCompleteOffset);
+  if (trailingBytes.includes(0x0a)) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁包含未校验的完整日志记录。');
+  }
+  const frameBytes = encodeWikiRecoveryClearJournalFrame(entry, record, trailingBytes);
+  if (currentBytes.length + frameBytes.length > WIKI_RECOVERY_CLEAR_GUARD_MAX_BYTES) {
+    throw new WikiBasicError('recovery-clear-guard-too-large', 'Wiki 恢复清理保护日志达到安全上限，已停止操作。');
+  }
+  let written = 0;
+  while (written < frameBytes.length) {
+    const result = await entry.handle.write(frameBytes, written, frameBytes.length - written, null);
+    if (!Number.isSafeInteger(result.bytesWritten) || result.bytesWritten <= 0) {
+      throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护日志未能完整追加。');
+    }
+    written += result.bytesWritten;
+  }
+  await entry.handle.sync();
+  const expectedBytes = Buffer.concat([currentBytes, frameBytes]);
+  entry.lastDigest = sha256Text(expectedBytes);
+  entry.lastSequence += 1;
+  entry.lastFrameSha256 = sha256Text(frameBytes);
+  entry.lastCompleteOffset = expectedBytes.length;
+  entry.lastRecord = record;
+  await assertWikiRecoveryClearGuardEntryCurrent(entry);
+};
+
+const acquireWikiRecoveryClearGuard = async (vaultPath) => {
+  const guardPath = recoveryClearGuardPath(vaultPath);
+  const token = randomUUID();
+  let handle;
+  try {
+    handle = await fsp.open(guardPath, 'ax+', 0o600);
+  } catch (error) {
+    if (error?.code === 'EEXIST') throw new WikiBasicError('wiki-recovery-clear-busy', '已有 Wiki 恢复清理保护锁；请重新检查恢复状态。');
+    throw error;
+  }
+  const guardInfo = await handle.stat({ bigint: true });
+  const entry = {
+    vaultPath,
+    guardPath,
+    token,
+    started: isoNow(),
+    handle,
+    guardIdentity: regularFileIdentityFromInfo(guardInfo),
+    lastDigest: sha256Text(Buffer.alloc(0)),
+    lastSequence: 0,
+    lastFrameSha256: '',
+    lastCompleteOffset: 0,
+    lastRecord: null
+  };
+  try {
+    await writeWikiRecoveryClearGuardRecord(entry, { phase: 'created' });
+    return entry;
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    entry.handle = null;
+    throw error;
+  }
+};
+
+const closeWikiRecoveryClearGuard = async (entry) => {
+  if (!entry.handle) return;
+  await entry.handle.close();
+  entry.handle = null;
+};
+
+const archiveWikiRecoveryClearGuard = async (entry, destinationDirectory = '') => {
+  const directory = destinationDirectory || path.join(entry.vaultPath, '_archives', 'recovery-clear-guards');
+  await assertSafeDirectoryChain(entry.vaultPath, directory);
+  await fsp.mkdir(directory, { recursive: true });
+  await assertSafeDirectoryChain(entry.vaultPath, directory);
+  const destination = path.join(directory, `_recovery-clear-guard-${entry.token}.json`);
+  await assertWikiRecoveryClearGuardEntryCurrent(entry);
+  await closeWikiRecoveryClearGuard(entry);
+  try {
+    await fsp.rename(entry.guardPath, destination);
+  } catch (error) {
+    const claimed = await readWikiRecoveryClearGuardFile(entry.vaultPath, destination).catch(() => null);
+    const canonical = await fsp.lstat(entry.guardPath).catch(() => null);
+    if (!claimed || claimed.guardToken !== entry.token || claimed.guardSha256 !== entry.lastDigest || canonical) throw error;
+  }
+  const claimed = await readWikiRecoveryClearGuardFile(entry.vaultPath, destination);
+  if (claimed.guardToken !== entry.token || claimed.guardSha256 !== entry.lastDigest) {
+    throw new WikiBasicError('recovery-clear-guard-lost', 'Wiki 恢复清理保护锁所有者或内容已变化。');
+  }
+  return destination;
+};
+
+const retainWikiRecoveryClearGuard = async (entry, details = {}) => {
+  if (!entry.handle) return;
+  try {
+    await writeWikiRecoveryClearGuardRecord(entry, { state: 'recovery-required', ...details });
+  } finally {
+    await closeWikiRecoveryClearGuard(entry);
+  }
+};
+
+const recoveryClearGuardDetails = (record, extra = {}) => ({
+  phase: record.phase,
+  archive: record.archive,
+  protection: record.protection,
+  claimedStaging: record.claimedStaging,
+  retainedStaging: record.retainedStaging,
+  stagingIdentity: record.stagingIdentity,
+  freshStagingIdentity: record.freshStagingIdentity,
+  failure: record.failure,
+  ...extra
+});
+
+const claimInterruptedWikiRecoveryClearGuard = async (vaultPath, guard, expectedProtection) => {
+  assertExpectedWikiRecoveryProtection(guard, expectedProtection);
+  if (processIsActive(guard.guardPid)) {
+    throw new WikiBasicError('wiki-recovery-clear-busy', 'Wiki 恢复清理仍由活跃进程持有，已停止接管。');
+  }
+  const guardPath = recoveryClearGuardPath(vaultPath);
+  const handle = await fsp.open(guardPath, 'a+');
+  const info = await handle.stat({ bigint: true });
+  const entry = {
+    vaultPath,
+    guardPath,
+    token: guard.guardToken,
+    started: guard.createdAt,
+    handle,
+    guardIdentity: regularFileIdentityFromInfo(info),
+    lastDigest: guard.guardSha256,
+    lastSequence: guard.guardJournalSequence,
+    lastFrameSha256: guard.guardJournalFrameSha256,
+    lastCompleteOffset: guard.guardJournalCompleteBytes,
+    lastRecord: guard.guardRecord
+  };
+  try {
+    if (!sameRegularFileIdentity(guard.guardFileIdentity, entry.guardIdentity)) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复清理保护锁在确认后被替换。');
+    }
+    const currentBytes = await readWikiRecoveryClearGuardHandle(entry);
+    if (sha256Text(currentBytes) !== guard.guardSha256) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复清理保护锁内容在确认后发生变化。');
+    }
+    await writeWikiRecoveryClearGuardRecord(entry, recoveryClearGuardDetails(guard.guardRecord, {
+      state: 'clearing',
+      resumedAt: isoNow()
+    }));
+    return entry;
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    entry.handle = null;
+    throw error;
+  }
+};
+
+const lstatOrNull = async (target) => {
+  try {
+    return await fsp.lstat(target);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+};
+
+const readExpectedRecoveryProtectionAt = async (vaultPath, stagingPath, expectedIdentity, expectedArchive = '') => {
+  const protection = await readWikiRecoveryProtectionAtStaging(vaultPath, stagingPath);
+  if (!protection) throw new WikiBasicError('stale-recovery-marker', 'Wiki 原恢复保护已不存在，已保留根目录保护锁。');
+  if (expectedIdentity && !sameWikiRecoveryProtectionIdentity(protection, expectedIdentity)) {
+    throw new WikiBasicError('stale-recovery-marker', 'Wiki 原恢复保护内容已变化，已保留根目录保护锁。');
+  }
+  if (expectedArchive && protection.archive !== expectedArchive) {
+    throw new WikiBasicError('stale-recovery-marker', 'Wiki 原恢复保护归档已变化，已保留根目录保护锁。');
+  }
+  return protection;
+};
+
+const assertFreshRecoveryStaging = async (vaultPath, stagingPath, originalIdentity, expectedFreshIdentity = null) => {
+  const safeStaging = await requireSafeRecoveryStaging(vaultPath);
+  if (path.resolve(safeStaging) !== path.resolve(stagingPath)) {
+    throw new WikiBasicError('unsafe-recovery-staging', 'Wiki 新恢复目录位置无效。');
+  }
+  const identity = await directoryIdentity(stagingPath);
+  if (sameDirectoryIdentity(identity, originalIdentity)
+    || (expectedFreshIdentity && !sameDirectoryIdentity(identity, expectedFreshIdentity))) {
+    throw new WikiBasicError('stale-recovery-staging', 'Wiki 新恢复目录身份与中断记录不一致。');
+  }
+  const entries = await fsp.readdir(stagingPath);
+  if (entries.length > 0) {
+    throw new WikiBasicError('stale-recovery-staging', 'Wiki 新恢复目录已出现未确认内容，已保留根目录保护锁。');
+  }
+  return identity;
+};
+
+const resetUninitializedWikiRecoveryClearGuard = async (vaultPath, guard, expectedProtection) => {
+  assertExpectedWikiRecoveryProtection(guard, expectedProtection);
+  if (!guard.guardJournalUninitialized || guard.guardPhase !== 'uninitialized' || guard.archive) {
+    throw new WikiBasicError('unsafe-recovery-clear-guard', 'Wiki 恢复清理保护锁不是可重置的首次写入现场。');
+  }
+  const suspiciousClaim = (await fsp.readdir(vaultPath, { withFileTypes: true }))
+    .find((item) => policyPathKey(item.name).startsWith('_staging-recovery-clear-'));
+  if (suspiciousClaim) {
+    throw new WikiBasicError('stale-recovery-staging', '检测到无法归属的 Wiki 恢复目录认领现场，已保留根目录保护锁。');
+  }
+  await requireSafeRecoveryStaging(vaultPath, { allowMissing: true });
+
+  const guardPath = recoveryClearGuardPath(vaultPath);
+  const handle = await fsp.open(guardPath, 'a+');
+  const info = await handle.stat({ bigint: true });
+  const entry = {
+    vaultPath,
+    guardPath,
+    token: guard.guardToken,
+    started: '',
+    handle,
+    guardIdentity: regularFileIdentityFromInfo(info),
+    lastDigest: guard.guardSha256,
+    lastSequence: 0,
+    lastFrameSha256: '',
+    lastCompleteOffset: 0,
+    lastRecord: null
+  };
+  try {
+    if (!sameRegularFileIdentity(guard.guardFileIdentity, entry.guardIdentity)) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复清理保护锁在确认后被替换。');
+    }
+    const currentBytes = await assertWikiRecoveryClearGuardEntryCurrent(entry);
+    if (sha256Text(currentBytes) !== guard.guardSha256) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复清理保护锁内容在确认后发生变化。');
+    }
+    const current = await readWikiRecoveryClearGuardFile(vaultPath, guardPath);
+    if (!current.guardJournalUninitialized || current.guardToken !== guard.guardToken
+      || current.guardSha256 !== guard.guardSha256
+      || !sameRegularFileIdentity(current.guardFileIdentity, guard.guardFileIdentity)) {
+      throw new WikiBasicError('stale-recovery-marker', 'Wiki 恢复清理保护锁首次写入现场已变化。');
+    }
+    const retainedGuardPath = await archiveWikiRecoveryClearGuard(entry);
+    return {
+      ok: true,
+      cleared: false,
+      reset: true,
+      resumed: true,
+      archive: '',
+      protectionType: 'clear-guard',
+      retainedGuard: path.relative(vaultPath, retainedGuardPath).replace(/\\/g, '/')
+    };
+  } catch (error) {
+    await closeWikiRecoveryClearGuard(entry).catch(() => undefined);
+    throw error;
+  }
+};
+
+const resumeWikiRecoveryClearGuard = async (vaultPath, guard, expectedProtection) => {
+  assertExpectedWikiRecoveryProtection(guard, expectedProtection);
+  if (guard.guardJournalUninitialized) {
+    return resetUninitializedWikiRecoveryClearGuard(vaultPath, guard, expectedProtection);
+  }
+  if (processIsActive(guard.guardPid)) {
+    throw new WikiBasicError('wiki-recovery-clear-busy', 'Wiki 恢复清理仍由活跃进程持有，已停止接管。');
+  }
+  const record = guard.guardRecord;
+  let entry = null;
+  let details = recoveryClearGuardDetails(record);
+  let originalProtection = null;
+  try {
+    entry = await claimInterruptedWikiRecoveryClearGuard(vaultPath, guard, expectedProtection);
+    const token = guard.guardToken;
+    const stagingPath = path.join(vaultPath, '_staging');
+    const claimedName = `_staging-recovery-clear-${token}`;
+    const claimedPath = path.join(vaultPath, claimedName);
+    const retainedName = `_cleared-staging-${token}`;
+    const retainedPath = guard.archivePath
+      ? path.join(guard.archivePath, retainedName)
+      : '';
+    const [staging, claimedInfo, retainedInfo] = await Promise.all([
+      requireSafeRecoveryStaging(vaultPath, { allowMissing: true }),
+      lstatOrNull(claimedPath),
+      retainedPath ? lstatOrNull(retainedPath) : Promise.resolve(null)
+    ]);
+
+    if (claimedInfo && record.claimedStaging !== claimedName) {
+      throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复目录已被认领，但保护锁没有完整记录该位置。');
+    }
+    if (retainedInfo && (!guard.archivePath || (record.retainedStaging && record.retainedStaging !== retainedName))) {
+      throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复归档位置与保护锁记录不一致。');
+    }
+    if (claimedInfo && retainedInfo) {
+      throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复目录同时出现认领与归档副本，已保留根目录保护锁。');
+    }
+
+    if (staging && !claimedInfo && !retainedInfo) {
+      if (['claimed', 'retained', 'staging-created'].includes(record.phase)) {
+        throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复清理阶段与现有目录不一致。');
+      }
+      const currentIdentity = await directoryIdentity(staging);
+      if (record.stagingIdentity && !sameDirectoryIdentity(record.stagingIdentity, currentIdentity)) {
+        throw new WikiBasicError('stale-recovery-staging', 'Wiki 原恢复目录在中断后被替换。');
+      }
+      originalProtection = await readExpectedRecoveryProtectionAt(
+        vaultPath,
+        staging,
+        record.protection || null,
+        record.archive || ''
+      );
+      const retainedGuardPath = await archiveWikiRecoveryClearGuard(entry, originalProtection.archivePath);
+      return {
+        ok: true,
+        cleared: false,
+        reset: true,
+        resumed: true,
+        archive: originalProtection.archive,
+        protectionType: 'clear-guard',
+        nextProtectionType: originalProtection.type,
+        retainedGuard: path.relative(vaultPath, retainedGuardPath).replace(/\\/g, '/')
+      };
+    }
+
+    if (claimedInfo) {
+      if (staging || !guard.archivePath || !record.protection || !record.stagingIdentity) {
+        throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复目录认领现场不完整，已保留根目录保护锁。');
+      }
+      await assertClaimedRecoveryStaging(vaultPath, claimedPath, record.stagingIdentity);
+      originalProtection = await readExpectedRecoveryProtectionAt(
+        vaultPath,
+        claimedPath,
+        record.protection,
+        record.archive
+      );
+      details = recoveryClearGuardDetails(record, {
+        state: 'clearing',
+        phase: 'claimed',
+        retainedStaging: retainedName,
+        resumedAt: isoNow()
+      });
+      await writeWikiRecoveryClearGuardRecord(entry, details);
+      await assertSafeDirectoryChain(vaultPath, guard.archivePath);
+      try {
+        await fsp.rename(claimedPath, retainedPath);
+      } catch (error) {
+        const [currentClaim, currentRetained] = await Promise.all([
+          lstatOrNull(claimedPath),
+          lstatOrNull(retainedPath)
+        ]);
+        if (currentClaim || !currentRetained) throw error;
+      }
+    } else if (!retainedInfo) {
+      throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复清理中断现场不完整，已保留根目录保护锁。');
+    }
+
+    if (!guard.archivePath || !record.protection || !record.stagingIdentity) {
+      throw new WikiBasicError('stale-recovery-staging', 'Wiki 恢复归档缺少可验证的原保护信息。');
+    }
+    await assertRetainedRecoveryStaging(vaultPath, guard.archivePath, retainedPath, record.stagingIdentity, token);
+    originalProtection = await readExpectedRecoveryProtectionAt(
+      vaultPath,
+      retainedPath,
+      record.protection,
+      record.archive
+    );
+    details = recoveryClearGuardDetails(record, {
+      state: 'clearing',
+      phase: record.phase === 'staging-created' ? 'staging-created' : 'retained',
+      retainedStaging: retainedName,
+      resumedAt: isoNow()
+    });
+    await writeWikiRecoveryClearGuardRecord(entry, details);
+
+    let freshStagingIdentity;
+    if (staging) {
+      freshStagingIdentity = await assertFreshRecoveryStaging(
+        vaultPath,
+        stagingPath,
+        record.stagingIdentity,
+        record.freshStagingIdentity || null
+      );
+    } else {
+      await fsp.mkdir(stagingPath);
+      freshStagingIdentity = await assertFreshRecoveryStaging(vaultPath, stagingPath, record.stagingIdentity);
+    }
+    details = recoveryClearGuardDetails(record, {
+      state: 'clearing',
+      phase: 'staging-created',
+      retainedStaging: retainedName,
+      freshStagingIdentity,
+      resumedAt: isoNow()
+    });
+    await writeWikiRecoveryClearGuardRecord(entry, details);
+    forgetRecoveredWikiWriteLock(vaultPath, originalProtection);
+    const retainedGuardPath = await archiveWikiRecoveryClearGuard(entry, guard.archivePath);
+    return {
+      ok: true,
+      cleared: true,
+      resumed: true,
+      archive: originalProtection.archive,
+      protectionType: originalProtection.type,
+      retainedStaging: path.relative(vaultPath, retainedPath).replace(/\\/g, '/'),
+      retainedGuard: path.relative(vaultPath, retainedGuardPath).replace(/\\/g, '/')
+    };
+  } catch (error) {
+    if (!entry?.handle) throw error;
+    let guardError;
+    try {
+      await retainWikiRecoveryClearGuard(entry, {
+        ...details,
+        state: 'recovery-required',
+        failure: oneLine(error?.code || error?.message || 'recovery-clear-resume-failed', 160)
+      });
+    } catch (failure) {
+      guardError = failure;
+    }
+    if (guardError) throw new AggregateError([error, guardError], 'Wiki 恢复清理续办失败，且根目录保护锁无法完整更新。');
+    throw error;
+  }
+};
+
+const assertNoLegacyWikiWriteLocks = async (stagingDir) => {
+  for (const legacy of LEGACY_WIKI_WRITE_LOCKS) {
+    const legacyPath = path.join(stagingDir, legacy.name);
+    let info;
+    try {
+      info = await fsp.lstat(legacyPath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      throw error;
+    }
+    if (!info.isFile() || info.isSymbolicLink() || info.size > WIKI_WRITE_LOCK_MAX_BYTES) {
+      throw new WikiBasicError(legacy.unsafeCode, `检测到不安全的旧版 ${legacy.label}锁，已停止写入。`);
+    }
+    throw new WikiBasicError(
+      legacy.busyCode,
+      `检测到旧版 ${legacy.label}锁 ${legacy.name}，为防止不同版本同时写入已停止操作。请确认没有其他 DSH 正在写入后再处理该锁。`
+    );
+  }
+};
+
+const wikiWriteLockLost = () => new WikiBasicError(
+  'wiki-write-lock-lost',
+  '知识库写入锁所有者已变化，未删除其他锁。'
+);
+
+const removeCurrentOwner = (entry) => {
+  if (vaultWriteLockOwners.get(entry.key) === entry) vaultWriteLockOwners.delete(entry.key);
+};
+
+const forgetRecoveredWikiWriteLock = (vaultPath, protection) => {
+  if (protection?.type !== 'retained-lock' || !protection.lockToken) return;
+  const key = normalizedPathKey(path.join(vaultPath, '_staging', WIKI_WRITE_LOCK_NAME));
+  const owner = vaultWriteLockOwners.get(key);
+  if (owner?.token === protection.lockToken && owner.state === 'recovery-blocked') removeCurrentOwner(owner);
+};
+
+const closeOwnedWikiWriteLockHandle = async (entry) => {
+  if (!entry.handle) return;
+  try {
+    await retryWikiLockTransient(() => entry.handle.close());
+    entry.handle = null;
+  } catch (error) {
+    if (error?.code === 'EBADF') {
+      entry.handle = null;
+      return;
+    }
+    throw error;
+  }
+};
+
+const writeOwnedWikiWriteLockRecord = async (entry, extra = {}) => {
+  const record = `${JSON.stringify({
+    pid: process.pid,
+    token: entry.token,
+    operation: entry.operation,
+    started: entry.started,
+    ...extra
+  })}\n`;
+  const bytes = Buffer.from(record, 'utf8');
+  if (bytes.length > WIKI_WRITE_LOCK_MAX_BYTES) throw new WikiBasicError('wiki-write-lock-too-large', 'Wiki 写入锁恢复信息超出安全上限。');
+  await entry.handle.truncate(0);
+  await entry.handle.write(bytes, 0, bytes.length, 0);
+  await entry.handle.sync();
+};
+
+const registerActiveWikiTransactionArchive = async (vaultPath, archiveRoot, operation) => {
+  const lockPath = path.join(vaultPath, '_staging', WIKI_WRITE_LOCK_NAME);
+  const entry = vaultWriteLockOwners.get(normalizedPathKey(lockPath));
+  if (!entry || entry.state !== 'held' || entry.operation !== operation) {
+    throw new WikiBasicError('wiki-write-lock-lost', '无法把事务归档绑定到当前 Wiki 写入锁。');
+  }
+  const archive = path.relative(vaultPath, archiveRoot).replace(/\\/g, '/');
+  const kind = WIKI_RECOVERY_ARCHIVE_KINDS[operation];
+  if (!kind || !archive.startsWith(`_archives/${kind}/`)) {
+    throw new WikiBasicError('unsafe-recovery-archive', 'Wiki 事务归档路径无效。');
+  }
+  await writeOwnedWikiWriteLockRecord(entry, { state: 'held', archive });
+  entry.archive = archive;
+};
+
+const performOwnedWikiWriteLockRemoval = async (entry, { allowMissing = false } = {}) => {
+  await closeOwnedWikiWriteLockHandle(entry);
+  const claimPath = `${entry.lockPath}.release-${entry.token}-${randomUUID()}`;
+  let lastError;
+  let claimed = false;
+  for (const delayMs of WIKI_WRITE_LOCK_RETRY_DELAYS_MS) {
+    if (delayMs > 0) await waitForWikiLockRetry(delayMs);
+    try {
+      await fsp.rename(entry.lockPath, claimPath);
+      claimed = true;
+      break;
+    } catch (error) {
+      try {
+        const uncertainClaim = await readWikiWriteLockRecord(claimPath);
+        if (uncertainClaim.record.token === entry.token) {
+          claimed = true;
+          break;
+        }
+      } catch {}
+      if (error?.code === 'ENOENT') {
+        removeCurrentOwner(entry);
+        if (allowMissing) return;
+        throw wikiWriteLockLost();
+      }
+      if (WIKI_WRITE_LOCK_TRANSIENT_CODES.has(error?.code)) {
+        lastError = error;
+        continue;
+      }
+      removeCurrentOwner(entry);
+      throw error;
+    }
+  }
+  if (!claimed) throw lastError;
+
+  let current;
+  try {
+    current = await retryWikiLockTransient(() => readWikiWriteLockRecord(claimPath));
+  } catch (error) {
+    entry.state = 'released-cleanup-pending';
+    removeCurrentOwner(entry);
+    error.releasedCleanupPending = true;
+    error.releaseClaimPath = claimPath;
+    throw error;
+  }
+  if (current.record.token !== entry.token) {
+    try { await fsp.link(claimPath, entry.lockPath); } catch {}
+    removeCurrentOwner(entry);
+    throw wikiWriteLockLost();
+  }
+
+  entry.state = 'released-cleanup-pending';
+  removeCurrentOwner(entry);
+  try {
+    await retryWikiLockTransient(async () => {
+      try {
+        await fsp.unlink(claimPath);
+      } catch (error) {
+        if (error?.code === 'ENOENT') return;
+        throw error;
+      }
+    });
+  } catch (error) {
+    error.releasedCleanupPending = true;
+    error.releaseClaimPath = claimPath;
+    throw error;
+  }
+};
+
+const removeOwnedWikiWriteLock = async (entry, options = {}) => {
+  if (entry.cleanupPromise) return entry.cleanupPromise;
+  const cleanupPromise = performOwnedWikiWriteLockRemoval(entry, options);
+  entry.cleanupPromise = cleanupPromise;
+  try {
+    return await cleanupPromise;
+  } finally {
+    if (entry.cleanupPromise === cleanupPromise) entry.cleanupPromise = null;
+  }
+};
+
+const processIsActive = (pid) => {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== 'ESRCH';
+  }
+};
+
+const acquireVaultWriteLock = async (vaultPath, {
+  retryAfterMissing = true,
+  operation = 'wiki-write',
+  busyCode = 'wiki-write-busy',
+  busyMessage = '另一个 Wiki 写入操作正在更新该知识库，请稍后重试。'
+} = {}) => {
   const stagingDir = path.join(vaultPath, '_staging');
+  await assertNoWikiRecoveryClearGuard(vaultPath);
   await assertSafeDirectoryChain(vaultPath, stagingDir);
   await fsp.mkdir(stagingDir, { recursive: true });
   await assertSafeDirectoryChain(vaultPath, stagingDir);
-  const lockPath = path.join(stagingDir, '.dsh-wiki-project-sync.lock');
+  await assertNoWikiRecoveryClearGuard(vaultPath);
+  const pendingRecovery = await readWikiRecoveryProtectionAtStaging(vaultPath, stagingDir);
+  if (pendingRecovery) {
+    throw new WikiBasicError(
+      pendingRecovery.type === 'retained-lock' ? 'wiki-write-recovery-required' : 'wiki-recovery-required',
+      `知识库仍有未完成的回退，请先从 ${pendingRecovery.archive} 核对人工内容。`
+    );
+  }
+  await assertNoLegacyWikiWriteLocks(stagingDir);
+  const lockPath = path.join(stagingDir, WIKI_WRITE_LOCK_NAME);
+  const key = normalizedPathKey(lockPath);
+  const previousOwner = vaultWriteLockOwners.get(key);
+  if (previousOwner) {
+    if (previousOwner.state === 'recovery-blocked') {
+      throw new WikiBasicError(
+        'wiki-write-recovery-required',
+        '上一次 Wiki 自动回退无法建立恢复标记；保护锁仍保留。请先按错误中给出的归档路径核对内容。'
+      );
+    }
+    if (previousOwner.state !== 'orphaned') throw new WikiBasicError(busyCode, busyMessage);
+    try {
+      await removeOwnedWikiWriteLock(previousOwner, { allowMissing: true });
+    } catch (error) {
+      if (error?.code !== 'wiki-write-lock-lost') throw error;
+    }
+  }
+  await assertNoLegacyWikiWriteLocks(stagingDir);
+
+  const token = randomUUID();
   let handle;
   try {
     handle = await fsp.open(lockPath, 'wx', 0o600);
   } catch (error) {
     if (error?.code !== 'EEXIST') throw error;
-    const info = await fsp.lstat(lockPath);
-    if (!info.isFile() || info.isSymbolicLink() || info.size > 1024) {
-      throw new WikiBasicError('unsafe-project-sync-lock', '项目同步锁不是安全的普通文件，已停止写入。');
-    }
-    let opened;
+    let current;
     try {
-      opened = await readBoundedRegularFile(lockPath, 1024);
+      current = await readWikiWriteLockRecord(lockPath);
     } catch (readError) {
-      if (allowReclaim && readError?.code === 'ENOENT') return acquireProjectSyncLock(vaultPath, false);
+      if (retryAfterMissing && readError?.code === 'ENOENT') {
+        return acquireVaultWriteLock(vaultPath, { retryAfterMissing: false, operation, busyCode, busyMessage });
+      }
       throw readError;
     }
-    let ownerPid = 0;
-    try { ownerPid = Number(JSON.parse(opened?.bytes.toString('utf8') || '{}').pid) || 0; } catch {}
-    let ownerActive = false;
-    if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
-      try {
-        process.kill(ownerPid, 0);
-        ownerActive = true;
-      } catch (probeError) {
-        ownerActive = probeError?.code !== 'ESRCH';
-      }
+    if (current.record.state === 'recovery-required') {
+      throw new WikiBasicError(
+        'wiki-write-recovery-required',
+        `检测到回退保护锁，已停止写入。请先从 ${oneLine(current.record.archive || '错误提示中的恢复归档', 260)} 核对内容。`
+      );
     }
-    const recent = Date.now() - info.mtimeMs < 5 * 60 * 1000;
-    if (allowReclaim && !ownerActive && !recent) {
-      await fsp.unlink(lockPath);
-      return acquireProjectSyncLock(vaultPath, false);
+    const ownerPid = Number(current.record.pid) || 0;
+    const recent = Date.now() - current.info.mtimeMs < WIKI_WRITE_LOCK_STALE_MS;
+    if (!processIsActive(ownerPid) && !recent) {
+      throw new WikiBasicError(
+        'wiki-write-recovery-required',
+        '检测到未完成的 Wiki 写入锁，已禁止自动删除以避免并发覆盖。请确认没有 DSH 正在写入后，将 _staging/.dsh-wiki-write.lock 移出知识库再重试。'
+      );
     }
-    throw new WikiBasicError('project-sync-busy', '另一个项目知识同步正在写入该知识库，请稍后重试。');
+    throw new WikiBasicError(busyCode, busyMessage);
   }
+
+  const entry = { key, lockPath, token, operation: oneLine(operation, 48), started: isoNow(), handle, state: 'initializing' };
+  vaultWriteLockOwners.set(key, entry);
   try {
-    await handle.writeFile(`${JSON.stringify({ pid: process.pid, started: isoNow() })}\n`, 'utf8');
-    await handle.sync();
+    await writeOwnedWikiWriteLockRecord(entry, { state: 'held' });
+    entry.state = 'held';
+    await assertNoWikiRecoveryClearGuard(vaultPath);
   } catch (error) {
-    await handle.close().catch(() => undefined);
-    await fsp.unlink(lockPath).catch(() => undefined);
+    entry.state = 'orphaned';
+    let cleanupError;
+    try {
+      await removeOwnedWikiWriteLock(entry);
+    } catch (failure) {
+      cleanupError = failure;
+    }
+    if (cleanupError) throw new AggregateError([error, cleanupError], '知识库写入锁初始化失败，且未能安全清理锁。');
     throw error;
   }
-  return async () => {
-    await handle.close();
-    await fsp.unlink(lockPath);
+  return async ({ retainForRecovery = false, recoveryError = null } = {}) => {
+    if (vaultWriteLockOwners.get(key) !== entry || entry.state !== 'held') throw wikiWriteLockLost();
+    if (retainForRecovery) {
+      entry.state = 'recovery-blocked';
+      let recordError;
+      try {
+        await writeOwnedWikiWriteLockRecord(entry, {
+          state: 'recovery-required',
+          archive: oneLine(recoveryError?.archive || '', 260),
+          originalCode: oneLine(recoveryError?.originalCode || recoveryError?.code || 'rollback-incomplete', 80)
+        });
+      } catch (error) {
+        recordError = error;
+      }
+      await closeOwnedWikiWriteLockHandle(entry);
+      if (recordError) throw recordError;
+      return;
+    }
+    entry.state = 'releasing';
+    try {
+      await removeOwnedWikiWriteLock(entry);
+    } catch (error) {
+      if (vaultWriteLockOwners.get(key) === entry) entry.state = 'orphaned';
+      throw error;
+    }
   };
+};
+
+const withVaultWriteLock = async (vaultPath, lockOptions, operation, aggregateMessage) => {
+  const release = await acquireVaultWriteLock(vaultPath, lockOptions);
+  let result;
+  let primaryError;
+  try {
+    result = await operation();
+  } catch (error) {
+    primaryError = error;
+  }
+  let releaseError;
+  try {
+    await release({ retainForRecovery: Boolean(primaryError?.retainWriteLock), recoveryError: primaryError });
+  } catch (error) {
+    releaseError = error;
+  }
+  if (primaryError && releaseError) throw new AggregateError([primaryError, releaseError], aggregateMessage);
+  if (primaryError) throw primaryError;
+  if (releaseError) {
+    if (releaseError?.releasedCleanupPending || WIKI_WRITE_LOCK_TRANSIENT_CODES.has(releaseError?.code)) {
+      const committed = result && typeof result === 'object' ? result : { ok: true };
+      return {
+        ...committed,
+        committed: true,
+        cleanupPending: true,
+        lockCleanupPending: true,
+        warningCode: 'wiki-write-lock-release-incomplete',
+        message: `Wiki 内容已验证保存。${oneLine(committed.message || '', 320)} 写入锁清理暂未完成；下次同一进程会安全重试，请勿重复提交。`
+      };
+    }
+    throw releaseError;
+  }
+  return result;
+};
+
+const appendQueryLog = async (vaultPath, query, resultCount, clock) => withVaultWriteLock(
+  vaultPath,
+  { operation: 'query-log' },
+  async () => {
+    const logPath = path.join(vaultPath, 'log.md');
+    const line = `- [${isoNow(clock)}] QUERY query=${yamlString(oneLine(query, 180))} result_pages=${resultCount} mode=normal escalated=false\n`;
+    await fsp.appendFile(logPath, line, { encoding: 'utf8', mode: 0o600 });
+  },
+  'Wiki 查询已完成，但查询日志写入或写入锁清理未完成。'
+);
+
+const saveCapture = async (vaultPath, capture, options = {}) => {
+  const vault = await assertPlainDirectory(vaultPath);
+  return withVaultWriteLock(
+    vault,
+    {
+      operation: 'capture',
+      busyCode: 'capture-busy',
+      busyMessage: '另一个 Wiki 写入操作正在更新该知识库，请稍后再保存结论。'
+    },
+    () => saveCaptureLocked(vault, capture, options),
+    '保存 Wiki 结论失败，且知识库写入锁清理未完成。'
+  );
 };
 
 const previewProjectSync = async (vaultPath, workspacePath, {
@@ -825,8 +2971,14 @@ const previewProjectSync = async (vaultPath, workspacePath, {
   const previousFiles = previousProjectFiles(previous);
   const delta = projectFileDelta(previousFiles, inventory.files);
   const git = await inspectGit(inventory.workspace, previous?.last_git_commit || '');
-  const existingPages = await listCurrentProjectPages(vault, project, previous);
-  const unchanged = Boolean(previous && previous.source_fingerprint === inventory.fingerprint);
+  const pageState = await listCurrentProjectPages(vault, project, previous);
+  const existingPages = pageState.pages;
+  const missingManagedPages = pageState.missingManagedPages;
+  const releaseKnowledge = await inspectReleaseKnowledgePages(vault, project, previous, existingPages);
+  const sourceUnchanged = Boolean(previous && previous.source_fingerprint === inventory.fingerprint);
+  const unchanged = sourceUnchanged
+    && missingManagedPages.length === 0
+    && (!releaseKnowledge.established || releaseKnowledge.healthy);
   const mode = git?.status === 'ready' ? 'git' : 'inventory';
   const tokenPayload = {
     projectId: project.id,
@@ -834,12 +2986,22 @@ const previewProjectSync = async (vaultPath, workspacePath, {
     sourceFingerprint: inventory.fingerprint,
     previousFingerprint: previous?.source_fingerprint || '',
     pages: existingPages.map(({ path: pagePath, sha256 }) => ({ path: pagePath, sha256 })),
+    missingManagedPages,
+    releaseKnowledge: {
+      mode: releaseKnowledge.mode,
+      established: releaseKnowledge.established,
+      actualPages: releaseKnowledge.actualPages,
+      missingPages: releaseKnowledge.missingPages,
+      extraPages: releaseKnowledge.extraPages,
+      humanEditedPages: releaseKnowledge.humanEditedPages
+    },
     gitHead: git?.head || ''
   };
   return {
     ok: true,
     generatedAt: isoNow(clock),
     mode,
+    sourceUnchanged,
     unchanged,
     limited: inventory.limited,
     project,
@@ -850,20 +3012,23 @@ const previewProjectSync = async (vaultPath, workspacePath, {
     delta,
     git,
     existingPages,
+    missingManagedPages,
+    releaseKnowledge,
+    humanEditedPages: existingPages.filter((page) => page.humanEdited).map((page) => page.path),
     previewToken: sha256Text(JSON.stringify(tokenPayload))
   };
 };
 
 const allowedProjectPagePath = (project, value) => {
-  if (typeof value !== 'string' || value.length > 260 || value.includes('\\')) return '';
-  const relative = value.replace(/^\/+/, '');
+  if (typeof value !== 'string' || value.length > 260 || value.includes('\\') || value.startsWith('/')) return '';
+  const relative = value;
   const segments = relative.split('/');
   if (!relative.endsWith('.md')
     || relative.includes('..')
     || relative.includes('//')
     || /[\u0000-\u001f<>:"|?*]/u.test(relative)
     || segments.some((segment) => !segment || /[. ]$/u.test(segment) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment))) return '';
-  if (relative === project.overviewPath) return relative;
+  if (policyPathKey(relative) === policyPathKey(project.overviewPath)) return relative === project.overviewPath ? relative : '';
   const allowed = ['concepts', 'skills', 'references'];
   return allowed.some((section) => relative.startsWith(`${project.rootPath}/${section}/`)) ? relative : '';
 };
@@ -899,23 +3064,62 @@ const projectPageText = (page, project, timestamp, existingText = '') => {
 
 const buildProjectSyncPlan = async (vaultPath, workspacePath, spec, options = {}) => {
   const preview = await previewProjectSync(vaultPath, workspacePath, options);
-  if (preview.unchanged) throw new WikiBasicError('project-unchanged', '当前项目自上次同步后没有可识别的源文件变化。');
   if (!spec || spec.previewToken !== preview.previewToken) throw new WikiBasicError('stale-project-preview', '项目内容或知识库页面已变化，请重新检查增量。');
+  const releaseKnowledgeMode = spec.mode === 'release-knowledge';
+  if (spec.mode !== undefined && !releaseKnowledgeMode) throw new WikiBasicError('invalid-project-mode', '项目同步模式无效。');
   if (!Array.isArray(spec.pages) || spec.pages.length === 0 || spec.pages.length > MAX_PROJECT_PAGES) {
     throw new WikiBasicError('invalid-project-pages', `每次项目同步必须包含 1 到 ${MAX_PROJECT_PAGES} 个页面。`);
+  }
+  const releaseRootPrefix = `${policyPathKey(preview.releaseKnowledge.rootPath)}/`;
+  const touchesReleaseNamespace = spec.pages.some((page) => typeof page?.path === 'string' && policyPathKey(page.path).startsWith(releaseRootPrefix));
+  if (touchesReleaseNamespace && !releaseKnowledgeMode) {
+    throw new WikiBasicError('release-mode-required', '版本知识目录只能通过固定六页的 release-knowledge 模式更新。');
+  }
+  if (preview.missingManagedPages.length > 0) {
+    throw new WikiBasicError('managed-pages-missing', `有 ${preview.missingManagedPages.length} 个受管项目页面缺失或不安全，请先从恢复副本核对。`);
+  }
+  if (!releaseKnowledgeMode && preview.sourceUnchanged) {
+    throw new WikiBasicError('project-unchanged', '当前项目自上次同步后没有可识别的源文件变化。');
+  }
+  const releasePaths = RELEASE_KNOWLEDGE_PAGE_NAMES.map((name) => `${preview.project.rootPath}/references/releases/${name}.md`);
+  if (preview.releaseKnowledge.established && preview.releaseKnowledge.extraPages.length > 0) {
+    throw new WikiBasicError(
+      'release-knowledge-extra-pages',
+      `版本知识目录存在 ${preview.releaseKnowledge.extraPages.length} 个固定六页之外的 Markdown 文件。请先人工移出并重新预览；DSH 不会自动删除。`
+    );
+  }
+  if (releaseKnowledgeMode) {
+    if (preview.sourceUnchanged && preview.releaseKnowledge.healthy) {
+      throw new WikiBasicError('release-knowledge-unchanged', '版本证据与固定六页自上次同步后均未变化。');
+    }
+    const overviewExists = preview.existingPages.some((page) => page.path === preview.project.overviewPath);
+    const requiredPaths = new Set([...releasePaths, ...(!overviewExists ? [preview.project.overviewPath] : [])]);
+    const submittedPaths = spec.pages.map((page) => page?.path);
+    if (submittedPaths.length !== requiredPaths.size
+      || new Set(submittedPaths).size !== submittedPaths.length
+      || submittedPaths.some((pagePath) => !requiredPaths.has(pagePath))) {
+      throw new WikiBasicError(
+        'invalid-release-knowledge-pages',
+        `版本知识模式必须在同一事务中提交固定六页${overviewExists ? '' : '以及首次项目总览'}，不能缺页或附加其他页面。`
+      );
+    }
+  }
+  if (spec.pages.some((page) => !allowedProjectPagePath(preview.project, page?.path))) {
+    throw new WikiBasicError('invalid-project-page-path', '项目页面必须使用唯一规范路径，并位于当前项目的总览、concepts、skills 或 references 目录中。');
   }
   if (!preview.existingPages.length && !spec.pages.some((page) => page?.path === preview.project.overviewPath)) {
     throw new WikiBasicError('overview-required', '首次同步必须创建项目总览页面。');
   }
   const sourcePaths = new Set(preview.sourceFiles.map((item) => item.path));
-  const existingPages = new Map(preview.existingPages.map((item) => [item.path, item]));
+  const existingPages = new Map(preview.existingPages.map((item) => [policyPathKey(item.path), item]));
   const seen = new Set();
   const writes = [];
   let totalChars = 0;
   for (const candidate of spec.pages) {
     const relative = allowedProjectPagePath(preview.project, candidate?.path);
-    if (!relative || seen.has(relative)) throw new WikiBasicError('invalid-project-page-path', '项目页面必须位于当前项目的总览、concepts、skills 或 references 目录中。');
-    seen.add(relative);
+    const relativeKey = policyPathKey(relative);
+    if (!relative || seen.has(relativeKey)) throw new WikiBasicError('invalid-project-page-path', '项目页面必须使用唯一规范路径，并位于当前项目的总览、concepts、skills 或 references 目录中。');
+    seen.add(relativeKey);
     const title = oneLine(candidate?.title, MAX_TITLE_CHARS);
     const summary = oneLine(candidate?.summary, 240);
     const content = normalizeText(candidate?.content, MAX_PROJECT_PAGE_CHARS);
@@ -924,11 +3128,16 @@ const buildProjectSyncPlan = async (vaultPath, workspacePath, spec, options = {}
     }
     totalChars += content.length;
     if (totalChars > MAX_PROJECT_TOTAL_PAGE_CHARS) throw new WikiBasicError('project-pages-too-large', '本次项目同步页面总量超出限制。');
+    if (releaseKnowledgeMode && (!Array.isArray(candidate?.sources)
+      || candidate.sources.some((item) => typeof item !== 'string' || !RELEASE_KNOWLEDGE_SOURCE.test(item)))) {
+      throw new WikiBasicError('invalid-release-knowledge-source', '版本知识页面只能引用固定范围内、且已被本次预览扫描到的发布证据。');
+    }
     const sources = Array.isArray(candidate?.sources)
       ? [...new Set(candidate.sources.filter((item) => typeof item === 'string' && sourcePaths.has(item)))].slice(0, 24)
       : [];
     if (!sources.length) throw new WikiBasicError('invalid-project-sources', '每个项目页面至少需要一个本次扫描到的源文件。');
-    const existing = existingPages.get(relative);
+    const existing = existingPages.get(relativeKey);
+    if (existing && existing.path !== relative) throw new WikiBasicError('invalid-project-page-path', `知识页面 ${relative} 必须沿用清单中的规范大小写 ${existing.path}。`);
     if (existing && candidate.expectedSha256 !== existing.sha256) throw new WikiBasicError('stale-project-page', `知识页面 ${relative} 已变化，请重新读取后合并。`);
     if (!existing && candidate.expectedSha256 !== null && candidate.expectedSha256 !== undefined) throw new WikiBasicError('unexpected-project-page', `知识页面 ${relative} 尚不存在，不能按更新处理。`);
     const absolute = path.join(path.resolve(vaultPath), relative);
@@ -950,6 +3159,9 @@ const buildProjectSyncPlan = async (vaultPath, workspacePath, spec, options = {}
   return {
     ok: true,
     preview,
+    workflowMode: releaseKnowledgeMode ? 'release-knowledge' : 'project-sync',
+    releaseKnowledgeMode,
+    releasePaths,
     writes,
     pagesCreated: writes.filter((item) => !item.exists).length,
     pagesUpdated: writes.filter((item) => item.exists).length,
@@ -1019,11 +3231,16 @@ const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
   await assertSafeDirectoryChain(vault, path.dirname(archiveRoot));
   await fsp.mkdir(archiveRoot, { recursive: true });
   await assertSafeDirectoryChain(vault, archiveRoot);
-  const originals = new Map();
+  await registerActiveWikiTransactionArchive(vault, archiveRoot, 'project-sync');
+  const pageWriteErrors = {
+    staleCode: 'stale-project-page',
+    staleMessage: '知识页面在保存前发生变化，请重新读取后合并。',
+    untrackedCode: 'untracked-project-page',
+    untrackedMessage: '知识库目标位置出现未纳入清单的页面，已停止覆盖。'
+  };
   for (const write of plan.writes) {
     if (!write.exists) continue;
-    const original = await fsp.readFile(write.absolute, 'utf8');
-    originals.set(write.path, original);
+    const original = await assertExpectedPageState(write, pageWriteErrors);
     const backup = path.join(archiveRoot, write.path);
     await fsp.mkdir(path.dirname(backup), { recursive: true });
     await atomicWriteText(backup, original);
@@ -1033,12 +3250,18 @@ const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
   }
 
   const project = plan.preview.project;
+  const previousProject = originalManifest.projects?.[project.id] || {};
+  const releaseWorkflowEstablished = previousProject.workflow_mode === 'release-knowledge'
+    || previousProject.release_knowledge?.mode === 'release-knowledge';
   const overview = plan.writes.find((item) => item.path === project.overviewPath);
   const summary = overview?.summary || oneLine(originalManifest.projects?.[project.id]?.summary || '项目知识增量同步', 240);
   const pageSet = new Set([
     ...plan.preview.existingPages.map((item) => item.path),
     ...plan.writes.map((item) => item.path)
   ]);
+  const committedPageHashes = normalizedPageHashes(originalManifest.projects?.[project.id]?.page_sha256);
+  const pageHashes = new Map(plan.preview.existingPages.map((item) => [item.path, committedPageHashes[item.path] || item.sha256]));
+  for (const write of plan.writes) pageHashes.set(write.path, sha256Text(write.text));
   const nextManifest = {
     ...originalManifest,
     version: WIKI_SCHEMA_VERSION,
@@ -1053,6 +3276,16 @@ const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
         mode: plan.preview.mode,
         files: plan.preview.sourceFiles,
         pages_in_vault: [...pageSet].sort(),
+        page_sha256: sortedPageHashes(pageHashes),
+        workflow_mode: releaseWorkflowEstablished || plan.releaseKnowledgeMode ? 'release-knowledge' : 'project-sync',
+        release_knowledge: plan.releaseKnowledgeMode
+          ? {
+              mode: 'release-knowledge',
+              complete: true,
+              pages: [...plan.releasePaths],
+              updated: timestamp
+            }
+          : previousProject.release_knowledge,
         summary,
         updated: timestamp
       }
@@ -1061,19 +3294,37 @@ const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
   const nextManifestText = `${JSON.stringify(nextManifest, null, 2)}\n`;
   const nextIndex = updateProjectIndexText(originalIndex, project, summary, timestamp);
   const nextHot = updateProjectHotText(originalHot, project, timestamp, plan.writes.length);
-  const nextLog = `${originalLog.trimEnd()}\n- [${timestamp}] WIKI_UPDATE project=${yamlString(project.id)} mode=${plan.preview.mode} added=${plan.preview.delta.added.length} modified=${plan.preview.delta.modified.length} removed=${plan.preview.delta.removed.length} pages=${plan.writes.length} archive=${yamlString(path.relative(vault, archiveRoot).replace(/\\/g, '/'))}\n`;
+  const nextLog = `${originalLog.trimEnd()}\n- [${timestamp}] WIKI_UPDATE project=${yamlString(project.id)} mode=${plan.preview.mode} workflow=${plan.workflowMode} added=${plan.preview.delta.added.length} modified=${plan.preview.delta.modified.length} removed=${plan.preview.delta.removed.length} pages=${plan.writes.length} archive=${yamlString(path.relative(vault, archiveRoot).replace(/\\/g, '/'))}\n`;
+  const metadataWriteErrors = {
+    staleCode: 'stale-wiki-metadata',
+    staleMessage: 'Wiki 清单、索引、日志或热点页在同步期间发生变化，已停止覆盖。',
+    untrackedCode: 'stale-wiki-metadata',
+    untrackedMessage: 'Wiki 清单、索引、日志或热点页状态异常，已停止覆盖。'
+  };
+  const metadataWrites = [
+    { path: '.manifest.json', absolute: manifestPath, exists: true, expectedSha256: sha256Text(originalManifestText), text: nextManifestText },
+    { path: 'index.md', absolute: indexPath, exists: true, expectedSha256: sha256Text(originalIndex), text: nextIndex },
+    { path: 'log.md', absolute: logPath, exists: true, expectedSha256: sha256Text(originalLog), text: nextLog },
+    { path: 'hot.md', absolute: hotPath, exists: true, expectedSha256: sha256Text(originalHot), text: nextHot }
+  ];
+  const transactionWrites = [...plan.writes, ...metadataWrites];
+  const writtenPaths = new Set();
   try {
     for (const write of plan.writes) {
       await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
       await fsp.mkdir(path.dirname(write.absolute), { recursive: true });
       await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
-      await atomicWriteText(write.absolute, write.text);
+      await writeExpectedPage(write, pageWriteErrors, { vaultPath: vault, archiveRoot });
+      writtenPaths.add(write.path);
     }
     await afterPageWrites();
-    await atomicWriteText(manifestPath, nextManifestText);
-    await atomicWriteText(indexPath, nextIndex);
-    await atomicWriteText(logPath, nextLog);
-    await atomicWriteText(hotPath, nextHot);
+    if (plan.releaseKnowledgeMode) {
+      const releaseState = await inspectReleaseKnowledgePages(vault, project, previousProject, plan.writes);
+      if (!releaseState.complete) throw new WikiBasicError('release-knowledge-directory-changed', '版本知识目录在提交期间发生变化，固定六页未能保持完整，已停止提交。');
+    }
+    await assertTransactionClaimsStable(plan.writes, 'concurrent-project-page', '检测到项目页面在同步期间被其他程序修改，已停止提交');
+    for (const write of metadataWrites) await writeExpectedPage(write, metadataWriteErrors, { vaultPath: vault, archiveRoot });
+    await assertTransactionClaimsStable(transactionWrites, 'concurrent-wiki-edit', '检测到 Wiki 文件在事务提交期间被其他程序修改，已停止提交');
     for (const write of plan.writes) {
       if (await fsp.readFile(write.absolute, 'utf8') !== write.text) throw new WikiBasicError('write-verification-failed', `项目页面 ${write.path} 写入后校验失败。`);
     }
@@ -1083,17 +3334,18 @@ const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
     if (verifiedManifest !== nextManifestText || verifiedIndex !== nextIndex || verifiedLog !== nextLog || verifiedHot !== nextHot) {
       throw new WikiBasicError('write-verification-failed', '项目清单、索引、日志或热点页写入后校验失败。');
     }
-  } catch (error) {
-    for (const write of plan.writes) {
-      if (originals.has(write.path)) await atomicWriteText(write.absolute, originals.get(write.path)).catch(() => undefined);
-      else await fsp.unlink(write.absolute).catch(() => undefined);
+    if (plan.releaseKnowledgeMode) {
+      const releaseState = await inspectReleaseKnowledgePages(vault, project, nextManifest.projects[project.id], plan.writes);
+      if (!releaseState.complete) throw new WikiBasicError('release-knowledge-directory-changed', '版本知识目录在提交校验期间发生变化，固定六页未能保持完整。');
     }
-    await Promise.all([
-      atomicWriteText(manifestPath, originalManifestText),
-      atomicWriteText(indexPath, originalIndex),
-      atomicWriteText(logPath, originalLog),
-      atomicWriteText(hotPath, originalHot)
-    ]).catch(() => undefined);
+  } catch (error) {
+    await rollbackWikiTransaction({
+      vaultPath: vault,
+      archiveRoot,
+      operation: 'project-sync',
+      writes: transactionWrites.filter((write) => write.transactionTouched),
+      originalError: error
+    });
     throw error;
   }
   return {
@@ -1109,24 +3361,16 @@ const saveProjectSyncLocked = async (vaultPath, workspacePath, spec, {
 const saveProjectSync = async (vaultPath, workspacePath, spec, options = {}) => {
   if (!options.confirmed) return saveProjectSyncLocked(vaultPath, workspacePath, spec, options);
   const vault = await assertPlainDirectory(vaultPath);
-  const release = await acquireProjectSyncLock(vault);
-  let result;
-  let primaryError;
-  try {
-    result = await saveProjectSyncLocked(vault, workspacePath, spec, options);
-  } catch (error) {
-    primaryError = error;
-  }
-  let releaseError;
-  try {
-    await release();
-  } catch (error) {
-    releaseError = error;
-  }
-  if (primaryError && releaseError) throw new AggregateError([primaryError, releaseError], '项目同步失败，且同步锁清理未完成。');
-  if (primaryError) throw primaryError;
-  if (releaseError) throw releaseError;
-  return result;
+  return withVaultWriteLock(
+    vault,
+    {
+      operation: 'project-sync',
+      busyCode: 'project-sync-busy',
+      busyMessage: '另一个 Wiki 写入操作正在更新该知识库，请稍后再同步项目。'
+    },
+    () => saveProjectSyncLocked(vault, workspacePath, spec, options),
+    '项目同步失败，且知识库写入锁清理未完成。'
+  );
 };
 
 const historySessionFingerprint = (session) => sha256Text(JSON.stringify({
@@ -1267,23 +3511,53 @@ const historyPagePath = (project, value) => {
 
 const listDshHistoryPages = async (vaultPath, project, entry) => {
   const configured = Array.isArray(entry?.pages_in_vault) ? entry.pages_in_vault.slice(0, 100) : [];
+  assertUniquePolicyPaths(configured.filter((item) => typeof item === 'string'));
+  assertUniquePolicyPaths(Object.keys(entry?.page_sha256 && typeof entry.page_sha256 === 'object' ? entry.page_sha256 : {}));
+  const committedHashes = normalizedPageHashes(entry?.page_sha256);
   const pages = [];
+  const missingManagedPages = [];
   for (const relative of new Set(configured)) {
-    if (!historyPagePath(project, relative)) continue;
-    const absolute = path.join(vaultPath, relative);
-    if (!pathInside(vaultPath, absolute)) continue;
+    const normalized = typeof relative === 'string' ? relative.replace(/\\/g, '/') : '';
+    if (!historyPagePath(project, normalized)) {
+      missingManagedPages.push(normalized.slice(0, 260));
+      continue;
+    }
+    const absolute = path.join(vaultPath, normalized);
+    if (!pathInside(vaultPath, absolute)) {
+      missingManagedPages.push(normalized);
+      continue;
+    }
     try {
       const info = await fsp.lstat(absolute);
-      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) continue;
+      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MARKDOWN_BYTES) {
+        missingManagedPages.push(normalized);
+        continue;
+      }
       const opened = await readBoundedRegularFile(absolute, MAX_MARKDOWN_BYTES);
-      if (!opened) continue;
-      pages.push({ path: relative, sha256: sha256Text(opened.bytes), size: opened.size });
+      if (!opened) {
+        missingManagedPages.push(normalized);
+        continue;
+      }
+      const sha256 = sha256Text(opened.bytes);
+      const committedSha256 = committedHashes[normalized] || '';
+      if (!committedSha256) {
+        throw new WikiBasicError('untracked-history-page', `知识库中已有未纳入历史清单哈希的页面 ${normalized}，已停止覆盖。`);
+      }
+      pages.push({
+        path: normalized,
+        sha256,
+        size: opened.size,
+        committedSha256,
+        humanEdited: Boolean(committedSha256 && committedSha256 !== sha256)
+      });
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
+      missingManagedPages.push(normalized);
     }
   }
   pages.sort((left, right) => left.path.localeCompare(right.path));
-  return pages;
+  missingManagedPages.sort((left, right) => left.localeCompare(right));
+  return { pages, missingManagedPages: [...new Set(missingManagedPages)] };
 };
 
 const previewDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, { clock = () => new Date() } = {}) => {
@@ -1310,7 +3584,9 @@ const previewDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, { c
       status
     };
   });
-  const existingPages = await listDshHistoryPages(vault, project, previous);
+  const pageState = await listDshHistoryPages(vault, project, previous);
+  const existingPages = pageState.pages;
+  const missingManagedPages = pageState.missingManagedPages;
   const delta = {
     added: sessions.filter((session) => session.status === 'added'),
     modified: sessions.filter((session) => session.status === 'modified'),
@@ -1321,7 +3597,8 @@ const previewDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, { c
     sourceToken: source.sourceToken,
     sourceFileSha256: source.sourceFileSha256,
     sessions: sessions.map(({ sourceId, fingerprint }) => ({ sourceId, fingerprint })),
-    pages: existingPages.map(({ path: pagePath, sha256 }) => ({ path: pagePath, sha256 }))
+    pages: existingPages.map(({ path: pagePath, sha256 }) => ({ path: pagePath, sha256 })),
+    missingManagedPages
   };
   return {
     ok: true,
@@ -1337,7 +3614,9 @@ const previewDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, { c
     sessions,
     delta,
     existingPages,
-    unchanged: delta.added.length === 0 && delta.modified.length === 0,
+    missingManagedPages,
+    humanEditedPages: existingPages.filter((page) => page.humanEdited).map((page) => page.path),
+    unchanged: delta.added.length === 0 && delta.modified.length === 0 && missingManagedPages.length === 0,
     previewToken: sha256Text(JSON.stringify(tokenPayload))
   };
 };
@@ -1371,6 +3650,9 @@ const buildDshHistoryIngestPlan = async (vaultPath, workspacePath, sourcePath, s
   if (preview.unchanged) throw new WikiBasicError('history-unchanged', '选中的 DSH 历史自上次导入后没有变化。');
   if (!spec || spec.previewToken !== preview.previewToken || spec.sourceToken !== preview.sourceToken) {
     throw new WikiBasicError('stale-history-preview', 'DSH 历史、选择或知识库页面已变化，请重新预览。');
+  }
+  if (preview.missingManagedPages.length > 0) {
+    throw new WikiBasicError('managed-pages-missing', `有 ${preview.missingManagedPages.length} 个受管历史页面缺失或不安全，请先从恢复副本核对。`);
   }
   if (!Array.isArray(spec.pages) || spec.pages.length < 1 || spec.pages.length > MAX_HISTORY_PAGES) {
     throw new WikiBasicError('invalid-history-pages', `每次历史导入必须包含 1 到 ${MAX_HISTORY_PAGES} 个页面。`);
@@ -1444,58 +3726,6 @@ const readDshHistoryWikiPage = async (vaultPath, workspacePath, sourcePath, rela
   return { ok: true, path: relativePath, sha256: digest, content };
 };
 
-const acquireHistoryIngestLock = async (vaultPath, allowReclaim = true) => {
-  const stagingDir = path.join(vaultPath, '_staging');
-  await assertSafeDirectoryChain(vaultPath, stagingDir);
-  await fsp.mkdir(stagingDir, { recursive: true });
-  await assertSafeDirectoryChain(vaultPath, stagingDir);
-  const lockPath = path.join(stagingDir, '.dsh-wiki-history-ingest.lock');
-  let handle;
-  try {
-    handle = await fsp.open(lockPath, 'wx', 0o600);
-  } catch (error) {
-    if (error?.code !== 'EEXIST') throw error;
-    const info = await fsp.lstat(lockPath);
-    if (!info.isFile() || info.isSymbolicLink() || info.size > 1024) throw new WikiBasicError('unsafe-history-lock', '历史导入锁不是安全的普通文件。');
-    let opened;
-    try {
-      opened = await readBoundedRegularFile(lockPath, 1024);
-    } catch (readError) {
-      if (allowReclaim && readError?.code === 'ENOENT') return acquireHistoryIngestLock(vaultPath, false);
-      throw readError;
-    }
-    let ownerPid = 0;
-    try { ownerPid = Number(JSON.parse(opened?.bytes.toString('utf8') || '{}').pid) || 0; } catch {}
-    let ownerActive = false;
-    if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
-      try {
-        process.kill(ownerPid, 0);
-        ownerActive = true;
-      } catch (probeError) {
-        ownerActive = probeError?.code !== 'ESRCH';
-      }
-    }
-    const recent = Date.now() - info.mtimeMs < 5 * 60 * 1000;
-    if (allowReclaim && !ownerActive && !recent) {
-      await fsp.unlink(lockPath);
-      return acquireHistoryIngestLock(vaultPath, false);
-    }
-    throw new WikiBasicError('history-ingest-busy', '另一个 DSH 历史导入正在写入该知识库，请稍后重试。');
-  }
-  try {
-    await handle.writeFile(`${JSON.stringify({ pid: process.pid, started: isoNow() })}\n`, 'utf8');
-    await handle.sync();
-  } catch (error) {
-    await handle.close().catch(() => undefined);
-    await fsp.unlink(lockPath).catch(() => undefined);
-    throw error;
-  }
-  return async () => {
-    await handle.close();
-    await fsp.unlink(lockPath);
-  };
-};
-
 const updateDshHistoryIndexText = (text, writes, timestamp) => {
   let next = text.replace(/\*此索引由 DSH Desktop 维护。最后更新：[^*]+\*/u, `*此索引由 DSH Desktop 维护。最后更新：${timestamp}*`);
   const entries = writes.filter((write) => {
@@ -1530,8 +3760,36 @@ const clearDshHistorySource = async (sourcePath, sourceToken) => {
   let parsed;
   try { parsed = JSON.parse(opened?.bytes.toString('utf8') || '{}'); } catch {}
   if (!parsed || parsed.sourceToken !== sourceToken) throw new WikiBasicError('stale-history-source', 'DSH 历史导入源已变化，未执行清理。');
-  await fsp.unlink(resolved);
-  return { ok: true, cleared: true };
+  const expectedSourceDigest = sha256Text(opened.bytes);
+  const claimPath = `${resolved}.consumed-${randomUUID()}`;
+  try {
+    await fsp.rename(resolved, claimPath);
+  } catch (error) {
+    const [claimedAfterError, sourceAfterError] = await Promise.all([
+      readBoundedRegularFile(claimPath, MAX_HISTORY_SOURCE_BYTES).catch(() => null),
+      fsp.lstat(resolved).catch(() => null)
+    ]);
+    if (!claimedAfterError || sourceAfterError) throw error;
+  }
+  const claimed = await readBoundedRegularFile(claimPath, MAX_HISTORY_SOURCE_BYTES);
+  let claimedSource;
+  try { claimedSource = JSON.parse(claimed?.bytes.toString('utf8') || '{}'); } catch {}
+  if (!claimed || claimedSource?.sourceToken !== sourceToken || sha256Text(claimed.bytes) !== expectedSourceDigest) {
+    if (claimed) {
+      try { await writeNewTextAtomically(resolved, claimed.bytes.toString('utf8')); } catch {}
+    }
+    const stale = new WikiBasicError('stale-history-source', 'DSH 历史导入源在清理边界发生变化；替换内容已保留，未执行删除。');
+    stale.retainedClaim = claimPath;
+    throw stale;
+  }
+  try {
+    await retryWikiLockTransient(() => fsp.unlink(claimPath));
+  } catch (error) {
+    const remaining = await fsp.lstat(claimPath).catch(() => null);
+    if (!remaining) return { ok: true, cleared: true, cleanupPending: false };
+    return { ok: true, cleared: true, cleanupPending: true, retainedClaim: claimPath };
+  }
+  return { ok: true, cleared: true, cleanupPending: false };
 };
 
 const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, spec, {
@@ -1562,11 +3820,16 @@ const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, 
   await assertSafeDirectoryChain(vault, path.dirname(archiveRoot));
   await fsp.mkdir(archiveRoot, { recursive: true });
   await assertSafeDirectoryChain(vault, archiveRoot);
-  const originals = new Map();
+  await registerActiveWikiTransactionArchive(vault, archiveRoot, 'history-ingest');
+  const pageWriteErrors = {
+    staleCode: 'stale-history-page',
+    staleMessage: '历史知识页面在保存前发生变化，请重新读取后合并。',
+    untrackedCode: 'untracked-history-page',
+    untrackedMessage: '历史知识目标位置出现未纳入清单的页面，已停止覆盖。'
+  };
   for (const write of plan.writes) {
     if (!write.exists) continue;
-    const original = await fsp.readFile(write.absolute, 'utf8');
-    originals.set(write.path, original);
+    const original = await assertExpectedPageState(write, pageWriteErrors);
     const backup = path.join(archiveRoot, write.path);
     await fsp.mkdir(path.dirname(backup), { recursive: true });
     await atomicWriteText(backup, original);
@@ -1576,6 +3839,9 @@ const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, 
   }
 
   const pageSet = new Set([...(previous?.pages_in_vault || []), ...plan.writes.map((write) => write.path)]);
+  const committedPageHashes = normalizedPageHashes(previous?.page_sha256);
+  const pageHashes = new Map(plan.preview.existingPages.map((item) => [item.path, committedPageHashes[item.path] || item.sha256]));
+  for (const write of plan.writes) pageHashes.set(write.path, sha256Text(write.text));
   const nextSessions = { ...(previous?.sessions || {}) };
   for (const session of plan.preview.sessions) {
     const usedPages = plan.writes.filter((write) => write.sources.includes(session.sourceId)).map((write) => write.path);
@@ -1604,6 +3870,7 @@ const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, 
           source_cwd: project.sourceCwd,
           sessions: nextSessions,
           pages_in_vault: [...pageSet].filter((item) => historyPagePath(project, item)).sort(),
+          page_sha256: sortedPageHashes(pageHashes),
           updated: timestamp
         }
       }
@@ -1614,18 +3881,32 @@ const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, 
   const changedSessions = plan.preview.delta.added.length + plan.preview.delta.modified.length;
   const nextHot = updateDshHistoryHotText(originalHot, project, timestamp, changedSessions, plan.writes.length);
   const nextLog = `${originalLog.trimEnd()}\n- [${timestamp}] DSH_HISTORY_INGEST project=${yamlString(project.id)} sessions=${changedSessions} added=${plan.preview.delta.added.length} modified=${plan.preview.delta.modified.length} pages=${plan.writes.length} archive=${yamlString(path.relative(vault, archiveRoot).replace(/\\/g, '/'))}\n`;
+  const metadataWriteErrors = {
+    staleCode: 'stale-wiki-metadata',
+    staleMessage: 'Wiki 清单、索引、日志或热点页在历史导入期间发生变化，已停止覆盖。',
+    untrackedCode: 'stale-wiki-metadata',
+    untrackedMessage: 'Wiki 清单、索引、日志或热点页状态异常，已停止覆盖。'
+  };
+  const metadataWrites = [
+    { path: '.manifest.json', absolute: manifestPath, exists: true, expectedSha256: sha256Text(originalManifestText), text: nextManifestText },
+    { path: 'index.md', absolute: indexPath, exists: true, expectedSha256: sha256Text(originalIndex), text: nextIndex },
+    { path: 'log.md', absolute: logPath, exists: true, expectedSha256: sha256Text(originalLog), text: nextLog },
+    { path: 'hot.md', absolute: hotPath, exists: true, expectedSha256: sha256Text(originalHot), text: nextHot }
+  ];
+  const transactionWrites = [...plan.writes, ...metadataWrites];
+  const writtenPaths = new Set();
   try {
     for (const write of plan.writes) {
       await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
       await fsp.mkdir(path.dirname(write.absolute), { recursive: true });
       await assertSafeDirectoryChain(vault, path.dirname(write.absolute));
-      await atomicWriteText(write.absolute, write.text);
+      await writeExpectedPage(write, pageWriteErrors, { vaultPath: vault, archiveRoot });
+      writtenPaths.add(write.path);
     }
     await afterPageWrites();
-    await atomicWriteText(manifestPath, nextManifestText);
-    await atomicWriteText(indexPath, nextIndex);
-    await atomicWriteText(logPath, nextLog);
-    await atomicWriteText(hotPath, nextHot);
+    await assertTransactionClaimsStable(plan.writes, 'concurrent-history-page', '检测到历史页面在导入期间被其他程序修改，已停止提交');
+    for (const write of metadataWrites) await writeExpectedPage(write, metadataWriteErrors, { vaultPath: vault, archiveRoot });
+    await assertTransactionClaimsStable(transactionWrites, 'concurrent-wiki-edit', '检测到 Wiki 文件在事务提交期间被其他程序修改，已停止提交');
     for (const write of plan.writes) {
       if (await fsp.readFile(write.absolute, 'utf8') !== write.text) throw new WikiBasicError('write-verification-failed', `历史知识页面 ${write.path} 写入后校验失败。`);
     }
@@ -1636,14 +3917,13 @@ const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, 
       throw new WikiBasicError('write-verification-failed', '历史清单、索引、日志或热点页写入后校验失败。');
     }
   } catch (error) {
-    for (const write of plan.writes) {
-      if (originals.has(write.path)) await atomicWriteText(write.absolute, originals.get(write.path)).catch(() => undefined);
-      else await fsp.unlink(write.absolute).catch(() => undefined);
-    }
-    await Promise.all([
-      atomicWriteText(manifestPath, originalManifestText), atomicWriteText(indexPath, originalIndex),
-      atomicWriteText(logPath, originalLog), atomicWriteText(hotPath, originalHot)
-    ]).catch(() => undefined);
+    await rollbackWikiTransaction({
+      vaultPath: vault,
+      archiveRoot,
+      operation: 'history-ingest',
+      writes: transactionWrites.filter((write) => write.transactionTouched),
+      originalError: error
+    });
     throw error;
   }
   let sourceCleared = false;
@@ -1666,24 +3946,16 @@ const saveDshHistoryIngestLocked = async (vaultPath, workspacePath, sourcePath, 
 const saveDshHistoryIngest = async (vaultPath, workspacePath, sourcePath, spec, options = {}) => {
   if (!options.confirmed) return saveDshHistoryIngestLocked(vaultPath, workspacePath, sourcePath, spec, options);
   const vault = await assertPlainDirectory(vaultPath);
-  const release = await acquireHistoryIngestLock(vault);
-  let result;
-  let primaryError;
-  try {
-    result = await saveDshHistoryIngestLocked(vault, workspacePath, sourcePath, spec, options);
-  } catch (error) {
-    primaryError = error;
-  }
-  let releaseError;
-  try {
-    await release();
-  } catch (error) {
-    releaseError = error;
-  }
-  if (primaryError && releaseError) throw new AggregateError([primaryError, releaseError], 'DSH 历史导入失败，且写入锁清理未完成。');
-  if (primaryError) throw primaryError;
-  if (releaseError) throw releaseError;
-  return result;
+  return withVaultWriteLock(
+    vault,
+    {
+      operation: 'history-ingest',
+      busyCode: 'history-ingest-busy',
+      busyMessage: '另一个 Wiki 写入操作正在更新该知识库，请稍后再导入 DSH 历史。'
+    },
+    () => saveDshHistoryIngestLocked(vault, workspacePath, sourcePath, spec, options),
+    'DSH 历史导入失败，且知识库写入锁清理未完成。'
+  );
 };
 
 const readConfiguredVault = async (configPath) => {
@@ -1850,6 +4122,7 @@ module.exports = {
   buildCapturePreview,
   buildDshHistoryIngestPlan,
   buildProjectSyncPlan,
+  clearWikiRecoveryMarker,
   initializeWikiVault,
   inspectProjectGit,
   inspectWikiVault,
@@ -1857,6 +4130,8 @@ module.exports = {
   previewDshHistoryIngest,
   queryWiki,
   readConfiguredVault,
+  readWikiRecoveryProtection,
+  readWikiRecoveryMarker,
   readDshHistorySession,
   readDshHistorySource,
   readDshHistoryWikiPage,

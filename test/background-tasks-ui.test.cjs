@@ -7,6 +7,7 @@ test('workspace navigation admits one activation and releases its lock after com
   const code = main.slice(main.indexOf('const activateWorkspace = async'), main.indexOf('const performWorkspaceActivation = async'));
   const releases = [], calls = [];
   const activate = require('node:vm').runInNewContext(`let workspaceActivationPromise = null; ${code}; activateWorkspace`, {
+    appIsClosing: () => false,
     performWorkspaceActivation: async (workspace, session) => { calls.push([workspace, session]); return new Promise((resolve) => releases.push(resolve)); }
   });
   const first = activate('workspace-a', 'session-a');
@@ -21,9 +22,10 @@ test('background task UI is native-only, bounded, text-rendered, accessible and 
   assert.match(ui, /textContent/); assert.doesNotMatch(ui, /innerHTML|eval\(/);
   assert.match(html, /aria-controls="background-task-panel"/); assert.match(html, /maxlength="8000"/);
   assert.match(html, /完全退出后不执行/); assert.match(main, /backgroundScheduleDescription\(input.schedule\)/);
-  assert.match(main, /await backgroundTasks\?\.stop\(\)/); assert.match(main, /继续后台运行/);
+  assert.match(main, /name: '后台任务调度',[\s\S]*backgroundTasks\.stop\(\)/); assert.match(main, /继续后台运行/);
   assert.match(main, /后台记录不能安全加载，已禁用调度/);
   assert.match(main, /if \(workspaceActivationPromise\) return \{ ok: false/);
-  assert.match(main, /await Promise\.allSettled\(\[workspaceActivationPromise\]\)/);
+  assert.match(main, /\['工作区切换', workspaceActivationPromise\]/);
+  assert.match(html, /工作树不是内容脱敏/); assert.match(html, /新会话仍可通过桌面凭据桥使用 Key/);
   assert.ok(JSON.parse(read('package.json')).build.files.includes('assets/background-tasks.js'));
 });

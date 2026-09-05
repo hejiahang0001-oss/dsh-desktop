@@ -1,10 +1,12 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.1",
+  "version": "1.1.8",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
+  "copyright": "Copyright © 2026 DSH Desktop contributors",
   "license": "MIT",
+  "packageManager": "pnpm@11.19.0",
   "private": true,
   "scripts": {
     "start": "node scripts/start-electron.cjs",
@@ -16,18 +18,24 @@
     "validate:controlled-plugin-install": "node scripts/validate-controlled-plugin-install.cjs",
     "release:governance": "node scripts/release-governance.cjs",
     "smoke:packaged-terminal": "node scripts/smoke-packaged-terminal.cjs",
+    "smoke:packaged-lifecycle": "node scripts/smoke-packaged-lifecycle.cjs",
+    "smoke:packaged-safe-exit": "node scripts/smoke-packaged-safe-exit.cjs",
+    "verify:windows-identity": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-windows-version-info.ps1 -ExecutablePath \"dist\\win-unpacked\\DSH Desktop.exe\"",
     "pack:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --dir --win --x64",
     "dist:win": "vendor\\runtime\\win32-x64\\node.exe node_modules\\electron-builder\\out\\cli\\cli.js --win nsis portable --x64"
   },
   "devDependencies": {
+    "7zip-bin": "5.2.0",
+    "@electron/asar": "3.4.1",
     "electron": "43.4.1",
-    "electron-builder": "26.8.1",
+    "electron-builder": "26.11.1",
     "harness-build-pnpm": "npm:pnpm@11.7.0",
     "pnpm": "11.19.0"
   },
   "build": {
     "appId": "com.dsh.desktop",
     "productName": "DSH Desktop",
+    "afterPack": "scripts/after-pack.cjs",
     "asar": true,
     "npmRebuild": false,
     "compression": "store",
@@ -84,10 +92,8 @@
       "assets/workbench-network.css",
       "assets/workbench-network.js",
       "assets/harness-localization.js",
-      "assets/harness-reliable-interrupt.js",
       "assets/document-intake.js",
       "assets/session-continuity.js",
-      "assets/session-workflow.js",
       "assets/composer-text-bridge.js",
       "assets/document-intake.css",
       "electron/extension-center.cjs",
@@ -120,16 +126,20 @@
         ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.2-alpha.2/node_modules",
+        "from": "vendor/harness-hoisted-0.1.2-rc.1/node_modules",
         "to": "harness/node_modules"
       },
       {
-        "from": "vendor/harness-hoisted-0.1.2-alpha.2/harness-runtime.json",
+        "from": "vendor/harness-hoisted-0.1.2-rc.1/harness-runtime.json",
         "to": "harness/harness-runtime.json"
       },
       {
         "from": "electron/terminal-pty-host.cjs",
         "to": "terminal/terminal-pty-host.cjs"
+      },
+      {
+        "from": "electron/harness-process-host.cjs",
+        "to": "harness-host/harness-process-host.cjs"
       },
       {
         "from": "node_modules/pnpm",
@@ -176,12 +186,19 @@
       {
         "from": "runtime/dsh-desktop-credentials",
         "to": "harness-plugins/dsh-desktop-credentials",
-        "filter": ["index.mjs", "package.json"]
+        "filter": [
+          "index.mjs",
+          "package.json"
+        ]
       },
       {
         "from": "runtime/dsh-desktop-tools",
         "to": "harness-plugins/dsh-desktop-tools",
-        "filter": ["index.mjs", "session-control.mjs", "package.json"]
+        "filter": [
+          "index.mjs",
+          "session-control.mjs",
+          "package.json"
+        ]
       },
       {
         "from": "resources/skills",
@@ -189,11 +206,21 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "LICENSE",
+        "to": "legal/LICENSE.txt"
+      },
+      {
+        "from": "docs/THIRD_PARTY_LICENSES.md",
+        "to": "legal/THIRD_PARTY_LICENSES.md"
       }
     ],
     "win": {
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
+      "signExecutable": false,
       "verifyUpdateCodeSignature": false,
+      "legalTrademarks": "Independent community project; not affiliated with or endorsed by DeepSeek.",
       "target": [
         {
           "target": "nsis",

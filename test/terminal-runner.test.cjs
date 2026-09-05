@@ -1,10 +1,12 @@
 const assert = require('node:assert/strict');
+const { execFile } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const test = require('node:test');
+const { promisify } = require('node:util');
 const {
   MAX_INPUT_CHARS,
   TerminalRunner,
@@ -15,6 +17,8 @@ const {
   resolveTerminalRuntime,
   sanitizePtyOutput
 } = require('../electron/terminal-runner.cjs');
+
+const execFileAsync = promisify(execFile);
 
 const createHost = () => {
   const child = new EventEmitter();
@@ -71,6 +75,33 @@ const removeTemporaryWorkspace = async (target) => {
       if (!['EPERM', 'EBUSY'].includes(error.code) || attempt === 9) throw error;
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
+  }
+};
+
+const waitForFile = async (target, timeoutMs = 5000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (!fs.existsSync(target)) {
+    if (Date.now() >= deadline) throw new Error(`file did not appear: ${target}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
+
+const processIsAlive = (pid) => {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    throw error;
+  }
+};
+
+const waitForProcessExit = async (pid, timeoutMs = 5000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (processIsAlive(pid)) {
+    if (Date.now() >= deadline) throw new Error(`process ${pid} did not exit`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 };
 
@@ -156,17 +187,143 @@ test('terminal output removes OSC clipboard writes and keeps ANSI color sequence
 test('terminal runner stops the complete PTY helper process tree', async () => {
   const host = createHost();
   let killedPid = null;
+  let killedShellPid = null;
   const runner = new TerminalRunner({
     workspacePath: path.resolve('terminal-workspace'),
     ...fakeRuntime(),
     spawnImpl: () => host,
-    killTree: async (target) => { killedPid = target.pid; target.emit('exit', null, 'SIGTERM'); }
+    killTree: async (target, shellPid) => { killedPid = target.pid; killedShellPid = shellPid; target.emit('exit', null, 'SIGTERM'); }
   });
   runner.start();
   host.stdout.write(`${JSON.stringify({ type: 'ready', pid: 5678, cols: 100, rows: 30 })}\n`);
   const state = await runner.stop();
   assert.equal(killedPid, 4321);
+  assert.equal(killedShellPid, 5678);
   assert.equal(state.status, 'stopped');
+});
+
+test('concurrent terminal stops share one process-tree shutdown', async () => {
+  const host = createHost();
+  let releaseKill;
+  let kills = 0;
+  const runner = new TerminalRunner({
+    workspacePath: path.resolve('terminal-workspace'),
+    ...fakeRuntime(),
+    spawnImpl: () => host,
+    killTree: async () => {
+      kills += 1;
+      await new Promise((resolve) => { releaseKill = resolve; });
+    }
+  });
+  runner.start();
+  host.stdout.write(`${JSON.stringify({ type: 'ready', pid: 5678, cols: 100, rows: 30 })}\n`);
+
+  const first = runner.stop();
+  const second = runner.stop();
+  assert.equal(first, second);
+  assert.equal(kills, 1);
+  releaseKill();
+  assert.equal((await first).status, 'stopped');
+  assert.equal(runner.isActive(), false);
+});
+
+test('a replacement terminal cannot start until the previous tree cleanup settles', async () => {
+  const firstHost = createHost();
+  const secondHost = createHost();
+  secondHost.pid = 4322;
+  let releaseKill;
+  const hosts = [firstHost, secondHost];
+  const runner = new TerminalRunner({
+    workspacePath: path.resolve('terminal-workspace'),
+    ...fakeRuntime(),
+    spawnImpl: () => hosts.shift(),
+    killTree: async () => new Promise((resolve) => { releaseKill = resolve; })
+  });
+  runner.start();
+  firstHost.stdout.write(`${JSON.stringify({ type: 'ready', pid: 5678, cols: 100, rows: 30 })}\n`);
+  const stopping = runner.stop();
+  firstHost.emit('exit', null, 'SIGTERM');
+  assert.equal(runner.isActive(), false);
+  assert.throws(() => runner.start(), (error) => error.code === 'TERMINAL_BUSY');
+
+  releaseKill();
+  await stopping;
+  assert.equal(runner.start().status, 'starting');
+});
+
+test('protocol overflow kills the owned process tree before becoming inactive', async () => {
+  const host = createHost();
+  let kills = 0;
+  const runner = new TerminalRunner({
+    workspacePath: path.resolve('terminal-workspace'),
+    ...fakeRuntime(),
+    spawnImpl: () => host,
+    killTree: async () => { kills += 1; }
+  });
+  runner.start();
+  host.stdout.write('x'.repeat(1024 * 1024 + 1));
+  const state = await runner.stop();
+
+  assert.equal(kills, 1);
+  assert.equal(state.status, 'failed');
+  assert.equal(runner.isActive(), false);
+  assert.match(runner.getSnapshot().output, /协议超过安全上限/);
+});
+
+test('an unexpected PTY host exit still cleans the recorded shell process tree', async () => {
+  const host = createHost();
+  let killedHostPid = null;
+  let killedShellPid = null;
+  const runner = new TerminalRunner({
+    workspacePath: path.resolve('terminal-workspace'),
+    ...fakeRuntime(),
+    spawnImpl: () => host,
+    killTree: async (target, shellPid) => {
+      killedHostPid = target.pid;
+      killedShellPid = shellPid;
+    }
+  });
+  runner.start();
+  host.stdout.write(`${JSON.stringify({ type: 'ready', pid: 5678, cols: 100, rows: 30 })}\n`);
+
+  host.emit('exit', 70, null);
+  const state = await runner.stop();
+
+  assert.equal(killedHostPid, 4321);
+  assert.equal(killedShellPid, 5678);
+  assert.equal(state.status, 'failed');
+  assert.equal(runner.isActive(), false);
+  assert.match(runner.getSnapshot().output, /宿主意外退出/);
+});
+
+test('stale PTY host events cannot finish or write into a replacement run', () => {
+  const firstHost = createHost();
+  const secondHost = createHost();
+  secondHost.pid = 4322;
+  const hosts = [firstHost, secondHost];
+  const runner = new TerminalRunner({
+    workspacePath: path.resolve('terminal-workspace'),
+    ...fakeRuntime(),
+    spawnImpl: () => hosts.shift()
+  });
+
+  runner.start();
+  firstHost.stdout.write(`${JSON.stringify({ type: 'exit', exitCode: 0, signal: null })}\n`);
+  assert.equal(runner.getState().status, 'completed');
+
+  runner.start();
+  secondHost.stdout.write(`${JSON.stringify({ type: 'ready', pid: 6789, cols: 100, rows: 30 })}\n`);
+  assert.equal(runner.getState().runId, 2);
+  assert.equal(runner.getState().status, 'running');
+
+  firstHost.stdout.write(`${JSON.stringify({ type: 'data', data: 'stale-output' })}\n`);
+  firstHost.emit('exit', 1, null);
+
+  assert.equal(runner.getState().runId, 2);
+  assert.equal(runner.getState().status, 'running');
+  assert.equal(runner.getState().pid, 6789);
+  assert.equal(runner.isActive(), true);
+  assert.doesNotMatch(runner.getSnapshot().output, /stale-output/);
 });
 
 test('terminal runner reports a synchronous PTY host launch failure without staying busy', () => {
@@ -193,16 +350,20 @@ test('real Windows PTY persists across commands in the workspace without the man
   });
   context.after(async () => { if (runner.isActive()) await runner.stop(); });
   runner.start({ cols: 100, rows: 30 });
-  await waitForState(runner, 'running');
+  const hostPid = runner.child.pid;
+  const running = await waitForState(runner, 'running');
+  assert.ok(Number.isSafeInteger(running.pid) && running.pid > 0, 'real PTY ready must include the owned shell PID');
   runner.write("Write-Output ('cwd=' + (Get-Location).Path); Write-Output ('secret=' + [bool]$env:DEEPSEEK_API_KEY)\r");
   await new Promise((resolve) => setTimeout(resolve, 500));
   runner.write("Write-Output 'second-command'\r");
   await new Promise((resolve) => setTimeout(resolve, 300));
   runner.write('exit\r');
   await waitForState(runner, ['completed', 'failed']);
+  await waitForProcessExit(hostPid);
   const output = stripAnsi(runner.getSnapshot().output);
 
   assert.equal(runner.getState().status, 'completed');
+  assert.equal(runner.isActive(), false);
   assert.match(output, /cwd=/);
   assert.match(output, /secret=False/i);
   assert.match(output, /second-command/);
@@ -223,5 +384,70 @@ test('real Windows PTY process tree stops before a long interactive command comp
   await new Promise((resolve) => setTimeout(resolve, 250));
   const state = await runner.stop();
   assert.equal(state.status, 'stopped');
+  assert.equal(runner.isActive(), false);
+});
+
+test('real Windows PTY shutdown removes a shell descendant instead of only the helper host', {
+  skip: realPtySkip,
+  timeout: 25000
+}, async (context) => {
+  const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-pty-tree-stop-'));
+  const pidFile = path.join(workspacePath, 'descendant.pid');
+  let descendantPid = 0;
+  const runner = new TerminalRunner({ workspacePath, ...realPtyRuntime });
+  context.after(async () => {
+    if (runner.isActive()) await runner.stop().catch(() => undefined);
+    if (processIsAlive(descendantPid)) {
+      try { process.kill(descendantPid); } catch { /* The owned test process may already be gone. */ }
+    }
+    await removeTemporaryWorkspace(workspacePath);
+  });
+
+  runner.start();
+  await waitForState(runner, 'running');
+  const escapedPidFile = pidFile.replaceAll("'", "''");
+  runner.write(`$child = Start-Process -FilePath \"$env:SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -ArgumentList @('-NoProfile','-Command','Start-Sleep -Seconds 60') -PassThru; Set-Content -LiteralPath '${escapedPidFile}' -Value $child.Id\r`);
+  await waitForFile(pidFile);
+  descendantPid = Number(fs.readFileSync(pidFile, 'utf8').trim());
+  assert.equal(processIsAlive(descendantPid), true);
+
+  const state = await runner.stop();
+  await waitForProcessExit(descendantPid);
+  assert.equal(state.status, 'stopped');
+  assert.equal(runner.isActive(), false);
+});
+
+test('real Windows PTY guardian removes detached descendants when only the helper host is killed', {
+  skip: realPtySkip,
+  timeout: 25000
+}, async (context) => {
+  const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-pty-guardian-'));
+  const pidFile = path.join(workspacePath, 'descendant.pid');
+  let descendantPid = 0;
+  let shellPid = 0;
+  let hostPid = 0;
+  const runner = new TerminalRunner({ workspacePath, ...realPtyRuntime });
+  context.after(async () => {
+    for (const pid of [hostPid, shellPid, descendantPid]) {
+      if (!processIsAlive(pid)) continue;
+      await execFileAsync('taskkill.exe', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }).catch(() => undefined);
+    }
+    await removeTemporaryWorkspace(workspacePath);
+  });
+
+  runner.start();
+  const running = await waitForState(runner, 'running');
+  shellPid = running.pid;
+  hostPid = runner.child.pid;
+  const escapedPidFile = pidFile.replaceAll("'", "''");
+  runner.write(`$child = Start-Process -FilePath \"$env:SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -ArgumentList @('-NoProfile','-Command','Start-Sleep -Seconds 60') -PassThru; Set-Content -LiteralPath '${escapedPidFile}' -Value $child.Id\r`);
+  await waitForFile(pidFile);
+  descendantPid = Number(fs.readFileSync(pidFile, 'utf8').trim());
+  assert.equal(processIsAlive(descendantPid), true);
+
+  await execFileAsync('taskkill.exe', ['/pid', String(hostPid), '/F'], { windowsHide: true });
+  await waitForState(runner, 'failed');
+  await runner.stop();
+  await Promise.all([waitForProcessExit(shellPid), waitForProcessExit(descendantPid)]);
   assert.equal(runner.isActive(), false);
 });

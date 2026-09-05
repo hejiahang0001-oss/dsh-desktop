@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
@@ -33,6 +34,16 @@ const waitForState = (manager, status, timeoutMs = 5000) => new Promise((resolve
   };
   manager.on('state', onState);
 });
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
 
 test('preview URLs accept only credential-free loopback services outside the Harness origin', () => {
   assert.equal(normalizeLoopbackUrl('3000'), 'http://127.0.0.1:3000/');
@@ -111,6 +122,115 @@ test('external loopback preview is monitored but never treated as an owned port'
   const offline = waitForState(manager, 'offline');
   await close(server);
   assert.equal((await offline).owned, false);
+});
+
+test('stopping during an external probe prevents the stale result from reviving preview', async () => {
+  const pendingProbe = deferred();
+  const manager = new PreviewManager({ probe: () => pendingProbe.promise });
+  const connecting = manager.connect('http://127.0.0.1:5173');
+  await waitForState(manager, 'starting');
+
+  const stopped = await manager.stop();
+  assert.equal(stopped.status, 'stopped');
+  pendingProbe.resolve({ ok: true, url: 'http://127.0.0.1:5173/' });
+  await connecting;
+
+  assert.equal(manager.getState().status, 'stopped');
+  assert.equal(manager.getState().mode, 'none');
+  assert.equal(manager.monitor, null);
+});
+
+test('a stale monitor probe cannot overwrite a replacement external preview', async () => {
+  const staleMonitorProbe = deferred();
+  let probeCount = 0;
+  const manager = new PreviewManager({
+    probe: async (url) => {
+      probeCount += 1;
+      if (probeCount === 2) return staleMonitorProbe.promise;
+      return { ok: true, url };
+    }
+  });
+
+  await manager.connect('http://127.0.0.1:5173');
+  const staleMonitoring = manager._monitorExternal();
+  assert.equal(probeCount, 2);
+  await manager.connect('http://127.0.0.1:4173');
+  staleMonitorProbe.resolve({ ok: false, error: new Error('old service offline') });
+  await staleMonitoring;
+
+  assert.equal(manager.getState().status, 'ready');
+  assert.equal(manager.getState().url, 'http://127.0.0.1:4173/');
+  assert.equal(manager.getState().error, '');
+  await manager.stop();
+});
+
+test('stopping while a managed preview starts listening prevents a stale ready state', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-preview-listen-race-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'index.html'), '<h1>race</h1>');
+
+  const server = new EventEmitter();
+  server.listen = () => {};
+  server.close = (callback) => callback();
+  server.address = () => ({ port: 54321 });
+  const manager = new PreviewManager({ createServer: () => server });
+  await manager.activate(root);
+
+  const opening = manager.openFile('index.html');
+  await waitForState(manager, 'starting');
+  await manager.stop();
+  server.emit('listening');
+  await opening;
+
+  assert.equal(manager.getState().status, 'stopped');
+  assert.equal(manager.getState().mode, 'none');
+  assert.equal(manager.server, null);
+});
+
+test('managed preview close force-clears persistent connections and rejects within a bound', {
+  timeout: 1000
+}, async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-preview-close-timeout-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'index.html'), '<h1>persistent</h1>');
+
+  const calls = { close: 0, closeIdleConnections: 0, closeAllConnections: 0 };
+  const server = new EventEmitter();
+  server.listen = () => queueMicrotask(() => server.emit('listening'));
+  server.close = () => { calls.close += 1; };
+  server.closeIdleConnections = () => { calls.closeIdleConnections += 1; };
+  server.closeAllConnections = () => { calls.closeAllConnections += 1; };
+  server.address = () => ({ port: 54322 });
+  const manager = new PreviewManager({
+    createServer: () => server,
+    closeTimeoutMs: 25
+  });
+  await manager.activate(root);
+  await manager.openFile('index.html');
+
+  await assert.rejects(manager.stop(), (error) => error instanceof PreviewError && error.code === 'PREVIEW_CLOSE_TIMEOUT');
+  assert.deepEqual(calls, { close: 1, closeIdleConnections: 1, closeAllConnections: 1 });
+  assert.equal(manager.server, server);
+  assert.equal(manager.isActive(), true);
+  assert.equal(manager.getState().owned, true);
+
+  server.close = (callback) => { calls.close += 1; callback(); };
+  await manager.stop();
+  assert.equal(manager.server, null);
+  assert.equal(manager.isActive(), false);
+});
+
+test('stopping an external preview never closes the external service', async (context) => {
+  const server = http.createServer((_request, response) => response.end('still-running'));
+  const port = await listen(server);
+  context.after(async () => { if (server.listening) await close(server); });
+  const manager = new PreviewManager();
+
+  await manager.connect(`http://127.0.0.1:${port}`);
+  await manager.stop();
+
+  assert.equal(server.listening, true);
+  assert.equal((await probeLoopback(`http://127.0.0.1:${port}`)).ok, true);
 });
 
 test('only HTML files can start the managed application preview', async (context) => {

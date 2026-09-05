@@ -8,9 +8,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Repository = 'https://github.com/deepseek-ai/deepseek-harness.git'
-$Tag = 'dsh-v0.1.2-alpha.2'
-$Commit = '0a53fb55bea101816fa226bb964ae2bed71c343b'
-$HarnessVersion = '0.1.2-alpha.2'
+$Tag = 'dsh-v0.1.2-rc.1'
+$Commit = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
+$HarnessVersion = '0.1.2-rc.1'
 $PnpmVersion = '11.7.0'
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Node = Join-Path $Root 'vendor\runtime\win32-x64\node.exe'
@@ -43,7 +43,14 @@ function Remove-OwnedTemporaryDirectory {
   if (-not $Resolved.StartsWith($TempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to remove a directory outside the temporary root: $Resolved"
   }
-  if (Test-Path -LiteralPath $Resolved) { Remove-Item -LiteralPath $Resolved -Recurse -Force }
+  for ($Attempt = 1; $Attempt -le 3 -and (Test-Path -LiteralPath $Resolved); $Attempt += 1) {
+    try {
+      Remove-Item -LiteralPath $Resolved -Recurse -Force -ErrorAction Stop
+    } catch {
+      if ($Attempt -lt 3) { Start-Sleep -Milliseconds 300 }
+      else { Write-Warning "Temporary Harness source could not be fully removed: $Resolved" }
+    }
+  }
 }
 
 if (-not (Test-Path -LiteralPath $Node -PathType Leaf)) { throw 'Bundled Node.js is missing. Run pnpm runtime:fetch first.' }
@@ -62,9 +69,9 @@ try {
   if (-not (Test-Path -LiteralPath (Join-Path $SourceDirectory '.git'))) { throw "Harness source is not a Git checkout: $SourceDirectory" }
   $ActualCommit = (& git.exe -C $SourceDirectory rev-parse HEAD).Trim()
   if ($LASTEXITCODE -ne 0 -or $ActualCommit -ne $Commit) { throw "Harness source commit mismatch: $ActualCommit" }
-  $TrackedChanges = @(& git.exe -C $SourceDirectory status --porcelain --untracked-files=no)
+  $TrackedChanges = @(& git.exe -C $SourceDirectory status --porcelain --untracked-files=all)
   if ($LASTEXITCODE -ne 0) { throw 'Unable to verify the Harness source worktree.' }
-  if ($TrackedChanges.Count -ne 0) { throw "Harness source has tracked changes:`n$($TrackedChanges -join "`n")" }
+  if ($TrackedChanges.Count -ne 0) { throw "Harness source checkout is not clean:`n$($TrackedChanges -join "`n")" }
   $SourceManifest = Get-Content -Raw -LiteralPath (Join-Path $SourceDirectory 'package.json') | ConvertFrom-Json
   if ($SourceManifest.version -ne $HarnessVersion -or $SourceManifest.packageManager -ne "pnpm@$PnpmVersion") {
     throw "Harness source identity mismatch: $($SourceManifest.version), $($SourceManifest.packageManager)"

@@ -11,7 +11,7 @@
 <body>
   <header class="toolbar">
     <div>
-      <span class="eyebrow">DSH Desktop 0.9.0</span>
+      <span id="app-version" class="eyebrow" aria-label="当前产品版本">DSH Desktop</span>
       <h1>Wiki 中心</h1>
       <p>把会话结论、当前项目增量和你选择的 DSH 历史沉淀为可查询、可追溯的本地 Markdown 知识。</p>
     </div>
@@ -19,6 +19,48 @@
   </header>
 
   <main>
+    <section id="wiki-onboarding" class="panel onboarding" aria-labelledby="onboarding-title">
+      <div class="section-heading">
+        <div><span class="section-label">首次使用</span><h2 id="onboarding-title">三步建立本地知识库</h2></div>
+        <span class="status waiting">约 1 分钟</span>
+      </div>
+      <ol class="onboarding-steps">
+        <li><span class="step-index" aria-hidden="true">1</span><div><h3>选择目录</h3><p>选择一个本机普通文件夹作为 Vault，已有内容不会被复制或覆盖。</p></div></li>
+        <li><span class="step-index" aria-hidden="true">2</span><div><h3>补齐结构</h3><p>确认后只创建缺失的目录、索引与清单文件，不要求 Git 或 Obsidian。</p></div></li>
+        <li><span class="step-index" aria-hidden="true">3</span><div><h3>检查并使用</h3><p>检查项目来源是否有变化，再查询、同步或保存会话结论。</p></div></li>
+      </ol>
+      <div class="actions">
+        <button id="onboarding-choose-vault" type="button">开始选择知识库</button>
+      </div>
+    </section>
+
+    <section id="wiki-overview" class="panel overview-panel" aria-labelledby="overview-title" hidden>
+      <div class="section-heading">
+        <div><span class="section-label">运行概览</span><h2 id="overview-title">知识库健康状态</h2></div>
+        <span id="overview-status" class="status waiting" role="status">正在检查</span>
+      </div>
+      <dl class="health-grid">
+        <div class="health-item health-path"><dt>Vault 路径</dt><dd id="health-vault-path">尚未提供</dd></div>
+        <div class="health-item"><dt>结构</dt><dd id="health-structure">检查中</dd><small id="health-structure-detail">等待知识库状态。</small></div>
+        <div class="health-item"><dt>页面数</dt><dd id="health-page-count">0</dd><small id="health-page-detail">只统计可查询页面。</small></div>
+        <div class="health-item health-wide"><dt>最近同步</dt><dd id="health-last-sync">暂无记录</dd><small>仅显示可信状态提供的时间。</small></div>
+        <div class="health-item health-wide"><dt>来源新鲜度</dt><dd id="health-freshness">待检查</dd><small id="health-freshness-detail">点击检查后读取当前项目增量。</small></div>
+      </dl>
+      <div id="recovery-callout" class="recovery-callout" role="status" hidden>
+        <div class="recovery-copy">
+          <strong id="recovery-title">需要恢复</strong>
+          <p id="recovery-detail">可执行恢复操作已经就绪。</p>
+          <p id="recovery-managed-pages" class="recovery-managed-pages" hidden></p>
+          <p id="recovery-guidance" class="recovery-guidance" hidden></p>
+        </div>
+        <button id="recover-vault" class="secondary" type="button">运行安全恢复</button>
+      </div>
+      <div class="actions overview-actions">
+        <button id="check-source-health" class="secondary" type="button" disabled>检查来源新鲜度</button>
+        <button id="refresh-wiki-state" class="ghost" type="button">刷新状态</button>
+      </div>
+    </section>
+
     <section class="panel vault-panel" aria-labelledby="vault-title">
       <div class="section-heading">
         <div><span class="section-label">授权范围</span><h2 id="vault-title">用户选择的知识库</h2></div>

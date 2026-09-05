@@ -118,4 +118,7 @@ test('dependency source and supported peer ranges are deterministic', () => {
   assert.equal(satisfiesSupportedRange('1.2.9', '~1.2.3'), true);
   assert.equal(satisfiesSupportedRange('1.3.0', '~1.2.3'), false);
   assert.equal(satisfiesSupportedRange('1.2.3', 'workspace:*'), null);
+  assert.equal(satisfiesSupportedRange('0.1.2-rc.1', '0.1.2-rc.1'), true);
+  assert.equal(satisfiesSupportedRange('0.1.2-rc.1', '0.1.2-alpha.5'), false);
+  assert.equal(satisfiesSupportedRange('0.1.2-rc.1', '^0.1.2'), null);
 });

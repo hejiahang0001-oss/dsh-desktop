@@ -7,6 +7,7 @@ const {
   buildExtensionCenter,
   callHarnessRemote,
   categoryOf,
+  requiredInventoryModulesActive,
   safeHarnessOrigin,
   sanitizePluginInventory
 } = require('../electron/extension-center.cjs');
@@ -37,6 +38,18 @@ test('Harness Remote caller uses the official slash endpoint and exact empty arg
   await assert.rejects(() => callHarnessRemote('http://127.0.0.1:18888', '..', 'list'));
   assert.equal(safeHarnessOrigin('http://127.0.0.1:18888/'), true);
   assert.equal(boundedErrorMessage(` bad\0  ${'x'.repeat(600)} `, 'fallback').length, 512);
+});
+
+test('required Harness modules must be enabled and active', () => {
+  const required = [
+    '@deepseek-ai/dsh-api-session-controller',
+    '@deepseek-ai/dsh-api-workspace-controller',
+    '@deepseek-ai/dsh-session-log-export'
+  ];
+  const ready = { entries: required.map((moduleName) => ({ moduleName, enabled: true, fiberPhase: 'active' })) };
+  assert.equal(requiredInventoryModulesActive(ready, required), true);
+  assert.equal(requiredInventoryModulesActive({ entries: ready.entries.slice(1) }, required), false);
+  assert.equal(requiredInventoryModulesActive({ entries: ready.entries.map((entry, index) => index === 0 ? { ...entry, fiberPhase: 'failed' } : entry) }, required), false);
 });
 
 test('extension center maps the official inventory into four fixed capability surfaces', () => {

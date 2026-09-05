@@ -85,6 +85,14 @@ const sanitizePluginInventory = (snapshot) => {
   return immutable({ entries: immutable(entries), limited: raw.length > MAX_INVENTORY_ENTRIES });
 };
 
+const requiredInventoryModulesActive = (inventory, packageNames) => {
+  if (!Array.isArray(packageNames) || packageNames.length === 0) return false;
+  const entries = sanitizePluginInventory(inventory).entries;
+  return packageNames.every((packageName) => entries.some((entry) => entry.moduleName === packageName
+    && entry.enabled
+    && entry.fiberPhase === 'active'));
+};
+
 const categoryOf = (moduleName) => {
   if (/(?:^|\/)dsh-(?:client-ui-)?skill(?:-|$)|(?:^|\/)dsh-tool-skill(?:\/|$)/i.test(moduleName)) return 'skills';
   if (/(?:^|\/)dsh-mcp-client(?:\/|$)/i.test(moduleName)) return 'mcp';
@@ -233,6 +241,7 @@ module.exports = {
   buildExtensionCenter,
   callHarnessRemote,
   categoryOf,
+  requiredInventoryModulesActive,
   safeHarnessOrigin,
   safeModuleName,
   sanitizePluginInventory,

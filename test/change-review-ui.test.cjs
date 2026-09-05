@@ -17,3 +17,12 @@ test('workbench Git review presents trustworthy empty and failure states', () =>
   assert.match(source, /empty\.dataset\.state = reviewState/);
   assert.doesNotMatch(source, /暂无 Git 变更/);
 });
+
+test('review actions do not dominate empty and non-actionable states', () => {
+  const source = read('assets/workbench-panel.js');
+  const css = read('assets/workbench-panel.css');
+  assert.match(source, /const hasActionableChanges = changes\.canAcceptCount > 0 \|\| changes\.canRejectCount > 0/);
+  assert.match(source, /actions\.hidden =[^;]*!hasActionableChanges/);
+  assert.match(css, /\.dsh-review-button\[data-action="accept"\]:disabled/);
+  assert.doesNotMatch(css, /dsh-reliable-interrupt/);
+});

@@ -127,10 +127,7 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     openWindow: () => ipcRenderer.invoke('git-delivery:open-window')
   }),
   harness: Object.freeze({
-    workflowState: () => ipcRenderer.invoke('harness:workflow-state'),
     getState: () => ipcRenderer.invoke('harness:get-state'),
-    interruptAndPrompt: (text) => ipcRenderer.invoke('harness:interrupt-and-prompt', text),
-    interruptQueued: () => ipcRenderer.invoke('harness:interrupt-queued'),
     restart: () => ipcRenderer.invoke('harness:restart'),
     openLog: () => ipcRenderer.invoke('harness:open-log'),
     onState: (listener) => {

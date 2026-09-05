@@ -1,7 +1,15 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const { execFile } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const path = require('node:path');
+const { promisify } = require('node:util');
 const zlib = require('node:zlib');
+const { extractFile } = require('@electron/asar');
+const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
+const { inspectReleasePayloadBinding } = require('./release-payload-binding.cjs');
+
+const execFileAsync = promisify(execFile);
 
 const MAX_BLOCKMAP_COMPRESSED_BYTES = 8 * 1024 * 1024;
 const MAX_BLOCKMAP_RAW_BYTES = 64 * 1024 * 1024;
@@ -47,11 +55,46 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 ]);
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
-const REQUIRED_HARNESS_VERSION = '0.1.2-alpha.2';
-const REQUIRED_HARNESS_COMMIT = '0a53fb55bea101816fa226bb964ae2bed71c343b';
-const REQUIRED_HARNESS_PACKAGE_COUNT = 254;
+const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
+const REQUIRED_DESKTOP_VERSION = '1.1.8';
+const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
+const REQUIRED_HARNESS_TAG = 'dsh-v0.1.2-rc.1';
+const REQUIRED_HARNESS_VERSION = '0.1.2-rc.1';
+const REQUIRED_HARNESS_COMMIT = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d';
+const REQUIRED_HARNESS_PACKAGE_COUNT = 251;
+const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = '98c1d04821a504c85c480e563b9629b1556189cb95becf0796c2f4eccc8e62dd';
+const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 242;
+const REQUIRED_HARNESS_BUILD_NODE = 'v24.19.0';
+const REQUIRED_HARNESS_BUILD_PNPM = '11.7.0';
+const REQUIRED_HARNESS_DEPENDENCY_RESOLUTION = 'upstream-frozen-lockfile';
+const REQUIRED_HARNESS_PACKAGE_PAYLOAD = 'upstream-pnpm-pack';
+const REQUIRED_HARNESS_INSTALL_SCRIPTS = Object.freeze(['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local']);
+const REQUIRED_HARNESS_VENDOR_PACKAGES = new Set([
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/cordis-plugin-group',
+  '@deepseek-ai/cordis-plugin-hmr',
+  '@deepseek-ai/cordis-plugin-include',
+  '@deepseek-ai/cordis-plugin-loader',
+  '@deepseek-ai/cordis-plugin-logger-console',
+  '@deepseek-ai/cordis-plugin-timer',
+  '@deepseek-ai/cosmokit',
+  '@deepseek-ai/schemastery'
+]);
+const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
+  ['@deepseek-ai/node-addon-landlock-run', '0.1.1'],
+  ['@deepseek-ai/node-addon-landlock-run-linux-arm64', '0.1.1'],
+  ['@deepseek-ai/node-addon-landlock-run-linux-x64', '0.1.1']
+]);
+const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
+const REQUIRED_LEGAL_SHA256 = new Map([
+  ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
+  ['THIRD_PARTY_LICENSES.md', '165837b5a2670868ceedc7e19f24e2e4d08a4002bd27067283b85a5677d6b534']
+]);
 
 const normalize = (value) => value.replaceAll('\\', '/');
+const HARNESS_PROCESS_HOST_RELATIVE = normalize(path.join('resources', 'harness-host', 'harness-process-host.cjs'));
+const TERMINAL_PROCESS_HOST_RELATIVE = normalize(path.join('resources', 'terminal', 'terminal-pty-host.cjs'));
+const NODE_RUNTIME_RELATIVE = normalize(path.join('resources', 'runtime', 'node.exe'));
 
 const validateBlockmap = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || value.version !== '2') throw new Error('Blockmap invalid: unsupported root.');
@@ -185,6 +228,36 @@ const inspectPeFile = async (filePath) => {
   }
 };
 
+const parseVersionInfoReport = (value) => {
+  const lines = String(value || '').replace(/^\uFEFF/u, '').split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try { return JSON.parse(lines[index]); } catch { /* Continue to an earlier output line. */ }
+  }
+  return null;
+};
+
+const inspectWindowsExecutableIdentity = async (root) => {
+  const executablePath = path.join(root, 'DSH Desktop.exe');
+  const info = await fsp.lstat(executablePath).catch(() => null);
+  if (!info?.isFile() || info.isSymbolicLink() || info.size <= 0) {
+    return { ok: false, present: false, error: 'DSH Desktop.exe is missing or unsafe.' };
+  }
+  const scriptPath = path.resolve(__dirname, 'verify-windows-version-info.ps1');
+  try {
+    const result = await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', scriptPath,
+      '-ExecutablePath', executablePath,
+      '-ExpectedVersion', REQUIRED_DESKTOP_VERSION
+    ], { encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+    return { ...(parseVersionInfoReport(result.stdout) || {}), ok: true, present: true };
+  } catch (error) {
+    const report = parseVersionInfoReport(error?.stdout);
+    return { ...(report || {}), ok: false, present: true, error: report ? 'Executable identity did not match.' : (error?.message || String(error)) };
+  }
+};
+
 const inspectPackageLayout = async (rootPath) => {
   const root = path.resolve(rootPath);
   const redundantRoots = [
@@ -198,6 +271,7 @@ const inspectPackageLayout = async (rootPath) => {
   const powerpointSkillPrefix = normalize(path.join('resources', 'skills', 'powerpoint-pptx'));
   const bundledSkillsPrefix = normalize(path.join('resources', 'skills'));
   const harnessPrefix = normalize(path.join('resources', 'harness'));
+  const legalPrefix = normalize(path.join('resources', 'legal'));
   const queue = [root];
   let seen = 0;
   let reparsePoints = 0;
@@ -214,7 +288,40 @@ const inspectPackageLayout = async (rootPath) => {
   const powerpointSkillPaths = new Set();
   const wikiSkillRuntime = { files: 0, bytes: 0 };
   const wikiSkillPaths = new Set();
-  const harnessRuntime = { files: 0, bytes: 0, version: '', packageCount: 0, commit: '', provenanceVersion: 0 };
+  const legalPaths = new Set();
+  const legalSha256 = {};
+  const harnessRuntime = {
+    files: 0,
+    bytes: 0,
+    version: '',
+    repository: '',
+    tag: '',
+    packageCount: 0,
+    packageInventorySha256: '',
+    provenancePackageInventorySha256: '',
+    commit: '',
+    provenanceVersion: 0,
+    buildNode: '',
+    buildPnpm: '',
+    dependencyResolution: '',
+    packagePayload: '',
+    installScripts: [],
+    runtimePayload: null,
+    actualRuntimePayload: null,
+    dshPackageCount: 0,
+    vendorPackageCount: 0,
+    vendorPackagesMissing: [],
+    auxiliaryPackageCount: 0,
+    auxiliaryPackagesMissing: [],
+    unexpectedDeepSeekPackages: [],
+    mismatchedPackages: []
+  };
+  const harnessProcessHost = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
+  const terminalProcessHost = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
+  const nodeRuntime = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
+  const harnessVendorPackages = new Set();
+  const harnessAuxiliaryPackages = new Set();
+  const harnessReleasePackages = [];
   while (queue.length > 0) {
     const directory = queue.shift();
     const entries = await fsp.readdir(directory, { withFileTypes: true });
@@ -283,9 +390,91 @@ const inspectPackageLayout = async (rootPath) => {
         harnessRuntime.files += 1;
         harnessRuntime.bytes += info.size;
       }
+      if (relative === HARNESS_PROCESS_HOST_RELATIVE) {
+        harnessProcessHost.present = true;
+        harnessProcessHost.bytes = info.size;
+        harnessProcessHost.sha256 = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      }
+      if (relative === TERMINAL_PROCESS_HOST_RELATIVE) {
+        terminalProcessHost.present = true;
+        terminalProcessHost.bytes = info.size;
+        terminalProcessHost.sha256 = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      }
+      if (relative === NODE_RUNTIME_RELATIVE) {
+        nodeRuntime.present = true;
+        nodeRuntime.bytes = info.size;
+        nodeRuntime.sha256 = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+      }
+      if (relative.startsWith(`${legalPrefix}/`)) {
+        const legalRelative = relative.slice(legalPrefix.length + 1);
+        legalPaths.add(legalRelative);
+        if (REQUIRED_LEGAL_SHA256.has(legalRelative)) {
+          legalSha256[legalRelative] = createHash('sha256').update(await fsp.readFile(target)).digest('hex');
+        }
+      }
+      const harnessPackageMatch = relative.match(/^resources\/harness\/node_modules\/@deepseek-ai\/([^/]+)\/package\.json$/);
+      if (harnessPackageMatch) {
+        const expectedName = `@deepseek-ai/${harnessPackageMatch[1]}`;
+        try {
+          const manifest = JSON.parse(await fsp.readFile(target, 'utf8'));
+          if (manifest.name !== expectedName) {
+            harnessRuntime.mismatchedPackages.push(`${expectedName}@invalid-name`);
+          } else if (manifest.name === '@deepseek-ai/dsh' || manifest.name.startsWith('@deepseek-ai/dsh-')) {
+            harnessRuntime.dshPackageCount += 1;
+            harnessReleasePackages.push(`${manifest.name}@${manifest.version || 'missing'}`);
+            if (manifest.version !== REQUIRED_HARNESS_VERSION) harnessRuntime.mismatchedPackages.push(`${manifest.name}@${manifest.version || 'missing'}`);
+          } else if (REQUIRED_HARNESS_VENDOR_PACKAGES.has(manifest.name)) {
+            harnessRuntime.vendorPackageCount += 1;
+            harnessVendorPackages.add(manifest.name);
+            harnessReleasePackages.push(`${manifest.name}@${manifest.version || 'missing'}`);
+          } else if (REQUIRED_HARNESS_AUXILIARY_PACKAGES.has(manifest.name)) {
+            harnessRuntime.auxiliaryPackageCount += 1;
+            harnessAuxiliaryPackages.add(manifest.name);
+            if (manifest.version !== REQUIRED_HARNESS_AUXILIARY_PACKAGES.get(manifest.name)) {
+              harnessRuntime.mismatchedPackages.push(`${manifest.name}@${manifest.version || 'missing'}`);
+            }
+          } else {
+            harnessRuntime.unexpectedDeepSeekPackages.push(`${manifest.name}@${manifest.version || 'missing'}`);
+          }
+        } catch {
+          harnessRuntime.mismatchedPackages.push(`${expectedName}@invalid-manifest`);
+        }
+      }
     }
   }
   const pnpmManifestPath = path.join(root, 'resources', 'pnpm', 'package', 'package.json');
+  try {
+    harnessProcessHost.expectedSha256 = createHash('sha256')
+      .update(await fsp.readFile(path.resolve(__dirname, '..', 'electron', 'harness-process-host.cjs')))
+      .digest('hex');
+  } catch {
+    harnessProcessHost.expectedSha256 = '';
+  }
+  try {
+    terminalProcessHost.expectedSha256 = createHash('sha256')
+      .update(await fsp.readFile(path.resolve(__dirname, '..', 'electron', 'terminal-pty-host.cjs')))
+      .digest('hex');
+  } catch {
+    terminalProcessHost.expectedSha256 = '';
+  }
+  try {
+    nodeRuntime.expectedSha256 = createHash('sha256')
+      .update(await fsp.readFile(path.resolve(__dirname, '..', 'vendor', 'runtime', 'win32-x64', 'node.exe')))
+      .digest('hex');
+  } catch {
+    nodeRuntime.expectedSha256 = '';
+  }
+  const packagedApp = { name: '', version: '' };
+  try {
+    const packagedManifestBytes = extractFile(path.join(root, 'resources', 'app.asar'), 'package.json');
+    if (packagedManifestBytes.length === 0 || packagedManifestBytes.length > 1024 * 1024) throw new Error('Packaged manifest size is invalid.');
+    const packagedManifest = JSON.parse(packagedManifestBytes.toString('utf8'));
+    packagedApp.name = typeof packagedManifest.name === 'string' ? packagedManifest.name : '';
+    packagedApp.version = typeof packagedManifest.version === 'string' ? packagedManifest.version : '';
+  } catch {
+    packagedApp.name = '';
+    packagedApp.version = '';
+  }
   if (pnpmPaths.has('package/package.json')) {
     try {
       const manifest = JSON.parse(await fsp.readFile(pnpmManifestPath, 'utf8'));
@@ -304,19 +493,67 @@ const inspectPackageLayout = async (rootPath) => {
     const dshManifest = JSON.parse(await fsp.readFile(path.join(root, 'resources', 'harness', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'));
     if (dshManifest.name === '@deepseek-ai/dsh' && typeof dshManifest.version === 'string') harnessRuntime.version = dshManifest.version;
     const provenance = JSON.parse(await fsp.readFile(path.join(root, 'resources', 'harness', 'harness-runtime.json'), 'utf8'));
+    harnessRuntime.repository = typeof provenance?.harness?.repository === 'string' ? provenance.harness.repository : '';
+    harnessRuntime.tag = typeof provenance?.harness?.tag === 'string' ? provenance.harness.tag : '';
     harnessRuntime.packageCount = Number.isSafeInteger(provenance?.build?.packageCount) ? provenance.build.packageCount : 0;
+    harnessRuntime.provenancePackageInventorySha256 = typeof provenance?.build?.packageInventorySha256 === 'string'
+      ? provenance.build.packageInventorySha256
+      : '';
     harnessRuntime.commit = typeof provenance?.harness?.commit === 'string' ? provenance.harness.commit : '';
     harnessRuntime.provenanceVersion = Number.isSafeInteger(provenance?.version) ? provenance.version : 0;
+    harnessRuntime.buildNode = typeof provenance?.build?.node === 'string' ? provenance.build.node : '';
+    harnessRuntime.buildPnpm = typeof provenance?.build?.pnpm === 'string' ? provenance.build.pnpm : '';
+    harnessRuntime.dependencyResolution = typeof provenance?.build?.dependencyResolution === 'string' ? provenance.build.dependencyResolution : '';
+    harnessRuntime.packagePayload = typeof provenance?.build?.packagePayload === 'string' ? provenance.build.packagePayload : '';
+    harnessRuntime.installScripts = Array.isArray(provenance?.build?.installScripts)
+      ? provenance.build.installScripts.filter((value) => typeof value === 'string')
+      : [];
+    harnessRuntime.runtimePayload = provenance?.build?.runtimePayload && typeof provenance.build.runtimePayload === 'object'
+      ? provenance.build.runtimePayload
+      : null;
     if (provenance?.harness?.name !== '@deepseek-ai/dsh' || provenance?.harness?.version !== harnessRuntime.version) {
       harnessRuntime.version = '';
     }
   } catch {
     harnessRuntime.version = '';
   }
+  harnessRuntime.vendorPackagesMissing = [...REQUIRED_HARNESS_VENDOR_PACKAGES]
+    .filter((name) => !harnessVendorPackages.has(name))
+    .sort((left, right) => left.localeCompare(right, 'en'));
+  harnessRuntime.auxiliaryPackagesMissing = [...REQUIRED_HARNESS_AUXILIARY_PACKAGES.keys()]
+    .filter((name) => !harnessAuxiliaryPackages.has(name))
+    .sort((left, right) => left.localeCompare(right, 'en'));
+  harnessRuntime.mismatchedPackages.sort((left, right) => left.localeCompare(right, 'en'));
+  harnessRuntime.unexpectedDeepSeekPackages.sort((left, right) => left.localeCompare(right, 'en'));
+  harnessRuntime.packageInventorySha256 = createHash('sha256')
+    .update(`${harnessReleasePackages.sort((left, right) => left.localeCompare(right, 'en')).join('\n')}\n`)
+    .digest('hex');
+  try {
+    harnessRuntime.actualRuntimePayload = inspectHarnessRuntimePayload(path.join(root, 'resources', 'harness', 'node_modules'));
+  } catch {
+    harnessRuntime.actualRuntimePayload = null;
+  }
   const requiredHarnessRuntimeReady = harnessRuntime.version === REQUIRED_HARNESS_VERSION
+    && harnessRuntime.repository === REQUIRED_HARNESS_REPOSITORY
+    && harnessRuntime.tag === REQUIRED_HARNESS_TAG
     && harnessRuntime.commit === REQUIRED_HARNESS_COMMIT
     && harnessRuntime.packageCount === REQUIRED_HARNESS_PACKAGE_COUNT
-    && harnessRuntime.provenanceVersion === 1;
+    && harnessRuntime.packageInventorySha256 === REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256
+    && harnessRuntime.provenancePackageInventorySha256 === REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256
+    && harnessRuntime.provenanceVersion === 1
+    && harnessRuntime.buildNode === REQUIRED_HARNESS_BUILD_NODE
+    && harnessRuntime.buildPnpm === REQUIRED_HARNESS_BUILD_PNPM
+    && harnessRuntime.dependencyResolution === REQUIRED_HARNESS_DEPENDENCY_RESOLUTION
+    && harnessRuntime.packagePayload === REQUIRED_HARNESS_PACKAGE_PAYLOAD
+    && JSON.stringify(harnessRuntime.installScripts) === JSON.stringify(REQUIRED_HARNESS_INSTALL_SCRIPTS)
+    && harnessRuntime.dshPackageCount === REQUIRED_HARNESS_DSH_PACKAGE_COUNT
+    && harnessRuntime.vendorPackageCount === REQUIRED_HARNESS_VENDOR_PACKAGES.size
+    && harnessRuntime.vendorPackagesMissing.length === 0
+    && harnessRuntime.auxiliaryPackageCount === REQUIRED_HARNESS_AUXILIARY_PACKAGES.size
+    && harnessRuntime.auxiliaryPackagesMissing.length === 0
+    && harnessRuntime.unexpectedDeepSeekPackages.length === 0
+    && JSON.stringify(harnessRuntime.runtimePayload) === JSON.stringify(harnessRuntime.actualRuntimePayload)
+    && harnessRuntime.mismatchedPackages.length === 0;
   const requiredDesktopPlugins = ['dsh-desktop-shell-env/index.mjs', 'dsh-desktop-shell-env/package.json',
     'dsh-desktop-credentials/index.mjs', 'dsh-desktop-credentials/package.json',
     'dsh-desktop-tools/index.mjs', 'dsh-desktop-tools/session-control.mjs', 'dsh-desktop-tools/package.json'];
@@ -325,9 +562,26 @@ const inspectPackageLayout = async (rootPath) => {
     const info = await fsp.lstat(path.join(root, 'resources', 'harness-plugins', relative)).catch(() => null);
     if (!info?.isFile() || info.isSymbolicLink()) desktopPluginsMissing.push(relative);
   }
+  const executableIdentity = await inspectWindowsExecutableIdentity(root);
   return {
+    packagedApp,
+    executableIdentity,
+    requiredPackagedAppReady: packagedApp.name === REQUIRED_DESKTOP_NAME && packagedApp.version === REQUIRED_DESKTOP_VERSION,
+    requiredExecutableIdentityReady: executableIdentity.ok === true,
     requiredDesktopPluginsReady: desktopPluginsMissing.length === 0,
     desktopPluginsMissing,
+    harnessProcessHost,
+    requiredHarnessProcessHostReady: harnessProcessHost.present
+      && harnessProcessHost.bytes > 0
+      && harnessProcessHost.sha256 === harnessProcessHost.expectedSha256,
+    terminalProcessHost,
+    requiredTerminalProcessHostReady: terminalProcessHost.present
+      && terminalProcessHost.bytes > 0
+      && terminalProcessHost.sha256 === terminalProcessHost.expectedSha256,
+    nodeRuntime,
+    requiredNodeRuntimeReady: nodeRuntime.present
+      && nodeRuntime.bytes > 0
+      && nodeRuntime.sha256 === nodeRuntime.expectedSha256,
     redundantAppRuntime,
     terminalRuntime,
     requiredTerminalFilesReady: REQUIRED_TERMINAL_FILES.every((name) => terminalPaths.has(name)),
@@ -342,6 +596,10 @@ const inspectPackageLayout = async (rootPath) => {
     requiredPowerpointSkillFilesReady: REQUIRED_POWERPOINT_SKILL_FILES.every((name) => powerpointSkillPaths.has(name)),
     wikiSkillRuntime,
     requiredWikiSkillFilesReady: REQUIRED_WIKI_SKILL_FILES.every((name) => wikiSkillPaths.has(name)),
+    legalSha256,
+    requiredLegalNoticesReady: REQUIRED_LEGAL_FILES.every((name) => (
+      legalPaths.has(name) && legalSha256[name] === REQUIRED_LEGAL_SHA256.get(name)
+    )),
     harnessRuntime,
     requiredHarnessRuntimeReady,
     reparsePoints
@@ -354,29 +612,48 @@ const main = async () => {
   const previousBlockmapPath = readArgument('previous-blockmap');
   const currentBlockmapPath = readArgument('current-blockmap');
   const installerPath = readArgument('installer');
+  const portablePath = readArgument('portable');
   const unpackedRoot = readArgument('unpacked-root');
   const outputPath = readArgument('output');
-  if (!previousBlockmapPath || !currentBlockmapPath || !installerPath || !unpackedRoot || !outputPath) {
-    throw new Error('Usage: node scripts/release-governance.cjs --previous-blockmap=<file> --current-blockmap=<file> --installer=<exe> --unpacked-root=<dir> --output=<json>');
+  if (!previousBlockmapPath || !currentBlockmapPath || !installerPath || !portablePath || !unpackedRoot || !outputPath) {
+    throw new Error('Usage: node scripts/release-governance.cjs --previous-blockmap=<file> --current-blockmap=<file> --installer=<exe> --portable=<exe> --unpacked-root=<dir> --output=<json>');
   }
-  const [previousBuffer, currentBuffer, signature, packageLayout] = await Promise.all([
+  const manifest = JSON.parse(await fsp.readFile(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+  const [previousBuffer, currentBuffer, signature, packageLayout, payloadBinding] = await Promise.all([
     fsp.readFile(path.resolve(previousBlockmapPath)),
     fsp.readFile(path.resolve(currentBlockmapPath)),
     inspectPeFile(path.resolve(installerPath)),
-    inspectPackageLayout(path.resolve(unpackedRoot))
+    inspectPackageLayout(path.resolve(unpackedRoot)),
+    inspectReleasePayloadBinding({
+      installerPath: path.resolve(installerPath),
+      portablePath: path.resolve(portablePath),
+      unpackedRoot: path.resolve(unpackedRoot),
+      expectedVersion: manifest.version
+    })
   ]);
   const differential = compareBlockmaps(decodeBlockmap(previousBuffer), decodeBlockmap(currentBuffer));
   if (differential.currentBytes !== signature.bytes) throw new Error('Current blockmap size does not match the installer.');
-  const manifest = JSON.parse(await fsp.readFile(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+  const manifestBinding = {
+    expected: { name: manifest.name, version: manifest.version },
+    packaged: packageLayout.packagedApp,
+    matches: packageLayout.packagedApp?.name === manifest.name
+      && packageLayout.packagedApp?.version === manifest.version
+  };
   const verifyUpdateCodeSignature = manifest.build?.win?.verifyUpdateCodeSignature === true;
   const updateReadiness = assessAutomaticUpdate({
     signatureStatus: signature.status,
     verifyUpdateCodeSignature
   });
-  const packageReady = packageLayout.redundantAppRuntime.files === 0
+  const packageReady = payloadBinding.accepted === true
+    && manifestBinding.matches
+    && packageLayout.redundantAppRuntime.files === 0
+    && packageLayout.requiredPackagedAppReady
+    && packageLayout.requiredExecutableIdentityReady
     && packageLayout.terminalRuntime.foreignPlatformFiles === 0
     && packageLayout.terminalRuntime.pdbFiles === 0
     && packageLayout.requiredTerminalFilesReady
+    && packageLayout.requiredTerminalProcessHostReady
+    && packageLayout.requiredNodeRuntimeReady
     && packageLayout.requiredPnpmFilesReady
     && packageLayout.requiredPnpmVersionReady
     && packageLayout.pnpmRuntime.wrapperValid
@@ -384,14 +661,18 @@ const main = async () => {
     && packageLayout.requiredExcelSkillFilesReady
     && packageLayout.requiredPowerpointSkillFilesReady
     && packageLayout.requiredWikiSkillFilesReady
+    && packageLayout.requiredLegalNoticesReady
     && packageLayout.requiredHarnessRuntimeReady
+    && packageLayout.requiredHarnessProcessHostReady
     && packageLayout.requiredDesktopPluginsReady
     && packageLayout.reparsePoints === 0;
   const report = {
     version: 1,
     packageVersion: manifest.version,
     packageReady,
+    manifestBinding,
     packageLayout,
+    payloadBinding,
     differential: {
       ...differential,
       eligible: differential.reuseRatio >= 0.8
@@ -420,12 +701,20 @@ module.exports = {
   MAX_BLOCKMAP_COMPRESSED_BYTES,
   MAX_BLOCKMAP_RAW_BYTES,
   MAX_PACKAGE_FILES,
+  NODE_RUNTIME_RELATIVE,
   REQUIRED_PNPM_FILES,
   REQUIRED_PNPM_VERSION,
+  REQUIRED_DESKTOP_VERSION,
   REQUIRED_HARNESS_COMMIT,
+  REQUIRED_HARNESS_BUILD_NODE,
+  REQUIRED_HARNESS_BUILD_PNPM,
+  REQUIRED_HARNESS_DSH_PACKAGE_COUNT,
+  REQUIRED_HARNESS_INSTALL_SCRIPTS,
   REQUIRED_HARNESS_PACKAGE_COUNT,
+  REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256,
   REQUIRED_HARNESS_VERSION,
   REQUIRED_TERMINAL_FILES,
+  TERMINAL_PROCESS_HOST_RELATIVE,
   REQUIRED_WIKI_SKILL_FILES,
   REQUIRED_EXCEL_SKILL_FILES,
   REQUIRED_WORD_SKILL_FILES,
@@ -433,6 +722,7 @@ module.exports = {
   compareBlockmaps,
   decodeBlockmap,
   inspectPackageLayout,
+  inspectWindowsExecutableIdentity,
   parsePeCertificateTable,
   validateBlockmap
 };

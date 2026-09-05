@@ -1,8 +1,9 @@
 const { app, BrowserWindow, WebContentsView, desktopCapturer, dialog, ipcMain, Menu, Notification, safeStorage, screen, session, shell, Tray } = require('electron');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { randomBytes, randomUUID } = require('node:crypto');
+const { randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
 const { GitChangeReviewer } = require('./change-review.cjs');
 const { ReviewScopes } = require('./review-scopes.cjs');
 const { isTrustedClipboardWrite } = require('./clipboard-policy.cjs');
@@ -16,7 +17,7 @@ const {
   resolveControlledPnpmRuntime
 } = require('./controlled-plugin-installer.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
-const { buildExtensionCenter, callHarnessRemote } = require('./extension-center.cjs');
+const { buildExtensionCenter, callHarnessRemote, requiredInventoryModulesActive } = require('./extension-center.cjs');
 const { inspectOfficeCenter, isOfficeSkillId } = require('./office-center.cjs');
 const { extractWikiSessionCandidates, selectCaptureCandidate } = require('./wiki-center.cjs');
 const {
@@ -54,11 +55,6 @@ const {
   synchronizeHarnessWorkspace,
   waitForHarnessSessionSelection
 } = require('./harness-workspace-sync.cjs');
-const {
-  ReliableInterruptController,
-  ReliableInterruptError,
-  readHarnessQueueSnapshotFromWebContents
-} = require('./harness-reliable-interrupt.cjs');
 const {
   invokeHarnessCommandAction,
   invokeHarnessUiAction,
@@ -104,11 +100,21 @@ const { WorkspaceStore } = require('./workspace-store.cjs');
 const { SideChatController, SideChatError } = require('./side-chat.cjs');
 const { DocumentIntakeController } = require('./document-intake-controller.cjs');
 const { contextKey } = require('./document-intake-controller.cjs');
+const { resolveHarnessSessionContext } = require('./harness-session-context.cjs');
 const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs');
 const { NativeWorkbenchDock } = require('./native-workbench-dock.cjs');
 const { DockLayoutStore, TOOLS: DOCK_TOOLS } = require('./dock-layout.cjs');
 const { TerminalReadBroker } = require('./terminal-read-broker.cjs');
 const { SessionContinuityStore } = require('./session-continuity-store.cjs');
+const {
+  ApplicationClosingError,
+  LifecycleGate,
+  LifecycleStateStore,
+  buildVersionIdentity,
+  restoreAndFocusWindow,
+  settleLifecycleSteps,
+  versionIdentityLines
+} = require('./app-lifecycle.cjs');
 
 app.commandLine.appendSwitch('lang', 'zh-CN');
 app.setName('DSH Desktop');
@@ -151,12 +157,16 @@ let tasksSubagentsController;
 let backgroundTasks;
 let backgroundUnavailableMessage = '独立后台任务尚未初始化。';
 let backgroundOperationPromise = null;
+let harnessOperationPromise = null;
+let documentIntakeOperationPromise = null;
+let changeReviewOperationPromise = null;
+let previewOperationPromise = null;
+let wikiMutationOperationPromise = null;
 let quitOperationPromise = null;
 let workspaceActivationPromise = null;
 let sideChatController;
 let gitDeliveryManager;
 let updatePreferenceStore;
-let reliableInterruptController;
 let pluginRecoveryOutcomes = Object.freeze([]);
 let pluginTogglePromise = null;
 let pluginInstallPromise = null;
@@ -166,6 +176,7 @@ let sideChatOperationPromise = null;
 let supportBackupOperationPromise = null;
 let gitDeliveryOperationPromise = null;
 let updateCheckPromise = null;
+let networkOperationPromise = null;
 let sideChatSelectionTimer;
 let sideChatPartitionSession;
 let sideChatMainLayout;
@@ -182,6 +193,23 @@ const harnessSelectionTrace = [];
 let harnessFetch = null;
 let harnessProxyEnvironment = Object.freeze({});
 let allowQuit = false;
+let requestedQuitReason = 'system-quit';
+let pendingSecondInstanceFocus = false;
+let lifecycleSmokeSecondInstanceObserved = false;
+let lifecycleSmokeSecondInstanceResolve;
+let lifecycleStateStore;
+let lifecycleRecovery = Object.freeze({ needed: false, reason: '', source: 'fallback', previous: null });
+let fatalShutdownError;
+const lifecycleGate = new LifecycleGate();
+const appIsClosing = () => lifecycleGate.isClosing();
+const assertApplicationOpen = () => lifecycleGate.assertOpen();
+const applicationClosingResult = (extra = {}) => ({
+  ok: false,
+  reason: 'app-quitting',
+  message: 'DSH Desktop 正在安全退出。',
+  error: 'DSH Desktop 正在安全退出。',
+  ...extra
+});
 let loadFailureHandled = false;
 let agentPollTimer;
 const agentTransitionTracker = new AgentTransitionTracker();
@@ -288,7 +316,6 @@ const workbenchCheckpointScriptPath = path.join(rootDir, 'assets', 'workbench-ch
 const workbenchNetworkCssPath = path.join(rootDir, 'assets', 'workbench-network.css');
 const workbenchNetworkScriptPath = path.join(rootDir, 'assets', 'workbench-network.js');
 const harnessLocalizationScriptPath = path.join(rootDir, 'assets', 'harness-localization.js');
-const harnessReliableInterruptScriptPath = path.join(rootDir, 'assets', 'harness-reliable-interrupt.js');
 let workbenchPanelCss = '';
 let workbenchPanelScript = '';
 let workbenchFilesCss = '';
@@ -302,7 +329,106 @@ let workbenchCheckpointScript = '';
 let workbenchNetworkCss = '';
 let workbenchNetworkScript = '';
 let harnessLocalizationScript = '';
-let harnessReliableInterruptScript = '';
+
+const existingPathComponentsSync = (target) => {
+  const resolved = path.resolve(target);
+  const parsed = path.parse(resolved);
+  const components = [];
+  let current = parsed.root;
+  for (const segment of resolved.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    if (!fs.existsSync(current)) break;
+    components.push(current);
+  }
+  return components;
+};
+
+const assertNoSmokeReparsePathSync = (target) => {
+  const components = existingPathComponentsSync(target);
+  for (const component of components) {
+    if (fs.lstatSync(component).isSymbolicLink()) throw new Error(`安全退出验收拒绝链接路径：${component}`);
+  }
+  if (process.platform !== 'win32' || components.length === 0) return;
+  const encoded = Buffer.from(JSON.stringify(components), 'utf8').toString('base64');
+  const command = [
+    `$paths = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')) | ConvertFrom-Json`,
+    "foreach ($itemPath in $paths) { $item = Get-Item -LiteralPath $itemPath -Force; if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw ('reparse:' + $itemPath) } }"
+  ].join('; ');
+  const powershell = path.join(process.env.SystemRoot || process.env.SYSTEMROOT || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  execFileSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, stdio: 'pipe' });
+};
+
+const tokenMatches = (expected, supplied) => {
+  if (typeof expected !== 'string' || typeof supplied !== 'string') return false;
+  const left = Buffer.from(expected, 'utf8');
+  const right = Buffer.from(supplied, 'utf8');
+  return left.length === right.length && timingSafeEqual(left, right);
+};
+
+const SAFE_EXIT_CONTINUATION_TIMEOUT_MS = 180_000;
+
+const consumeSafeExitAuthorizationSync = (smokeTarget) => {
+  if (!app.isPackaged) throw new Error('安全退出验收只允许打包应用使用。');
+  if (process.argv.some((argument) => argument.startsWith('--smoke-credential-source='))) {
+    throw new Error('安全退出验收拒绝复制任何真实凭据。');
+  }
+  const authArgument = process.argv.find((argument) => argument.startsWith('--safe-exit-smoke-auth='));
+  const tokenArgument = process.argv.find((argument) => argument.startsWith('--safe-exit-smoke-token='));
+  if (!authArgument || !tokenArgument) throw new Error('安全退出验收缺少一次性授权。');
+  const output = path.resolve(smokeTarget.slice(smokeTarget.indexOf('=') + 1));
+  const authorizationPath = path.resolve(authArgument.slice('--safe-exit-smoke-auth='.length));
+  const suppliedToken = tokenArgument.slice('--safe-exit-smoke-token='.length);
+  const runDirectory = path.dirname(output);
+  const artifactsDirectory = path.dirname(runDirectory);
+  if (path.basename(artifactsDirectory).toLowerCase() !== 'artifacts'
+    || !path.basename(runDirectory).startsWith(`v${app.getVersion()}-safe-exit-`)
+    || path.dirname(authorizationPath) !== runDirectory
+    || path.basename(authorizationPath) !== 'safe-exit.authorization.json') {
+    throw new Error('安全退出验收路径不属于本次排他运行目录。');
+  }
+  assertNoSmokeReparsePathSync(authorizationPath);
+  assertNoSmokeReparsePathSync(output);
+  const consumedPath = path.join(runDirectory, 'safe-exit.authorization.consumed.json');
+  if (fs.existsSync(consumedPath)) throw new Error('安全退出验收授权已被使用。');
+  fs.renameSync(authorizationPath, consumedPath);
+  assertNoSmokeReparsePathSync(consumedPath);
+  const authStat = fs.lstatSync(consumedPath);
+  if (!authStat.isFile() || authStat.isSymbolicLink()) throw new Error('安全退出验收授权不是普通文件。');
+  let authorization;
+  try {
+    authorization = JSON.parse(fs.readFileSync(consumedPath, 'utf8'));
+  } finally {
+    fs.unlinkSync(consumedPath);
+  }
+  const expiry = Date.parse(authorization.expiry);
+  const now = Date.now();
+  if (authorization.schemaVersion !== 1
+    || !/^[a-f0-9]{64}$/.test(suppliedToken)
+    || !tokenMatches(authorization.token, suppliedToken)
+    || path.resolve(authorization.output || '') !== output
+    || !Number.isSafeInteger(authorization.driverPid)
+    || authorization.driverPid <= 0
+    || authorization.continuationTimeoutMs !== SAFE_EXIT_CONTINUATION_TIMEOUT_MS
+    || !Number.isFinite(expiry)
+    || expiry <= now
+    || expiry > now + 120_000) {
+    throw new Error('安全退出验收一次性授权无效或已过期。');
+  }
+  try { process.kill(authorization.driverPid, 0); } catch { throw new Error('安全退出验收驱动进程已经退出。'); }
+  const userDataPath = `${output}.user-data`;
+  if ([output, `${output}.ready.json`, `${output}.continue`, userDataPath].some((target) => fs.existsSync(target))) {
+    throw new Error('安全退出验收拒绝复用已有输出或 userData。');
+  }
+  fs.mkdirSync(userDataPath, { recursive: false });
+  assertNoSmokeReparsePathSync(userDataPath);
+  return Object.freeze({
+    output,
+    userDataPath,
+    driverPid: authorization.driverPid,
+    continuationTimeoutMs: authorization.continuationTimeoutMs
+  });
+};
+
 const desktopSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-test-file='));
 const harnessSmokeTarget = process.argv.find((argument) => argument.startsWith('--harness-smoke-file='));
 const documentIntakeSmokeTarget = process.argv.find((argument) => argument.startsWith('--document-intake-smoke-file='));
@@ -324,6 +450,9 @@ const supportSmokeTarget = process.argv.find((argument) => argument.startsWith('
 const gitDeliverySmokeTarget = process.argv.find((argument) => argument.startsWith('--git-delivery-smoke-file='));
 const traySmokeTarget = process.argv.find((argument) => argument.startsWith('--tray-smoke-file='));
 const commandFeedbackSmokeTarget = process.argv.find((argument) => argument.startsWith('--command-feedback-smoke-file='));
+const lifecycleSmokeTarget = process.argv.find((argument) => argument.startsWith('--lifecycle-smoke-file='));
+const safeExitSmokeTarget = process.argv.find((argument) => argument.startsWith('--safe-exit-smoke-file='));
+const safeExitSmokeAuthorization = safeExitSmokeTarget ? consumeSafeExitAuthorizationSync(safeExitSmokeTarget) : null;
 const windowSizeSmokeTarget = process.argv.find((argument) => argument.startsWith('--smoke-window-size='));
 const isolatedSmokeTarget = [
   desktopSmokeTarget,
@@ -348,9 +477,10 @@ const isolatedSmokeTarget = [
   traySmokeTarget,
   commandFeedbackSmokeTarget
 ].find(Boolean);
-if (isolatedSmokeTarget) {
-  const outputPath = isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1);
-  app.setPath('userData', `${path.resolve(outputPath)}.user-data`);
+const smokeProfileTarget = isolatedSmokeTarget || safeExitSmokeTarget;
+if (smokeProfileTarget) {
+  const outputPath = safeExitSmokeAuthorization?.output || smokeProfileTarget.slice(smokeProfileTarget.indexOf('=') + 1);
+  app.setPath('userData', safeExitSmokeAuthorization?.userDataPath || `${path.resolve(outputPath)}.user-data`);
   const source = process.argv.find((argument) => argument.startsWith('--smoke-credential-source='))?.slice('--smoke-credential-source='.length);
   if (source && path.basename(source) === '.credentials.dpapi.json') {
     if (!path.isAbsolute(source) || fs.lstatSync(source).isSymbolicLink()) throw new Error('加密测试凭据源无效。');
@@ -362,6 +492,25 @@ if (isolatedSmokeTarget) {
     fs.copyFileSync(localState, path.join(target, 'Local State'), fs.constants.COPYFILE_EXCL);
     fs.copyFileSync(source, path.join(target, 'harness', '.credentials.dpapi.json'), fs.constants.COPYFILE_EXCL);
   }
+}
+if (lifecycleSmokeTarget) {
+  const outputPath = lifecycleSmokeTarget.slice(lifecycleSmokeTarget.indexOf('=') + 1);
+  app.setPath('userData', `${path.resolve(outputPath)}.user-data`);
+}
+
+const singleInstanceLockAcquired = Boolean(isolatedSmokeTarget) || app.requestSingleInstanceLock({
+  product: 'DSH Desktop',
+  version: app.getVersion()
+});
+if (!singleInstanceLockAcquired) {
+  allowQuit = true;
+  app.quit();
+} else if (!isolatedSmokeTarget) {
+  app.on('second-instance', () => {
+    pendingSecondInstanceFocus = !showMainWindow();
+    lifecycleSmokeSecondInstanceObserved = true;
+    lifecycleSmokeSecondInstanceResolve?.();
+  });
 }
 
 const parseWindowSize = (value) => {
@@ -508,11 +657,12 @@ const flushComposerDraft = async () => {
   if (!mainWindow || mainWindow.isDestroyed() || !harnessUiReady()) return;
   await mainWindow.webContents.executeJavaScript('window.__DSH_CONTINUITY__?.flush()', true);
 };
-const startHarnessForWindow = async ({ restart = false, preferredSessionId = '' } = {}) => {
+const performStartHarnessForWindow = async ({ restart = false, preferredSessionId = '' } = {}) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, error: '窗口不可用。' };
   if (restart && (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size)) return { ok: false, error: '请先结束后台运行，再重启 Harness；未中断其他任务。' };
   await flushComposerDraft();
   if (sideChatOperationPromise) await sideChatOperationPromise;
+  assertApplicationOpen();
   if (restart && (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size)) return { ok: false, error: '等待期间后台任务已启动，未重启 Harness。' };
   closeSideChatWindow();
   stopAgentPolling();
@@ -524,17 +674,24 @@ const startHarnessForWindow = async ({ restart = false, preferredSessionId = '' 
   workspaceSyncDiagnostics = unavailableWorkspaceSync('syncing');
   installApplicationMenu();
   await showStatusPage();
+  assertApplicationOpen();
   try {
     const url = restart ? await supervisor.restart() : await supervisor.start();
+    assertApplicationOpen();
     const authentication = await establishHarnessSession(url);
+    assertApplicationOpen();
     if (!isSafeHarnessUrl(authentication.origin)) throw new Error('Harness 地址未通过回环安全校验。');
     harnessOrigin = authentication.origin;
     harnessAuthCookie = authentication.cookie;
     harnessFetch = createAuthenticatedHarnessFetch({ origin: harnessOrigin, cookie: harnessAuthCookie });
     await supervisor.credentialHost?.verifyReady(harnessOrigin, harnessFetch);
+    assertApplicationOpen();
     await installHarnessCookie(mainWindow.webContents.session);
+    assertApplicationOpen();
     await mainWindow.loadURL(harnessOrigin);
+    assertApplicationOpen();
     const selectedSessionId = isSessionId(preferredSessionId) ? preferredSessionId : await waitForInitialHarnessSelection(mainWindow.webContents);
+    assertApplicationOpen();
     const workspace = getWorkspaceState();
     workspaceSyncDiagnostics = await synchronizeHarnessWorkspace({
       origin: harnessOrigin,
@@ -543,17 +700,22 @@ const startHarnessForWindow = async ({ restart = false, preferredSessionId = '' 
       selectedSessionId,
       fetchImpl: harnessFetch
     });
+    assertApplicationOpen();
     const selection = await selectHarnessSession(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
+    assertApplicationOpen();
     if (selection.changed) {
       harnessSelectionIntent = { sessionId: workspaceSyncDiagnostics.sessionId, expires: Date.now() + 15000 };
       await mainWindow.loadURL(harnessOrigin);
+      assertApplicationOpen();
       await waitForHarnessSessionSelection(mainWindow.webContents, workspaceSyncDiagnostics.sessionId);
+      assertApplicationOpen();
     }
     void refreshDesktopDiagnostics();
     if (nativeDock && dockLayoutStore.getState().open) await openDockTool(dockLayoutStore.getState().active);
     startAgentPolling();
     return { ok: true, url };
   } catch (error) {
+    if (error instanceof ApplicationClosingError) return applicationClosingResult();
     if (isolatedSmokeTarget) {
       const listing = harnessOrigin ? await authenticatedHarnessApi(harnessOrigin, 'session.list', {}).catch(() => null) : null;
       await fsp.writeFile(`${path.resolve(isolatedSmokeTarget.slice(isolatedSmokeTarget.indexOf('=') + 1))}.selection.json`, JSON.stringify({
@@ -571,6 +733,17 @@ const startHarnessForWindow = async ({ restart = false, preferredSessionId = '' 
     void refreshAgentDiagnostics();
     return { ok: false, error: error.message };
   }
+};
+
+const startHarnessForWindow = (options = {}) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult());
+  if (harnessOperationPromise) return harnessOperationPromise;
+  harnessOperationPromise = performStartHarnessForWindow(options)
+    .catch((error) => (error instanceof ApplicationClosingError
+      ? applicationClosingResult()
+      : Promise.reject(error)))
+    .finally(() => { harnessOperationPromise = null; });
+  return harnessOperationPromise;
 };
 
 const getWorkspaceState = () => workspaceStore?.getState() || {
@@ -783,6 +956,7 @@ const runVisibleDesktopAction = async (title, action) => {
 const networkChangeBlocked = () => agentDiagnostics.canStop || agentDiagnostics.status === 'waiting';
 
 const saveNetworkSettings = async (settings) => {
+  if (appIsClosing()) return { ...applicationClosingResult(), state: getNetworkState() };
   if (networkChangeBlocked()) {
     return { ok: false, reason: 'agent-busy', message: '请先结束当前生成或待确认操作，再修改代理。', state: getNetworkState() };
   }
@@ -799,6 +973,7 @@ const saveNetworkSettings = async (settings) => {
     if (!decision.confirmed) {
       return { ok: false, canceled: true, reason: 'canceled', message: '已取消，代理设置未修改。', state: getNetworkState() };
     }
+    assertApplicationOpen();
     const state = await applyProxySettings(decision.settings, { persist: true });
     setTimeout(() => { void startHarnessForWindow({ restart: true }); }, 250).unref?.();
     return { ok: true, restarting: true, state };
@@ -808,6 +983,7 @@ const saveNetworkSettings = async (settings) => {
 };
 
 const testNetworkSettings = async (settings) => {
+  if (appIsClosing()) return applicationClosingResult();
   let testSession;
   const startedAt = Date.now();
   try {
@@ -844,6 +1020,24 @@ const testNetworkSettings = async (settings) => {
   }
 };
 
+const runNetworkOperation = (operation) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult());
+  if (networkOperationPromise) {
+    return Promise.resolve({ ok: false, reason: 'network-busy', message: '另一项网络或代理操作仍在处理中。' });
+  }
+  let pending;
+  pending = Promise.resolve()
+    .then(() => {
+      assertApplicationOpen();
+      return operation();
+    })
+    .finally(() => {
+      if (networkOperationPromise === pending) networkOperationPromise = null;
+    });
+  networkOperationPromise = pending;
+  return pending;
+};
+
 const loadWorkbenchPanelAssets = async () => {
   const documentsCss = await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8');
   const documentsScript = await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.js'), 'utf8');
@@ -861,7 +1055,6 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchNetworkCss) workbenchNetworkCss = await fsp.readFile(workbenchNetworkCssPath, 'utf8');
   if (!workbenchNetworkScript) workbenchNetworkScript = await fsp.readFile(workbenchNetworkScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
-  if (!harnessReliableInterruptScript) harnessReliableInterruptScript = await fsp.readFile(harnessReliableInterruptScriptPath, 'utf8');
   return {
     css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}\n${documentsCss}`,
     documentsScript,
@@ -872,14 +1065,9 @@ const loadWorkbenchPanelAssets = async () => {
     checkpointScript: workbenchCheckpointScript,
     networkScript: workbenchNetworkScript,
     commandScript: workbenchCommandScript,
-    localizationScript: harnessLocalizationScript,
-    reliableInterruptScript: harnessReliableInterruptScript
+    localizationScript: harnessLocalizationScript
   };
 };
-
-const installReliableInterrupt = async (assets) => Boolean(
-  await mainWindow.webContents.executeJavaScript(assets.reliableInterruptScript, true)
-);
 
 const installWorkbenchPanel = async () => {
   if (!harnessUiReady()) return false;
@@ -895,14 +1083,12 @@ const installWorkbenchPanel = async () => {
     const checkpointInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.checkpointScript, true));
     const networkInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.networkScript, true));
     const commandInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.commandScript, true));
-    const reliableInterruptInstalled = await installReliableInterrupt(assets);
     await mainWindow.webContents.executeJavaScript(assets.composerTextScript, true);
     const documentsInstalled = Boolean(await mainWindow.webContents.executeJavaScript(assets.documentsScript, true));
     await mainWindow.webContents.executeJavaScript(await fsp.readFile(path.join(rootDir, 'assets', 'session-continuity.js'), 'utf8'), true);
-    await mainWindow.webContents.executeJavaScript(await fsp.readFile(path.join(rootDir, 'assets', 'session-workflow.js'), 'utf8'), true);
     if (nativeDock) { await mainWindow.webContents.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8')); nativeDock.layout(); }
     return localizationInstalled && reviewInstalled && previewInstalled && filesInstalled && checkpointInstalled
-      && networkInstalled && commandInstalled && reliableInterruptInstalled && documentsInstalled;
+      && networkInstalled && commandInstalled && documentsInstalled;
   } catch {
     return false;
   }
@@ -1029,6 +1215,7 @@ const publishCheckpointState = (state) => {
 
 const createCodeCheckpoint = async (source = 'manual') => {
   if (!checkpointManager) return getCheckpointState();
+  if (appIsClosing() || quitOperationPromise) return getCheckpointState();
   if (checkpointRestorePromise || checkpointForkPromise) return getCheckpointState();
   if (checkpointCreatePromise) return checkpointCreatePromise;
   checkpointCreatePromise = (async () => {
@@ -1189,6 +1376,7 @@ const performRestoreCheckpoint = async (checkpointId = '') => {
 };
 
 const restoreCodeCheckpoint = (checkpointId = '') => {
+  if (appIsClosing() || quitOperationPromise) return Promise.resolve(getCheckpointState());
   if (checkpointRestorePromise) return checkpointRestorePromise;
   checkpointRestorePromise = performRestoreCheckpoint(checkpointId)
     .finally(() => { checkpointRestorePromise = null; });
@@ -1303,6 +1491,7 @@ const performForkCheckpointSession = async (checkpointId) => {
 };
 
 const forkCheckpointSession = (checkpointId) => {
+  if (appIsClosing() || quitOperationPromise) return Promise.resolve(getCheckpointState());
   if (checkpointForkPromise) return checkpointForkPromise;
   checkpointForkPromise = performForkCheckpointSession(checkpointId)
     .finally(() => { checkpointForkPromise = null; });
@@ -1323,18 +1512,11 @@ ipcMain.on('harness:take-selection-intent', (event) => {
 const documentIntakeController = new DocumentIntakeController({
   getPersistence: getContinuityStore,
   getContext: async () => {
+    assertApplicationOpen();
     if (!harnessUiReady()) throw new Error('请等待工作区连接完成后添加文件。');
-    const workspacePath = getWorkspaceState().activePath;
-    if (!workspacePath) throw new Error('请先选择工作区。');
-    const sessionId = await readHarnessSessionSelection(mainWindow.webContents);
-    if (sessionId) {
-      const listing = await authenticatedHarnessApi(harnessOrigin, 'session.list', {});
-      const selected = listing.items?.find((item) => item.sessionId === sessionId);
-      if (!selected || selected.origin === 'subagent' || pathKey(selected.cwd) !== pathKey(workspacePath)) {
-        throw new Error('当前会话与工作区尚未同步，请等待同步后重试。');
-      }
-    }
-    return { workspacePath, sessionId };
+    if (workspaceActivationPromise) throw new Error('正在切换桌面工作区，请稍后重试。');
+    return resolveHarnessSessionContext({ origin: harnessOrigin, webContents: mainWindow.webContents,
+      fallbackWorkspacePath: getWorkspaceState().activePath, apiCall: authenticatedHarnessApi });
   },
   chooseFiles: async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -1385,6 +1567,11 @@ const terminalReadBroker = new TerminalReadBroker({
   })).response === 1
 });
 const createToolSurface = (id, options) => nativeDock ? nativeDock.create(id, options) : new BrowserWindow(options);
+const closeWindowIfApplicationClosing = (window) => {
+  if (!appIsClosing()) return false;
+  if (window && !window.isDestroyed()) window.close();
+  return true;
+};
 const persistProjectPanels = () => dockLayoutStore?.update({ panels: getWorkbenchState() }) || Promise.resolve();
 const fitWorkbenchSidePanels = async (preferred = 'review') => {
   if (!nativeDock || !mainWindow || mainWindow.isDestroyed() || !workbenchStore) return;
@@ -1396,6 +1583,7 @@ const fitWorkbenchSidePanels = async (preferred = 'review') => {
   }
 };
 const openDockTool = async (id) => {
+  if (appIsClosing()) return applicationClosingResult();
   if (!DOCK_TOOLS.includes(id)) throw new Error('未知工作台工具。');
   const actions = { terminal: openTerminalWindow, office: openOfficeCenterWindow, tasks: openTasksSubagentsWindow,
     extensions: openPluginHealthWindow, wiki: openWikiCenterWindow, worktrees: openWorktreesWindow };
@@ -1590,26 +1778,56 @@ const bindPreviewManager = (manager) => {
   });
 };
 
-const openWorkspacePreview = async (filePath) => {
-  if (!previewManager || !harnessUiReady()) return { ok: false, message: '应用预览尚未就绪。' };
-  try {
-    const state = await previewManager.openFile(filePath);
-    await setPreviewPanelOpen(true, { focus: true, stopOnClose: false });
-    return { ok: true, state };
-  } catch (error) {
-    return { ok: false, message: error.message, state: previewManager.getState() };
+const runPreviewOperation = (operation) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult());
+  if (previewOperationPromise) {
+    return Promise.resolve({ ok: false, message: '另一项预览操作仍在处理中。', state: previewManager?.getState() });
   }
+  let pending;
+  pending = Promise.resolve()
+    .then(() => {
+      assertApplicationOpen();
+      return operation();
+    })
+    .finally(() => {
+      if (previewOperationPromise === pending) previewOperationPromise = null;
+    });
+  previewOperationPromise = pending;
+  return pending;
 };
 
-const connectLocalPreview = async (url) => {
+const openWorkspacePreview = (filePath) => {
+  if (appIsClosing()) return applicationClosingResult();
   if (!previewManager || !harnessUiReady()) return { ok: false, message: '应用预览尚未就绪。' };
-  try {
-    const state = await previewManager.connect(url, { reservedOrigins: [harnessOrigin] });
-    await setPreviewPanelOpen(true, { focus: true, stopOnClose: false });
-    return { ok: state.status === 'ready', message: state.error || '', state };
-  } catch (error) {
-    return { ok: false, message: error.message, state: previewManager.getState() };
-  }
+  return runPreviewOperation(async () => {
+    try {
+      const state = await previewManager.openFile(filePath);
+      assertApplicationOpen();
+      await setPreviewPanelOpen(true, { focus: true, stopOnClose: false });
+      return { ok: true, state };
+    } catch (error) {
+      return error instanceof ApplicationClosingError
+        ? applicationClosingResult({ state: previewManager.getState() })
+        : { ok: false, message: error.message, state: previewManager.getState() };
+    }
+  });
+};
+
+const connectLocalPreview = (url) => {
+  if (appIsClosing()) return applicationClosingResult();
+  if (!previewManager || !harnessUiReady()) return { ok: false, message: '应用预览尚未就绪。' };
+  return runPreviewOperation(async () => {
+    try {
+      const state = await previewManager.connect(url, { reservedOrigins: [harnessOrigin] });
+      assertApplicationOpen();
+      await setPreviewPanelOpen(true, { focus: true, stopOnClose: false });
+      return { ok: state.status === 'ready', message: state.error || '', state };
+    } catch (error) {
+      return error instanceof ApplicationClosingError
+        ? applicationClosingResult({ state: previewManager.getState() })
+        : { ok: false, message: error.message, state: previewManager.getState() };
+    }
+  });
 };
 
 const openPreviewExternally = async () => {
@@ -1622,6 +1840,7 @@ const openPreviewExternally = async () => {
 };
 
 const startTerminalSession = async (size = {}) => {
+  if (appIsClosing()) return applicationClosingResult({ state: terminalRunner?.getState() });
   if (!terminalRunner) {
     return { ok: false, message: '交互式终端尚未就绪。', state: terminalRunner?.getState() };
   }
@@ -1646,6 +1865,7 @@ const startTerminalSession = async (size = {}) => {
   if (result.response !== 0) {
     return { ok: false, canceled: true, state: terminalRunner.getState() };
   }
+  if (appIsClosing()) return applicationClosingResult({ state: terminalRunner.getState() });
   try {
     return { ok: true, state: terminalRunner.start(size) };
   } catch (error) {
@@ -1690,7 +1910,7 @@ const createTerminalWindow = async () => {
   created.on('closed', () => {
     if (terminalWindow === created) terminalWindow = undefined;
     terminalOwner = null;
-    if (terminalRunner?.isActive()) void terminalRunner.stop();
+    if (terminalRunner?.isActive()) void terminalRunner.stop().catch(() => {});
     installApplicationMenu();
   });
   await created.loadFile(terminalPage);
@@ -1698,6 +1918,7 @@ const createTerminalWindow = async () => {
 };
 
 const openTerminalWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (terminalWindow && !terminalWindow.isDestroyed()) {
     if (terminalWindow.isMinimized()) terminalWindow.restore();
     terminalWindow.show();
@@ -1705,6 +1926,10 @@ const openTerminalWindow = async () => {
     return { ok: true, reused: true };
   }
   await createTerminalWindow();
+  if (appIsClosing()) {
+    if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
+    return applicationClosingResult();
+  }
   installApplicationMenu();
   return { ok: true, reused: false };
 };
@@ -1756,6 +1981,7 @@ const createContextSourcesWindow = async () => {
 };
 
 const openContextSourcesWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (contextSourcesWindow && !contextSourcesWindow.isDestroyed()) {
     if (contextSourcesWindow.isMinimized()) contextSourcesWindow.restore();
     contextSourcesWindow.show();
@@ -1763,6 +1989,7 @@ const openContextSourcesWindow = async () => {
     return { ok: true, reused: true };
   }
   await createContextSourcesWindow();
+  if (closeWindowIfApplicationClosing(contextSourcesWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
 };
 
@@ -1869,6 +2096,7 @@ const createPluginHealthWindow = async () => {
 };
 
 const openPluginHealthWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (pluginHealthWindow && !pluginHealthWindow.isDestroyed()) {
     if (pluginHealthWindow.isMinimized()) pluginHealthWindow.restore();
     pluginHealthWindow.show();
@@ -1876,6 +2104,7 @@ const openPluginHealthWindow = async () => {
     return { ok: true, reused: true };
   }
   await createPluginHealthWindow();
+  if (closeWindowIfApplicationClosing(pluginHealthWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
 };
 
@@ -1927,6 +2156,7 @@ const createOfficeCenterWindow = async () => {
 };
 
 const openOfficeCenterWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (officeCenterWindow && !officeCenterWindow.isDestroyed()) {
     if (officeCenterWindow.isMinimized()) officeCenterWindow.restore();
     officeCenterWindow.show();
@@ -1934,6 +2164,7 @@ const openOfficeCenterWindow = async () => {
     return { ok: true, reused: true };
   }
   await createOfficeCenterWindow();
+  if (closeWindowIfApplicationClosing(officeCenterWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
 };
 
@@ -1960,13 +2191,65 @@ const inspectWikiSkills = async () => Promise.all(WIKI_SKILLS.map(async (skill) 
 
 const unavailableWikiCenterState = (message = 'Wiki 中心尚未完成初始化。') => ({
   available: false,
+  appVersion: app.getVersion(),
   vault: { configured: false, ready: false, status: 'unconfigured', vaultPath: '', missing: [], pageCount: 0, message },
   skills: WIKI_SKILLS.map((skill) => ({ ...skill, status: 'missing' })),
-  harness: { status: 'waiting' },
+  harness: { status: 'waiting', version: harnessRuntimePaths?.version || HARNESS_VERSION },
   session: { available: false },
   project: { available: false, status: 'waiting', name: '', path: '' },
-  history: { available: false, status: 'waiting' }
+  history: { available: false, status: 'waiting' },
+  recovery: { available: false, manualOnly: false, label: '', message: '' }
 });
+
+const inspectWikiRecovery = async (vault) => {
+  if (!vault?.configured || typeof vault.vaultPath !== 'string' || !path.isAbsolute(vault.vaultPath)
+    || typeof wikiRuntime?.readWikiRecoveryProtection !== 'function') {
+    return { available: false, label: '', message: '' };
+  }
+  try {
+    const protection = vault.recovery || await wikiRuntime.readWikiRecoveryProtection(vault.vaultPath);
+    if (!protection) return { available: false, label: '', message: '' };
+    if (protection.invalid === true) {
+      return {
+        available: true,
+        label: '人工处理无法验证的恢复保护',
+        message: '恢复保护记录无法安全校验。可打开知识库目录人工核对；软件不会自动移动或删除保护记录。',
+        archivePath: '',
+        archive: '',
+        operation: 'recovery-clear',
+        createdAt: '',
+        type: 'invalid-recovery',
+        invalidClearGuard: protection.code === 'unsafe-recovery-clear-guard',
+        id: '',
+        digest: ''
+      };
+    }
+    const type = protection.type || (protection.lockProtected ? 'retained-lock' : 'marker');
+    const id = type === 'marker' ? protection.id : type === 'retained-lock' ? protection.lockToken : protection.guardToken;
+    const digest = type === 'marker' ? protection.markerSha256 : type === 'retained-lock' ? protection.lockSha256 : protection.guardSha256;
+    const clearGuard = type === 'clear-guard';
+    return {
+      available: Boolean(id && digest && (clearGuard || (protection.archivePath && protection.archive))),
+      label: clearGuard
+        ? (protection.archivePath ? '继续中断的恢复清理' : '重置中断的恢复清理')
+        : '处理本次恢复事务',
+      message: type === 'clear-guard'
+        ? (protection.archivePath
+            ? '上一次恢复保护清理未完整完成。请核对事务副本后继续；软件保持写入保护。'
+            : '上一次恢复保护清理在移动现场前中断。可安全重置清理状态，再核对原恢复事务。')
+        : `检测到 ${protection.operation} 回退未完整完成。打开本次事务副本进行人工核对；软件不会自动覆盖并发修改。`,
+      archivePath: protection.archivePath,
+      archive: protection.archive,
+      operation: protection.operation,
+      createdAt: protection.createdAt,
+      type,
+      id,
+      digest
+    };
+  } catch {
+    return { available: false, label: '', message: '' };
+  }
+};
 
 const getWikiCenterState = async () => {
   if (!wikiRuntime || !wikiSettingsStore) return unavailableWikiCenterState();
@@ -1985,11 +2268,20 @@ const getWikiCenterState = async () => {
     && agentDiagnostics.pendingCount === 0
     && agentDiagnostics.queuedCount === 0;
   const projectAvailable = vault.ready && typeof getWorkspaceState().activePath === 'string' && path.isAbsolute(getWorkspaceState().activePath);
+  const recovery = await inspectWikiRecovery(vault);
+  vault.sourceFreshness = {
+    status: projectAvailable ? 'unknown' : 'unavailable',
+    checkedAt: '',
+    message: projectAvailable
+      ? (vault.lastSyncAt ? '尚未检查当前项目是否有新变化。' : '尚无成功同步记录；请先检查当前项目。')
+      : '当前工作区或知识库尚不可检查。'
+  };
   return {
     available: vault.ready && skills.every((skill) => skill.status === 'ready'),
+    appVersion: app.getVersion(),
     vault,
     skills,
-    harness: { status: harnessReady ? 'ready' : 'waiting' },
+    harness: { status: harnessReady ? 'ready' : 'waiting', version: harnessRuntimePaths?.version || HARNESS_VERSION },
     session: { available: sessionAvailable },
     project: {
       available: projectAvailable,
@@ -2000,8 +2292,115 @@ const getWikiCenterState = async () => {
     history: {
       available: projectAvailable && harnessReady,
       status: projectAvailable && harnessReady ? 'ready' : 'waiting'
+    },
+    recovery: {
+      available: recovery.available,
+      manualOnly: recovery.type === 'invalid-recovery',
+      label: recovery.label,
+      message: recovery.message
     }
   };
+};
+
+const recoverSelectedWikiVault = async () => {
+  if (appIsClosing()) return applicationClosingResult({ state: await getWikiCenterState() });
+  const state = await getWikiCenterState();
+  const recovery = await inspectWikiRecovery(state.vault);
+  if (!recovery.available) {
+    return { ok: false, message: '当前没有可直接打开的恢复副本；请按页面提示重新选择目录或补齐结构。', state };
+  }
+  if (recovery.type === 'invalid-recovery') {
+    const invalidDetail = recovery.invalidClearGuard
+      ? '软件不会自动删除或重命名无法证明阶段的保护记录。打开知识库目录后，请先备份整个目录，再核对根目录固定文件 .dsh-wiki-recovery-clear.lock 及相关恢复现场；不要直接删除该文件。'
+      : '软件不会自动删除或重命名无法验证的恢复记录。打开知识库目录后，请先备份整个目录，再核对恢复提示和 _staging 中的保护现场；不要直接删除未知文件。';
+    const { response } = await dialog.showMessageBox(wikiCenterWindow || mainWindow, {
+      type: 'warning',
+      title: '人工处理无法验证的 Wiki 恢复保护',
+      message: '恢复保护记录无法安全校验，Wiki 写入仍被阻止。',
+      detail: invalidDetail,
+      buttons: ['打开知识库目录', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    if (response !== 0) return { ok: false, message: '已取消；Wiki 写入保护保持不变。', state: await getWikiCenterState() };
+    const refreshed = await getWikiCenterState();
+    const current = await inspectWikiRecovery(refreshed.vault);
+    if (current.type !== 'invalid-recovery'
+      || typeof refreshed.vault?.vaultPath !== 'string' || !path.isAbsolute(refreshed.vault.vaultPath)
+      || pathKey(refreshed.vault.vaultPath) !== pathKey(state.vault.vaultPath)) {
+      return { ok: false, message: '恢复保护状态或知识库目录已变化，未打开目录；请重新检查。', state: refreshed };
+    }
+    let vaultInfo;
+    try { vaultInfo = await fsp.lstat(refreshed.vault.vaultPath); } catch {}
+    if (!vaultInfo?.isDirectory() || vaultInfo.isSymbolicLink()) {
+      return { ok: false, message: '知识库目录当前不可安全打开；Wiki 写入保护保持不变。', state: refreshed };
+    }
+    const openError = await shell.openPath(refreshed.vault.vaultPath);
+    if (openError) return { ok: false, message: `知识库目录打开失败：${openError}`, state: await getWikiCenterState() };
+    return {
+      ok: true,
+      message: '已打开知识库目录；写入保护保持不变。请先备份，再人工核对 .dsh-wiki-recovery-clear.lock 和恢复现场。',
+      state: await getWikiCenterState()
+    };
+  }
+  const interruptedClear = recovery.type === 'clear-guard';
+  const canOpenArchive = Boolean(recovery.archivePath);
+  const { response } = await dialog.showMessageBox(wikiCenterWindow || mainWindow, {
+    type: 'warning',
+    title: interruptedClear ? '处理中断的 Wiki 恢复清理' : '核对 Wiki 恢复事务',
+    message: interruptedClear ? '上一次解除恢复保护时被中断，软件仍保持写入保护。' : '自动回退未能完整完成，软件已保留并发修改。',
+    detail: interruptedClear
+      ? (canOpenArchive
+          ? `恢复副本：${recovery.archive}\n\n先核对副本，再继续上一次安全恢复；不会覆盖人工页面或删除恢复副本。`
+          : '中断发生在恢复现场移动前。重置只会归档本次清理保护记录，并重新显示原恢复事务；不会写入或删除知识页面。')
+      : `恢复副本：${recovery.archive}\n\n先打开副本核对页面。只有在你已人工恢复或确认保留当前内容后，才能解除写入保护；解除保护不会删除恢复副本。`,
+    buttons: [canOpenArchive ? '打开恢复副本' : '保留写入保护', interruptedClear ? (canOpenArchive ? '继续安全恢复' : '重置中断状态') : '已完成核对，解除保护', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  });
+  if (response === 2) return { ok: false, message: '已取消；Wiki 写入保护保持不变。', state };
+  if (response === 1) {
+    const current = await inspectWikiRecovery((await getWikiCenterState()).vault);
+    if (!current.available || current.type !== recovery.type || current.archive !== recovery.archive
+      || current.id !== recovery.id || current.digest !== recovery.digest
+      || typeof wikiRuntime?.clearWikiRecoveryMarker !== 'function') {
+      return { ok: false, message: '恢复标记已变化，未解除保护；请重新检查。', state: await getWikiCenterState() };
+    }
+    try {
+      const cleared = await runWikiMutation(() => wikiRuntime.clearWikiRecoveryMarker(state.vault.vaultPath, {
+        type: current.type,
+        archive: current.archive,
+        id: current.id,
+        digest: current.digest
+      }));
+      const refreshed = await getWikiCenterState();
+      const refreshedRecovery = await inspectWikiRecovery(refreshed.vault);
+      if (cleared?.reset === true && cleared?.cleared === false) {
+        if (refreshedRecovery.type === 'clear-guard') {
+          return { ok: false, message: '中断的清理状态仍受保护；现场没有被修改。', state: refreshed };
+        }
+        return {
+          ok: true,
+          message: refreshedRecovery.available
+            ? '已安全重置中断的清理状态；原恢复事务仍受保护，请再次核对后解除。'
+            : '已安全重置中断的清理状态；当前没有待处理的恢复事务。',
+          state: refreshed
+        };
+      }
+      if (!cleared?.cleared || refreshed.vault.status === 'recovery-required' || refreshedRecovery.available) {
+        return { ok: false, message: '写入保护尚未完整解除；恢复现场和保护记录均已保留。', state: refreshed };
+      }
+      return { ok: true, message: '已解除 Wiki 写入保护；恢复副本仍完整保留。', state: refreshed };
+    } catch (error) {
+      return { ok: false, message: error?.message || '写入保护未解除。', state: await getWikiCenterState() };
+    }
+  }
+  if (!canOpenArchive) return { ok: false, message: '已保留 Wiki 写入保护；知识库没有被修改。', state: await getWikiCenterState() };
+  const openError = await shell.openPath(recovery.archivePath);
+  if (openError) return { ok: false, message: `恢复副本位置打开失败：${openError}`, state: await getWikiCenterState() };
+  return { ok: true, message: `已打开 ${recovery.archive}；DSH Desktop 没有自动覆盖任何知识页面。`, state: await getWikiCenterState() };
 };
 
 const createWikiCenterWindow = async () => {
@@ -2042,6 +2441,7 @@ const createWikiCenterWindow = async () => {
 };
 
 const openWikiCenterWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) {
     if (wikiCenterWindow.isMinimized()) wikiCenterWindow.restore();
     wikiCenterWindow.show();
@@ -2049,10 +2449,30 @@ const openWikiCenterWindow = async () => {
     return { ok: true, reused: true };
   }
   await createWikiCenterWindow();
+  if (closeWindowIfApplicationClosing(wikiCenterWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
 };
 
+const runWikiMutation = (operation) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult());
+  if (wikiMutationOperationPromise) {
+    return Promise.resolve({ ok: false, message: '另一项 Wiki 写入仍在处理中，请稍后重试。' });
+  }
+  let pending;
+  pending = Promise.resolve()
+    .then(() => {
+      assertApplicationOpen();
+      return operation();
+    })
+    .finally(() => {
+      if (wikiMutationOperationPromise === pending) wikiMutationOperationPromise = null;
+    });
+  wikiMutationOperationPromise = pending;
+  return pending;
+};
+
 const chooseWikiVault = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (!wikiSettingsStore) return { ok: false, message: 'Wiki 设置存储不可用。' };
   const selected = await dialog.showOpenDialog(nativeParent(wikiCenterWindow), {
     title: '选择本地 Wiki 知识库目录',
@@ -2060,15 +2480,18 @@ const chooseWikiVault = async () => {
     properties: ['openDirectory', 'createDirectory']
   });
   if (selected.canceled || !selected.filePaths[0]) return { ok: false, canceled: true, message: '未更改知识库。' };
-  try {
-    await wikiSettingsStore.setVault(selected.filePaths[0]);
-    return { ok: true, state: await getWikiCenterState(), message: '已选择知识库；如结构不完整，请执行初始化。' };
+ try {
+    return await runWikiMutation(async () => {
+      await wikiSettingsStore.setVault(selected.filePaths[0]);
+      return { ok: true, state: await getWikiCenterState(), message: '已选择知识库；如结构不完整，请执行初始化。' };
+    });
   } catch (error) {
     return { ok: false, message: error?.message || '无法使用所选目录。', state: await getWikiCenterState() };
   }
 };
 
 const initializeSelectedWikiVault = async () => {
+  if (appIsClosing()) return applicationClosingResult({ state: await getWikiCenterState() });
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先选择知识库目录。', state: await getWikiCenterState() };
   const confirmation = await dialog.showMessageBox(nativeParent(wikiCenterWindow), {
@@ -2083,18 +2506,21 @@ const initializeSelectedWikiVault = async () => {
   });
   if (confirmation.response !== 0) return { ok: false, canceled: true, message: '知识库未改变。', state: await getWikiCenterState() };
   try {
-    const initialized = await wikiRuntime.initializeWikiVault(vaultPath);
-    return {
-      ok: true,
-      message: `初始化完成：新建 ${initialized.created.length} 项，保留 ${initialized.preserved.length} 项。`,
-      state: await getWikiCenterState()
-    };
+    return await runWikiMutation(async () => {
+      const initialized = await wikiRuntime.initializeWikiVault(vaultPath);
+      return {
+        ok: true,
+        message: `初始化完成：新建 ${initialized.created.length} 项，保留 ${initialized.preserved.length} 项。`,
+        state: await getWikiCenterState()
+      };
+    });
   } catch (error) {
     return { ok: false, message: error?.message || '知识库初始化失败。', state: await getWikiCenterState() };
   }
 };
 
 const querySelectedWiki = async (query) => {
+  if (appIsClosing()) return applicationClosingResult({ results: [] });
   if (typeof query !== 'string' || query.length > 300) return { ok: false, message: 'Wiki 查询内容无效。', results: [] };
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先配置并初始化知识库。', results: [] };
@@ -2106,6 +2532,7 @@ const querySelectedWiki = async (query) => {
 };
 
 const previewCurrentProjectWikiSync = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   const workspacePath = getWorkspaceState().activePath;
   if (!wikiRuntime || !vaultPath) return { ok: false, message: '请先配置并初始化知识库。' };
@@ -2125,9 +2552,14 @@ const previewCurrentProjectWikiSync = async () => {
         removed: preview.delta.removed.length
       },
       existingPages: preview.existingPages.length,
-      message: preview.unchanged
-        ? '当前项目与上次同步清单一致。'
-        : `发现 ${preview.delta.added.length} 个新增、${preview.delta.modified.length} 个修改、${preview.delta.removed.length} 个移除文件。`
+      humanEditedPages: preview.humanEditedPages || [],
+      missingManagedPages: preview.missingManagedPages || [],
+      generatedAt: preview.generatedAt,
+      message: preview.missingManagedPages?.length
+        ? `发现 ${preview.missingManagedPages.length} 个受管 Wiki 页面缺失或不安全；普通同步已停用，请先核对恢复副本。`
+        : preview.unchanged
+        ? `当前项目与上次同步清单一致${preview.humanEditedPages?.length ? `；发现 ${preview.humanEditedPages.length} 个 Wiki 页面有人工作后修改，后续同步会要求先读取合并` : ''}。`
+        : `发现 ${preview.delta.added.length} 个新增、${preview.delta.modified.length} 个修改、${preview.delta.removed.length} 个移除文件${preview.humanEditedPages?.length ? `；${preview.humanEditedPages.length} 个 Wiki 页面需先合并人工修改` : ''}。`
     };
   } catch (error) {
     return { ok: false, message: error?.message || '当前项目增量检查失败。' };
@@ -2135,6 +2567,7 @@ const previewCurrentProjectWikiSync = async () => {
 };
 
 const invokeCurrentProjectWikiSync = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   const state = await getWikiCenterState();
   if (!state.vault?.ready) return { ok: false, message: '请先配置并初始化知识库。' };
   if (!state.project?.available) return { ok: false, message: '当前工作区不可用。' };
@@ -2176,6 +2609,7 @@ const scheduleDshHistorySourceExpiry = (sourcePath, sourceToken, expiresAt) => {
 };
 
 const listDshHistorySessions = async () => {
+  if (appIsClosing()) return applicationClosingResult({ items: [] });
   const state = await getWikiCenterState();
   const workspacePath = getWorkspaceState().activePath;
   if (!state.vault?.ready) return { ok: false, message: '请先配置并初始化知识库。', items: [] };
@@ -2197,6 +2631,7 @@ const listDshHistorySessions = async () => {
 };
 
 const prepareSelectedDshHistory = async (selection) => {
+  if (appIsClosing()) return applicationClosingResult();
   const state = await getWikiCenterState();
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   const workspacePath = getWorkspaceState().activePath;
@@ -2208,6 +2643,7 @@ const prepareSelectedDshHistory = async (selection) => {
     await discardPreparedDshHistorySource();
     const response = await authenticatedHarnessApi(harnessOrigin, 'session.list', {}, { timeoutMs: 5000 });
     const summaries = dshHistorySelectionCatalog.resolve(selection, response?.items, workspacePath);
+    assertApplicationOpen();
     prepared = await prepareDshHistorySource({
       apiCall: authenticatedHarnessApi,
       origin: harnessOrigin,
@@ -2230,8 +2666,19 @@ const prepareSelectedDshHistory = async (selection) => {
       limited: preview.limited,
       expiresAt: preview.expiresAt,
       redactions: preview.redactions.map(({ id, label, count }) => ({ id, label, count })),
+      missingManagedPages: preview.missingManagedPages || [],
       sessions: preview.sessions.map(({ title, messageCount, status, limited }) => ({ title, messageCount, status, limited }))
     };
+    if (preview.missingManagedPages?.length) {
+      await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken);
+      if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
+      dshHistoryExpiryTimer = undefined;
+      return {
+        ...result,
+        blocked: true,
+        message: `发现 ${preview.missingManagedPages.length} 个受管历史页面缺失或不安全；请先核对恢复副本，再重新准备。`
+      };
+    }
     if (preview.unchanged) {
       await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken);
       if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
@@ -2248,12 +2695,17 @@ const prepareSelectedDshHistory = async (selection) => {
 };
 
 const invokePreparedDshHistory = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   const workspacePath = getWorkspaceState().activePath;
   const sourcePath = currentWikiHistorySourcePath();
   if (!wikiRuntime || !vaultPath || !sourcePath) return { ok: false, message: '请先在 Wiki 中心准备 DSH 历史。' };
   try {
     const preview = await wikiRuntime.previewDshHistoryIngest(vaultPath, workspacePath, sourcePath);
+    if (preview.missingManagedPages?.length) {
+      await wikiRuntime.clearDshHistorySource(sourcePath, preview.sourceToken).catch(() => undefined);
+      return { ok: false, message: '受管历史页面缺失或不安全；请先核对恢复副本。' };
+    }
     if (preview.unchanged) {
       await wikiRuntime.clearDshHistorySource(sourcePath, preview.sourceToken);
       return { ok: false, message: '所选会话已导入，无需重复处理。' };
@@ -2272,6 +2724,7 @@ const invokePreparedDshHistory = async () => {
 };
 
 const loadCurrentWikiCandidates = async ({ includeSessionId = false } = {}) => {
+  if (appIsClosing()) return applicationClosingResult({ items: [] });
   if (!harnessUiReady() || workspaceSyncDiagnostics.status !== 'synced' || !isSessionId(workspaceSyncDiagnostics.sessionId)) {
     return { ok: false, message: '请等待当前 Harness 会话与工作区同步。', items: [] };
   }
@@ -2327,6 +2780,7 @@ const resolveWikiCapture = async (payload) => {
 };
 
 const previewWikiCapture = async (payload) => {
+  if (appIsClosing()) return applicationClosingResult();
   if (!wikiRuntime) return { ok: false, message: 'Wiki 保存能力不可用。' };
   const resolved = await resolveWikiCapture(payload);
   if (!resolved.ok || !resolved.vaultPath) return { ok: false, message: resolved.message || '请先配置知识库。' };
@@ -2345,6 +2799,7 @@ const previewWikiCapture = async (payload) => {
 };
 
 const saveWikiCapture = async (payload) => {
+  if (appIsClosing()) return applicationClosingResult();
   if (!wikiRuntime) return { ok: false, message: 'Wiki 保存能力不可用。' };
   const resolved = await resolveWikiCapture(payload);
   if (!resolved.ok || !resolved.vaultPath) return { ok: false, message: resolved.message || '请先配置知识库。' };
@@ -2362,10 +2817,10 @@ const saveWikiCapture = async (payload) => {
       noLink: true
     });
     if (confirmation.response !== 0) return { ok: false, canceled: true, message: '结论未保存。' };
-    return await wikiRuntime.saveCapture(resolved.vaultPath, resolved.capture, {
+    return await runWikiMutation(() => wikiRuntime.saveCapture(resolved.vaultPath, resolved.capture, {
       confirmedSensitive: preview.sensitive.length > 0,
       workspaceName: workspaceStore?.getState()?.displayName || '当前工作区'
-    });
+    }));
   } catch (error) {
     return { ok: false, message: error?.message || '结论保存失败。' };
   }
@@ -2407,6 +2862,7 @@ const createWorktreesWindow = async () => {
 };
 
 const openWorktreesWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (worktreesWindow && !worktreesWindow.isDestroyed()) {
     if (worktreesWindow.isMinimized()) worktreesWindow.restore();
     worktreesWindow.show();
@@ -2414,6 +2870,7 @@ const openWorktreesWindow = async () => {
     return { ok: true, reused: true };
   }
   await createWorktreesWindow();
+  if (closeWindowIfApplicationClosing(worktreesWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
 };
 
@@ -2445,6 +2902,7 @@ const publishGitDeliveryState = async (options = {}) => {
 };
 
 const gitDeliveryBusyReason = async () => {
+  if (appIsClosing() || quitOperationPromise) return 'DSH Desktop 正在安全退出。';
   await refreshAgentDiagnostics({ rebuildMenu: false });
   if (terminalRunner?.isActive()) return '请先停止正在运行的安全终端。';
   if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
@@ -2484,6 +2942,8 @@ const performGitDeliveryCommit = async (message, fingerprint) => {
   const parent = gitDeliveryWindow && !gitDeliveryWindow.isDestroyed() ? gitDeliveryWindow : mainWindow;
   const confirmation = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
   if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，没有创建提交。', state: before };
+  const confirmedBusyReason = await gitDeliveryBusyReason();
+  if (confirmedBusyReason) return { ok: false, message: confirmedBusyReason, state: await getGitDeliveryState() };
   const result = await gitDeliveryManager.commit(normalized, fingerprint);
   if (gitDeliveryWindow && !gitDeliveryWindow.isDestroyed()) gitDeliveryWindow.webContents.send('git-delivery:state', result.state);
   await refreshChangeReviewDiagnostics({ rebuildMenu: false });
@@ -2492,6 +2952,7 @@ const performGitDeliveryCommit = async (message, fingerprint) => {
 };
 
 const queueGitDeliveryCommit = (message, fingerprint) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult());
   if (gitDeliveryOperationPromise) return Promise.resolve({ ok: false, message: '另一个 Git 提交操作仍在进行。' });
   gitDeliveryOperationPromise = Promise.resolve()
     .then(() => performGitDeliveryCommit(message, fingerprint))
@@ -2542,6 +3003,7 @@ const createGitDeliveryWindow = async () => {
 };
 
 const openGitDeliveryWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (gitDeliveryWindow && !gitDeliveryWindow.isDestroyed()) {
     if (gitDeliveryWindow.isMinimized()) gitDeliveryWindow.restore();
     gitDeliveryWindow.show();
@@ -2549,7 +3011,33 @@ const openGitDeliveryWindow = async () => {
     return { ok: true, reused: true };
   }
   await createGitDeliveryWindow();
+  if (closeWindowIfApplicationClosing(gitDeliveryWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
+};
+
+// Read-only execution metadata for the native Tasks/Subagents catalog. This
+// does not submit, steer, stop, or mutate the official Harness queue.
+const getCurrentWorkflow = async () => {
+  try {
+    if (!harnessUiReady() || worktreeOperationPromise) return { available: false };
+    const context = await documentIntakeController.getContext();
+    const value = await supervisor.credentialHost.sessionControl.request('status', context);
+    if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
+    return {
+      available: true,
+      sessionId: value.sessionId,
+      running: value.running,
+      queued: value.queued,
+      steering: value.steering,
+      pending: value.pending,
+      approvals: value.approvals,
+      jobs: value.liveJobs,
+      turnOpen: value.turnOpen,
+      lastTurnReason: value.lastTurnReason
+    };
+  } catch {
+    return { available: false };
+  }
 };
 
 const getTasksSubagentsState = async () => {
@@ -2603,7 +3091,7 @@ const performBackgroundAction = async (request) => {
   if (operation === 'create') {
     const sourcePath = getWorkspaceState().activePath;
     return backgroundTasks.create(request.input, sourcePath, ({ input, repository }) => backgroundConfirmation('建立独立后台任务', `创建“${input.name}”并授权所选运行计划？`,
-      `源仓库：${repository.root}\n基础提交：${repository.head}\n计划：${backgroundScheduleDescription(input.schedule)}\n\n只从已提交内容建立独立分支和目录，不复制未提交文件、Key 或依赖，不自动同步或合并。每次执行使用新的会话；同一任务沿用自己的目录。权限固定 Workspace Write + Ask。软件需保持运行，关闭主窗口会留在托盘；错过时间仅补一次，不无限补跑。\n\n每日最多 ${input.dailyLimit} 次；将使用模型额度。\n任务内容：\n${input.prompt}`));
+      `源仓库：${repository.root}\n基础提交：${repository.head}\n计划：${backgroundScheduleDescription(input.schedule)}\n\n未提交的源文件和软件托管 Key 不会复制；当前提交已经跟踪的文件会按 Git 正常检出，包括已提交的依赖或误提交的凭据。工作树只负责隔离任务，不是内容脱敏或秘密扫描，也不会自动同步或合并。每次执行使用新的会话；同一任务沿用自己的目录。权限固定 Workspace Write + Ask。软件需保持运行，关闭主窗口会留在托盘；错过时间仅补一次，不无限补跑。\n\n每日最多 ${input.dailyLimit} 次；将使用模型额度。\n任务内容：\n${input.prompt}`));
   }
   if (operation === 'archive') {
     if (!await backgroundConfirmation('归档已完成记录', '归档完成、已停止和已核对的运行记录？', '保留本机归档文件、原会话和工作树；归档不重置每日运行次数。失败和待核对记录不会移走。')) return { canceled: true };
@@ -2678,6 +3166,7 @@ const createTasksSubagentsWindow = async () => {
 };
 
 const openTasksSubagentsWindow = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) {
     if (tasksSubagentsWindow.isMinimized()) tasksSubagentsWindow.restore();
     tasksSubagentsWindow.show();
@@ -2686,6 +3175,7 @@ const openTasksSubagentsWindow = async () => {
     return { ok: true, reused: true };
   }
   await createTasksSubagentsWindow();
+  if (closeWindowIfApplicationClosing(tasksSubagentsWindow)) return applicationClosingResult();
   return { ok: true, reused: false };
 };
 
@@ -2839,6 +3329,7 @@ const createSideChatHarnessWindow = async (context) => {
 };
 
 const openSideChatWindow = () => {
+  if (appIsClosing() || quitOperationPromise) return Promise.resolve(applicationClosingResult());
   if (sideChatWindow && !sideChatWindow.isDestroyed()) {
     if (sideChatWindow.isMinimized()) sideChatWindow.restore();
     sideChatWindow.show();
@@ -2888,6 +3379,7 @@ const taskActionFailure = async (error) => ({
 });
 
 const runTasksSubagentsOperation = (operation) => {
+  if (appIsClosing() || quitOperationPromise) return Promise.resolve(applicationClosingResult());
   if (tasksSubagentsOperationPromise) return Promise.resolve({ ok: false, message: '另一个任务面板操作仍在处理中。' });
   tasksSubagentsOperationPromise = Promise.resolve()
     .then(operation)
@@ -2957,6 +3449,8 @@ const performInterruptSubagent = async (id) => {
 
 const pluginMutationBusy = () => (
   Boolean(terminalRunner?.isActive())
+  || appIsClosing()
+  || Boolean(quitOperationPromise)
   || agentDiagnostics.canStop
   || agentDiagnostics.status === 'waiting'
   || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)
@@ -2968,7 +3462,7 @@ const worktreeExternalBusy = () => (
   || Boolean(pluginTogglePromise || pluginInstallPromise)
 );
 const worktreeMutationBusy = () => worktreeExternalBusy() || Boolean(worktreeOperationPromise);
-const handoffOperationBusy = () => Boolean(worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise
+const handoffOperationBusy = () => Boolean(appIsClosing() || quitOperationPromise || worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise
   || supportBackupOperationPromise || checkpointRestorePromise || checkpointForkPromise || terminalRunner?.isActive()
   || backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size
   || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status));
@@ -3181,7 +3675,7 @@ const getHandoffService = () => handoffServicePromise ||= (async () => {
     confirm: async ({ direction, repository, session, targetPath }) => (await dialog.showMessageBox(nativeParent(worktreesWindow), {
       title: direction === 'back' ? '返回原目录继续' : '交接到独立工作树', type: 'question',
       message: direction === 'back' ? '将当前会话和代码状态交接回原目录？' : '新建独立工作树并继续当前会话？',
-      detail: `源目录：${repository.repository.root}\n目标：${targetPath || '软件管理的新工作树'}\n分支：${repository.repository.branch}\n历史事件：${session.eventCount}\n\n保留原会话、原目录和恢复点；迁移草稿、会话文档、Git 跟踪及未忽略的文件，保留暂存状态。忽略的依赖和环境文件不搬运。只复制代码状态，不自动合并提交。原目录有其他修改时拒绝返回覆盖。`,
+      detail: `源目录：${repository.repository.root}\n目标：${targetPath || '软件管理的新工作树'}\n分支：${repository.repository.branch}\n历史事件：${session.eventCount}\n\n会话交接与普通“新建工作树”不同：它会保留原会话、原目录和恢复点，并迁移草稿、会话文档、Git 跟踪文件以及未忽略的未提交/未跟踪文件，保留暂存状态；忽略的依赖和环境文件不搬运。工作树不是内容脱敏机制，请先检查敏感资料。软件托管 Key 不写入目标目录，但模型仍通过桌面凭据桥使用。只迁移代码状态，不自动合并提交；原目录有其他修改时拒绝返回覆盖。`,
       buttons: ['取消', '确认交接'], defaultId: 0, cancelId: 0, noLink: true
     })).response === 1
   });
@@ -3206,7 +3700,7 @@ const performWorktreeCreate = async () => {
     type: 'info',
     title: '新建隔离工作树',
     message: '确认从当前提交创建新的隔离分支和目录？',
-    detail: `基础分支：${before.repository.branch || 'detached HEAD'}\n基础提交：${before.repository.headShort}\n\n软件会生成固定的 dsh/worktree-* 分支，并把目录放在 DSH Desktop 的受控数据目录。当前工作区不会自动切换；软件 Key 不进入 Git 子进程。`,
+    detail: `基础分支：${before.repository.branch || 'detached HEAD'}\n基础提交：${before.repository.headShort}\n\n软件会生成固定的 dsh/worktree-* 分支，并把目录放在 DSH Desktop 的受控数据目录。未提交和未跟踪文件不会进入新目录；当前提交已跟踪的全部文件会按 Git 正常检出，包括已提交的依赖或误提交的凭据。工作树不是内容脱敏或秘密扫描。软件托管 Key 不复制到目录或 Git 子进程，但新会话仍可通过桌面凭据桥使用。当前工作区不会自动切换。`,
     buttons: ['取消', '创建工作树'],
     defaultId: 0,
     cancelId: 0,
@@ -3306,6 +3800,7 @@ const performWorktreeRemove = async (id) => {
 };
 
 const queueWorktreeOperation = (operation) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult({ state: unavailableWorktreeState('DSH Desktop 正在安全退出。') }));
   if (worktreeOperationPromise) return worktreeOperationPromise;
   worktreeOperationPromise = Promise.resolve().then(operation)
     .finally(() => { worktreeOperationPromise = null; });
@@ -3485,12 +3980,52 @@ const agentStatusLabel = () => {
 
 const trayIconPath = path.join(rootDir, 'build', 'icon.ico');
 
-const showMainWindow = () => {
-  if (!mainWindow || mainWindow.isDestroyed()) return false;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
-  return true;
+const showMainWindow = () => restoreAndFocusWindow(mainWindow);
+
+const requestApplicationQuit = (reason = 'system-quit') => {
+  requestedQuitReason = reason;
+  app.quit();
+};
+
+const currentVersionIdentity = () => buildVersionIdentity({
+  product: app.getVersion(),
+  harness: harnessRuntimePaths?.version || HARNESS_VERSION,
+  electron: process.versions.electron,
+  node: process.versions.node
+});
+
+const closeManagedAuxiliaryWindows = () => {
+  closeSideChatWindow();
+  for (const window of [
+    terminalWindow,
+    contextSourcesWindow,
+    pluginHealthWindow,
+    officeCenterWindow,
+    wikiCenterWindow,
+    worktreesWindow,
+    tasksSubagentsWindow,
+    gitDeliveryWindow
+  ]) {
+    if (window && !window.isDestroyed()) window.close();
+  }
+};
+
+const showLifecycleRecoveryNotice = async () => {
+  if (!lifecycleRecovery.needed || !mainWindow || mainWindow.isDestroyed()) return;
+  const uncertain = lifecycleRecovery.reason === 'state-recovered';
+  const previousVersion = lifecycleRecovery.previous?.identity?.product;
+  await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: uncertain ? '上次退出状态需要核对' : '已从上次异常退出恢复',
+    message: uncertain
+      ? '上次退出记录不完整，DSH Desktop 已从可验证记录重新启动。'
+      : '上次 DSH Desktop 未完成正常退出，现已重新启动并核对本机状态。',
+    detail: `${previousVersion ? `上次产品版本：V${previousVersion}\n` : ''}不会依据旧进程号或旧端口结束任何进程，也不会自动重发结果不明的后台任务。会话、软件托管 Key 和设置仍使用原来的本机存储；请在“任务”中核对待确认记录。`,
+    buttons: ['我知道了'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
 };
 
 const showFixedNotification = (copy) => {
@@ -3545,7 +4080,7 @@ const updateApplicationTray = () => {
     { label: skipped ? `已跳过 V${skipped}` : '未跳过产品 Latest', enabled: false },
     { label: '自动下载与安装：关闭（未签名）', enabled: false },
     { type: 'separator' },
-    { label: '退出 DSH Desktop', click: () => { app.quit(); } }
+    { label: '退出 DSH Desktop', click: () => { requestApplicationQuit('explicit-exit'); } }
   ]));
 };
 
@@ -3572,6 +4107,7 @@ const showUpdateDialog = (options) => (
 );
 
 const checkForUpdatesFromUser = () => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult());
   if (updateCheckPromise) return updateCheckPromise;
   updateCheckPromise = (async () => {
     updateApplicationTray();
@@ -3758,8 +4294,18 @@ const showChangeReviewFailure = async (error) => {
   });
 };
 
-const reviewChangePath = async (reportedPath, action) => {
+const queueChangeReviewOperation = (operation) => {
+  if (appIsClosing()) return Promise.resolve(false);
+  if (changeReviewOperationPromise) return Promise.resolve(false);
+  changeReviewOperationPromise = Promise.resolve()
+    .then(operation)
+    .finally(() => { changeReviewOperationPromise = null; });
+  return changeReviewOperationPromise;
+};
+
+const performReviewChangePath = async (reportedPath, action) => {
   try {
+    assertApplicationOpen();
     await refreshChangeReviewDiagnostics();
     if (!reportedPath || !changeReviewer) throw new Error('尚未检测到可审查文件。');
     const state = await changeReviewer.inspect(reportedPath);
@@ -3794,20 +4340,27 @@ const reviewChangePath = async (reportedPath, action) => {
       noLink: true
     });
     if (result.response !== 0) return false;
+    assertApplicationOpen();
     if (accepting) await changeReviewer.accept(state.path);
     else await changeReviewer.reject(state.path);
     await refreshChangeReviewDiagnostics();
     return true;
   } catch (error) {
+    if (error instanceof ApplicationClosingError) return false;
     await showChangeReviewFailure(error);
     return false;
   }
 };
 
+const reviewChangePath = (reportedPath, action) => queueChangeReviewOperation(
+  () => performReviewChangePath(reportedPath, action)
+);
+
 const reviewLatestChange = async (action) => reviewChangePath(changeReviewDiagnostics.path, action);
 
-const reviewChangeBatch = async (action) => {
+const performReviewChangeBatch = async (action) => {
   try {
+    assertApplicationOpen();
     if (!changeReviewer) throw new Error('当前没有可用的 Git 审查器。');
     if (agentDiagnostics.canStop || agentDiagnostics.status === 'waiting') {
       throw new Error('Agent 仍在运行或等待确认，请完成当前操作后再审查变更。');
@@ -3835,16 +4388,22 @@ const reviewChangeBatch = async (action) => {
       noLink: true
     });
     if (result.response !== 0) return false;
+    assertApplicationOpen();
     const paths = candidates.map((item) => item.path);
     if (accepting) await changeReviewer.acceptMany(paths);
     else await changeReviewer.rejectMany(paths);
     await refreshChangeReviewDiagnostics();
     return true;
   } catch (error) {
+    if (error instanceof ApplicationClosingError) return false;
     await showChangeReviewFailure(error);
     return false;
   }
 };
+
+const reviewChangeBatch = (action) => queueChangeReviewOperation(
+  () => performReviewChangeBatch(action)
+);
 
 const showPowerShellCompatibility = async () => {
   const affected = agentDiagnostics.powerShellCompatibility === 'sandbox-crash';
@@ -3909,6 +4468,7 @@ const invokePowerPointPptxSkill = async () => {
 };
 
 const invokeWikiSkill = async (id) => {
+  if (appIsClosing()) return false;
   if (!harnessUiReady() || !['wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest'].includes(id)) return false;
   const methods = { 'wiki-query': 'invokeWikiQuery', 'wiki-capture': 'invokeWikiCapture', 'wiki-update': 'invokeWikiUpdate', 'wiki-history-ingest': 'invokeWikiHistory' };
   const titles = { 'wiki-query': 'Wiki 知识查询', 'wiki-capture': 'Wiki 会话结论保存', 'wiki-update': 'Wiki 项目增量同步', 'wiki-history-ingest': 'DSH 历史批量导入' };
@@ -3927,6 +4487,7 @@ const invokeWikiSkill = async (id) => {
 };
 
 const invokeOfficeCenterSkill = async (id) => {
+  if (appIsClosing()) return applicationClosingResult();
   if (!isOfficeSkillId(id)) return { ok: false, message: '交付类型不在固定清单中。' };
   if (!harnessUiReady() || workspaceSyncDiagnostics.status !== 'synced') {
     return { ok: false, message: '请等待 Harness 与当前工作区同步后再使用。' };
@@ -4022,9 +4583,10 @@ const writePrivateJson = async (targetPath, value) => {
 const exportRedactedDiagnostics = async () => {
   try {
     const semantic = await collectSupportBackupFiles(dataRoot);
+    const identity = currentVersionIdentity();
     const report = createRedactedDiagnosticReport({
-      appInfo: { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged },
-      runtime: { electron: process.versions.electron, node: process.versions.node, harness: HARNESS_VERSION, pnpm: '11.19.0' },
+      appInfo: { version: identity.product, platform: process.platform, packaged: app.isPackaged },
+      runtime: { electron: identity.electron, node: identity.node, harness: identity.harness, pnpm: '11.19.0' },
       workspace: getWorkspaceState(),
       diagnostics: { ...getDiagnosticsState(), harnessStatus: supervisor?.getState().status || 'stopped' },
       network: getNetworkState(),
@@ -4057,6 +4619,7 @@ const exportRedactedDiagnostics = async () => {
 };
 
 const supportBackupBusyReason = () => {
+  if (appIsClosing() || quitOperationPromise) return 'DSH Desktop 正在安全退出。';
   if (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size) return '请先结束独立后台运行；备份不会中断其他会话。';
   if (terminalRunner?.isActive()) return '请先停止正在运行的终端命令。';
   if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
@@ -4178,6 +4741,7 @@ const showWorkspaceError = async (error) => {
 };
 
 const activateWorkspace = async (workspacePath, preferredSessionId = '') => {
+  if (appIsClosing()) return applicationClosingResult();
   if (workspaceActivationPromise) return { ok: false, error: '另一项工作区切换尚未结束；未改变当前选择。' };
   workspaceActivationPromise = performWorkspaceActivation(workspacePath, preferredSessionId).finally(() => { workspaceActivationPromise = null; });
   return workspaceActivationPromise;
@@ -4225,12 +4789,14 @@ const performWorkspaceActivation = async (workspacePath, preferredSessionId = ''
 };
 
 const chooseWorkspace = async () => {
+  if (appIsClosing()) return applicationClosingResult();
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择本地代码仓库',
     buttonLabel: '打开仓库',
     properties: ['openDirectory', 'createDirectory']
   });
   if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
+  if (appIsClosing()) return applicationClosingResult();
   return activateWorkspace(result.filePaths[0]);
 };
 
@@ -4785,7 +5351,7 @@ function installApplicationMenu() {
             type: 'info',
             title: `关于 DSH Desktop V${app.getVersion()}`,
             message: `DSH Desktop V${app.getVersion()}`,
-            detail: `Electron ${process.versions.electron} · Node ${process.versions.node}\nDeepSeek Harness ${harnessRuntimePaths?.version || '0.1.2-alpha.2'}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
+            detail: `${versionIdentityLines(currentVersionIdentity())}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
             buttons: ['确定'],
             defaultId: 0,
             cancelId: 0
@@ -4817,12 +5383,12 @@ ipcMain.handle('network:get-state', (event) => (
 ));
 ipcMain.handle('network:test', (event, settings) => (
   desktopIpcAllowed(event)
-    ? testNetworkSettings(settings)
+    ? runNetworkOperation(() => testNetworkSettings(settings))
     : { ok: false, reason: 'untrusted', message: '代理测试请求来源未通过安全校验。' }
 ));
 ipcMain.handle('network:save', (event, settings) => (
   desktopIpcAllowed(event)
-    ? saveNetworkSettings(settings)
+    ? runNetworkOperation(() => saveNetworkSettings(settings))
     : { ok: false, reason: 'untrusted', message: '代理设置请求来源未通过安全校验。' }
 ));
 ipcMain.handle('workspace:get-state', (event) => (
@@ -4995,9 +5561,18 @@ const runDocumentRequest = async (event, operation) => {
   }
   catch { return { ok: false, available: false, message: '工作区状态已变化，请稍后重试。' }; }
 };
+const runDocumentMutationRequest = (event, operation) => {
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult({ available: false }));
+  if (documentIntakeOperationPromise) {
+    return Promise.resolve({ ok: false, available: false, message: '另一项文件导入仍在进行。' });
+  }
+  documentIntakeOperationPromise = runDocumentRequest(event, operation)
+    .finally(() => { documentIntakeOperationPromise = null; });
+  return documentIntakeOperationPromise;
+};
 ipcMain.handle('documents:get-state', (event) => runDocumentRequest(event, () => documentIntakeController.getState()));
-ipcMain.handle('documents:choose', (event, context) => runDocumentRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, choose: true })));
-ipcMain.handle('documents:import', (event, paths, context) => runDocumentRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, paths })));
+ipcMain.handle('documents:choose', (event, context) => runDocumentMutationRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, choose: true })));
+ipcMain.handle('documents:import', (event, paths, context) => runDocumentMutationRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, paths })));
 ipcMain.handle('files:read', (event, filePath) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.readFile(filePath))
 ));
@@ -5050,11 +5625,11 @@ ipcMain.handle('terminal:start', async (event, size) => {
   return result;
 });
 ipcMain.on('terminal:write', (event, data) => {
-  if (!terminalOwnedBy(event) || !terminalRunner) return;
+  if (appIsClosing() || !terminalOwnedBy(event) || !terminalRunner) return;
   try { terminalRunner.write(data); } catch { /* Drop invalid or oversized PTY input. */ }
 });
 ipcMain.on('terminal:resize', (event, size) => {
-  if (!terminalOwnedBy(event) || !terminalRunner || !size) return;
+  if (appIsClosing() || !terminalOwnedBy(event) || !terminalRunner || !size) return;
   terminalRunner.resize(size.cols, size.rows);
 });
 ipcMain.handle('terminal:stop', async (event) => {
@@ -5106,7 +5681,7 @@ ipcMain.handle('plugin-health:toggle', (event, profileId, packageName, enable) =
   if (typeof profileId !== 'string' || typeof packageName !== 'string' || typeof enable !== 'boolean') {
     return { ok: false, message: '扩展变更参数无效。' };
   }
-  if (pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
+  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一个扩展变更仍在处理中。' };
   pluginTogglePromise = performPluginToggle({ profileId, packageName, enable })
     .finally(() => { pluginTogglePromise = null; });
   return pluginTogglePromise;
@@ -5118,7 +5693,7 @@ ipcMain.handle('plugin-health:install', (event, profileId, catalogId) => {
   if (typeof profileId !== 'string' || typeof catalogId !== 'string') {
     return { ok: false, message: '插件安装参数无效。' };
   }
-  if (pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
+  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一个扩展变更仍在处理中。' };
   pluginInstallPromise = performPluginInstall({ profileId, catalogId })
     .finally(() => { pluginInstallPromise = null; });
   return pluginInstallPromise;
@@ -5130,7 +5705,7 @@ ipcMain.handle('plugin-health:lifecycle', (event, profileId, catalogId, action) 
   if (typeof profileId !== 'string' || typeof catalogId !== 'string' || !['install', 'upgrade', 'uninstall', 'rollback'].includes(action)) {
     return { ok: false, message: '插件生命周期参数无效。' };
   }
-  if (pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一个扩展变更仍在处理中。' };
+  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一个扩展变更仍在处理中。' };
   pluginInstallPromise = performPluginInstall({ profileId, catalogId, action })
     .finally(() => { pluginInstallPromise = null; });
   return pluginInstallPromise;
@@ -5154,6 +5729,9 @@ ipcMain.handle('wiki-center:choose-vault', (event) => (
 ));
 ipcMain.handle('wiki-center:initialize-vault', (event) => (
   wikiCenterIpcAllowed(event) ? initializeSelectedWikiVault() : { ok: false, message: '知识库初始化请求未通过安全校验。' }
+));
+ipcMain.handle('wiki-center:recover', (event) => (
+  wikiCenterIpcAllowed(event) ? recoverSelectedWikiVault() : { ok: false, message: 'Wiki 恢复请求未通过安全校验。' }
 ));
 ipcMain.handle('wiki-center:query', (event, query) => (
   wikiCenterIpcAllowed(event) ? querySelectedWiki(query) : { ok: false, message: 'Wiki 查询请求未通过安全校验。', results: [] }
@@ -5275,7 +5853,7 @@ ipcMain.handle('tasks-subagents:background-action', (event, request) => {
   const allowed = ['create', 'run', 'pause', 'resume', 'open', 'stop', 'acknowledge', 'archive', 'release'];
   if (!tasksSubagentsIpcAllowed(event) || !request || !allowed.includes(request.operation)
     || !['create', 'archive'].includes(request.operation) && !/^[a-f0-9-]{36}$/i.test(request.id || '')) return { ok: false, message: '后台任务请求未通过安全校验。' };
-  if (backgroundOperationPromise || worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: '另一项任务或工作区操作尚未结束。' };
+  if (appIsClosing() || quitOperationPromise || backgroundOperationPromise || worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一项任务或工作区操作尚未结束。' };
   backgroundOperationPromise = (async () => {
     try { const result = await performBackgroundAction(request); return { ok: true, result, state: await getTasksSubagentsState() }; }
     catch (error) { return { ok: false, message: error.message || '任务操作失败；未自动重试。', state: await getTasksSubagentsState() }; }
@@ -5329,54 +5907,9 @@ ipcMain.handle('git-delivery:open-window', (event) => (
     ? openGitDeliveryWindow()
     : { ok: false, message: 'Git 交付中心请求来源未通过安全校验。' }
 ));
-const getCurrentWorkflow = async () => {
-  try {
-    if (!harnessUiReady() || worktreeOperationPromise) return { available: false };
-    const context = await documentIntakeController.getContext();
-    const value = await supervisor.credentialHost.sessionControl.request('status', context);
-    if (context.sessionId !== await readHarnessSessionSelection(mainWindow.webContents)) return { available: false };
-    return { available: true, sessionId: value.sessionId, running: value.running, queued: value.queued, steering: value.steering,
-      pending: value.pending, approvals: value.approvals, jobs: value.liveJobs, turnOpen: value.turnOpen, lastTurnReason: value.lastTurnReason };
-  } catch { return { available: false }; }
-};
-ipcMain.handle('harness:workflow-state', (event) => harnessIpcAllowed(event) ? getCurrentWorkflow() : { available: false });
 ipcMain.handle('harness:get-state', (event) => (
   desktopIpcAllowed(event) ? (supervisor?.getState() || { status: 'idle' }) : { status: 'unavailable' }
 ));
-ipcMain.handle('harness:interrupt-queued', async (event) => {
-  if (!harnessIpcAllowed(event) || !reliableInterruptController) {
-    return { ok: false, accepted: false, message: '排队插话请求未通过安全校验。' };
-  }
-  try {
-    const receipt = await reliableInterruptController.interruptQueued();
-    setTimeout(() => { void refreshAgentDiagnostics(); }, 120);
-    return receipt;
-  } catch (error) {
-    return {
-      ok: false,
-      accepted: false,
-      reason: error instanceof ReliableInterruptError ? error.code : 'interrupt-failed',
-      message: error?.message || '排队插话失败，消息仍保留。'
-    };
-  }
-});
-ipcMain.handle('harness:interrupt-and-prompt', async (event, text) => {
-  if (!harnessIpcAllowed(event) || !reliableInterruptController || typeof text !== 'string') {
-    return { ok: false, accepted: false, message: '插话请求未通过安全校验。' };
-  }
-  try {
-    const receipt = await reliableInterruptController.interruptAndPrompt(text);
-    setTimeout(() => { void refreshAgentDiagnostics(); }, 120);
-    return receipt;
-  } catch (error) {
-    return {
-      ok: false,
-      accepted: false,
-      reason: error instanceof ReliableInterruptError ? error.code : 'interrupt-failed',
-      message: error?.message || '插话发送失败，草稿已保留。'
-    };
-  }
-});
 ipcMain.handle('harness:restart', (event) => (
   desktopIpcAllowed(event) ? startHarnessForWindow({ restart: true }) : { ok: false, reason: 'untrusted' }
 ));
@@ -5472,12 +6005,7 @@ const createWindow = async () => {
   mainWindow.on('closed', () => {
     nativeDock?.destroy(); nativeDock = undefined;
     stopAgentPolling();
-    closeSideChatWindow();
-    if (terminalWindow && !terminalWindow.isDestroyed()) terminalWindow.close();
-    if (worktreesWindow && !worktreesWindow.isDestroyed()) worktreesWindow.close();
-    if (tasksSubagentsWindow && !tasksSubagentsWindow.isDestroyed()) tasksSubagentsWindow.close();
-    if (officeCenterWindow && !officeCenterWindow.isDestroyed()) officeCenterWindow.close();
-    if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
+    closeManagedAuxiliaryWindows();
     mainWindow = undefined;
   });
 
@@ -5497,6 +6025,197 @@ const runDesktopSmoke = async (target) => {
     locale: app.getLocale(),
     safeStorage: safeStorage.isEncryptionAvailable()
   }, null, 2));
+};
+
+const runLifecycleSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const readyPath = `${resolvedTarget}.ready.json`;
+  let result;
+  let waitTimer;
+  try {
+    mainWindow = new BrowserWindow({
+      width: 720,
+      height: 480,
+      show: false,
+      title: 'DSH Desktop 生命周期验证',
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+    await mainWindow.loadURL('data:text/html;charset=utf-8,%3Ctitle%3EDSH%20Lifecycle%3C%2Ftitle%3E%3Ch1%3EDSH%20Desktop%3C%2Fh1%3E');
+    const secondInstance = new Promise((resolve, reject) => {
+      lifecycleSmokeSecondInstanceResolve = resolve;
+      waitTimer = setTimeout(() => reject(new Error('没有收到第二次启动信号。')), 20_000);
+    });
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(readyPath, `${JSON.stringify({ ready: true, pid: process.pid, version: app.getVersion() })}\n`, 'utf8');
+    if (lifecycleSmokeSecondInstanceObserved) lifecycleSmokeSecondInstanceResolve();
+    await secondInstance;
+    clearTimeout(waitTimer);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const identity = currentVersionIdentity();
+    result = {
+      ok: lifecycleSmokeSecondInstanceObserved
+        && mainWindow.isVisible()
+        && !mainWindow.isMinimized()
+        && identity.product === app.getVersion(),
+      version: identity.product,
+      harnessVersion: identity.harness,
+      electronVersion: identity.electron,
+      secondInstanceReceived: lifecycleSmokeSecondInstanceObserved,
+      windowVisible: mainWindow.isVisible(),
+      windowMinimized: mainWindow.isMinimized(),
+      singleInstanceLockAcquired
+    };
+  } catch (error) {
+    result = { ok: false, version: app.getVersion(), error: error?.message || String(error) };
+  } finally {
+    clearTimeout(waitTimer);
+    lifecycleSmokeSecondInstanceResolve = undefined;
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(resolvedTarget, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    allowQuit = true;
+    mainWindow?.destroy();
+    mainWindow = undefined;
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+
+const waitForSmokeCondition = async (readState, predicate, { timeoutMs = 20_000, intervalMs = 50 } = {}) => {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const state = readState();
+    if (predicate(state)) return state;
+    if (Date.now() >= deadline) throw new Error('打包态安全退出资源没有在限定时间内就绪。');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  } while (true);
+};
+
+const writeSmokeJsonAtomically = async (filePath, value) => {
+  const pendingPath = `${filePath}.${process.pid}-${randomUUID()}.tmp`;
+  try {
+    await fsp.writeFile(pendingPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+    await fsp.rename(pendingPath, filePath);
+  } finally {
+    await fsp.unlink(pendingPath).catch((error) => {
+      if (error?.code !== 'ENOENT') throw error;
+    });
+  }
+};
+
+const probeSafeExitResource = async (fetchImpl, url) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
+    await response.arrayBuffer();
+    return { ok: response.ok, status: response.status };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const runSafeExitSmoke = async (target) => {
+  const resolvedTarget = path.resolve(target);
+  const readyPath = `${resolvedTarget}.ready.json`;
+  const continuePath = `${resolvedTarget}.continue`;
+  try {
+    const harnessResult = harnessOperationPromise
+      ? await harnessOperationPromise
+      : await startHarnessForWindow();
+    if (!harnessResult?.ok) throw new Error(harnessResult?.error || 'Harness 没有完成启动。');
+
+    const workspace = getWorkspaceState();
+    const expectedWorkspace = path.join(dataRoot, 'launch-root');
+    if (!workspace.isFallback || pathKey(workspace.activePath) !== pathKey(expectedWorkspace)) {
+      throw new Error('安全退出验收拒绝写入非隔离临时工作区。');
+    }
+    const previewFileName = 'dsh-safe-exit-smoke.html';
+    await fsp.writeFile(
+      path.join(workspace.activePath, previewFileName),
+      '<!doctype html><meta charset="utf-8"><title>DSH safe exit smoke</title><h1>ready</h1>\n',
+      'utf8'
+    );
+
+    terminalRunner.start({ cols: 80, rows: 24 });
+    const terminalState = await waitForSmokeCondition(
+      () => terminalRunner.getState(),
+      (state) => state.status === 'running' && Number.isSafeInteger(state.pid) && state.pid > 0
+    );
+    const previewState = await previewManager.openFile(previewFileName);
+    if (previewState.status !== 'ready' || !previewState.owned || !Number.isSafeInteger(previewState.port)) {
+      throw new Error('托管预览没有形成可验证的本机端口。');
+    }
+
+    const harnessState = supervisor.getState();
+    const harnessUrl = new URL(harnessState.url);
+    const [harnessProbe, previewProbe] = await Promise.all([
+      probeSafeExitResource(harnessFetch, harnessOrigin),
+      probeSafeExitResource(fetch, previewState.url)
+    ]);
+    if (!harnessProbe.ok || !previewProbe.ok) throw new Error('退出前的 Harness 或预览活动性探测失败。');
+
+    const lifecycle = lifecycleStateStore?.getState();
+    if (lifecycle?.status !== 'running') throw new Error('退出前的生命周期日志不是 running 状态。');
+    const nonce = randomUUID();
+    const ready = {
+      schemaVersion: 1,
+      ready: true,
+      packaged: app.isPackaged,
+      version: app.getVersion(),
+      appPid: process.pid,
+      harnessHostPid: harnessState.pid,
+      terminalHostPid: terminalRunner.child?.pid || null,
+      terminalShellPid: terminalState.pid,
+      harnessPort: Number(harnessUrl.port),
+      previewPort: previewState.port,
+      lifecycleRunId: lifecycle.runId,
+      lifecycleStatus: lifecycle.status,
+      singleInstanceLockAcquired,
+      quitBypassActive: allowQuit,
+      continuationTimeoutMs: safeExitSmokeAuthorization.continuationTimeoutMs,
+      nonce,
+      resources: {
+        harness: harnessState.status,
+        terminal: terminalState.status,
+        preview: previewState.status
+      },
+      identity: currentVersionIdentity()
+    };
+    if (![ready.harnessHostPid, ready.terminalHostPid, ready.terminalShellPid]
+      .every((pid) => Number.isSafeInteger(pid) && pid > 0)) {
+      throw new Error('退出前无法取得完整的受管进程身份。');
+    }
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await writeSmokeJsonAtomically(readyPath, ready);
+    await waitForSmokeCondition(
+      () => {
+        try {
+          return JSON.parse(fs.readFileSync(continuePath, 'utf8')).nonce === nonce;
+        } catch {
+          return false;
+        }
+      },
+      Boolean,
+      { timeoutMs: safeExitSmokeAuthorization.continuationTimeoutMs, intervalMs: 50 }
+    );
+  } catch (error) {
+    process.exitCode = 1;
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.unlink(readyPath).catch((failure) => {
+      if (failure?.code !== 'ENOENT') throw failure;
+    });
+    await writeSmokeJsonAtomically(readyPath, {
+      schemaVersion: 1,
+      ready: false,
+      version: app.getVersion(),
+      appPid: process.pid,
+      error: error?.stack || error?.message || String(error)
+    });
+  }
+  requestApplicationQuit('explicit-exit');
 };
 
 const runCommandFeedbackSmoke = async (target) => {
@@ -5923,12 +6642,6 @@ const runHarnessSmoke = async (target) => {
       secure: false
     });
     await smokeHarnessWindow.loadURL(authentication.origin);
-    const queueSnapshot = await readHarnessQueueSnapshotFromWebContents(
-      smokeHarnessWindow.webContents,
-      authentication.origin,
-      workspaceSync.sessionId,
-      { timeoutMs: 5000 }
-    );
     const liveInventory = await callHarnessRemote(authentication.origin, 'pluginInventory', 'list', {}, { fetchImpl: smokeFetch });
     const runtimePaths = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
     const runtimeCatalog = new PluginHealthCatalog({
@@ -5945,14 +6658,23 @@ const runHarnessSmoke = async (target) => {
     const pluginSurface = extensionCenter.surfaces.find((item) => item.id === 'plugins');
     const hookSurface = extensionCenter.surfaces.find((item) => item.id === 'hooks');
     const mcpSurface = extensionCenter.surfaces.find((item) => item.id === 'mcp');
+    const requiredHarnessActiveModules = [
+      '@deepseek-ai/dsh-api-session-controller',
+      '@deepseek-ai/dsh-api-workspace-controller',
+      '@deepseek-ai/dsh-session-log-export'
+    ];
+    const requiredHarnessModulesReady = requiredInventoryModulesActive(liveInventory, requiredHarnessActiveModules);
     result = {
       ok: sideChat.kind === 'fresh'
         && sideChat.sourceSessionId === workspaceSync.sessionId
         && sideChat.sideSessionId !== workspaceSync.sessionId
         && sideChat.permission === 'workspace-write'
-        && Array.isArray(queueSnapshot)
         && extensionCenter.available
         && pluginSurface?.total > 0
+        && pluginSurface?.failed === 0
+        && pluginSurface?.transitional === 0
+        && runtimeState.runtime?.status === 'healthy'
+        && requiredHarnessModulesReady
         && skillSurface?.total > 0
         && mcpSurface?.status === 'ready'
         && mcpSurface?.total === 0
@@ -5975,9 +6697,9 @@ const runHarnessSmoke = async (target) => {
         independent: sideChat.sideSessionId !== sideChat.sourceSessionId,
         permission: sideChat.permission
       },
-      reliableInterrupt: {
-        controlStream: 'ready',
-        queuedItems: queueSnapshot.length
+      officialInteraction: {
+        owner: 'deepseek-harness',
+        queueSteerStop: true
       },
       extensionCenter: {
         source: extensionCenter.source,
@@ -5989,6 +6711,7 @@ const runHarnessSmoke = async (target) => {
           misdirected: runtimeState.runtime?.misdirected || 0
         },
         plugins: { total: pluginSurface?.total || 0, active: pluginSurface?.active || 0, failed: pluginSurface?.failed || 0 },
+        requiredActiveModules: { ready: requiredHarnessModulesReady, packages: requiredHarnessActiveModules },
         skills: { total: skillSurface?.total || 0, active: skillSurface?.active || 0 },
         mcp: { status: mcpSurface?.status || 'unknown', version: mcpSurface?.version || '', total: mcpSurface?.total || 0, active: mcpSurface?.active || 0 },
         hooks: hookSurface?.status || 'unknown'
@@ -6023,7 +6746,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     harnessOrigin = authentication.origin;
     harnessFetch = createAuthenticatedHarnessFetch(authentication);
     harnessAuthCookie = authentication.cookie;
-    const selected = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath, fetchImpl: harnessFetch });
+    let selected = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath, fetchImpl: harnessFetch });
     mainWindow = new BrowserWindow({ width: 1280, height: 880, show: false, webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true
     } });
@@ -6051,6 +6774,20 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     await evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="稍后配置")?.click()');
     for (const name of ['composer-text-bridge.js', 'document-intake.js']) await evaluate(await fsp.readFile(path.join(rootDir, 'assets', name), 'utf8'));
     await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
+    if (process.argv.includes('--smoke-cross-workspace')) {
+      const sidebarPath = path.join(smokeRoot, 'sidebar-workspace'); await fsp.mkdir(sidebarPath, { recursive: true });
+      const other = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath: sidebarPath, fetchImpl: harnessFetch });
+      await waitFor('Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).some(row=>row.textContent.includes("sidebar-workspace"))');
+      // Upstream deliberately displays every blank session as “New Session”,
+      // even after rename. Use the workspace's actual New Session button;
+      // the official navigation reuses its already-created blank session.
+      await evaluate('(()=>{const row=Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).find(row=>row.textContent.includes("sidebar-workspace"));Array.from(row.querySelectorAll("button")).at(-1).click()})()');
+      await waitFor(`JSON.parse(localStorage.getItem('dsh.sessions.current')||'{}').sessionId === ${JSON.stringify(other.sessionId)}`);
+      if (getWorkspaceState().activePath !== workspacePath) throw new Error('Cross-workspace test must retain the original native launch workspace');
+      selected = other;
+      const context = await documentIntakeController.getContext();
+      if (context.workspacePath !== sidebarPath || context.sessionId !== selected.sessionId) throw new Error('Selected sidebar workspace was not resolved');
+    }
     if (continuity) {
       documentIntakeController.chooseFiles = async () => [source];
       documentIntakeController.confirmImport = async () => true;
@@ -6070,10 +6807,6 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       bindTerminalRunner(terminalRunner);
       pluginHealthCatalog = new PluginHealthCatalog({ harnessHome: path.join(smokeRoot, 'harness'), dshPackageDir: path.resolve(path.dirname(harnessRuntimePaths.dshBinPath), '..') });
       tasksSubagentsController = new TasksSubagentsController({ getOrigin: () => harnessOrigin, getWebContents: () => wc, apiCall: authenticatedHarnessApi });
-      reliableInterruptController = new ReliableInterruptController({ getOrigin: () => harnessOrigin, getWebContents: () => wc,
-        getWorkspacePath: () => getWorkspaceState().activePath, apiCall: authenticatedHarnessApi,
-        resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
-        readQueue: (origin, id, options) => readHarnessQueueSnapshotFromWebContents(wc, origin, id, options) });
       worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
       if (handoff || process.argv.includes('--smoke-background')) { checkpointManager = new GitCheckpointManager(); checkpointDiagnostics = await checkpointManager.activate(workspacePath); }
       wikiRuntime = require(harnessRuntimePaths.wikiToolPath); wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: path.join(smokeRoot, 'wiki-settings.json') }); await wikiSettingsStore.init();
@@ -6098,7 +6831,8 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       }
       if (dock && process.argv.includes('--smoke-workflow')) {
         if (!process.argv.includes('--smoke-real-model')) throw new Error('Workflow acceptance requires the real model flag.');
-        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi });
+        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath: selected.workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi,
+          crossWorkspace: process.argv.includes('--smoke-cross-workspace') });
         if (!result.ok) process.exitCode = 1;
         return;
       }
@@ -6144,8 +6878,31 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     nativeFileResult = await evaluate('(async()=>{const state=await desktopAPI.documents.getState(); return desktopAPI.documents.importFiles(Array.from(document.getElementById("dsh-smoke-native-file").files),state.context)})()');
     await evaluate('document.querySelector(".dsh-document-chip button").click()');
     await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
-    await evaluate('var dropped=new DataTransfer(); dropped.items.add(document.getElementById("dsh-smoke-native-file").files[0]); document.dispatchEvent(new DragEvent("drop",{dataTransfer:dropped,bubbles:true,cancelable:true}))');
+    const dragPoint = await evaluate('(()=>{const r=document.querySelector("[data-composer-card]").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
+    const dragData = { items: [], files: [source], dragOperationsMask: 1 };
+    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'dragEnter', ...dragPoint, data: dragData });
+    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'dragOver', ...dragPoint, data: dragData });
+    await waitFor('document.querySelector(".dsh-document-drop-hint")?.hidden === false');
+    const imageOverlayAbsent = await evaluate('!Array.from(document.querySelectorAll("[role=status]")).some(el=>/Drop images here|图片拖动到此处即可添加|拖入图片/.test(el.textContent))');
+    if (!imageOverlayAbsent) throw new Error('Document drag activated the upstream image-only overlay');
+    await fsp.writeFile(`${resolvedTarget}.drag.png`, (await wc.capturePage()).toPNG());
+    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'drop', ...dragPoint, data: dragData });
     await waitFor('window.__DSH_COMPOSER_TEXT__.read().includes("参考资料") && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    if (!await evaluate('document.querySelector(".dsh-document-drop-hint")?.hidden === true')) throw new Error('Drag feedback was not cleared after drop');
+    const runtime = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
+    const word = require(runtime.docxToolPath), excel = require(runtime.xlsxToolPath);
+    const officeFixtures = [
+      ['拖入表格.xlsx', word.createZip(excel.workbookEntries(excel.normalizeSpec({ sheets: [{ name: '数据', rows: [['项目', '金额'], ['测试', 123]] }] })))],
+      ['拖入文档.docx', word.createZip(word.documentEntries(word.normalizeSpec({ title: '拖拽验证', sections: [{ kind: 'paragraph', text: '这是隔离测试文件。' }] })))],
+      ['拖入资料.pdf', buildPdfSmokeDocument()]
+    ];
+    const officePaths = [];
+    for (const [name, bytes] of officeFixtures) { const file = path.join(smokeRoot, name); await fsp.writeFile(file, bytes); officePaths.push(file); }
+    const officeDrag = { items: [], files: officePaths, dragOperationsMask: 1 };
+    for (const type of ['dragEnter', 'dragOver', 'drop']) await wc.debugger.sendCommand('Input.dispatchDragEvent', { type, ...dragPoint, data: officeDrag });
+    await waitFor('document.querySelectorAll(".dsh-document-chip").length === 4 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
+    const officeSourceUnchanged = (await Promise.all(officePaths.map(async (file, index) => (await fsp.readFile(file)).equals(officeFixtures[index][1])))).every(Boolean);
+    if (!officeSourceUnchanged) throw new Error('Document drag modified an original fixture');
     const fake = await evaluate('(async()=>{const state=await desktopAPI.documents.getState();return desktopAPI.documents.importFiles([new File(["x"],"fake.csv")],state.context)})()');
     await wc.debugger.sendCommand('Fetch.enable', { patterns: [{ urlPattern: '*api/session/prompt', requestStage: 'Request' }] });
     await fsp.writeFile(`${resolvedTarget}.before-send.png`, (await wc.capturePage()).toPNG());
@@ -6165,6 +6922,9 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       inputKind: 'Lexical contenteditable', chooseInserted: chosen.includes('参考资料'), removalPreservedDraft: !removed.includes('参考资料') && removed.includes('保留这段草稿'),
       nativeFileImported: Boolean(nativeFileResult.ok), syntheticFileRejected: fake.ok === false, originalUnchanged,
       nativeFileDropInserted: true,
+      completeNativeDragLifecycle: true, imageOverlayAbsent, crossWorkspace: process.argv.includes('--smoke-cross-workspace'),
+      officeFormatsDragged: ['xlsx', 'docx', 'pdf'], officeSourceUnchanged,
+      selectedWorkspaceConfirmed: (await documentIntakeController.getContext()).workspacePath === selected.workspacePath,
       upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
@@ -6336,16 +7096,16 @@ const runPluginHealthSmoke = async (target) => {
   try {
     await writeSmokePackage(dshPackageDir, {
       name: '@deepseek-ai/dsh',
-      version: '0.1.2-alpha.2',
+      version: HARNESS_VERSION,
       dependencies: Object.fromEntries([
-        ['@deepseek-ai/dsh-base', '0.1.2-alpha.2'],
-        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, '0.1.2-alpha.2'])
+        ['@deepseek-ai/dsh-base', HARNESS_VERSION],
+        ...capabilityPackageNames.map((name) => [`@deepseek-ai/${name}`, HARNESS_VERSION])
       ])
     });
-    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: '0.1.2-alpha.2', dsh: { bundle: { patch: './cordis.patch.yml' } } });
+    await writeSmokePackage(basePackageDir, { name: '@deepseek-ai/dsh-base', version: HARNESS_VERSION, dsh: { bundle: { patch: './cordis.patch.yml' } } });
     for (const name of capabilityPackageNames) {
       const packageDir = path.join(installRoot, '@deepseek-ai', name);
-      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: '0.1.2-alpha.2' });
+      await writeSmokePackage(packageDir, { name: `@deepseek-ai/${name}`, version: HARNESS_VERSION });
       await linkSmokePackage(fallbackRoot, `@deepseek-ai/${name}`, packageDir);
     }
     await writeSmokePackage(externalPackageDir, { name: 'community-bundle', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } } });
@@ -6481,11 +7241,19 @@ const runOfficeCenterSmoke = async (target) => {
       enabledButtons: document.querySelectorAll('.invoke:not(:disabled)').length,
       text: document.body.innerText
     })`, true);
+    await officeCenterWindow.webContents.executeJavaScript(
+      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
     const screenshot = await officeCenterWindow.webContents.capturePage();
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
     await officeCenterWindow.webContents.executeJavaScript('window.scrollTo(0, document.documentElement.scrollHeight)', true);
     await new Promise((resolve) => setTimeout(resolve, 100));
+    await officeCenterWindow.webContents.executeJavaScript(
+      'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
     const integrationScreenshot = await officeCenterWindow.webContents.capturePage();
     const integrationScreenshotPath = `${resolvedTarget}.integration.png`;
     const integrationScreenshotSize = integrationScreenshot.getSize();
@@ -6551,6 +7319,33 @@ const runWikiCenterSmoke = async (target) => {
     wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: smokeConfig });
     await fsp.mkdir(smokeVault, { recursive: true });
     await wikiSettingsStore.init();
+    await createWikiCenterWindow();
+    const onboardingRendered = await wikiCenterWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        const onboarding = document.querySelector('#wiki-onboarding');
+        const overview = document.querySelector('#wiki-overview');
+        if (onboarding?.hidden === false && overview?.hidden === true && document.querySelectorAll('.onboarding-steps li').length === 3) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`, true);
+    if (!onboardingRendered) throw new Error('wiki-center-onboarding-smoke-timeout');
+    wikiCenterWindow.showInactive();
+    await wikiCenterWindow.webContents.executeJavaScript(
+      'window.scrollTo(0, 0); new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+      true
+    );
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const onboardingScreenshot = await wikiCenterWindow.webContents.capturePage();
+    const onboardingScreenshotPath = `${resolvedTarget}.onboarding.png`;
+    const onboardingScreenshotSize = onboardingScreenshot.getSize();
+    await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fsp.writeFile(onboardingScreenshotPath, onboardingScreenshot.toPNG());
+    wikiCenterWindow.destroy();
+    wikiCenterWindow = undefined;
+
     await wikiSettingsStore.setVault(smokeVault);
     await wikiRuntime.initializeWikiVault(smokeVault);
     await fsp.writeFile(path.join(smokeVault, 'concepts', 'wiki-basic.md'), [
@@ -6594,8 +7389,28 @@ const runWikiCenterSmoke = async (target) => {
     const rendered = await wikiCenterWindow.webContents.executeJavaScript(`({
       apiKeys: Object.keys(window.wikiCenterAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
+      versionText: document.querySelector('#app-version')?.textContent || '',
+      onboardingHidden: document.querySelector('#wiki-onboarding')?.hidden === true,
+      overviewHidden: document.querySelector('#wiki-overview')?.hidden === true,
+      structureText: document.querySelector('#health-structure')?.textContent || '',
+      pageCountText: document.querySelector('#health-page-count')?.textContent || '',
+      freshnessText: document.querySelector('#health-freshness')?.textContent || '',
       capabilityRows: document.querySelectorAll('.capability').length,
       resultRows: document.querySelectorAll('.result').length,
+      layout: (() => {
+        const hero = document.querySelector('.toolbar > div');
+        const heading = document.querySelector('.toolbar h1');
+        const intro = document.querySelector('.toolbar p');
+        return {
+          viewportWidth: window.innerWidth,
+          heroWidth: Math.round(hero?.getBoundingClientRect().width || 0),
+          headingWidth: Math.round(heading?.getBoundingClientRect().width || 0),
+          headingScrollWidth: heading?.scrollWidth || 0,
+          introWidth: Math.round(intro?.getBoundingClientRect().width || 0),
+          introScrollWidth: intro?.scrollWidth || 0,
+          bodyScrollWidth: document.body.scrollWidth
+        };
+      })(),
       text: document.body.innerText
     })`, true);
     wikiCenterWindow.showInactive();
@@ -6608,11 +7423,40 @@ const runWikiCenterSmoke = async (target) => {
     const historyScreenshot = await wikiCenterWindow.webContents.capturePage();
     const historyScreenshotPath = `${resolvedTarget}.history.png`;
     const historyScreenshotSize = historyScreenshot.getSize();
+    wikiCenterWindow.setContentSize(760, 740);
+    await wikiCenterWindow.webContents.executeJavaScript('window.scrollTo(0, 0); true', true);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const narrowLayout = await wikiCenterWindow.webContents.executeJavaScript(`(() => {
+      const viewportWidth = window.innerWidth;
+      const required = ['.toolbar', '#wiki-overview', '#vault-panel', '#project-panel', '#query-panel', '#capture-panel'];
+      const clipped = required.filter((selector) => {
+        const element = document.querySelector(selector);
+        if (!element || element.hidden) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.left < -1 || rect.right > viewportWidth + 1;
+      });
+      return { viewportWidth, bodyScrollWidth: document.body.scrollWidth, clipped };
+    })()`, true);
+    const narrowScreenshot = await wikiCenterWindow.webContents.capturePage();
+    const narrowScreenshotPath = `${resolvedTarget}.narrow.png`;
+    const narrowScreenshotSize = narrowScreenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeHistory', 'invokeProjectSync', 'listHistorySessions', 'prepareHistory', 'previewCapture', 'previewProjectSync', 'query', 'saveCapture'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeHistory', 'invokeProjectSync', 'listHistorySessions', 'prepareHistory', 'previewCapture', 'previewProjectSync', 'query', 'recover', 'saveCapture'])
         && rendered.title === 'Wiki 中心'
+        && rendered.versionText === `DSH Desktop V${app.getVersion()} · Harness V${harnessRuntimePaths.version || HARNESS_VERSION}`
+        && rendered.onboardingHidden
+        && !rendered.overviewHidden
+        && rendered.structureText === '结构完整'
+        && Number.parseInt(rendered.pageCountText, 10) >= 1
+        && rendered.freshnessText === '暂不可查'
         && rendered.capabilityRows === 6
         && rendered.resultRows >= 1
+        && rendered.layout.heroWidth >= Math.min(900, rendered.layout.viewportWidth - 220)
+        && rendered.layout.headingScrollWidth <= rendered.layout.headingWidth
+        && rendered.layout.introScrollWidth <= rendered.layout.introWidth
+        && rendered.layout.bodyScrollWidth <= rendered.layout.viewportWidth
+        && narrowLayout.bodyScrollWidth <= narrowLayout.viewportWidth
+        && narrowLayout.clipped.length === 0
         && rendered.text.includes('无 Git Wiki 基础能力')
         && rendered.text.includes('页面：concepts/wiki-basic.md')
         && rendered.text.includes('来源：dsh-smoke:v0.6.5')
@@ -6620,19 +7464,34 @@ const runWikiCenterSmoke = async (target) => {
         && screenshotSize.width > 0
         && screenshotSize.height > 0
         && historyScreenshotSize.width > 0
-        && historyScreenshotSize.height > 0,
+        && historyScreenshotSize.height > 0
+        && narrowScreenshotSize.width > 0
+        && narrowScreenshotSize.height > 0
+        && onboardingScreenshotSize.width > 0
+        && onboardingScreenshotSize.height > 0,
       version: app.getVersion(),
       apiKeys: rendered.apiKeys,
       title: rendered.title,
+      versionText: rendered.versionText,
+      onboardingHidden: rendered.onboardingHidden,
+      overviewHidden: rendered.overviewHidden,
+      structureText: rendered.structureText,
+      pageCountText: rendered.pageCountText,
+      freshnessText: rendered.freshnessText,
       capabilityRows: rendered.capabilityRows,
       resultRows: rendered.resultRows,
+      layout: rendered.layout,
       vaultPath: smokeVault,
       screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height },
-      historyScreenshot: { path: historyScreenshotPath, width: historyScreenshotSize.width, height: historyScreenshotSize.height }
+      historyScreenshot: { path: historyScreenshotPath, width: historyScreenshotSize.width, height: historyScreenshotSize.height },
+      narrowLayout,
+      narrowScreenshot: { path: narrowScreenshotPath, width: narrowScreenshotSize.width, height: narrowScreenshotSize.height },
+      onboardingScreenshot: { path: onboardingScreenshotPath, width: onboardingScreenshotSize.width, height: onboardingScreenshotSize.height }
     };
     await fsp.mkdir(path.dirname(resolvedTarget), { recursive: true });
     await fsp.writeFile(screenshotPath, screenshot.toPNG());
     await fsp.writeFile(historyScreenshotPath, historyScreenshot.toPNG());
+    await fsp.writeFile(narrowScreenshotPath, narrowScreenshot.toPNG());
   } catch (error) {
     result = { ok: false, version: app.getVersion(), error: error?.stack || error?.message || String(error) };
   } finally {
@@ -7092,9 +7951,10 @@ const runSupportSmoke = async (target) => {
     ]);
     const created = await createSupportBackup({ dataRoot: supportData, destinationRoot: backups, appVersion: app.getVersion() });
     const verified = await validateSupportBackup(created.backupRoot);
+    const identity = currentVersionIdentity();
     const report = createRedactedDiagnosticReport({
-      appInfo: { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged },
-      runtime: { electron: process.versions.electron, node: process.versions.node, harness: HARNESS_VERSION, pnpm: '11.19.0' },
+      appInfo: { version: identity.product, platform: process.platform, packaged: app.isPackaged },
+      runtime: { electron: identity.electron, node: identity.node, harness: identity.harness, pnpm: '11.19.0' },
       workspace: { displayName: '中文 工作区', activePath: 'C:/private/repository', isFallback: false },
       diagnostics: { harnessStatus: 'running', sessions: { available: true, count: 1 }, credential: { status: 'configured', value: 'sk-support-smoke-secret-123456' }, agent: { status: 'ready', pendingCount: 0, queuedCount: 0 }, workspaceSync: { status: 'synced' } },
       network: { mode: 'custom', status: 'proxied', proxyUrl: 'https://user:pass@proxy.invalid' },
@@ -7128,7 +7988,13 @@ const runSupportSmoke = async (target) => {
 };
 
 app.whenReady().then(async () => {
+  if (!singleInstanceLockAcquired) return;
   app.setAppUserModelId('com.dsh.desktop');
+  if (lifecycleSmokeTarget) {
+    await runLifecycleSmoke(lifecycleSmokeTarget.slice('--lifecycle-smoke-file='.length));
+    app.quit();
+    return;
+  }
   configureHarnessSessionPermissions(session.defaultSession, () => mainWindow?.webContents);
 
   if (credentialAgentSmokeTarget) {
@@ -7253,6 +8119,10 @@ app.whenReady().then(async () => {
   }
 
   dataRoot = app.getPath('userData');
+  lifecycleStateStore = new LifecycleStateStore({
+    filePath: path.join(dataRoot, 'lifecycle-state.json')
+  });
+  lifecycleRecovery = await lifecycleStateStore.begin(currentVersionIdentity());
   await discardPreparedDshHistorySource();
   workspaceStore = new WorkspaceStore({
     filePath: path.join(dataRoot, 'desktop-state.json'),
@@ -7325,30 +8195,17 @@ app.whenReady().then(async () => {
   checkpointManager = new GitCheckpointManager();
   checkpointDiagnostics = await checkpointManager.activate(workspace.activePath);
   await initializeProxySettings();
-  const lifecycleRecovery = await controlledPluginInstaller.recoverPending({
+  const pluginLifecycleRecovery = await controlledPluginInstaller.recoverPending({
     workspacePath: workspace.activePath,
     proxyEnvironment: harnessProxyEnvironment
   });
   const toggleRecovery = await profileBundleManager.recoverPending();
-  pluginRecoveryOutcomes = Object.freeze([...lifecycleRecovery, ...toggleRecovery]);
+  pluginRecoveryOutcomes = Object.freeze([...pluginLifecycleRecovery, ...toggleRecovery]);
   supervisor = createSupervisor(dataRoot, workspace.activePath);
   tasksSubagentsController = new TasksSubagentsController({
     getOrigin: () => harnessOrigin,
     getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
     apiCall: authenticatedHarnessApi
-  });
-  reliableInterruptController = new ReliableInterruptController({
-    getOrigin: () => harnessOrigin,
-    getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined),
-    getWorkspacePath: () => getWorkspaceState().activePath,
-    resumeQueue: (context) => supervisor.credentialHost.sessionControl.request('resume-queue', context),
-    apiCall: authenticatedHarnessApi,
-    readQueue: (origin, sessionId, options) => readHarnessQueueSnapshotFromWebContents(
-      mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined,
-      origin,
-      sessionId,
-      options
-    )
   });
   sideChatController = new SideChatController({ getOrigin: () => harnessOrigin, apiCall: authenticatedHarnessApi });
   try { await initializeBackgroundTasks(); backgroundTasks.start(); }
@@ -7357,6 +8214,16 @@ app.whenReady().then(async () => {
   createApplicationTray();
   installApplicationMenu();
   await createWindow();
+  await lifecycleStateStore.transition('running');
+  if (safeExitSmokeTarget) {
+    await runSafeExitSmoke(safeExitSmokeTarget.slice('--safe-exit-smoke-file='.length));
+    return;
+  }
+  if (pendingSecondInstanceFocus) {
+    pendingSecondInstanceFocus = false;
+    showMainWindow();
+  }
+  await showLifecycleRecoveryNotice();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow();
     else showMainWindow();
@@ -7370,38 +8237,126 @@ app.on('before-quit', (event) => {
   }
   event.preventDefault();
   if (quitOperationPromise) return;
-  const stopAfterBackup = async () => {
-    if (backgroundTasks?.requiresBackground() || backgroundOperationPromise) {
-      const answer = await dialog.showMessageBox(nativeParent(mainWindow), { type: 'warning', title: '退出 DSH Desktop', message: '完全退出会停止后台执行和定时检查。',
-        detail: '保留任务与会话记录；下次启动会先核对结果，不会自动重发结果不明的运行。若要继续后台工作，请取消并关闭主窗口，软件会留在托盘。', buttons: ['继续后台运行', '完全退出'], defaultId: 0, cancelId: 0, noLink: true });
+  const performSafeQuit = async () => {
+    const hasBackgroundWork = Boolean(backgroundTasks?.requiresBackground() || backgroundOperationPromise);
+    const hasForegroundAgentWork = isBackgroundSupervisionRequired(agentDiagnostics);
+    if (!fatalShutdownError && (hasBackgroundWork || hasForegroundAgentWork)) {
+      const answer = await dialog.showMessageBox(nativeParent(mainWindow), {
+        type: 'warning',
+        title: '退出 DSH Desktop',
+        message: hasBackgroundWork
+          ? '完全退出会停止后台执行和定时检查。'
+          : agentDiagnostics.status === 'waiting'
+            ? '当前会话仍在等待确认，完全退出会中断这次运行。'
+            : '当前会话仍在运行，完全退出会中断 Harness 和正在执行的工具。',
+        detail: hasBackgroundWork
+          ? '保留任务与会话记录；下次启动会先核对结果，不会自动重发结果不明的运行。若要继续后台工作，请取消并关闭主窗口，软件会留在托盘。'
+          : '已经写入磁盘的文件不会自动回滚；尚未完成的工具结果可能不完整。建议先取消退出，等待本轮结束或主动停止后再退出。',
+        buttons: [hasBackgroundWork ? '继续后台运行' : '取消退出', '完全退出'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      });
       if (answer.response !== 1) return false;
     }
+    if (!lifecycleGate.beginClosing()) throw new ApplicationClosingError();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setEnabled(false);
+    closeManagedAuxiliaryWindows();
+    await lifecycleStateStore?.transition('quitting');
     stopAgentPolling(); stopSideChatSelectionMonitor();
-    await backgroundTasks?.stop();
-    if (backgroundOperationPromise) await Promise.allSettled([backgroundOperationPromise]);
-    if (workspaceActivationPromise) await Promise.allSettled([workspaceActivationPromise]);
-    await flushComposerDraft().catch(() => {});
-    if (worktreeOperationPromise) await Promise.allSettled([worktreeOperationPromise]);
-    if (supportBackupOperationPromise) await Promise.allSettled([supportBackupOperationPromise]);
-    if (gitDeliveryOperationPromise) await Promise.allSettled([gitDeliveryOperationPromise]);
-    const stops = [];
-    if (terminalRunner?.isActive()) stops.push(terminalRunner.stop());
-    if (previewManager?.isActive()) stops.push(previewManager.stop());
-    if (supervisor?.isActive()) stops.push(supervisor.stop());
-    await Promise.allSettled(stops);
-    await terminalSettlePromise;
+    const scheduler = await settleLifecycleSteps(backgroundTasks ? [{
+      name: '后台任务调度',
+      run: () => backgroundTasks.stop()
+    }] : [], { timeoutMs: 30_000 });
+    if (!scheduler.ok) throw new Error(scheduler.failures.map((entry) => entry.error).join('；'));
+
+    const operations = [
+      ['后台任务操作', backgroundOperationPromise],
+      ['Harness 启动或重启', harnessOperationPromise],
+      ['文档导入', documentIntakeOperationPromise],
+      ['Git 变更审查', changeReviewOperationPromise],
+      ['应用预览操作', previewOperationPromise],
+      ['Wiki 写入', wikiMutationOperationPromise],
+      ['工作区切换', workspaceActivationPromise],
+      ['插件启停', pluginTogglePromise],
+      ['插件安装', pluginInstallPromise],
+      ['工作树操作', worktreeOperationPromise],
+      ['子代理操作', tasksSubagentsOperationPromise],
+      ['Side Chat 操作', sideChatOperationPromise],
+      ['支持备份', supportBackupOperationPromise],
+      ['Git 交付', gitDeliveryOperationPromise],
+      ['网络与代理操作', networkOperationPromise],
+      ['产品更新检查', updateCheckPromise],
+      ['创建检查点', checkpointCreatePromise],
+      ['恢复检查点', checkpointRestorePromise],
+      ['分叉检查点', checkpointForkPromise],
+      ['会话交接', handoffServicePromise]
+    ].filter(([, operation]) => operation).map(([name, operation]) => ({ name, run: () => operation }));
+    const settled = await settleLifecycleSteps(operations, { timeoutMs: 90_000 });
+    if (!settled.ok) throw new Error(settled.failures.map((entry) => `${entry.name}：${entry.error}`).join('；'));
+
+    const draft = await settleLifecycleSteps([
+      { name: '会话草稿写入', run: () => flushComposerDraft() }
+    ], { timeoutMs: 5_000 });
+    if (!draft.ok) throw new Error(draft.failures[0].error);
+    const owned = await settleLifecycleSteps([
+      terminalRunner?.isActive() ? { name: '安全终端', run: () => terminalRunner.stop(), verify: () => !terminalRunner.isActive() } : null,
+      previewManager?.isActive() ? { name: '预览服务', run: () => previewManager.stop(), verify: () => !previewManager.isActive() } : null,
+      supervisor?.isActive() ? { name: 'Harness 内核', run: () => supervisor.stop(), verify: () => !supervisor.isActive() } : null
+    ].filter(Boolean), { timeoutMs: 20_000 });
+    if (!owned.ok) throw new Error(owned.failures.map((entry) => `${entry.name}：${entry.error}`).join('；'));
+    const terminalSettled = await settleLifecycleSteps([{ name: '终端状态收口', run: () => terminalSettlePromise }], { timeoutMs: 10_000 });
+    if (!terminalSettled.ok) throw new Error(terminalSettled.failures[0].error);
+    if (fatalShutdownError) await lifecycleStateStore?.transition('quit-failed');
+    else await lifecycleStateStore?.markClean(requestedQuitReason);
     return true;
   };
-  quitOperationPromise = stopAfterBackup().then((confirmed) => { if (confirmed) { allowQuit = true; app.quit(); } })
-    .catch((error) => { showFixedNotification({ title: '未能安全退出', body: error.message || '请核对后台任务状态后重试。' }); })
+  quitOperationPromise = performSafeQuit().then((confirmed) => {
+    if (confirmed) {
+      allowQuit = true;
+      if (fatalShutdownError) process.exitCode = 1;
+      app.quit();
+    }
+  })
+    .catch(async (error) => {
+      await lifecycleStateStore?.transition('quit-failed').catch(() => {});
+      if (fatalShutdownError) {
+        process.exitCode = 1;
+        app.exit(1);
+        return;
+      }
+      lifecycleGate.reopen();
+      backgroundTasks?.start();
+      if ((!mainWindow || mainWindow.isDestroyed()) && app.isReady()) {
+        await createWindow().catch(() => {});
+      } else if (supervisor && !supervisor.isActive()) {
+        void startHarnessForWindow().catch(() => {});
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setEnabled(true);
+        showMainWindow();
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          title: '未能安全退出',
+          message: 'DSH Desktop 没有退出，避免留下未完成的任务或子进程。',
+          detail: `${error?.message || '请核对后台任务状态后重试。'}\n\n如果刚才输入了内容，请先复制草稿再重试。`,
+          buttons: ['确定'],
+          defaultId: 0,
+          cancelId: 0
+        });
+      } else {
+        showFixedNotification({ title: '未能安全退出', body: error?.message || '请核对后台任务状态后重试。' });
+      }
+      await lifecycleStateStore?.transition('running').catch(() => {});
+    })
     .finally(() => { quitOperationPromise = null; });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' && (!isolatedSmokeTarget || allowQuit)) app.quit();
+  if (process.platform !== 'darwin' && (!isolatedSmokeTarget || allowQuit)) requestApplicationQuit('window-close');
 });
 
-process.on('uncaughtException', (error) => {
+const recordDesktopError = (error) => {
   try {
     const logDir = app.getPath('userData');
     fs.mkdirSync(logDir, { recursive: true });
@@ -7409,4 +8364,17 @@ process.on('uncaughtException', (error) => {
   } catch {
     // Last-resort handler: avoid throwing again while recording the crash.
   }
-});
+};
+
+const initiateFatalShutdown = (reason) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason || 'Unknown fatal desktop error'));
+  recordDesktopError(error);
+  if (fatalShutdownError) return;
+  fatalShutdownError = error;
+  void lifecycleStateStore?.transition('quit-failed').catch(() => {});
+  if (app.isReady() && singleInstanceLockAcquired) requestApplicationQuit('system-quit');
+  else app.exit(1);
+};
+
+process.on('uncaughtException', initiateFatalShutdown);
+process.on('unhandledRejection', initiateFatalShutdown);

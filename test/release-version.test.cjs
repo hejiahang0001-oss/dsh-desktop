@@ -28,6 +28,53 @@ test('release-facing files follow the package version', () => {
   assert.match(read('PROGRESS.md'), new RegExp(`V${version.replaceAll('.', '\\.')}`));
 });
 
+test('Windows executable resources identify DSH Desktop instead of the Electron shell', () => {
+  const manifest = JSON.parse(read('package.json'));
+  const verifier = read('scripts/verify-windows-version-info.ps1');
+  const governance = read('scripts/release-governance.cjs');
+  const payloadBinding = read('scripts/release-payload-binding.cjs');
+  const lifecycleSmoke = read('scripts/smoke-packaged-lifecycle.cjs');
+  const safeExitSmoke = read('scripts/smoke-packaged-safe-exit.cjs');
+  assert.equal(manifest.build.productName, 'DSH Desktop');
+  assert.equal(manifest.devDependencies['electron-builder'], '26.11.1');
+  assert.equal(manifest.devDependencies['7zip-bin'], '5.2.0');
+  assert.equal(manifest.build.toolsets, undefined);
+  assert.equal(manifest.build.afterPack, 'scripts/after-pack.cjs');
+  assert.equal(manifest.build.win.signAndEditExecutable, true);
+  assert.equal(manifest.build.win.signExecutable, false);
+  assert.match(manifest.author, /DSH Desktop/u);
+  assert.match(manifest.copyright, /DSH Desktop/u);
+  assert.match(manifest.build.win.legalTrademarks, /Independent community project/u);
+  assert.ok(manifest.build.extraResources.some((entry) => (
+    entry.from === 'electron/harness-process-host.cjs'
+      && entry.to === 'harness-host/harness-process-host.cjs'
+  )));
+  assert.equal(manifest.scripts['smoke:packaged-lifecycle'], 'node scripts/smoke-packaged-lifecycle.cjs');
+  assert.equal(manifest.scripts['smoke:packaged-safe-exit'], 'node scripts/smoke-packaged-safe-exit.cjs');
+  assert.match(manifest.scripts['verify:windows-identity'], /verify-windows-version-info\.ps1/);
+  assert.match(verifier, /InternalName -eq \$ExpectedProductName/);
+  assert.match(verifier, /OriginalFilename -ne 'electron\.exe'/);
+  assert.match(governance, /requiredExecutableIdentityReady: executableIdentity\.ok === true/);
+  assert.match(governance, /readArgument\('portable'\)/);
+  assert.match(governance, /payloadBinding\.accepted === true/);
+  assert.match(governance, /manifestBinding\.matches/);
+  assert.match(payloadBinding, /payloadTrees\.installer\?\.matches === true/);
+  assert.match(payloadBinding, /payloadTrees\.portable\?\.matches === true/);
+  assert.match(payloadBinding, /executablesValid/);
+  assert.match(payloadBinding, /Object\.values\(stability\)\.every/);
+  assert.match(payloadBinding, /release-extractor-identity-mismatch/);
+  assert.match(governance, /&& packageLayout\.requiredExecutableIdentityReady/);
+  assert.doesNotMatch(lifecycleSmoke, /spawn\(executable,[^\n]+windowsHide: true/);
+  assert.match(safeExitSmoke, /--safe-exit-smoke-file=/);
+  assert.match(safeExitSmoke, /inspectPackagedBuild/);
+  assert.match(safeExitSmoke, /readyState\.version !== buildEvidence\.package\.version/);
+  assert.match(safeExitSmoke, /lifecycle\.status === 'clean'/);
+  assert.match(safeExitSmoke, /harnessDescendantsBefore\.length < 1/);
+  assert.match(safeExitSmoke, /terminalDescendantsBefore\.some/);
+  assert.match(safeExitSmoke, /ownedPortResidueAfterExit\.length === 0/);
+  assert.match(safeExitSmoke, /reusedPortsAfterExit/);
+});
+
 test('update dialog does not hard-code a superseded Stable version', () => {
   const main = read('electron/main.cjs');
   const dialog = main.slice(main.indexOf('const checkForUpdatesFromUser ='), main.indexOf('const checkForUpdatesFromUser =') + 4000);

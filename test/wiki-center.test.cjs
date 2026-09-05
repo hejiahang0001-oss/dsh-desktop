@@ -2,8 +2,11 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  buildWikiCenterDashboardState,
   extractWikiSessionCandidates,
-  selectCaptureCandidate
+  selectCaptureCandidate,
+  trustedAppVersion,
+  trustedHarnessVersion
 } = require('../electron/wiki-center.cjs');
 
 const history = {
@@ -33,4 +36,75 @@ test('capture request must reference a candidate and accepts only the fixed shap
   assert.equal(selected.title, '修订标题');
   assert.equal(selectCaptureCandidate({ title: '标题', content: '内容', sourceSeq: 999 }, candidates), null);
   assert.equal(selectCaptureCandidate({ title: '标题', content: '内容', sourceSeq: 5, sourceSessionId: '伪造' }, candidates), null);
+});
+
+test('Wiki dashboard accepts its product version only from bounded trusted state', () => {
+  assert.equal(trustedAppVersion({ appVersion: '1.1.8' }), '1.1.8');
+  assert.equal(trustedAppVersion({ app: { version: '1.2.0-rc.1' } }), '1.2.0-rc.1');
+  assert.equal(trustedAppVersion({ appVersion: '1.1.8\n伪造' }), '');
+  assert.equal(trustedAppVersion({}), '');
+  assert.equal(trustedHarnessVersion({ harness: { version: '0.1.2-rc.1' } }), '0.1.2-rc.1');
+  assert.equal(trustedHarnessVersion({ harness: { version: '0.1.2\n伪造' } }), '');
+});
+
+test('Wiki dashboard keeps first-run guidance separate from configured health data', () => {
+  const firstRun = buildWikiCenterDashboardState({
+    appVersion: '1.1.8',
+    harness: { version: '0.1.2-rc.1' },
+    vault: { configured: false, status: 'unconfigured', pageCount: 0 }
+  });
+  assert.equal(firstRun.configured, false);
+  assert.equal(firstRun.appVersion, '1.1.8');
+  assert.equal(firstRun.harnessVersion, '0.1.2-rc.1');
+  assert.equal(firstRun.lastSyncAt, '');
+  assert.equal(firstRun.freshness.status, 'unknown');
+  assert.equal(firstRun.recovery.available, false);
+
+  const configured = buildWikiCenterDashboardState({
+    app: { version: '1.1.8' },
+    vault: {
+      configured: true,
+      status: 'ready',
+      vaultPath: 'D:\\Knowledge\\DSH',
+      missing: [],
+      pageCount: 37,
+      limited: false,
+      lastSyncAt: '2026-09-04T01:02:03.000Z',
+      sourceFreshness: { status: 'fresh', checkedAt: '2026-09-04T02:03:04.000Z' }
+    }
+  });
+  assert.equal(configured.configured, true);
+  assert.equal(configured.vaultPath, 'D:\\Knowledge\\DSH');
+  assert.equal(configured.structure.status, 'ready');
+  assert.equal(configured.pages.count, 37);
+  assert.equal(configured.lastSyncAt, '2026-09-04T01:02:03.000Z');
+  assert.equal(configured.freshness.status, 'fresh');
+});
+
+test('Wiki dashboard exposes only executable recovery modes and never invents sync time', () => {
+  const missingStructure = buildWikiCenterDashboardState({
+    vault: { configured: true, status: 'needs-init', vaultPath: 'D:\\Knowledge', missing: ['index.md'], pageCount: 0 }
+  });
+  assert.deepEqual(missingStructure.structure.missing, ['index.md']);
+  assert.equal(missingStructure.recovery.mode, 'initialize-vault');
+  assert.equal(missingStructure.lastSyncAt, '');
+
+  const stale = buildWikiCenterDashboardState({
+    vault: { configured: true, status: 'ready', vaultPath: 'D:\\Knowledge', pageCount: 2 },
+    project: { available: true }
+  }, {
+    sourceCheck: { ok: true, unchanged: false, generatedAt: '2026-09-04T03:04:05.000Z' }
+  });
+  assert.equal(stale.freshness.status, 'stale');
+  assert.equal(stale.freshness.checkedAt, '2026-09-04T03:04:05.000Z');
+  assert.equal(stale.lastSyncAt, '');
+  assert.equal(stale.recovery.mode, 'refresh-source');
+
+  const routed = buildWikiCenterDashboardState({
+    vault: { configured: true, status: 'recovery-required', vaultPath: 'D:\\Knowledge', pageCount: 2 },
+    recovery: { available: true, label: '恢复最近一次同步', message: '由主进程重新校验恢复点。' }
+  });
+  assert.equal(routed.structure.status, 'recovery-required');
+  assert.equal(routed.recovery.mode, 'ipc');
+  assert.equal(routed.recovery.label, '恢复最近一次同步');
 });

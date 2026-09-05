@@ -41,7 +41,7 @@ function summary(ctx, observation, control, withHistory = true) {
     liveJobs: jobs.filter((job) => ['running', 'stopping'].includes(job.status)).length, turnOpen, lastTurnReason };
 }
 export async function sessionControl(ctx, operation, request) {
-  if (!['inspect', 'status', 'workspace-status', 'fork', 'resume-queue', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
+  if (!['inspect', 'status', 'workspace-status', 'fork', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
   const sourcePath = await canonicalDirectory(request.workspacePath);
   if (operation === 'workspace-status') return workspaceActivity(ctx, sourcePath);
   if (operation === 'task-create') {
@@ -93,18 +93,6 @@ export async function sessionControl(ctx, operation, request) {
       agent.cancel({ kind: 'user' }, { keepInbox: false });
       return { accepted: true };
     }
-    if (operation === 'resume-queue') {
-      const agent = ctx.agents.get(request.sessionId);
-      if (!agent || !agent.inbox.nextTurn.some((item) => item.id === request.itemId)) throw new Error('排队消息已离开队列；未重复发送。');
-      if (agent.status === 'running') throw new Error('当前回合尚未停止，请稍后继续队列。');
-      // Public Agent/Inbox APIs, one synchronous host operation: reinsert the
-      // last existing item in the same position and wake FIFO processing.
-      // No text reconstruction, new message identity or transport gap.
-      const tail = agent.inbox.nextTurn.at(-1);
-      agent.inbox.remove(tail.id);
-      agent.followup(tail);
-      return { accepted: true, sessionId: request.sessionId };
-    }
     if (state.running || state.pending || state.liveJobs || state.approvals || state.turnOpen || ctx.agents.get(request.sessionId)?.inbox?.hasPending) throw new Error('请先结束执行、排队消息、审批和后台命令，再交接会话。');
     if (request.historyHash !== state.historyHash || !validId(request.childId) || request.childId === request.sessionId || pathKey(sourcePath) === pathKey(targetPath)) throw new Error('会话或交接目标已变化，请重新确认。');
     if (observation.events.length > 20000 || Buffer.byteLength(JSON.stringify(observation.events)) > 8 * 1024 * 1024) throw new Error('会话历史超过安全交接上限，请先压缩上下文。');
@@ -115,8 +103,9 @@ export async function sessionControl(ctx, operation, request) {
     const preset = sourceAgent ? ctx.agentPresets.composedPreset(sourceAgent.ctx)
       : observation.projections?.values?.agentPreset || observation.header.agentPreset;
     if (typeof preset !== 'string' || !preset) throw new Error('源会话的 Agent 预设尚不可确认。');
-    const handle = await ctx.agents.create({ sessionId: request.childId, seed: observation.events, meta: {
-      cwd: targetPath, parentSession: request.sessionId, seedLength: observation.events.length,
+    const handle = await ctx.agents.create({ sessionId: request.childId, seed: observation.events,
+      inheritedEventCount: observation.events.length, meta: {
+      cwd: targetPath, parentSession: request.sessionId, isSeeded: true,
       agentPreset: preset
     }, agentOptions: ctx.agentDefaultModel.currentSelection(),
     setup: (agentCtx) => sourceAgent ? void ctx.agentPresets.composeFrom(agentCtx, sourceAgent.ctx) : ctx.agentPresets.mount(agentCtx, preset).then(() => {}) });
@@ -129,7 +118,7 @@ export async function sessionControl(ctx, operation, request) {
     // Public Session.create appends one empty end-seed boundary when needed.
     // Validate the exact inherited prefix, metadata AND the allowed boundary.
     if (pathKey(verified.meta.cwd) !== pathKey(targetPath) || verified.meta.parentSession !== request.sessionId
-      || verified.meta.seedLength !== observation.events.length || digest(inherited) !== state.historyHash
+      || verified.meta.isSeeded !== true || verified.inheritedEventCount !== observation.events.length || digest(inherited) !== state.historyHash
       || appended.length > 1 || appended.some((event) => event.type !== 'session/end-seed' || Object.keys(event.data).length)) throw new Error('交接持久化校验失败；原会话和目标目录均保留。');
     return { ...state, sessionId: child.id, sourceSessionId: request.sessionId, workspacePath: targetPath, workspaceId: workspace.id, inheritedEvents: observation.events.length };
   } finally { observation[Symbol.dispose](); }
