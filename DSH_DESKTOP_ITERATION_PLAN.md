@@ -8,7 +8,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：按用户既有“新版本覆盖旧版、迭代版作为 Latest”授权推进打包、验证、覆盖及 Pre-release 发布；遇到新的风险或范围变化再请求指令。Stable 不按日程自动晋升，只有明确“更新 Stable”命令后才更新。
-> 执行状态：V1.1.9 验收中；本轮不自动继续 V1.1.10。Stable 保持 V1.1.0。
+> 执行状态：V1.1.9 已安装 Latest，源码、包内容和安装态验收通过，GitHub 草稿资产上传中；本轮不自动继续 V1.1.10。Stable 保持 V1.1.0。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
