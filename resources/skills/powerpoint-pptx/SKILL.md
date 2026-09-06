@@ -4,7 +4,7 @@ description: Create, edit, inspect, and validate editable PowerPoint PPTX presen
 user-invocable: true
 disable-model-invocation: false
 metadata:
-  version: 0.5.22
+  version: 1.1.9
 ---
 
 # PowerPoint PPTX
@@ -108,6 +108,9 @@ Replacement applies only to complete individual slide or speaker-note text runs.
 Inspection reports slides, editable shapes/text runs/tables/charts, images, notes, masters, layouts, embedded workbooks, external relationships, macros, OLE objects, and ActiveX parts. `--strict` fails if external relationships, macros, OLE/ActiveX, missing master/layout/notes structure, or unsupported active content is present.
 
 ## Safety and limits
+
+- V1.1.9 uses the same bounded ZIP and namespace-aware XML safety checks as Word/Excel, including encoded external targets and the contents of embedded chart workbooks. Unsupported active content fails before output publication.
+- Report `delivery.path`, `delivery.sha256`, `delivery.overwritten` and `delivery.rollback` path/hash. A receipt describes the checked disk file; recheck after human edits. `visualValidation: not-performed` does not certify slide rendering. Retain verified rollback copies for user-directed recovery.
 
 - Every spec, image, input, output, and rollback file stays inside the active workspace; links, junctions, traversal, and remote paths are rejected.
 - Creation supports at most 40 slides, 80 elements per slide, 1,000 elements total, 20 images/32 MiB image data, 20 charts, 30 categories per chart, and 6 series per chart.

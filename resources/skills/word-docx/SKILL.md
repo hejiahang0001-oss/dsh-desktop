@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: false
 metadata:
   owner: DSH Desktop
-  version: 0.5.20
+  version: 1.1.9
 ---
 
 # DSH Desktop Word DOCX
@@ -17,7 +17,7 @@ metadata:
 
 - `create`：根据 JSON 规格生成可编辑 DOCX，支持标题、副标题、1–3 级标题、段落、项目符号、编号、表格、PNG/JPEG 图片、分页、页眉和页脚。
 - `replace-text`：对已有 DOCX 的单个 Word 文本节点做精确替换；若文本被 Word 拆成多个格式片段，必须向用户说明本版本不会跨片段猜测替换。
-- `inspect`：在交付前检查 DOCX ZIP、必需 OOXML 条目、段落和表格结构。
+- `inspect --strict`：交付前检查 ZIP/OOXML、段落和表格，拒绝宏、外部关系、DTD/实体、OLE/ActiveX、活动内容和不支持的字段指令。创建与替换也自动执行同一严格检查。
 - 所有输入、规格和输出都必须在当前工作区内；工具拒绝路径穿越、符号链接/重解析点、超限 JSON、超限 DOCX、ZIP 越界和不支持的压缩方法。
 - 图片只从当前工作区读取真实 PNG/JPEG；单图小于 12 MiB、总计小于 32 MiB、最多 24 张，不接受远程 URL、SVG、伪装格式或链接路径。
 - 默认不覆盖已有输出；只有用户明确要求覆盖，或修改操作明确把输出指向原文件时，才使用 `--overwrite`。覆盖会保留同目录 `.dsh-backup-*` 副本。
@@ -35,7 +35,7 @@ metadata:
 ```
 
 ```powershell
-& $env:DSH_DESKTOP_NODE $env:DSH_DESKTOP_DOCX_TOOL inspect --workspace $env:DSH_CWD --input '<工作区内输出.docx>'
+& $env:DSH_DESKTOP_NODE $env:DSH_DESKTOP_DOCX_TOOL inspect --workspace $env:DSH_CWD --input '<工作区内输出.docx>' --strict
 ```
 
 路径参数必须作为独立参数传递并加引号，不拼接成二次执行的命令字符串。
@@ -88,10 +88,11 @@ metadata:
 
 ## 必做验证
 
-1. 先运行 `inspect`，要求返回 `ok: true`、`valid: true`，并核对 `paragraphs`、`tables`、`images` 与预期一致。
+1. 先运行 `inspect --strict`，要求返回 `ok: true`、`valid: true`、`safety.passed: true`，并核对 `paragraphs`、`tables`、`images` 与预期一致。
 2. 如果本机安装了 Microsoft Word，可用 Word 打开交付文件进行分页、表格、页眉页脚的视觉检查；不要让 Word 自动覆盖源文件。
 3. 若当前环境无法做视觉渲染，必须明确写“结构验证已通过，未完成视觉渲染”，不能把结构检查说成完整视觉验收。
-4. 最终回复给出 DOCX 的绝对路径、是否覆盖、备份路径（若有）、结构检查结果和视觉检查状态。
+4. 最终回复给出 DOCX 路径、`delivery.sha256`、是否覆盖、`delivery.rollback` 的路径和摘要（若有）、结构检查与视觉检查状态。交付收据只证明检查时的磁盘文件；人工修改后须重新检查。
+5. `delivery.visualValidation: not-performed` 不代表视觉验收通过；不把结构/安全检查描述成排版检查。回退副本用于用户核验恢复，不自动覆盖当前文件。
 
 ## 失败处理
 

@@ -129,7 +129,7 @@ const createFixture = async (context, { generatedResources = false } = {}) => {
       }
     };
   }
-  return { root, packagedRoot, asarPath, generatedResourcePolicy };
+  return { root, app, packagedRoot, asarPath, generatedResourcePolicy };
 };
 
 const inspectFixture = (fixture, overrides = {}) => inspectPackagedBuild({
@@ -178,6 +178,20 @@ test('package evidence verifies electron-builder generated dist resources and fi
   const packEvidence = await inspectFixture(fixture, { generatedResourcePolicy: fixture.generatedResourcePolicy });
   assert.equal(packEvidence.accepted, true);
   assert.notEqual(packEvidence.fingerprint, evidence.fingerprint);
+});
+
+test('dependency manifests tolerate reviewed builder metadata removal but reject runtime version changes', async (context) => {
+  const fixture = await createFixture(context);
+  const relative = path.join('node_modules', 'fixture', 'package.json');
+  const manifest = { name: 'fixture', version: '1.0.0', main: 'index.js', bugs: { url: 'https://example.invalid/issues' }, keywords: ['fixture'], scripts: { test: 'node test.js' } };
+  await write(path.join(fixture.root, relative), JSON.stringify(manifest));
+  const packed = { name: manifest.name, version: manifest.version, main: manifest.main };
+  await write(path.join(fixture.app, relative), JSON.stringify(packed));
+  await createPackage(fixture.app, fixture.asarPath);
+  assert.equal((await inspectFixture(fixture)).accepted, true);
+  await write(path.join(fixture.app, relative), JSON.stringify({ ...packed, version: '2.0.0' }));
+  await createPackage(fixture.app, fixture.asarPath);
+  assert.equal((await inspectFixture(fixture)).accepted, false);
 });
 
 test('package evidence rejects altered generated dist metadata and elevate binaries', async (context) => {

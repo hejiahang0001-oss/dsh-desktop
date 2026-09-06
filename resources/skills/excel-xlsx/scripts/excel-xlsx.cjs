@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { createZip, readZip, xmlEscape } = require('../../word-docx/scripts/word-docx.cjs');
+const { inspectPackageSafety, assertSafeInspection, assertWorkspacePath, deliveryReceipt } = require('../../word-docx/scripts/ooxml-safety.cjs');
 
 const MAX_SPEC_BYTES = 4 * 1024 * 1024;
 const MAX_CSV_BYTES = 8 * 1024 * 1024;
@@ -84,6 +85,7 @@ const resolveWorkspace = (value) => path.resolve(value || process.env.DSH_CWD ||
 const resolveWorkspacePath = (workspace, candidate, label, extension) => {
   if (typeof candidate !== 'string' || candidate.trim() === '') throw new ExcelXlsxError('invalid-path', `${label} 不能为空。`);
   const resolved = path.resolve(workspace, candidate);
+  try { assertWorkspacePath(workspace, resolved); } catch (error) { throw new ExcelXlsxError(error.code, error.message); }
   if (!isWithin(workspace, resolved)) throw new ExcelXlsxError('outside-workspace', `${label} 必须位于当前工作区内。`);
   if (extension && path.extname(resolved).toLowerCase() !== extension) throw new ExcelXlsxError('invalid-path', `${label} 必须使用 ${extension} 扩展名。`);
   return resolved;
@@ -463,16 +465,25 @@ const inspectEntries = (entries) => {
   const connections = entries.has('xl/connections.xml') ? 1 : 0;
   const queryTables = [...entries.keys()].filter((name) => name.startsWith('xl/queryTables/')).length;
   const macros = [...entries.keys()].filter((name) => /vbaProject\.bin$/i.test(name)).length;
-  return { entryCount: entries.size, sheetCount: sheets.length, cells, formulas, formulaErrors, riskyFormulas, unsupportedFormulaStructures, filters, frozenPanes, externalLinks, connections, queryTables, macros, sheets: details };
+  const safety = inspectPackageSafety(entries, { readZip, inspectSpreadsheetNode: (node) => {
+    if (node.localName === 'f') {
+      if (['shared', 'array', 'dataTable'].includes(node.getAttribute('t'))) throw new Error('unsupported formula structure');
+      normalizeFormula(node.textContent, 'existing formula');
+    }
+    if (node.localName === 'c' && node.getAttribute('t') === 'e') throw new Error('formula error');
+  } });
+  return { safety, entryCount: entries.size, sheetCount: sheets.length, cells, formulas, formulaErrors, riskyFormulas, unsupportedFormulaStructures, filters, frozenPanes, externalLinks, connections, queryTables, macros, sheets: details };
 };
 
 const assertStrictInspection = (inspection) => {
+  assertSafeInspection(inspection, ExcelXlsxError);
   if (inspection.formulaErrors || inspection.riskyFormulas || inspection.unsupportedFormulaStructures || inspection.externalLinks || inspection.connections || inspection.queryTables || inspection.macros) {
     throw new ExcelXlsxError('strict-validation-failed', `严格检查失败：公式错误 ${inspection.formulaErrors}，风险公式 ${inspection.riskyFormulas}，不支持的公式结构 ${inspection.unsupportedFormulaStructures}，外部链接 ${inspection.externalLinks}，连接 ${inspection.connections}，查询表 ${inspection.queryTables}，宏 ${inspection.macros}。`);
   }
 };
 
 const atomicWrite = async (outputPath, buffer, { overwrite = false } = {}) => {
+  assertStrictInspection(inspectEntries(readWorkbookZip(buffer)));
   await fsp.mkdir(path.dirname(outputPath), { recursive: true });
   let existed = false;
   try {
@@ -493,11 +504,11 @@ const atomicWrite = async (outputPath, buffer, { overwrite = false } = {}) => {
   try {
     await fsp.writeFile(temporary, buffer, { flag: 'wx' });
     assertStrictInspection(inspectEntries(readWorkbookZip(await fsp.readFile(temporary))));
-    if (process.platform === 'win32' && existed) await fsp.rm(outputPath);
-    await fsp.rename(temporary, outputPath);
+    if (existed) await fsp.rename(temporary, outputPath);
+    else { await fsp.link(temporary, outputPath); await fsp.unlink(temporary); }
   } catch (error) {
     await fsp.rm(temporary, { force: true }).catch(() => {});
-    if (backup && !fs.existsSync(outputPath)) await fsp.copyFile(backup, outputPath).catch(() => {});
+    if (backup && !fs.existsSync(outputPath)) await fsp.copyFile(backup, outputPath, fs.constants.COPYFILE_EXCL).catch(() => {});
     throw error;
   }
   return backup;
@@ -512,7 +523,7 @@ const createWorkbook = async ({ workspace, specPath, outputPath, overwrite = fal
   const spec = normalizeSpec(await readBoundedJson(specFile));
   const buffer = createZip(workbookEntries(spec));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'create', output, bytes: buffer.length, backup, reconciliations: spec.reconciliations, ...inspectEntries(readWorkbookZip(buffer)) };
+  return { operation: 'create', output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), reconciliations: spec.reconciliations, ...inspectEntries(readWorkbookZip(buffer)) };
 };
 
 const parseCsv = (text) => {
@@ -574,7 +585,7 @@ const importCsv = async ({ workspace, inputPath, outputPath, sheetName = 'Data',
   });
   const buffer = createZip(workbookEntries(spec));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'import-csv', input, output, bytes: buffer.length, backup, importedRows: rows.length, importedColumns: widthCount, inferredNumbers: inferNumbers, ...inspectEntries(readWorkbookZip(buffer)) };
+  return { operation: 'import-csv', input, output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), importedRows: rows.length, importedColumns: widthCount, inferredNumbers: inferNumbers, ...inspectEntries(readWorkbookZip(buffer)) };
 };
 
 const normalizeUpdateCell = (source, label) => {
@@ -669,7 +680,7 @@ const setCells = async ({ workspace, inputPath, specPath, outputPath, overwrite 
   ));
   const buffer = createZip([...entries].map(([name, data]) => ({ name, data })));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'set-cells', input, output, bytes: buffer.length, backup, updates: updates.length, ...inspectEntries(readWorkbookZip(buffer)) };
+  return { operation: 'set-cells', input, output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), updates: updates.length, ...inspectEntries(readWorkbookZip(buffer)) };
 };
 
 const inspectWorkbook = async ({ workspace, inputPath, strict = false }) => {
@@ -726,6 +737,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertStrictInspection,
   ExcelXlsxError,
   MAX_COLUMNS,
   MAX_ROWS,

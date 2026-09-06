@@ -2,6 +2,20 @@
 
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
+## V1.1.9 Office validation and delivery receipts
+
+The complete source suite passes **545/545**, with zero failures or skips (219.974 seconds). After the final PDF smoke-host correction, the affected release, package-evidence and governance gates pass **32/32**. The production dependency audit reports zero known vulnerabilities. Evidence is under `artifacts/v1.1.9-release-candidate`.
+
+The packaged standalone Office CLI passes DOCX table/image generation, XLSX formulas/reconciliation and editable PPT chart/notes, strict inspection and overwrite-backup SHA-256 checks. Its environment contains no Git, global Node, NODE_PATH or inherited API Key. A real DeepSeek turn correctly reads generated XLSX and DOCX through the software-managed encrypted Key; the source credential remains unchanged, with no plaintext found in its vault/log. This is generated acceptance data, not user business data.
+
+The three-page Chinese PDF source smoke passes with embedded Unicode fonts, readable Chinese, page-2 table and distinct page-3 content confirmed in native window captures. Early candidate capture attempts were rejected: changing a live embed source unloaded the PDF plugin, and capturePage did not capture its native surface. Fresh host-page navigation and native window capture correct the test; no blank capture is accepted. Final package/installation/publication evidence follows after execution.
+
+The receipt is a point-in-time filesystem observation, not durable recovery, a malware scanner or visual-layout certification. Supported local-filesystem writes use exclusive creation or atomic replacement; concurrent filesystem activity is not kernel-isolated. Microsoft Office visual layout, a second computer, 24-hour aging, Portable performance improvement and persistent recovery UI are not claimed.
+
+### V1.1.8 publication follow-up
+
+The former local candidate was published on 2026-09-05 as a non-draft Pre-release targeting `4602aca7fcf76cf6e169dd73bd50201ed2161118`. All four assets reached `uploaded`; exact remote sizes, SHA-256 values and anonymous full re-downloads matched. The evidence is `artifacts/v1.1.8-release-candidate/github-publication-verification.json`. Stable remains V1.1.0. Historical local-candidate statements below describe the earlier checkpoint.
+
 ## V1.1.8 Wiki productization local-candidate evidence
 
 - Closure date: 2026-09-05. Desktop V1.1.8 pins Harness `dsh-v0.1.2-rc.1` / `a66e4702047846cdaa10c66c9d3df3951f5ea70d`. Official Queue/Steer/Stop and software-managed Key priority retain their existing ownership.

@@ -159,15 +159,15 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.equal(report.pnpmRuntime.wrapperValid, false);
 });
 
-test('package layout binds the inspected app.asar to the V1.1.8 desktop manifest', async (context) => {
+test('package layout binds the inspected app.asar to the V1.1.9 desktop manifest', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-app-version-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const appRoot = path.join(root, 'app-source');
-  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.8' }));
+  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.9' }));
   fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   const ready = await inspectPackageLayout(root);
-  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.8' });
+  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.9' });
   assert.equal(ready.requiredPackagedAppReady, true);
 
   writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.5' }));
@@ -255,9 +255,11 @@ test('package layout requires the trusted Word skill and fixed offline DOCX tool
   });
 
   writeFile(path.join(skillRoot, 'scripts', 'word-docx.cjs'), '// fixed offline tool\n');
+  assert.equal((await inspectPackageLayout(root)).requiredWordSkillFilesReady, false);
+  writeFile(path.join(skillRoot, 'scripts', 'ooxml-safety.cjs'), '// shared Office safety core\n');
   const ready = await inspectPackageLayout(root);
   assert.equal(ready.requiredWordSkillFilesReady, true);
-  assert.equal(ready.wordSkillRuntime.files, 2);
+  assert.equal(ready.wordSkillRuntime.files, 3);
 });
 
 test('package layout requires the trusted Excel skill and fixed offline XLSX tool', async (context) => {
