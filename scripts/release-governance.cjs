@@ -34,7 +34,8 @@ const REQUIRED_PNPM_FILES = Object.freeze([
 ]);
 const REQUIRED_WORD_SKILL_FILES = Object.freeze([
   'SKILL.md',
-  'scripts/word-docx.cjs'
+  'scripts/word-docx.cjs',
+  'scripts/ooxml-safety.cjs'
 ]);
 const REQUIRED_EXCEL_SKILL_FILES = Object.freeze([
   'SKILL.md',
@@ -56,7 +57,7 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.8';
+const REQUIRED_DESKTOP_VERSION = '1.1.9';
 const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
 const REQUIRED_HARNESS_TAG = 'dsh-v0.1.2-rc.1';
 const REQUIRED_HARNESS_VERSION = '0.1.2-rc.1';
@@ -88,7 +89,7 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', '165837b5a2670868ceedc7e19f24e2e4d08a4002bd27067283b85a5677d6b534']
+  ['THIRD_PARTY_LICENSES.md', 'e9bc69b7ea75ed77d1bf00e854636330d44b957eb3f5600828a2fc0c0a6e7a63']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');

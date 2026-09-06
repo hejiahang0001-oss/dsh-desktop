@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { inspectPackageSafety, assertSafeInspection, assertWorkspacePath, deliveryReceipt } = require('../../word-docx/scripts/ooxml-safety.cjs');
 const {
   createZip,
   imageMetadata,
@@ -12,6 +13,8 @@ const {
 } = require('../../word-docx/scripts/word-docx.cjs');
 const {
   normalizeSpec: normalizeWorkbookSpec,
+  inspectEntries: inspectWorkbookEntries,
+  assertStrictInspection: assertWorkbookStrictInspection,
   workbookEntries
 } = require('../../excel-xlsx/scripts/excel-xlsx.cjs');
 
@@ -94,6 +97,7 @@ const resolveWorkspace = (value) => path.resolve(value || process.env.DSH_CWD ||
 const resolveWorkspacePath = (workspace, candidate, label, extension) => {
   if (typeof candidate !== 'string' || candidate.trim() === '') throw new PowerPointPptxError('invalid-path', `${label} 不能为空。`);
   const resolved = path.resolve(workspace, candidate);
+  try { assertWorkspacePath(workspace, resolved); } catch (error) { throw new PowerPointPptxError(error.code, error.message); }
   if (!isWithin(workspace, resolved)) throw new PowerPointPptxError('outside-workspace', `${label} 必须位于当前工作区内。`);
   if (extension && path.extname(resolved).toLowerCase() !== extension) throw new PowerPointPptxError('invalid-path', `${label} 必须使用 ${extension} 扩展名。`);
   return resolved;
@@ -533,10 +537,11 @@ const inspectEntries = (entries) => {
   const oleObjects = [...entries.keys()].filter((name) => /(^|\/)oleObjects\//i.test(name)).length;
   const activeX = [...entries.keys()].filter((name) => /(^|\/)activeX\//i.test(name)).length;
   const externalLinks = [...entries.keys()].filter((name) => /(^|\/)externalLinks\//i.test(name)).length;
-  return { valid: true, entries: entries.size, slides: slideNames.length, shapes, textRuns, textCharacters, tables, charts, images, notes, masters, layouts, notesMasters, embeddedWorkbooks, externalRelationships, externalLinks, macros, oleObjects, activeX };
+  return { valid: true, safety: inspectPackageSafety(entries, { readZip, inspectEmbeddedWorkbook: (embedded) => assertWorkbookStrictInspection(inspectWorkbookEntries(embedded)) }), entries: entries.size, slides: slideNames.length, shapes, textRuns, textCharacters, tables, charts, images, notes, masters, layouts, notesMasters, embeddedWorkbooks, externalRelationships, externalLinks, macros, oleObjects, activeX };
 };
 
 const assertStrictInspection = (inspection) => {
+  assertSafeInspection(inspection, PowerPointPptxError);
   if (inspection.masters < 1 || inspection.layouts < 2 || inspection.notesMasters < 1 || inspection.notes !== inspection.slides || inspection.charts !== inspection.embeddedWorkbooks || inspection.externalRelationships || inspection.externalLinks || inspection.macros || inspection.oleObjects || inspection.activeX) {
     throw new PowerPointPptxError('strict-validation-failed', `严格检查失败：母版 ${inspection.masters}，版式 ${inspection.layouts}，备注母版 ${inspection.notesMasters}，备注 ${inspection.notes}/${inspection.slides}，图表/数据 ${inspection.charts}/${inspection.embeddedWorkbooks}，外部关系 ${inspection.externalRelationships}，外链 ${inspection.externalLinks}，宏 ${inspection.macros}，OLE ${inspection.oleObjects}，ActiveX ${inspection.activeX}。`);
   }
@@ -574,6 +579,7 @@ const replaceTextInEntries = (entries, rawSpec) => {
 };
 
 const atomicWrite = async (outputPath, buffer, { overwrite = false } = {}) => {
+  assertStrictInspection(inspectEntries(readPresentationZip(buffer)));
   await fsp.mkdir(path.dirname(outputPath), { recursive: true });
   let existed = false;
   try {
@@ -594,11 +600,11 @@ const atomicWrite = async (outputPath, buffer, { overwrite = false } = {}) => {
   try {
     await fsp.writeFile(temporary, buffer, { flag: 'wx' });
     assertStrictInspection(inspectEntries(readPresentationZip(await fsp.readFile(temporary))));
-    if (process.platform === 'win32' && existed) await fsp.rm(outputPath);
-    await fsp.rename(temporary, outputPath);
+    if (existed) await fsp.rename(temporary, outputPath);
+    else { await fsp.link(temporary, outputPath); await fsp.unlink(temporary); }
   } catch (error) {
     await fsp.rm(temporary, { force: true }).catch(() => {});
-    if (backup && !fs.existsSync(outputPath)) await fsp.copyFile(backup, outputPath).catch(() => {});
+    if (backup && !fs.existsSync(outputPath)) await fsp.copyFile(backup, outputPath, fs.constants.COPYFILE_EXCL).catch(() => {});
     throw error;
   }
   return backup;
@@ -612,7 +618,7 @@ const createPresentation = async ({ workspace, specPath, outputPath, overwrite =
   const materialized = await materializeImages(root, normalizeSpec(await readBoundedJson(specFile)));
   const buffer = createZip(presentationEntries(materialized));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'create', output, bytes: buffer.length, backup, ...inspectEntries(readPresentationZip(buffer)) };
+  return { operation: 'create', output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), ...inspectEntries(readPresentationZip(buffer)) };
 };
 
 const replacePresentationText = async ({ workspace, inputPath, specPath, outputPath, overwrite = false }) => {
@@ -628,7 +634,7 @@ const replacePresentationText = async ({ workspace, inputPath, specPath, outputP
   const replacement = replaceTextInEntries(entries, await readBoundedJson(specFile));
   const buffer = createZip([...entries].map(([name, data]) => ({ name, data })));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'replace-text', input, output, bytes: buffer.length, backup, replacements: replacement.counts, ...inspectEntries(readPresentationZip(buffer)) };
+  return { operation: 'replace-text', input, output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), replacements: replacement.counts, ...inspectEntries(readPresentationZip(buffer)) };
 };
 
 const inspectPresentation = async ({ workspace, inputPath, strict = false }) => {

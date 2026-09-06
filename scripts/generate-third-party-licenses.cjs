@@ -5,6 +5,7 @@ const root = path.resolve(__dirname, '..');
 const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
 const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.2-rc.1', 'node_modules');
 const directPackageRoots = [
+  path.join(root, 'node_modules', '@xmldom', 'xmldom'),
   path.join(root, 'node_modules', 'pnpm'),
   path.join(root, 'node_modules', 'node-pty'),
   path.join(root, 'node_modules', '@xterm', 'xterm'),
@@ -54,7 +55,7 @@ const packages = [...new Map(packageRows.map((entry) => [`${entry.name}@${entry.
   .sort((left, right) => left.license.localeCompare(right.license, 'en')
     || left.name.localeCompare(right.name, 'en')
     || left.version.localeCompare(right.version, 'en'));
-if (packages.length !== 530) throw new Error(`Expected 530 packaged JavaScript packages, found ${packages.length}.`);
+if (packages.length !== 531) throw new Error(`Expected 531 packaged JavaScript packages, found ${packages.length}.`);
 
 const groups = new Map();
 for (const entry of packages) {

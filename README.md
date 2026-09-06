@@ -24,11 +24,11 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; public V1.1.1 Pre-release pins alpha.2; the unpublished local V1.1.8 candidate pins `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; V1.1.8 and the V1.1.9 iteration pin `dsh-v0.1.2-rc.1` at `a66e4702047846cdaa10c66c9d3df3951f5ea70d`.
 
 ## Why DSH Desktop
 
-V1.1.8 is an unpublished, unsigned local package candidate (`DSH-Desktop-Setup-1.1.8.exe`) that retains Harness rc.1 and productizes the local Wiki: guided setup, health and provenance, release knowledge and protected recovery. See the [release notes](docs/RELEASE_NOTES_v1.1.8.md) and [validation evidence](docs/VALIDATION.md) for the completed local checks and known limits.
+V1.1.9 (`DSH-Desktop-Setup-1.1.9.exe`) strengthens the existing Word, Excel and PowerPoint tools with shared package/XML safety checks and verified on-disk delivery receipts. It preserves the Wiki workflow and official Harness chat controls. See the [release notes](docs/RELEASE_NOTES_v1.1.9.md) and [validation evidence](docs/VALIDATION.md) for current acceptance and publication status.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:
 
@@ -83,7 +83,7 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.8 unpublished local candidate** closes the Wiki productization slice. The final source suite passes 536/536 and the production audit reports 0 known vulnerabilities. Package/source binding, packaged Wiki, unpacked lifecycle and safe-exit checks pass. The installer remains unsigned, with `automaticUpdateReady=false`; Portable cold launch through wrapper exit measured about 3 minutes 56 seconds. No installation or publication occurred. See the [release notes](docs/RELEASE_NOTES_v1.1.8.md), [validation record](docs/VALIDATION.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
+**V1.1.9 Office validation and delivery receipts** adds bounded ZIP and namespace-aware XML checks, embedded chart-workbook validation, and output/backup SHA-256 receipts. A receipt explicitly distinguishes structural validation from visual review; it is not a persistent recovery UI. V1.1.8 was published as a Pre-release on 2026-09-05 with all four assets verified. The installer remains unsigned, with `automaticUpdateReady=false`; Portable cold-start performance remains a known limitation. See the [release notes](docs/RELEASE_NOTES_v1.1.9.md), [validation record](docs/VALIDATION.md), and [rc.1 compatibility map](docs/HARNESS_UPSTREAM_v0.1.2-rc.1.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
@@ -172,7 +172,7 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 
 发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升；V1.0.5 作为上一版本保留，不同时晋升。后续按计划迭代的版本作为产品 Latest，在验证通过且覆盖动作前获得维护者即时明确确认后才覆盖当前电脑中的旧版；通过全部发布安全门禁并另行确认后，才以 GitHub Pre-release 发布。Stable 仍只有在维护者明确下达“更新 Stable”命令后才晋升，Latest 的日常推进不会自动替换 Stable。Stable 不代表安装器已签名或已完成 24 小时老化，已知边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
-当前公开 Pre-release 仍为 [V1.1.1](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.1)，Stable 为 V1.1.0。本地 V1.1.8 候选固定 Harness `0.1.2-rc.1`，完成 Wiki 首次引导、健康/来源状态、六页版本知识和受保护恢复；完整源码 536/536、生产依赖审计、包内容与打包态关键验证通过。Portable 基础启动成功，但本机首开到退出约 3 分 56 秒，未验证其双实例生命周期。本轮止于 V1.1.8，没有覆盖安装或 GitHub 发布。安装器仍未签名；详细证据、哈希和未验证范围见[验证记录](docs/VALIDATION.md)。
+本轮 V1.1.9 加强 Word、Excel、PPT 的共同安全检查，并返回磁盘文件及覆盖备份的 SHA-256 收据；不把结构检查说成排版验收，也不新建第二套文件卡片。前一版 [V1.1.8](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.8) 已于 2026-09-05 发布并完成四项资产核验。Stable 保持 V1.1.0；Harness 保持 `0.1.2-rc.1`，最新 alpha.1 的会话格式变更另行适配。本版安装、发布状态及已验证范围见[验证记录](docs/VALIDATION.md)。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；

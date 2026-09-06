@@ -132,6 +132,8 @@ const normalizeArchivedDependencyManifest = (bytes) => {
   const manifest = JSON.parse(bytes.toString('utf8'));
   delete manifest.scripts;
   delete manifest.keywords;
+  // electron-builder 26.11.1 removes npm issue-tracker metadata, not runtime fields.
+  delete manifest.bugs;
   return Buffer.from(JSON.stringify(canonicalize(manifest)), 'utf8');
 };
 

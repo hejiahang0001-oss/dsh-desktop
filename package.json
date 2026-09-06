@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -104,6 +104,9 @@
       "node_modules/@xterm/xterm/LICENSE",
       "node_modules/@xterm/addon-fit/lib/addon-fit.js",
       "node_modules/@xterm/addon-fit/LICENSE",
+      "node_modules/@xmldom/xmldom/lib/**/*",
+      "node_modules/@xmldom/xmldom/LICENSE",
+      "node_modules/@xmldom/xmldom/SECURITY.md",
       "!node_modules/node-pty/**/*",
       "!node_modules/node-addon-api/**/*",
       "!node_modules/@xterm/xterm/src/**/*",
@@ -208,6 +211,11 @@
         ]
       },
       {
+        "from": "node_modules/@xmldom/xmldom",
+        "to": "skills/node_modules/@xmldom/xmldom",
+        "filter": ["lib/**/*", "package.json", "LICENSE"]
+      },
+      {
         "from": "LICENSE",
         "to": "legal/LICENSE.txt"
       },
@@ -259,6 +267,7 @@
     }
   },
   "dependencies": {
+    "@xmldom/xmldom": "0.9.12",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "node-pty": "1.2.0-beta.15"

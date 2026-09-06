@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const zlib = require('node:zlib');
+const { validPartName, inspectPackageSafety, assertSafeInspection, assertWorkspacePath, deliveryReceipt } = require('./ooxml-safety.cjs');
 
 const MAX_SPEC_BYTES = 2 * 1024 * 1024;
 const MAX_DOCX_BYTES = 64 * 1024 * 1024;
@@ -79,6 +80,7 @@ const resolveWorkspacePath = (workspace, candidate, label, extension = '') => {
     throw new WordDocxError('invalid-path', `${label} 不能为空。`);
   }
   const resolved = path.resolve(workspace, candidate);
+  try { assertWorkspacePath(workspace, resolved); } catch (error) { throw new WordDocxError(error.code, error.message); }
   if (!isWithin(workspace, resolved)) throw new WordDocxError('outside-workspace', `${label} 必须位于当前工作区内。`);
   if (extension && path.extname(resolved).toLowerCase() !== extension) {
     throw new WordDocxError('invalid-path', `${label} 必须使用 ${extension} 扩展名。`);
@@ -148,10 +150,10 @@ const createZip = (entries) => {
   const names = new Set();
   for (const entry of entries) {
     const name = String(entry.name || '').replaceAll('\\', '/');
-    if (!name || name.startsWith('/') || name.includes('../') || names.has(name)) {
+    if (!validPartName(name) || names.has(name.toLowerCase())) {
       throw new WordDocxError('invalid-archive', `DOCX ZIP 条目名称无效：${name}`);
     }
-    names.add(name);
+    names.add(name.toLowerCase());
     const raw = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data ?? ''), 'utf8');
     if (raw.length > MAX_ENTRY_BYTES) throw new WordDocxError('invalid-archive', `DOCX ZIP 条目过大：${name}`);
     const compressed = zlib.deflateRawSync(raw, { level: 9 });
@@ -214,12 +216,17 @@ const findEndOfCentralDirectory = (buffer) => {
 };
 
 const readZip = (buffer) => {
-  if (!Buffer.isBuffer(buffer) || buffer.length <= 0 || buffer.length > MAX_DOCX_BYTES) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 22 || buffer.length > MAX_DOCX_BYTES) {
     throw new WordDocxError('invalid-archive', `DOCX 必须小于 ${MAX_DOCX_BYTES} 字节。`);
   }
   const endOffset = findEndOfCentralDirectory(buffer);
   const count = buffer.readUInt16LE(endOffset + 10);
   const centralOffset = buffer.readUInt32LE(endOffset + 16);
+  if (buffer.readUInt16LE(endOffset + 4) !== 0 || buffer.readUInt16LE(endOffset + 6) !== 0
+    || buffer.readUInt16LE(endOffset + 8) !== count || centralOffset + buffer.readUInt32LE(endOffset + 12) !== endOffset
+    || endOffset + 22 + buffer.readUInt16LE(endOffset + 20) !== buffer.length) {
+    throw new WordDocxError('invalid-archive', 'Office ZIP 分卷、目录长度或尾部身份无效。');
+  }
   if (count === 0 || count > MAX_ENTRIES || centralOffset >= endOffset) {
     throw new WordDocxError('invalid-archive', 'DOCX ZIP 中央目录无效。');
   }
@@ -241,7 +248,10 @@ const readZip = (buffer) => {
     preflightCursor += 46 + nameLength + extraLength + commentLength;
     if (preflightCursor > endOffset) throw new WordDocxError('invalid-archive', 'DOCX ZIP 中央目录条目越界。');
   }
+  if (preflightCursor !== endOffset) throw new WordDocxError('invalid-archive', 'Office ZIP 中央目录条目数量不匹配。');
   const entries = new Map();
+  const aliases = new Set();
+  const ranges = [];
   let cursor = centralOffset;
   for (let index = 0; index < count; index += 1) {
     if (cursor + 46 > endOffset || buffer.readUInt32LE(cursor) !== 0x02014b50) {
@@ -256,8 +266,9 @@ const readZip = (buffer) => {
     const extraLength = buffer.readUInt16LE(cursor + 30);
     const commentLength = buffer.readUInt16LE(cursor + 32);
     const localOffset = buffer.readUInt32LE(cursor + 42);
-    const name = buffer.subarray(cursor + 46, cursor + 46 + nameLength).toString((flags & 0x0800) ? 'utf8' : 'latin1').replaceAll('\\', '/');
-    if (!name || name.startsWith('/') || name.includes('../') || entries.has(name) || rawSize > MAX_ENTRY_BYTES || ![0, 8].includes(method)) {
+    const name = buffer.subarray(cursor + 46, cursor + 46 + nameLength).toString((flags & 0x0800) ? 'utf8' : 'latin1');
+    if (!validPartName(name) || aliases.has(name.toLowerCase()) || rawSize > MAX_ENTRY_BYTES || ![0, 8].includes(method)
+      || (flags & ~0x080e) !== 0 || buffer.readUInt16LE(cursor + 34) !== 0) {
       throw new WordDocxError('invalid-archive', `DOCX ZIP 条目不受支持：${name}`);
     }
     if (localOffset + 30 > centralOffset || buffer.readUInt32LE(localOffset) !== 0x04034b50) {
@@ -266,7 +277,26 @@ const readZip = (buffer) => {
     const localNameLength = buffer.readUInt16LE(localOffset + 26);
     const localExtraLength = buffer.readUInt16LE(localOffset + 28);
     const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+    const localName = buffer.subarray(localOffset + 30, localOffset + 30 + localNameLength);
+    const centralName = buffer.subarray(cursor + 46, cursor + 46 + nameLength);
+    if (!localName.equals(centralName) || buffer.readUInt16LE(localOffset + 6) !== flags
+      || buffer.readUInt16LE(localOffset + 8) !== method
+      || (!(flags & 8) && (buffer.readUInt32LE(localOffset + 14) !== crc
+        || buffer.readUInt32LE(localOffset + 18) !== compressedSize || buffer.readUInt32LE(localOffset + 22) !== rawSize))) {
+      throw new WordDocxError('invalid-archive', 'Office ZIP 本地条目与中央目录不一致或条目重叠。');
+    }
     if (dataOffset + compressedSize > centralOffset) throw new WordDocxError('invalid-archive', `DOCX ZIP 条目越界：${name}`);
+    let entryEnd = dataOffset + compressedSize;
+    if (flags & 8) {
+      let descriptor = entryEnd;
+      if (descriptor + 4 <= centralOffset && buffer.readUInt32LE(descriptor) === 0x08074b50) descriptor += 4;
+      if (descriptor + 12 > centralOffset || buffer.readUInt32LE(descriptor) !== crc
+        || buffer.readUInt32LE(descriptor + 4) !== compressedSize || buffer.readUInt32LE(descriptor + 8) !== rawSize) {
+        throw new WordDocxError('invalid-archive', 'Office ZIP 数据描述符与中央目录不一致。');
+      }
+      entryEnd = descriptor + 12;
+    }
+    if (ranges.some(([start, end]) => localOffset < end && entryEnd > start)) throw new WordDocxError('invalid-archive', 'Office ZIP 条目重叠。');
     const compressed = buffer.subarray(dataOffset, dataOffset + compressedSize);
     let data;
     try {
@@ -276,6 +306,8 @@ const readZip = (buffer) => {
     }
     if (data.length !== rawSize || crc32(data) !== crc) throw new WordDocxError('invalid-archive', `DOCX ZIP 条目校验失败：${name}`);
     entries.set(name, data);
+    aliases.add(name.toLowerCase());
+    ranges.push([localOffset, entryEnd]);
     cursor += 46 + nameLength + extraLength + commentLength;
   }
   return entries;
@@ -482,6 +514,7 @@ const inspectEntries = (entries) => {
   const text = [...documentXml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map((match) => xmlUnescape(match[1])).join('');
   return {
     valid: true,
+    safety: inspectPackageSafety(entries, { readZip }),
     entries: entries.size,
     textCharacters: text.length,
     paragraphs: (documentXml.match(/<w:p(?:\s|>)/g) || []).length,
@@ -525,6 +558,7 @@ const replaceTextInEntries = (entries, rawSpec) => {
 };
 
 const atomicWrite = async (outputPath, buffer, { overwrite = false } = {}) => {
+  assertSafeInspection(inspectEntries(readZip(buffer)), WordDocxError);
   await fsp.mkdir(path.dirname(outputPath), { recursive: true });
   let existed = false;
   try {
@@ -545,12 +579,12 @@ const atomicWrite = async (outputPath, buffer, { overwrite = false } = {}) => {
   try {
     await fsp.writeFile(temporary, buffer, { flag: 'wx' });
     const entries = readZip(await fsp.readFile(temporary));
-    inspectEntries(entries);
-    if (process.platform === 'win32' && existed) await fsp.rm(outputPath);
-    await fsp.rename(temporary, outputPath);
+    assertSafeInspection(inspectEntries(entries), WordDocxError);
+    if (existed) await fsp.rename(temporary, outputPath);
+    else { await fsp.link(temporary, outputPath); await fsp.unlink(temporary); }
   } catch (error) {
     await fsp.rm(temporary, { force: true }).catch(() => {});
-    if (backup && !fs.existsSync(outputPath)) await fsp.copyFile(backup, outputPath).catch(() => {});
+    if (backup && !fs.existsSync(outputPath)) await fsp.copyFile(backup, outputPath, fs.constants.COPYFILE_EXCL).catch(() => {});
     throw error;
   }
   return backup;
@@ -562,7 +596,7 @@ const parseArgs = (args) => {
     const token = args[index];
     if (!token.startsWith('--')) { values._.push(token); continue; }
     const name = token.slice(2);
-    if (name === 'overwrite' || name === 'json') { values[name] = true; continue; }
+    if (name === 'overwrite' || name === 'json' || name === 'strict') { values[name] = true; continue; }
     if (index + 1 >= args.length) throw new WordDocxError('invalid-arguments', `参数 --${name} 缺少值。`);
     values[name] = args[index += 1];
   }
@@ -581,7 +615,7 @@ const createDocument = async ({ workspace, specPath, outputPath, overwrite = fal
   const materialized = await materializeImages(root, normalized);
   const buffer = createZip(buildDocumentEntries(materialized));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'create', output, bytes: buffer.length, backup, ...inspectEntries(readZip(buffer)) };
+  return { operation: 'create', output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), ...inspectEntries(readZip(buffer)) };
 };
 
 const replaceDocumentText = async ({ workspace, inputPath, specPath, outputPath, overwrite = false }) => {
@@ -595,28 +629,30 @@ const replaceDocumentText = async ({ workspace, inputPath, specPath, outputPath,
   const inputInfo = await fsp.stat(input);
   if (!inputInfo.isFile() || inputInfo.size <= 0 || inputInfo.size > MAX_DOCX_BYTES) throw new WordDocxError('invalid-docx', '输入 DOCX 大小无效。');
   const entries = readZip(await fsp.readFile(input));
-  inspectEntries(entries);
+  assertSafeInspection(inspectEntries(entries), WordDocxError);
   const replacement = replaceTextInEntries(entries, await readBoundedJson(spec));
   const buffer = createZip([...entries].map(([name, data]) => ({ name, data })));
   const backup = await atomicWrite(output, buffer, { overwrite });
-  return { operation: 'replace-text', input, output, bytes: buffer.length, backup, replacements: replacement.counts, ...inspectEntries(readZip(buffer)) };
+  return { operation: 'replace-text', input, output, bytes: buffer.length, backup, delivery: await deliveryReceipt(root, output, buffer, backup), replacements: replacement.counts, ...inspectEntries(readZip(buffer)) };
 };
 
-const inspectDocument = async ({ workspace, inputPath }) => {
+const inspectDocument = async ({ workspace, inputPath, strict = false }) => {
   const root = resolveWorkspace(workspace);
   const input = resolveWorkspacePath(root, inputPath, '输入文件', '.docx');
   await assertNoReparsePath(root, input);
   const inputInfo = await fsp.stat(input);
   if (!inputInfo.isFile() || inputInfo.size <= 0 || inputInfo.size > MAX_DOCX_BYTES) throw new WordDocxError('invalid-docx', '输入 DOCX 大小无效。');
   const entries = readZip(await fsp.readFile(input));
-  return { operation: 'inspect', input, bytes: inputInfo.size, ...inspectEntries(entries) };
+  const inspection = inspectEntries(entries);
+  if (strict) assertSafeInspection(inspection, WordDocxError);
+  return { operation: 'inspect', input, bytes: inputInfo.size, ...inspection };
 };
 
 const usage = () => [
   'DSH Desktop Word DOCX Tool',
   'create --spec <spec.json> --output <file.docx> [--workspace <dir>] [--overwrite]',
   'replace-text --input <file.docx> --spec <replacements.json> --output <file.docx> [--workspace <dir>] [--overwrite]',
-  'inspect --input <file.docx> [--workspace <dir>]'
+  'inspect --input <file.docx> [--workspace <dir>] [--strict]'
 ].join('\n');
 
 const main = async (argv = process.argv.slice(2)) => {
@@ -625,7 +661,7 @@ const main = async (argv = process.argv.slice(2)) => {
   let result;
   if (command === 'create') result = await createDocument({ workspace: args.workspace, specPath: args.spec, outputPath: args.output, overwrite: args.overwrite });
   else if (command === 'replace-text') result = await replaceDocumentText({ workspace: args.workspace, inputPath: args.input, specPath: args.spec, outputPath: args.output, overwrite: args.overwrite });
-  else if (command === 'inspect') result = await inspectDocument({ workspace: args.workspace, inputPath: args.input });
+  else if (command === 'inspect') result = await inspectDocument({ workspace: args.workspace, inputPath: args.input, strict: args.strict });
   else throw new WordDocxError('invalid-arguments', usage());
   process.stdout.write(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);
   return result;

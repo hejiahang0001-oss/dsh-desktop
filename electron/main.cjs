@@ -6446,37 +6446,6 @@ const runTraySmoke = async (target) => {
   if (!result.ok) process.exitCode = 1;
 };
 
-const buildPdfSmokeDocument = () => {
-  const content = [
-    'BT',
-    '/F1 22 Tf',
-    '72 712 Td',
-    '(DSH Electron 43 PDF Smoke) Tj',
-    '0 -34 Td',
-    '/F1 13 Tf',
-    '(PDF preview rendered successfully.) Tj',
-    'ET'
-  ].join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-    `<< /Length ${Buffer.byteLength(content, 'ascii')} >>\nstream\n${content}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
-  ];
-  let pdf = '%PDF-1.4\n%DSH\n';
-  const offsets = [0];
-  objects.forEach((body, index) => {
-    offsets.push(Buffer.byteLength(pdf, 'latin1'));
-    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
-  });
-  const xrefOffset = Buffer.byteLength(pdf, 'latin1');
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
-  return Buffer.from(pdf, 'latin1');
-};
-
 const runPdfSmoke = async (target) => {
   const resolvedTarget = path.resolve(target);
   const smokeRoot = path.join(path.dirname(resolvedTarget), 'pdf-smoke-data');
@@ -6484,7 +6453,8 @@ const runPdfSmoke = async (target) => {
   const htmlPath = path.join(smokeRoot, 'preview.html');
   const screenshotPath = `${resolvedTarget}.png`;
   await fsp.mkdir(smokeRoot, { recursive: true });
-  await fsp.writeFile(pdfPath, buildPdfSmokeDocument());
+  const pdfFixture = await require('./pdf-smoke-document.cjs').buildChinesePdfSmoke(BrowserWindow);
+  await fsp.writeFile(pdfPath, pdfFixture.pdf);
   await fsp.writeFile(htmlPath, `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -6552,6 +6522,31 @@ const runPdfSmoke = async (target) => {
     }
     const viewerDarkPixelRatio = pixelCount ? darkPixels / pixelCount : 0;
     await fsp.writeFile(screenshotPath, screenshot.toPNG());
+    const pageScreenshots = [screenshotPath];
+    const pageVisualSignals = [viewerDarkPixelRatio];
+    const previewHtml = await fsp.readFile(htmlPath, 'utf8');
+    for (const page of [2, 3]) {
+      // Changing a live PDF embed's src unloads its plugin in Electron 43.
+      // Navigate a fresh host page so each initial PDF fragment is honored.
+      const pageHtmlPath = path.join(smokeRoot, `preview-page-${page}.html`);
+      await fsp.writeFile(pageHtmlPath, previewHtml.replace('#page=1&amp;', `#page=${page}&amp;`), 'utf8');
+      await smokeWindow.loadFile(pageHtmlPath);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Chromium's PDF plugin is a separate native surface; capturePage can
+      // return the white embed underneath it even when the viewer is visible.
+      const pageSources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1000, height: 780 }, fetchWindowIcons: false });
+      const pageImage = pageSources.find((candidate) => candidate.id === smokeWindow.getMediaSourceId())?.thumbnail;
+      if (!pageImage || pageImage.isEmpty()) throw new Error('pdf-page-window-capture-unavailable');
+      const pageBitmap = pageImage.toBitmap();
+      let pageDarkPixels = 0;
+      for (let offset = 0; offset + 3 < pageBitmap.length; offset += 4) {
+        if (Math.max(pageBitmap[offset], pageBitmap[offset + 1], pageBitmap[offset + 2]) < 96) pageDarkPixels += 1;
+      }
+      pageVisualSignals.push(pageDarkPixels / (pageBitmap.length / 4));
+      const pageScreenshot = `${resolvedTarget}.page-${page}.png`;
+      await fsp.writeFile(pageScreenshot, pageImage.toPNG());
+      pageScreenshots.push(pageScreenshot);
+    }
     result = {
       ok: !renderProcessGone
         && embed.found
@@ -6560,12 +6555,14 @@ const runPdfSmoke = async (target) => {
         && embed.height > 0
         && screenshotSize.width > 0
         && screenshotSize.height > 0
-        && viewerDarkPixelRatio > 0.08,
+        && viewerDarkPixelRatio > 0.08
+        && pageVisualSignals.every((ratio) => ratio > 0.08),
       name: app.getName(),
       version: app.getVersion(),
       electronVersion: process.versions.electron,
       renderProcessGone,
       embed,
+      pdfFixture: { pages: pdfFixture.pages, embeddedFonts: pdfFixture.embeddedFonts, pageScreenshots, pageVisualSignals },
       visualSignal: {
         viewerDarkPixelRatio: Number(viewerDarkPixelRatio.toFixed(4))
       },

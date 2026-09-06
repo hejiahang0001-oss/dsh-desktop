@@ -4,7 +4,7 @@ description: Create, import, edit, inspect, and reconcile editable Excel XLSX wo
 user-invocable: true
 disable-model-invocation: false
 metadata:
-  version: 0.5.21
+  version: 1.1.9
 ---
 
 # Excel XLSX
@@ -93,6 +93,9 @@ An update preserves the existing cell style unless an explicit numeric `styleInd
 Inspection reports sheet, cell, formula, formula-error, unsupported-formula-structure, filter, frozen-pane, external-link, macro, and risky-formula counts. `--strict` fails if formula errors, shared/array/data-table formula structures, macros, external links, or risky formulas are present. A newly generated workbook requests full calculation when opened in Excel; final values still require a spreadsheet application to recalculate.
 
 ## Safety and limits
+
+- V1.1.9 shares the bounded ZIP, namespace-aware XML, external relationship, macro and active-content checks with Word and PowerPoint. Creation and supported edits run the same strict checks automatically.
+- Report the verified `delivery.path`, `delivery.sha256`, `delivery.overwritten` and `delivery.rollback` path/hash. These describe the checked file, not later human edits. `visualValidation: not-performed` must never be described as visual or formula-recalculation acceptance; recheck after editing.
 
 - Every spec, CSV, input, output, and rollback file stays inside the active workspace; links, junctions, traversal, remote paths, and remote URLs are rejected.
 - Creation supports at most 32 sheets, 10,000 rows per sheet, 256 columns, and 100,000 populated cells in total.
