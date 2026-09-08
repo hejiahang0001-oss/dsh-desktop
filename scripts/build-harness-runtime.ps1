@@ -8,9 +8,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Repository = 'https://github.com/deepseek-ai/deepseek-harness.git'
-$Tag = 'dsh-v0.1.2-rc.1'
-$Commit = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
-$HarnessVersion = '0.1.2-rc.1'
+$Tag = 'dsh-v0.1.3-alpha.2'
+$Commit = '82a5fd61a7cf5c293cec4bdff68f455398d685e9'
+$HarnessVersion = '0.1.3-alpha.2'
 $PnpmVersion = '11.7.0'
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Node = Join-Path $Root 'vendor\runtime\win32-x64\node.exe'
@@ -99,6 +99,11 @@ try {
   Invoke-Checked -FilePath $Node -Arguments @('scripts\post-install.js') -WorkingDirectory $NodePty
   $SubprocessLocal = Join-Path $StagingDirectory 'node_modules\@deepseek-ai\dsh-subprocess-local'
   Invoke-Checked -FilePath $Node -Arguments @('scripts\ensure-spawn-helper.mjs') -WorkingDirectory $SubprocessLocal
+  # fs-ext is imported by Session persistence even when Windows uses the
+  # native semaphore backend. Build its real addon for the pinned Node ABI.
+  $FsExt = Join-Path $StagingDirectory 'node_modules\fs-ext'
+  $NodeGyp = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $Pnpm) '..\dist\node_modules\node-gyp\bin\node-gyp.js'))
+  Invoke-Checked -FilePath $Node -Arguments @($NodeGyp, 'rebuild') -WorkingDirectory $FsExt
 
   Invoke-Checked -FilePath $Node -Arguments @(
     $Assembler,
@@ -111,6 +116,7 @@ try {
     "--commit=$Commit"
   ) -WorkingDirectory $Root
   Invoke-Checked -FilePath $Node -Arguments @((Join-Path $StagingDirectory 'node_modules\@deepseek-ai\dsh\lib\bin.js'), '--version') -WorkingDirectory $Root
+  Invoke-Checked -FilePath $Node -Arguments @('-e', "if (typeof require('./node_modules/fs-ext').flock !== 'function') process.exit(1)") -WorkingDirectory $StagingDirectory
   Move-Item -LiteralPath $StagingDirectory -Destination $OutputDirectory
   $Succeeded = $true
   Write-Host "Harness runtime ready: $OutputDirectory"
