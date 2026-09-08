@@ -1,7 +1,6 @@
 const { spawn } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
 
@@ -102,7 +101,9 @@ const assertInside = (parent, child) => {
 
 const hydratePackages = async ({ archives, expectedPackages, runtimeRoot }) => {
   const nodeModules = path.join(runtimeRoot, 'node_modules');
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-harness-pack-'));
+  // Extraction and destination must share a volume: Windows CI keeps TEMP on
+  // C: and the checkout on D:, where rename would otherwise fail with EXDEV.
+  const scratch = fs.mkdtempSync(path.join(runtimeRoot, '.dsh-harness-pack-'));
   const expected = new Map(expectedPackages.map(({ manifest }) => [manifest.name, manifest.version]));
   const seen = new Set();
   try {
@@ -127,8 +128,7 @@ const hydratePackages = async ({ archives, expectedPackages, runtimeRoot }) => {
       seen.add(manifest.name);
     }
   } finally {
-    const tempPrefix = `${path.resolve(os.tmpdir())}${path.sep}`.toLowerCase();
-    if (!path.resolve(scratch).toLowerCase().startsWith(tempPrefix)) throw new Error(`Unsafe scratch path: ${scratch}`);
+    assertInside(runtimeRoot, scratch);
     fs.rmSync(scratch, { recursive: true, force: true });
   }
   if (seen.size !== expected.size) {
