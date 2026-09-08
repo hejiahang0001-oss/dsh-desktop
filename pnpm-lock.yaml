@@ -39,6 +39,9 @@ importers:
       pnpm:
         specifier: 11.19.0
         version: 11.19.0
+      semver:
+        specifier: 7.8.5
+        version: 7.8.5
 
   runtime/dsh-desktop-credentials: {}
 
@@ -173,11 +176,6 @@ packages:
   '@xmldom/xmldom@0.8.14':
     resolution: {integrity: sha512-T4EDRUBVZYRldYApjEJiU0e1stYWaRAX7CuSnKzrpwdZKo53zGV8/pqfzV6FfwNl9YThD2OumQYvqtvjvgG7aQ==}
     engines: {node: '>=10.0.0'}
-    deprecated: this version has critical issues, please update to the latest version
-
-  '@xmldom/xmldom@0.9.11':
-    resolution: {integrity: sha512-tW8bcK3hsG0/uqSnNz6TK4BkcuZSezoU7DlnYssILmZDktPnSHHuDJJFM0AJv+13gz2r0iGdrj6qqKeUnxXEDg==}
-    engines: {node: '>=14.6'}
     deprecated: this version has critical issues, please update to the latest version
 
   '@xmldom/xmldom@0.9.12':
@@ -1538,8 +1536,6 @@ snapshots:
 
   '@xmldom/xmldom@0.8.14': {}
 
-  '@xmldom/xmldom@0.9.11': {}
-
   '@xmldom/xmldom@0.9.12': {}
 
   '@xterm/addon-fit@0.11.0': {}
@@ -2478,7 +2474,7 @@ snapshots:
 
   plist@3.1.1:
     dependencies:
-      '@xmldom/xmldom': 0.9.11
+      '@xmldom/xmldom': 0.9.12
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 

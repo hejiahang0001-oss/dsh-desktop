@@ -16,7 +16,7 @@ $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Node = Join-Path $Root 'vendor\runtime\win32-x64\node.exe'
 $Pnpm = Join-Path $Root 'node_modules\harness-build-pnpm\bin\pnpm.cjs'
 $Assembler = Join-Path $PSScriptRoot 'assemble-harness-runtime.cjs'
-if ($OutputDirectory -eq '') { $OutputDirectory = Join-Path $Root "vendor\harness-hoisted-$HarnessVersion" }
+if ($OutputDirectory -eq '') { $OutputDirectory = Join-Path $Root "vendor\harness-hoisted-$HarnessVersion-desktop-security-1" }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $StagingDirectory = "$OutputDirectory.staging-$([guid]::NewGuid().ToString('N'))"
 $OwnSource = $SourceDirectory -eq ''
@@ -66,7 +66,7 @@ try {
   if ($OwnSource) {
     # Match the Windows local checkout: documentation links remain Git link
     # blobs, not filesystem links. Runtime assembly still rejects all links.
-    Invoke-Checked -FilePath 'git.exe' -Arguments @('clone', '--config', 'core.symlinks=false', '--depth', '1', '--branch', $Tag, '--single-branch', $Repository, $SourceDirectory) -WorkingDirectory ([IO.Path]::GetTempPath())
+    Invoke-Checked -FilePath 'git.exe' -Arguments @('clone', '--config', 'core.symlinks=false', '--config', 'core.autocrlf=false', '--depth', '1', '--branch', $Tag, '--single-branch', $Repository, $SourceDirectory) -WorkingDirectory ([IO.Path]::GetTempPath())
   }
   if (-not (Test-Path -LiteralPath (Join-Path $SourceDirectory '.git'))) { throw "Harness source is not a Git checkout: $SourceDirectory" }
   $ActualCommit = (& git.exe -C $SourceDirectory rev-parse HEAD).Trim()
@@ -79,6 +79,8 @@ try {
     throw "Harness source identity mismatch: $($SourceManifest.version), $($SourceManifest.packageManager)"
   }
 
+  # Apply only reviewed exact-version security fixes after checking clean official source.
+  Invoke-Checked -FilePath $Node -Arguments @((Join-Path $PSScriptRoot 'apply-harness-security.cjs'), "--source-root=$SourceDirectory") -WorkingDirectory $Root
   Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
   $env:CI = '1'
   $env:npm_config_verify_deps_before_run = 'false'
@@ -119,6 +121,7 @@ try {
   ) -WorkingDirectory $Root
   Invoke-Checked -FilePath $Node -Arguments @((Join-Path $StagingDirectory 'node_modules\@deepseek-ai\dsh\lib\bin.js'), '--version') -WorkingDirectory $Root
   Invoke-Checked -FilePath $Node -Arguments @('-e', "if (typeof require('./node_modules/fs-ext').flock !== 'function') process.exit(1)") -WorkingDirectory $StagingDirectory
+  Invoke-Checked -FilePath $Node -Arguments @((Join-Path $PSScriptRoot 'audit-harness-runtime.cjs'), "--runtime-root=$StagingDirectory", "--output=$(Join-Path $StagingDirectory 'security-audit.json')") -WorkingDirectory $Root
   Move-Item -LiteralPath $StagingDirectory -Destination $OutputDirectory
   $Succeeded = $true
   Write-Host "Harness runtime ready: $OutputDirectory"

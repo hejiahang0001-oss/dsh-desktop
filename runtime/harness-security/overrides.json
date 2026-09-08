@@ -1,0 +1,17 @@
+{
+  "revision": "desktop-security-1",
+  "upstreamCommit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+  "upstreamWorkspaceSha256": "69ff4f54c74c012bff3223fab195583b2108f90efa068d69595da94853af8a4d",
+  "upstreamLockSha256": "a97c388b9f68649122e7b134c913da227ab41697a58d84e6b1ec47a258aa4ae3",
+  "workspaceSha256": "bdb95341d94989d436bb1c9bb817e1ffea70e80f8db0b7c469d313da862a9904",
+  "lockSha256": "c2249475d8c65c196ad3ab5d8c53c47a306244122c67e82545e0e238da9395db",
+  "overrides": {
+    "js-yaml@4.2.0": "4.3.1",
+    "protobufjs@7.6.4": "7.6.5",
+    "fast-uri@3.1.3": "3.1.6",
+    "ip-address@10.2.0": "10.3.1",
+    "hono@4.12.29": "4.12.34",
+    "@hono/node-server@1.19.14": "1.19.15",
+    "qs@6.15.3": "6.16.0"
+  }
+}

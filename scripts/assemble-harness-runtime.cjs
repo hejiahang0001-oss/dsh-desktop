@@ -218,7 +218,8 @@ const main = async () => {
       packageInventorySha256: createHash('sha256')
         .update(`${releasePackages.map(({ manifest }) => `${manifest.name}@${manifest.version}`).sort((left, right) => left.localeCompare(right, 'en')).join('\n')}\n`)
         .digest('hex'),
-      dependencyResolution: 'upstream-frozen-lockfile',
+      dependencyResolution: 'desktop-security-frozen-lockfile',
+      security: require('./apply-harness-security.cjs').verifySecurity(sourceRoot),
       packagePayload: 'upstream-pnpm-pack',
       installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local', 'fs-ext'],
       // Only node_modules is shipped as the executable Harness payload. The
