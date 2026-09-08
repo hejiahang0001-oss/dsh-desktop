@@ -28,6 +28,8 @@
 
 ## Why DSH Desktop
 
+V1.1.10 adapts Harness `0.1.3-alpha.2` in an isolated candidate. Source tests, migration, cold-history reads and attachment UI checks pass, but [upstream dependency security findings](docs/HARNESS_ALPHA2_SECURITY_REVIEW.md) hold packaging, installation and publication. Current Latest downloads remain V1.1.9 and Stable remains V1.1.0. See the [upgrade candidate notes](docs/RELEASE_NOTES_v1.1.10.md).
+
 V1.1.9 (`DSH-Desktop-Setup-1.1.9.exe`) strengthens the existing Word, Excel and PowerPoint tools with shared package/XML safety checks and verified on-disk delivery receipts. It preserves the Wiki workflow and official Harness chat controls. See the [release notes](docs/RELEASE_NOTES_v1.1.9.md) and [validation evidence](docs/VALIDATION.md) for current acceptance and publication status.
 
 DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Windows product shell around it:

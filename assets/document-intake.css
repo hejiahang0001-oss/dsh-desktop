@@ -97,29 +97,6 @@
 .dsh-document-status:empty { display: none; }
 .dsh-document-status[data-error="true"] { color: var(--dsh-document-danger); }
 
-.dsh-document-drop-hint {
-  position: fixed;
-  z-index: 1000;
-  inset: 20% 10%;
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  padding: 24px;
-  border: 2px dashed var(--dsh-document-accent);
-  border-radius: 12px;
-  color: light-dark(#242424, #f5f5f4);
-  background: light-dark(#f5f5f4f5, #202020f5);
-  box-shadow: 0 12px 36px rgb(0 0 0 / 18%);
-  font: inherit;
-  font-size: 16px;
-  text-align: center;
-  overflow-wrap: anywhere;
-  user-select: none;
-  pointer-events: none;
-}
-
-.dsh-document-drop-hint[hidden] { display: none; }
-
 @media (max-height: 650px) {
   .dsh-document-actions > span { display: none; }
   .dsh-document-status { max-height: 50px; }

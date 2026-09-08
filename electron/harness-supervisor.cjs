@@ -8,7 +8,7 @@ const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
 const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DSH_BIN', 'DSH_DESKTOP_PATCH']);
-const HARNESS_VERSION = '0.1.2-rc.1';
+const HARNESS_VERSION = '0.1.3-alpha.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
 const redactHarnessLog = (value) => stripAnsi(value).replace(
@@ -567,7 +567,7 @@ class HarnessSupervisor extends EventEmitter {
       );
       environment.DSH_DESKTOP_NODE = nodePath;
       delete environment.DSH_DESKTOP_CREDENTIAL_MODULE;
-      if (credentialHost) environment.DSH_DESKTOP_CREDENTIAL_MODULE = credentialHost.providerModule;
+      if (credentialHost?.providerModule) environment.DSH_DESKTOP_CREDENTIAL_MODULE = credentialHost.providerModule;
       delete environment.DSH_DESKTOP_TOOL_MODULE;
       if (credentialHost?.toolsModule) environment.DSH_DESKTOP_TOOL_MODULE = credentialHost.toolsModule;
       const spawnImpl = this.options.spawnImpl || spawn;

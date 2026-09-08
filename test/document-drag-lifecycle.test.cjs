@@ -27,34 +27,33 @@ function fixture() {
   return { handlers, windowHandlers, children, event };
 }
 
-test('file drag entry and hover do not bubble into the upstream image-only overlay', () => {
+test('workspace import leaves every global file drag event to the official attachment handler', () => {
   const f = fixture();
-  for (const type of ['dragenter', 'dragover']) {
+  for (const type of ['dragenter', 'dragover', 'dragleave', 'drop']) {
     const event = f.event(); f.handlers[type]?.(event);
-    assert.equal(event.prevented, true, `${type} must accept the OS file drag`);
-    assert.equal(event.stopped, true, `${type} must not activate the upstream image overlay`);
-  }
-  const hint = f.children.find((item) => item.className === 'dsh-document-drop-hint');
-  assert.ok(hint); assert.equal(hint.hidden, false);
-  assert.match(hint.textContent, /Excel.*Word.*PDF/);
-  f.windowHandlers.dragend?.(); assert.equal(hint.hidden, true);
-});
-
-test('ordinary text drags stay native and image drops reach the official image handler', () => {
-  const f = fixture();
-  for (const type of ['dragenter', 'dragover', 'drop']) {
-    const event = f.event(['text/plain']); f.handlers[type]?.(event);
+    assert.equal(f.handlers[type], undefined, `${type} belongs to the official attachment UI`);
     assert.equal(event.prevented, false); assert.equal(event.stopped, false);
   }
-  const image = f.event(['Files'], [{ name: 'photo.png', type: 'image/png' }]);
-  f.handlers.drop(image); assert.equal(image.stopped, false);
+  assert.equal(f.children.some((item) => item.className === 'dsh-document-drop-hint'), false);
+  assert.equal(f.windowHandlers.dragend, undefined);
 });
 
-test('nested drag leaves and leaving the viewport clear feedback without waiting for a drop', () => {
-  const f = fixture(); f.handlers.dragenter(f.event()); f.handlers.dragenter(f.event());
-  const hint = f.children.find((item) => item.className === 'dsh-document-drop-hint');
-  f.handlers.dragleave(f.event()); assert.equal(hint.hidden, false);
-  f.handlers.dragleave(f.event()); assert.equal(hint.hidden, true);
-  f.handlers.dragenter(f.event()); const leave = f.event(); leave.clientX = -1;
-  f.handlers.dragleave(leave); assert.equal(hint.hidden, true);
+test('text, documents, images, and mixed drops are neither intercepted nor duplicated', () => {
+  const f = fixture();
+  for (const event of [f.event(['text/plain']), f.event(['Files'], [{ name: 'report.xlsx', type: '' }]),
+    f.event(['Files'], [{ name: 'photo.png', type: 'image/png' }]),
+    f.event(['Files'], [{ name: 'report.pdf', type: 'application/pdf' }, { name: 'photo.png', type: 'image/png' }])]) {
+    f.handlers.drop?.(event);
+    assert.equal(event.prevented, false); assert.equal(event.stopped, false);
+  }
+});
+
+test('workspace import has one keyboard-native button and distinguishes attachment upload', () => {
+  const f = fixture();
+  const bar = f.children.find((item) => item.className === 'dsh-document-intake');
+  const [button, hint] = bar.children[0].children;
+  assert.equal(button.type, 'button');
+  assert.equal(button.textContent, '导入工作区');
+  assert.match(hint.textContent, /普通附件.*附件按钮/);
+  assert.match(hint.title, /不是附件上传/);
 });

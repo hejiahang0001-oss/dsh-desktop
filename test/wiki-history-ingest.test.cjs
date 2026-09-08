@@ -30,7 +30,9 @@ const message = (seq, role, text) => ({
     type: `${role}/message`,
     seq,
     time: seq * 10,
-    data: { message: { role, content: [{ type: 'text', text }, { type: 'thinking', thinking: 'hidden' }] } }
+    data: role === 'user'
+      ? { role, content: [{ type: 'text', text }, { type: 'thinking', thinking: 'hidden' }] }
+      : { message: { role, content: [{ type: 'text', text }, { type: 'thinking', thinking: 'hidden' }] }, stream: [] }
   }
 });
 
@@ -82,17 +84,45 @@ test('history extraction keeps only user and assistant text and redacts fixed cr
   assert.equal(direct.text, '[已遮蔽私钥]');
 });
 
+test('V2 history retains direct user prompts and settled assistant text without inventing replies from attempt streams', () => {
+  const user = message(6, 'user', '真实用户问题');
+  const final = message(9, 'assistant', '正式回答');
+  final.event.data.stream = [{ type: 'text-chunks', texts: ['正式', '回答'], time0: 1, dt: [1], index: 0 }];
+  const prefix = message(11, 'assistant', '中断前已展示的回答'); prefix.event.data.interrupted = true;
+  const extracted = extractHistoryMessages([user,
+    { type: 'event', event: { seq: 8, type: 'assistant/attempt', data: { stream: [{ type: 'text-chunks', texts: ['未交付的失败草稿'], time0: 1, dt: [], index: 0 }] } } },
+    final, prefix,
+    { type: 'event', event: { seq: 12, type: 'tool/result', data: { message: { role: 'user', content: [{ type: 'text', text: '工具输出不是用户提问' }] } } } }
+  ]);
+  assert.deepEqual(extracted.messages.map(({ seq, role, text }) => ({ seq, role, text })), [
+    { seq: 6, role: 'user', text: '真实用户问题' },
+    { seq: 9, role: 'assistant', text: '正式回答' },
+    { seq: 11, role: 'assistant', text: '中断前已展示的回答' }
+  ]);
+});
+
 test('session history paginates backwards without duplicating events', async () => {
   const calls = [];
   const apiCall = async (_origin, method, payload) => {
     calls.push({ method, payload });
-    if (payload.beforeSeq === undefined) return { events: [message(4, 'user', '四'), message(5, 'assistant', '五')], hasMore: true };
-    return { events: [message(1, 'user', '一'), message(4, 'user', '四')], hasMore: false };
+    if (payload.beforeSeq === undefined) return { events: [message(4, 'user', '四'), message(5, 'assistant', '五')], hasMore: true, throughSeq: 5 };
+    return { events: [message(1, 'user', '一'), message(4, 'user', '四')], hasMore: false, throughSeq: 5 };
   };
   const result = await loadSessionHistory(apiCall, 'http://127.0.0.1:1234', summary());
   assert.deepEqual(result.messages.map((item) => item.seq), [1, 4, 5]);
   assert.equal(calls[1].payload.beforeSeq, 4);
+  assert.equal(calls[1].payload.throughSeq, 5);
   assert.equal(calls.every((call) => call.method === 'session.history'), true);
+});
+
+test('session history rejects a changed or lost snapshot cursor during backwards pagination', async () => {
+  for (const changed of [8, undefined]) {
+    await assert.rejects(loadSessionHistory(async (_origin, _method, payload) => {
+      if (payload.beforeSeq === undefined) return { events: [message(4, 'user', '四')], hasMore: true, throughSeq: 5 };
+      assert.equal(payload.throughSeq, 5);
+      return { events: [message(1, 'user', '一')], hasMore: false, throughSeq: changed };
+    }, 'http://127.0.0.1:1234', summary()), (error) => error.code === 'invalid-history-pagination');
+  }
 });
 
 test('prepared history source is bounded, redacted, and contains no raw session id', async (t) => {

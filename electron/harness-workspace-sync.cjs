@@ -143,37 +143,28 @@ const callHarnessApi = async (origin, method, payload, options = {}) => {
   if (!isSessionId(sessionId)) {
     throw new HarnessWorkspaceSyncError('invalid-session', 'Harness 历史记录会话标识无效。');
   }
-  const listing = await callHarnessRemoteApi(origin, 'session.list', {}, options);
-  const summary = Array.isArray(listing?.items)
-    ? listing.items.find((item) => item?.sessionId === sessionId)
-    : undefined;
-  if (!summary) {
-    throw new HarnessWorkspaceSyncError('session-not-found', 'Harness 历史记录会话不存在。');
+  if (!isSafeHarnessOrigin(origin)) {
+    throw new HarnessWorkspaceSyncError('unsafe-origin', 'Harness 历史记录地址不是受信任的随机回环地址。');
   }
-  const projectionCursor = summary?.projections?.asOfSeq;
-  let throughSeq;
-  if (Number.isSafeInteger(projectionCursor) && projectionCursor >= -1) {
-    throughSeq = projectionCursor;
-  } else if (summary.blank === true) {
-    throughSeq = -1;
-  } else {
-    throw new HarnessWorkspaceSyncError(
-      'history-cursor-unavailable',
-      'Harness 尚未提供可安全读取此会话历史记录的位置。'
-    );
+  // alpha.2 list projections are optional/stale hints, not a history cursor.
+  // Remote follow can activate a cold Agent. Read the exact cut over the
+  // existing private desktop IPC instead; never turn a read into a resume.
+  if (typeof options.readHistoryPage !== 'function') {
+    throw new HarnessWorkspaceSyncError('history-reader-unavailable', 'Harness 只读历史通道尚未就绪。');
   }
-  const request = {
-    address: { kind: 'session', sessionId },
-    throughSeq,
+  const history = await options.readHistoryPage({
+    sessionId,
+    ...(payload?.throughSeq === undefined ? {} : { throughSeq: payload.throughSeq }),
     ...(payload?.beforeSeq === undefined ? {} : { beforeSeq: payload.beforeSeq }),
     ...(payload?.maxMessages === undefined ? {} : { maxMessages: payload.maxMessages })
-  };
-  const page = await callHarnessRemoteApi(origin, 'session.page', request, options);
-  return Object.freeze({
-    events: Array.isArray(page?.records) ? page.records : [],
-    hasMore: page?.hasMore === true,
-    projections: summary.projections || { asOfSeq: throughSeq, values: {} }
+  }, {
+    timeoutMs: Math.min(60_000, Math.max(250, Number(options.timeoutMs) || 8000))
   });
+  if (!Array.isArray(history?.events) || typeof history.hasMore !== 'boolean'
+    || !Number.isSafeInteger(history.throughSeq) || history.throughSeq < -1) {
+    throw new HarnessWorkspaceSyncError('invalid-response', 'Harness 只读历史通道返回了不完整的分页结果。');
+  }
+  return Object.freeze(history);
 };
 
 const synchronizeHarnessWorkspace = async ({

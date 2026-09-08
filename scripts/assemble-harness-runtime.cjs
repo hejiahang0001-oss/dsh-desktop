@@ -232,7 +232,9 @@ const main = async () => {
   process.stdout.write(`${JSON.stringify({ ok: true, provenance, layout })}\n`);
 };
 
-void main().catch((error) => {
+module.exports = { hydratePackages };
+
+if (require.main === module) void main().catch((error) => {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;
 });

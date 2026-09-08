@@ -47,7 +47,7 @@ const writeHarnessPackage = (binPath, content = '// test') => {
   fs.writeFileSync(binPath, content);
   fs.writeFileSync(path.resolve(path.dirname(binPath), '..', 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh',
-    version: '0.1.2-rc.1'
+    version: '0.1.3-alpha.2'
   }));
 };
 
@@ -244,7 +244,7 @@ test('runtime resolver prefers explicit, existing paths', () => {
     isPackaged: false,
     env: { DSH_DESKTOP_NODE: nodePath, DSH_DESKTOP_DSH_BIN: dshPath, DSH_DESKTOP_PATCH: patchPath }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office, version: '0.1.2-rc.1' });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office, version: '0.1.3-alpha.2' });
 });
 
 test('Harness process host uses fixed development and packaged paths', () => {
@@ -280,7 +280,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
   const packageDir = path.join(
     nodeModules,
     '.pnpm',
-    '@deepseek-ai+dsh@0.1.2-rc.1_test',
+    '@deepseek-ai+dsh@0.1.3-alpha.2_test',
     'node_modules',
     '@deepseek-ai',
     'dsh',
@@ -295,7 +295,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
   fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(linkedBin, 'top-level copy without dependency links');
-  fs.writeFileSync(path.resolve(path.dirname(linkedBin), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.2-rc.1' }));
+  fs.writeFileSync(path.resolve(path.dirname(linkedBin), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.3-alpha.2' }));
   fs.writeFileSync(pnpmBin, 'real package');
   fs.mkdirSync(path.dirname(patchPath), { recursive: true });
   fs.writeFileSync(patchPath, '[]');
@@ -333,7 +333,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
       DSH_DESKTOP_PATCH: externalPatchPath
     }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version: '0.1.2-rc.1' });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version: '0.1.3-alpha.2' });
 });
 
 test('packaged runtime fails closed instead of falling back to external overrides', () => {
@@ -350,10 +350,10 @@ test('packaged runtime fails closed instead of falling back to external override
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, target.endsWith('.yml') ? '[]' : 'test');
   }
-  fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.2-rc.1' }));
+  fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.3-alpha.2' }));
   for (const target of [
     path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'node.exe' : 'bin/node'),
-    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.2-rc.1', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.3-alpha.2', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]) {
     fs.mkdirSync(path.dirname(target), { recursive: true });

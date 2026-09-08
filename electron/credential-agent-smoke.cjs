@@ -48,7 +48,13 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     const auth = await establishHarnessSession(await supervisor.start());
     const origin = auth.origin, fetchImpl = createAuthenticatedHarnessFetch(auth);
     await supervisor.credentialHost.verifyReady(origin, fetchImpl);
-    const apiCall = (origin, method, request) => callHarnessApi(origin, method, request, { fetchImpl });
+    const apiCall = (origin, method, request) => callHarnessApi(origin, method, request, {
+      fetchImpl,
+      readHistoryPage: (payload, { timeoutMs }) => {
+        if (origin !== auth.origin) throw new Error('Harness history IPC origin does not match its authenticated process.');
+        return supervisor.credentialHost.sessionControl.request('history-page', { ...payload, timeoutMs });
+      }
+    });
     const inventory = sanitizePluginInventory(await callHarnessRemote(origin, 'pluginInventory', 'list', {}, { fetchImpl }));
     const credentialPlugins = inventory.entries.filter((entry) => /credential/.test(entry.moduleName));
     await fsp.writeFile(`${output}.inventory.json`, JSON.stringify(credentialPlugins));

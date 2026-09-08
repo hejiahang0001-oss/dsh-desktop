@@ -11,11 +11,11 @@ const {
 
 const history = {
   events: [
-    { seq: 1, time: 100, event: { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'thinking', thinking: '不应暴露' }, { type: 'text', text: '# 第一条结论\n保留正文。' }] } } } },
-    { seq: 2, event: { type: 'turn/end', data: { reason: { kind: 'aborted' } } } },
-    { seq: 3, time: 300, event: { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: '中断前可见前缀' }] } } } },
-    { seq: 4, event: { type: 'user/message', data: { message: { role: 'user', content: [{ type: 'text', text: '用户内容' }] } } } },
-    { seq: 5, time: 500, event: { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: '最终结论\n第二行。' }] } } } }
+    { type: 'event', event: { seq: 1, time: 100, type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'thinking', thinking: '不应暴露' }, { type: 'text', text: '# 第一条结论\n保留正文。' }] }, stream: [] } } },
+    { type: 'event', event: { seq: 2, type: 'turn/end', data: { reason: { kind: 'aborted' } } } },
+    { type: 'event', event: { seq: 3, time: 300, type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: '中断前可见前缀' }] }, stream: [] } } },
+    { type: 'event', event: { seq: 4, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '用户内容' }] } } },
+    { type: 'event', event: { seq: 5, time: 500, type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: '最终结论\n第二行。' }] }, stream: [] } } }
   ]
 };
 
@@ -36,6 +36,22 @@ test('capture request must reference a candidate and accepts only the fixed shap
   assert.equal(selected.title, '修订标题');
   assert.equal(selectCaptureCandidate({ title: '标题', content: '内容', sourceSeq: 999 }, candidates), null);
   assert.equal(selectCaptureCandidate({ title: '标题', content: '内容', sourceSeq: 5, sourceSessionId: '伪造' }, candidates), null);
+});
+
+test('V2 capture keeps durable event identity and interrupted prefixes, not transient or failed-attempt chunks', () => {
+  const records = [
+    { type: 'event', seq: 0, time: 1, event: { seq: 105, time: 9000, type: 'assistant/message', data: {
+      interrupted: true, message: { role: 'assistant', content: [{ type: 'text', text: '中断前可见回答' }] },
+      stream: [{ type: 'text-chunks', texts: ['中断前', '可见回答'], time0: 1, dt: [1], index: 0 }]
+    } } },
+    { type: 'event', event: { seq: 106, type: 'assistant/attempt', data: { stream: [{ type: 'text-chunks', texts: ['未交付草稿'] }] } } },
+    { type: 'assistant/live-chunk', chunk: { type: 'text-delta', text: '瞬态文本' } },
+    { type: 'event', event: { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '没有可靠来源的文本' }] } } } }
+  ];
+  const candidates = extractWikiSessionCandidates({ events: records });
+  assert.equal(candidates.length, 1); assert.equal(candidates[0].seq, 105); assert.equal(candidates[0].sourceTime, 9000);
+  assert.equal(candidates[0].text, '中断前可见回答'); assert.equal(candidates[0].interrupted, true);
+  assert.equal(selectCaptureCandidate({ title: '已确认', content: candidates[0].text, sourceSeq: 0 }, candidates), null);
 });
 
 test('Wiki dashboard accepts its product version only from bounded trusted state', () => {

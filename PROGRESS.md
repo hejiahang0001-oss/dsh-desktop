@@ -1,5 +1,13 @@
 # DSH Desktop 执行进度
 
+## V1.1.10 Harness 0.1.3-alpha.2 适配（2026-09-08，隔离候选通过，发布阻断）
+
+- 按用户“适配最新版本”切换本轮范围：固定官方 alpha.2 tag/commit；独立分支 `codex/v1.1.10-harness-alpha.2`。
+- 升级前完整测试通过、冻结 lockfile 安装通过、桌面根依赖审计无已知漏洞（不覆盖独立的上游 Harness 锁文件）。原 V1.1.9 运行时、安装包和用户数据保留。
+- 已适配 Session v2 冷读/锁/迁移、personaSuffix、软件代理优先级和官方附件交互。固定运行库构建与全哈希、579/579 源码测试、真实冷读、合成会话迁移和两轮附件 GUI 均通过；没有打包/安装验收，不代表已交付或公开。
+- 原 Office 恢复与 Portable 性能切片顺延，不混入本次内核升级。Stable 仍为 V1.1.0。
+- 官方上游 monorepo 生产审计出现 31 项告警；已确认默认 Agent Presets 的 `js-yaml@4.2.0` 解析链路受两项 High CPU 耗尽告警影响。详见[安全阻断记录](docs/HARNESS_ALPHA2_SECURITY_REVIEW.md)。未修改官方依赖锁定，等待安全补丁范围确认；不覆盖安装、不公开发布，不能以根依赖审计通过替代 Harness 审计。
+
 ## V1.1.9 Office 安全检查与真实交付收据（2026-09-07）
 
 - 本轮只交付一个小版本：统一 Word/Excel/PPT 的 ZIP、XML、关系、活动内容和敏感路径边界，补齐 PPT 内嵌工作簿公式检查。
