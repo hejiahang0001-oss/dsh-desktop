@@ -134,7 +134,7 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
 
   const dshRelative = path.join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   const packagedNodeModules = path.join(resourcesPath, 'harness', 'node_modules');
-  const hoistedNodeModules = path.join(rootDir, 'vendor', `harness-hoisted-${HARNESS_VERSION}`, 'node_modules');
+  const hoistedNodeModules = path.join(rootDir, 'vendor', `harness-hoisted-${HARNESS_VERSION}-desktop-security-1`, 'node_modules');
   const vendorNodeModules = path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, 'node_modules');
   const dshBinPath = firstExistingFile(isPackaged
     ? [path.join(resourcesPath, 'harness', dshRelative)]

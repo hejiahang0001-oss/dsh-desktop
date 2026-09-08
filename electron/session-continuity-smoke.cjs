@@ -15,7 +15,7 @@ async function runContinuitySmoke({ window, rootDir, evaluate, waitFor, target, 
   const visit = async (id) => { await flush(); await selectHarnessSession(wc, id); await window.loadURL(origin); await mount(); };
   await mount();
   await evaluate('window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "会话甲草稿，不要发送。")');
-  await evaluate('document.querySelector(".dsh-document-actions button").click()');
+  await require('./legacy-reference-smoke.cjs').seedLegacyReference(evaluate);
   await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
   await flush(); const draftA = await read(); const domBefore = await evaluate('window.__DSH_COMPOSER_TEXT__.current().innerHTML');
   const stateA = await evaluate('desktopAPI.drafts.getState()');
@@ -37,7 +37,7 @@ async function runContinuitySmoke({ window, rootDir, evaluate, waitFor, target, 
   checks.forgedTokenRejected = await evaluate('(async()=>{try{await desktopAPI.drafts.save({token:"forged",context:"x",text:"bad",revision:0});return false}catch{return true}})()');
   checks.staleRevisionRejected = await evaluate('(async()=>{const s=await desktopAPI.drafts.getState(); await desktopAPI.drafts.save({...s,text:s.text}); try{await desktopAPI.drafts.save({...s,text:"stale"});return false}catch{return true}})()');
   await window.loadURL(origin); await mount();
-  await evaluate('document.querySelector(".dsh-document-actions button").focus()');
+  await evaluate('window.__DSH_COMPOSER_TEXT__.current().focus()');
   await evaluate('window.__DSH_COMPOSER_TEXT__.remove(window.__DSH_COMPOSER_TEXT__.current(), window.__DSH_COMPOSER_TEXT__.read())');
   await flush(); await window.loadURL(origin); await mount();
   checks.clearedDraftStaysEmpty = !(await read()).trim();

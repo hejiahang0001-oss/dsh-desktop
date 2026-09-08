@@ -177,7 +177,7 @@ const getHarnessUiActionScript = (action) => {
     };
     if (action === 'stop-agent') return activate(labels['stop-agent']);
     if (action === 'focus-agent-input') {
-      const input = document.querySelector('[data-composer-card] textarea:not([disabled])');
+      const input = document.querySelector('[data-composer-input][contenteditable="true"]') || document.querySelector('[data-composer-card] textarea:not([disabled])');
       if (!input) return false;
       input.focus({ preventScroll: true });
       return true;
@@ -279,7 +279,7 @@ const getHarnessAgentStateScript = () => {
     const waitingMarkerCount = Array.from(document.querySelectorAll('span, div'))
       .filter((element) => labels['pending-state'].includes(normalized(element))).length;
     const pendingCount = Math.max(approvalCount, waitingMarkerCount);
-    const hasComposer = Boolean(document.querySelector('[data-composer-card] textarea:not([disabled])'));
+    const hasComposer = Boolean(document.querySelector('[data-composer-input][contenteditable="true"]') || document.querySelector('[data-composer-card] textarea:not([disabled])'));
     const permissionControl = allControls.find((element) => labels['permission-mode'].some((label) => normalized(element).startsWith(label))) || null;
     const permissionText = permissionControl ? normalized(permissionControl) : '';
     const permissionMode = /(?:workspace\\s*write|工作区写入)/i.test(permissionText) ? 'workspace-write'
@@ -383,9 +383,9 @@ const getHarnessCommandPreparationScript = (action) => {
     throw new Error(`Unsupported Harness command action: ${action}`);
   }
   return `(() => {
-    const input = document.querySelector('[data-composer-card] textarea:not([disabled])');
+    const input = document.querySelector('[data-composer-input][contenteditable="true"]') || document.querySelector('[data-composer-card] textarea:not([disabled])');
     if (!input) return { ready: false, reason: 'composer-unavailable' };
-    if ((input.value || '').trim() !== '') return { ready: false, reason: 'composer-has-draft' };
+    if ((input.value ?? input.innerText ?? input.textContent ?? '').trim() !== '') return { ready: false, reason: 'composer-has-draft' };
     input.focus({ preventScroll: true });
     return { ready: true, reason: 'ready' };
   })()`;

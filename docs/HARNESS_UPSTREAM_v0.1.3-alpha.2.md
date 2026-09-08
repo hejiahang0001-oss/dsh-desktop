@@ -1,13 +1,13 @@
 # Harness 0.1.3-alpha.2 compatibility for DSH Desktop V1.1.10
 
-Status: isolated implementation candidate; official runtime construction, synthetic migration and real renderer attachment gates pass. Packaging, overwrite installation and publication are held by the [upstream dependency security review](HARNESS_ALPHA2_SECURITY_REVIEW.md). Do not treat this page as publication evidence.
+Status: official-file iteration with approved minimal security build. Windows runtime build and physical dependency audit pass; package/install/publication evidence is tracked separately in VALIDATION.md. See the [bounded security review](HARNESS_ALPHA2_SECURITY_REVIEW.md).
 
 ## Fixed identity
 
 - Official repository: https://github.com/deepseek-ai/deepseek-harness
 - Tag: `dsh-v0.1.3-alpha.2`
 - Commit: `82a5fd61a7cf5c293cec4bdff68f455398d685e9`
-- Build: Node `v24.19.0`, upstream pnpm `11.7.0`, unchanged upstream lockfile.
+- Build: Node `v24.19.0`, upstream pnpm `11.7.0`; seven exact dependency overrides with reviewed security lock, revision `desktop-security-1`. Upstream application source remains unchanged; dependency graph does not.
 - Release family: 251 DSH packages plus 9 Cordis supporting packages; inventory SHA-256 `f28b3917e722e1843aa28da324c849f4bfd0a5f912d907365a6963b3e976a6e9`.
 
 Source references: [alpha.1 changes](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.1), [alpha.2 changes](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.2). This iteration includes both deltas from the previously bundled rc.1.
@@ -21,7 +21,7 @@ Source references: [alpha.1 changes](https://github.com/deepseek-ai/deepseek-har
 | Session V2 consumers | User messages use direct `data`; final assistant messages still use `data.message`. Wiki preserves nested event sequence/time and interruption markers. Failed attempts are not final answers. |
 | Language | Use `personaSuffix` and retain the official Harness identity. The removed `persona` option is not silently carried forward. |
 | Network | Official Harness owns outbound proxy dispatch. Desktop retains software/system proxy selection and explicitly clears lower-priority environment values when direct/custom is selected. |
-| Attachments | Official Harness owns upload and drag/drop, including mixed images/files. Desktop no longer captures global drag events. Native workspace import remains a separate bounded copy/reference operation, not a second upload transport. |
+| Attachments | Official Harness owns upload and drag/drop, including mixed images/files. The duplicate workspace-import button and empty bar are removed. Only pre-existing references retain a removal/restoration compatibility adapter; old files are not deleted. |
 | Office | Official attachments live outside the workspace and have different admission policies. Tools retain strict workspace and OOXML checks; explicitly selected attachments must be copied without overwriting to the active workspace before strict inspection/editing. |
 | Open In | Use the official application launcher; do not introduce a second privileged launcher or duplicate Web control. Existing native menu access remains available. |
 
@@ -29,7 +29,7 @@ Source references: [alpha.1 changes](https://github.com/deepseek-ai/deepseek-har
 
 The new `fs-ext@2.1.1` dependency is imported even when Windows uses Harness's native semaphore lease. It must be genuinely compiled for the bundled Node ABI, not stubbed out. Runtime assembly verifies the real module can load and records its build step. A Windows GitHub Actions runner supplies the build toolchain; users of the installer do not need that toolchain.
 
-Windows source clones explicitly use `core.symlinks=false`, matching the local checkout's representation of documentation link blobs. The source commit and clean-worktree checks, plus the packaged runtime's rejection of filesystem links, remain intact.
+Windows source clones explicitly use `core.symlinks=false` and `core.autocrlf=false`. The source commit and clean-worktree checks happen before exact reviewed dependency inputs are applied; their digests are rechecked at assembly. Packaged filesystem links remain forbidden.
 
 ## Migration and rollback
 

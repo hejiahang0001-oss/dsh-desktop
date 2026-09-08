@@ -6868,13 +6868,15 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     }
     documentIntakeController.chooseFiles = async () => [source];
     documentIntakeController.confirmImport = async () => true;
-    await evaluate('(async()=>{await window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "请汇总测试数据，保留这段草稿。"); document.querySelector(".dsh-document-actions button").click()})()');
+    const officialFileEntryOnly = await evaluate('!document.querySelector(".dsh-document-actions") && document.querySelector(".dsh-document-intake").hidden');
+    await evaluate('window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "请汇总测试数据，保留这段草稿。")');
+    await require('./legacy-reference-smoke.cjs').seedLegacyReference(evaluate);
     await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
     const chosen = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
     await evaluate('document.querySelector(".dsh-document-chip button").click()');
     await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
     const removed = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
-    await evaluate('document.querySelector(".dsh-document-actions button").click()');
+    await require('./legacy-reference-smoke.cjs').seedLegacyReference(evaluate);
     await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
     // CDP supplies a real disk-backed File to the isolated preload; this is not a synthetic File constructor.
     wc.debugger.attach('1.3');
@@ -6891,8 +6893,6 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       smokeRoot, workspacePath: selected.workspacePath, selected, origin: harnessOrigin,
       api: authenticatedHarnessApi, evaluate, waitFor, target: resolvedTarget
     });
-    await evaluate('document.querySelector(".dsh-document-actions button").click()');
-    await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
     const fake = await evaluate('(async()=>{const state=await desktopAPI.documents.getState();return desktopAPI.documents.importFiles([new File(["x"],"fake.csv")],state.context)})()');
     await wc.debugger.sendCommand('Fetch.enable', { patterns: [{ urlPattern: '*api/session/prompt', requestStage: 'Request' }] });
     await fsp.writeFile(`${resolvedTarget}.before-send.png`, (await wc.capturePage()).toPNG());
@@ -6908,16 +6908,17 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     const originalUnchanged = await fsp.readFile(source, 'utf8') === '名称,金额\n测试甲,12\n测试乙,18\n';
     const officialReceiptCount = (submitted.match(/"receiptId"\s*:/g) || []).length;
     result = { ok: chosen.includes('参考资料') && chosen.includes('保留这段草稿') && !removed.includes('参考资料') && removed.includes('保留这段草稿')
-      && nativeFileResult.ok && fake.ok === false && originalUnchanged && submitted.includes('dsh-attachments') && submitted.includes('保留这段草稿') && officialReceiptCount === 3,
+      && nativeFileResult.ok && fake.ok === false && originalUnchanged && officialFileEntryOnly && !submitted.includes('dsh-attachments') && submitted.includes('保留这段草稿') && officialReceiptCount === 3,
       version: app.getVersion(), evidence: 'real Harness renderer + native disk File + intercepted upstream send; no model request',
       inputKind: 'Lexical contenteditable', chooseInserted: chosen.includes('参考资料'), removalPreservedDraft: !removed.includes('参考资料') && removed.includes('保留这段草稿'),
       nativeFileImported: Boolean(nativeFileResult.ok), syntheticFileRejected: fake.ok === false, originalUnchanged,
       officialAttachments,
+      officialFileEntryOnly,
       officialReceiptCount,
       completeNativeDragLifecycle: officialAttachments.checks.onlyOfficialDropFeedback, crossWorkspace: process.argv.includes('--smoke-cross-workspace'),
       officeFormatsDragged: officialAttachments.formats, officeSourceUnchanged: officialAttachments.checks.originalFilesUnchanged,
       selectedWorkspaceConfirmed: (await documentIntakeController.getContext()).workspacePath === selected.workspacePath,
-      upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
+      upstreamPayloadHasNoLegacyReference: !submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
     await backgroundTasks?.stop();

@@ -3,7 +3,9 @@
   const api = window.desktopAPI?.documents;
   const bridge = window.__DSH_COMPOSER_TEXT__;
   if (!api || !bridge) return false;
-  let bar, list, status, button, busy = false, mountedCard, scheduled = false;
+  // Compatibility only: new files belong to the official attachment UI.
+  // Keep removing/restoring references already created by older desktop builds.
+  let bar, list, status, mountedCard, scheduled = false;
   const refs = new Map();
   let catalogSelection = null, catalogLoading = false;
   const hydrate = async () => {
@@ -15,7 +17,7 @@
       if (selected !== localStorage.getItem('dsh.sessions.current')) return;
       refs.clear(); state.references?.forEach((reference, index) => refs.set(reference, state.items[index]));
       catalogSelection = selected; if (list) redraw();
-    } catch { /* The add action reports connection errors. */ }
+    } catch { /* A failed catalog read must never alter the draft. */ }
     finally { catalogLoading = false; }
   };
   const composer = bridge.current;
@@ -24,9 +26,12 @@
   };
   const redraw = () => {
     list.replaceChildren();
+    let visible = false;
     const value = bridge.read();
     for (const [reference, item] of refs) {
       if (!value.includes(reference)) continue;
+      if (!item) continue;
+      visible = true;
       const chip = document.createElement('span'); chip.className = 'dsh-document-chip';
       const label = document.createElement('span'); label.textContent = item.name; label.title = item.relativePath;
       const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×';
@@ -40,33 +45,7 @@
       };
       chip.append(label, remove); list.append(chip);
     }
-  };
-  const add = async () => {
-    if (busy) return;
-    const input = composer();
-    const selection = localStorage.getItem('dsh.sessions.current');
-    if (!input) return message('输入框尚未就绪，请连接工作区后重试。', true);
-    busy = true; button.disabled = true; bar.setAttribute('aria-busy', 'true');
-    message('正在准备文件…');
-    try {
-      const before = await api.getState();
-      if (!before.available) throw new Error(before.message || '请等待工作区连接完成。');
-      const result = await api.choose(before.context);
-      if (result.canceled) return message(result.message);
-      const after = await api.getState();
-      if (before.context !== after.context || input !== composer() || selection !== localStorage.getItem('dsh.sessions.current')) throw new Error('会话已切换；没有把引用写入新会话，请回原会话重新添加。');
-      if (!result.ok) throw new Error(result.rejected?.map((r) => `${r.name}：${r.message}`).join('；') || result.message);
-      const additions = [];
-      result.references.forEach((reference, index) => {
-        refs.set(reference, result.items[index]);
-        if (!bridge.read(input).includes(reference)) additions.push(reference);
-      });
-      if (additions.length) await bridge.append(input, additions.join('\n'), () => selection === localStorage.getItem('dsh.sessions.current'));
-      redraw(); input.focus({ preventScroll: true });
-      const rejected = result.rejected?.map((r) => `${r.name}：${r.message}`).join('；');
-      message(`${result.message}${rejected ? ` 未添加：${rejected}` : ''}`, Boolean(rejected));
-    } catch (error) { message(error.message || '添加失败，草稿已保留，请重试。', true); }
-    finally { busy = false; button.disabled = false; bar.removeAttribute('aria-busy'); }
+    bar.hidden = !visible;
   };
   const mount = () => {
     scheduled = false;
@@ -75,27 +54,20 @@
     if (!card) return;
     if (bar?.isConnected && mountedCard === card) return;
     bar?.remove(); mountedCard = card;
-    bar = document.createElement('section'); bar.className = 'dsh-document-intake'; bar.setAttribute('aria-label', '工作区文件导入');
-    const row = document.createElement('div'); row.className = 'dsh-document-actions';
-    button = document.createElement('button'); button.type = 'button'; button.textContent = '导入工作区'; button.disabled = busy;
-    button.onclick = () => add();
-    const hint = document.createElement('span'); hint.id = 'dsh-document-intake-hint'; hint.textContent = '复制到工作区 · 普通附件请拖入对话或使用附件按钮';
-    hint.title = '此入口把本机文件导入工作区并添加只读引用，不是附件上传。支持 xlsx、docx、pdf、pptx、csv、txt、md；单文件最多 32 MB，每次最多 10 个、合计 64 MB。不支持旧版 xls/doc 和宏文件。';
-    button.setAttribute('aria-describedby', hint.id);
-    row.append(button, hint);
+    bar = document.createElement('section'); bar.className = 'dsh-document-intake'; bar.setAttribute('aria-label', '旧版文件引用'); bar.hidden = true;
     list = document.createElement('div'); list.className = 'dsh-document-list';
     status = document.createElement('div'); status.className = 'dsh-document-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    bar.append(row, list, status); card.insertAdjacentElement('beforebegin', bar); redraw();
+    bar.append(list, status); card.insertAdjacentElement('beforebegin', bar); redraw();
   };
   const observer = new MutationObserver(() => {
     if (!scheduled) { scheduled = true; requestAnimationFrame(mount); }
   });
   const onInput = (event) => { if (event.target === composer() && list) redraw(); };
-  const restored = () => { if (list) redraw(); };
+  const restored = () => { catalogSelection = null; void hydrate(); if (list) redraw(); };
   document.addEventListener('dsh-draft-restored', restored);
   document.addEventListener('input', onInput);
   observer.observe(document.body, { childList: true, subtree: true }); mount();
-  window.__DSH_DOCUMENT_INTAKE__ = Object.freeze({ installed: true, isPending: () => busy, dispose: () => {
+  window.__DSH_DOCUMENT_INTAKE__ = Object.freeze({ installed: true, isPending: () => catalogLoading, dispose: () => {
     observer.disconnect(); document.removeEventListener('dsh-draft-restored', restored); document.removeEventListener('input', onInput); bar?.remove();
   } });
   return true;

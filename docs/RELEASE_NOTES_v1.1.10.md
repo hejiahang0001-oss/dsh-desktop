@@ -1,12 +1,14 @@
 # DSH Desktop V1.1.10
 
-DeepSeek Harness `0.1.3-alpha.2` 隔离适配候选。运行库构建、合成会话迁移和真实附件界面验收通过，但因[上游依赖安全告警](HARNESS_ALPHA2_SECURITY_REVIEW.md)暂停打包、覆盖安装和公开发布；Stable 保持 V1.1.0。
+DeepSeek Harness `0.1.3-alpha.2` 适配与官方文件流程收口。按维护者确认补充最小依赖安全修复，完成实际运行库审计、打包态和安装态验收后更新 Latest；Stable 保持 V1.1.0。当前发布状态见[验证记录](VALIDATION.md)。
 
 ## 范围
 
 - 固定官方 `dsh-v0.1.3-alpha.2`，提交 `82a5fd61a7cf5c293cec4bdff68f455398d685e9`；不跟随浮动 latest，不同时升级 Electron、Node 或 pnpm。
 - 适配 Session v2 与冷读历史接口、persona 前后缀配置和软件代理优先级；历史读取不得自动激活 Agent。
-- 接入官方通用附件、图文混排及其上传状态；保留原生工作区导入和 Office 严格处理，因为官方附件对象并不位于工作区，且不提供相同准入检查。
+- 新文件统一使用官方附件、拖拽、图文混排和上传状态；移除重复的“导入工作区”按钮及空导入栏。保留旧文件引用和草稿恢复，不迁移或删除用户文件。
+- Word/Excel/PPT 格式 Skills、安全检查、真实文件及备份收据继续可用；它们是按需格式工具，不接管官方附件和产物卡片。官方通用文件能力不等于任意 Office 排版保证。
+- 固定七项同主版本安全补丁：js-yaml 4.3.1、protobufjs 7.6.5、fast-uri 3.1.6、ip-address 10.3.1、hono 4.12.34、@hono/node-server 1.19.15、qs 6.16.0；构建来源明确记录 `desktop-security-1` 和锁文件摘要。
 - 随官方升级获得长会话性能、断线恢复、子代理队列/Steer/Stop、自动滚动、Windows 子进程清理及 Open In 改进。
 
 ## 数据与兼容边界

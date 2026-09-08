@@ -1,6 +1,6 @@
-# Harness alpha.2 release hold — 2026-09-08
+# Harness alpha.2 security build review — 2026-09-08
 
-This is a bounded dependency review, not a general security certification. V1.1.10 remains an isolated compatibility candidate; do not overwrite the installed application or publish an installer while this hold is unresolved.
+This is a bounded dependency review, not a general security certification. The maintainer approved the minimum security build and Latest iteration. Installation/publication remain gated on the rebuilt physical payload audit and compatibility evidence; Stable is unchanged.
 
 ## Separate audit scopes
 
@@ -27,8 +27,10 @@ Source at commit `82a5fd61a7cf5c293cec4bdff68f455398d685e9` establishes the rele
 
 Malicious YAML must first reach a discovered preset directory, for example through a user import or a tool-created preset. No unauthenticated network exploit, credential disclosure or destructive attack was tested or established. App Boot and Include use `JSON_SCHEMA`; they are **not** confirmed merge/omap trigger sites and must not be counted as such.
 
-## Next decision
+## Approved bounded remediation
 
-The narrowest candidate fix for these two advisories is a reviewed, exact `js-yaml` 4.x security override at 4.3.1 or a later verified fixed release, followed by upstream semantic, preset, migration and desktop regressions. Other advisories still need actual payload membership checks. A security override changes the official frozen dependency graph and must be recorded as such; it must not be mislabeled as an unchanged official runtime.
+`runtime/harness-security/overrides.json` pins seven affected versions to fixed releases within their existing major: js-yaml 4.3.1, protobufjs 7.6.5, fast-uri 3.1.6, ip-address 10.3.1, hono 4.12.34, @hono/node-server 1.19.15 and qs 6.16.0. The generated upstream lock diff only changes these entries/references. SHA-256 `c2249475d8c65c196ad3ab5d8c53c47a306244122c67e82545e0e238da9395db` binds the reviewed lock. Build inputs are verified before and after the build; official application source is unchanged. Provenance is explicitly `desktop-security-frozen-lockfile`, revision `desktop-security-1`.
 
-Retain V1.1.9 installed/Latest and V1.1.0 Stable. Do not waive the audit gate or silently substitute third-party files inside an already-hashed runtime.
+The physical runtime's undici 8.10.0 is outside this audit's affected 7.x range (`>=7.0.0 <7.29.0`); it is not downgraded. Absent monorepo packages are not added merely to satisfy an unrelated workspace audit. `audit-harness-runtime.cjs` recursively inventories actual shipped package versions, checks advisory ranges using pinned semver, binds the payload hash, and fails on moderate/high/critical findings or registry errors. This supplements, not replaces, the desktop-root audit.
+
+The new runtime is built into a separate directory; the previous rc.1 and unpatched alpha.2 runtimes are retained for rollback/diagnosis. Do not waive the audit gate or silently substitute third-party files inside an already-hashed runtime. Actual audit/build results are recorded in VALIDATION.md as they complete.

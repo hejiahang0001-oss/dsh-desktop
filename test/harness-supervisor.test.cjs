@@ -353,7 +353,7 @@ test('packaged runtime fails closed instead of falling back to external override
   fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.3-alpha.2' }));
   for (const target of [
     path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'node.exe' : 'bin/node'),
-    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.3-alpha.2', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.3-alpha.2-desktop-security-1', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]) {
     fs.mkdirSync(path.dirname(target), { recursive: true });

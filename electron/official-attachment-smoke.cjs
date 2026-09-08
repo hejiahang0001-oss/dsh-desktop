@@ -54,6 +54,9 @@ async function runOfficialAttachmentSmoke({ window, BrowserWindow, nativeImage, 
   const rail = () => `document.querySelector(${JSON.stringify(pendingRail)})`;
   const readyFile = (name) => `(()=>{const card=Array.from(${rail()}?.querySelectorAll('[title]')||[]).find(el=>el.title===${JSON.stringify(name)});return Boolean(card)&&!/上传中|上传失败|Uploading|Upload failed/.test(card.textContent)})()`;
   const drop = async (paths, screenshot = false) => {
+    // Fresh no-Key profiles can show onboarding after an asynchronous session switch.
+    await evaluate('Array.from(document.querySelectorAll("button")).find(b=>["稍后配置","Set up later"].includes(b.textContent.trim()))?.click()');
+    await waitFor('!Array.from(document.querySelectorAll("button")).some(b=>["稍后配置","Set up later"].includes(b.textContent.trim()) && b.getClientRects().length)');
     const point = await evaluate('(()=>{const r=document.querySelector("[data-composer-card]").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
     const data = { items: [], files: paths, dragOperationsMask: 1 };
     for (const type of ['dragEnter', 'dragOver']) await wc.debugger.sendCommand('Input.dispatchDragEvent', { type, ...point, data });
@@ -77,6 +80,7 @@ async function runOfficialAttachmentSmoke({ window, BrowserWindow, nativeImage, 
   await waitFor(`${rail()}?.children.length === 4 && ${rail()}?.querySelectorAll('img').length === 1`);
   await waitFor(readyFile(files[1].name));
   checks.mixedFileAndImageDrop = true;
+  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
   await fsp.writeFile(`${target}.official-mixed.png`, (await wc.capturePage()).toPNG());
 
   const otherPath = path.join(smokeRoot, 'official-other-workspace'); await fsp.mkdir(otherPath, { recursive: true });

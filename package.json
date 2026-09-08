@@ -10,7 +10,7 @@
   "private": true,
   "scripts": {
     "start": "node scripts/start-electron.cjs",
-    "test": "node --test test/*.test.cjs",
+    "test": "node --test --test-concurrency=4 test/*.test.cjs",
     "electron:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-electron-runtime.ps1",
     "runtime:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-node-runtime.ps1",
     "runtime:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-harness-runtime.ps1",
@@ -130,11 +130,11 @@
         ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.3-alpha.2/node_modules",
+        "from": "vendor/harness-hoisted-0.1.3-alpha.2-desktop-security-1/node_modules",
         "to": "harness/node_modules"
       },
       {
-        "from": "vendor/harness-hoisted-0.1.3-alpha.2/harness-runtime.json",
+        "from": "vendor/harness-hoisted-0.1.3-alpha.2-desktop-security-1/harness-runtime.json",
         "to": "harness/harness-runtime.json"
       },
       {

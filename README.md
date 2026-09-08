@@ -28,7 +28,7 @@
 
 ## Why DSH Desktop
 
-V1.1.10 adapts Harness `0.1.3-alpha.2` in an isolated candidate. Source tests, migration, cold-history reads and attachment UI checks pass, but [upstream dependency security findings](docs/HARNESS_ALPHA2_SECURITY_REVIEW.md) hold packaging, installation and publication. Current Latest downloads remain V1.1.9 and Stable remains V1.1.0. See the [upgrade candidate notes](docs/RELEASE_NOTES_v1.1.10.md).
+V1.1.10 (`DSH-Desktop-Setup-1.1.10.exe`, candidate under validation) adapts Harness `0.1.3-alpha.2`, uses official attachments as the only new-file entry, and keeps older references and optional Office Skills. Seven exact security fixes are applied to the dependency graph without changing upstream application sources; this is a documented desktop security build, not an unchanged official runtime. Publication requires the physical-runtime audit and installed-app gates. Current public downloads remain V1.1.9 and Stable remains V1.1.0 until those gates pass. See the [candidate notes](docs/RELEASE_NOTES_v1.1.10.md).
 
 V1.1.9 (`DSH-Desktop-Setup-1.1.9.exe`) strengthens the existing Word, Excel and PowerPoint tools with shared package/XML safety checks and verified on-disk delivery receipts. It preserves the Wiki workflow and official Harness chat controls. See the [release notes](docs/RELEASE_NOTES_v1.1.9.md) and [validation evidence](docs/VALIDATION.md) for current acceptance and publication status.
 

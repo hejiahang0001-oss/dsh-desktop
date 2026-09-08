@@ -320,6 +320,21 @@ test('Plan mode signals use the official Harness chip and never infer from page 
   assert.equal(state.canExitPlan, true);
 });
 
+test('official Lexical input supports focus and refuses replacing an existing command draft', async () => {
+  let focused = false;
+  const composer = { innerText: '保留草稿', focus() { focused = true; } };
+  const document = { querySelector: (selector) => selector.includes('contenteditable') ? composer : null, querySelectorAll: () => [] };
+  const prepare = () => Function('document', 'return ' + getHarnessCommandPreparationScript('enter-plan-mode'))(document);
+  assert.equal(prepare().reason, 'composer-has-draft');
+  assert.equal(focused, false);
+  composer.innerText = '';
+  assert.equal(prepare().ready, true);
+  assert.equal(focused, true);
+  focused = false;
+  assert.equal(await Function('document', 'return ' + getHarnessUiActionScript('focus-agent-input'))(document), true);
+  assert.equal(focused, true);
+});
+
 test('Plan command action refuses drafts and submits only the fixed slash command', async () => {
   assert.match(getHarnessCommandPreparationScript('enter-plan-mode'), /composer-has-draft/);
   assert.throws(() => getHarnessCommandPreparationScript('arbitrary-command'), /Unsupported/);

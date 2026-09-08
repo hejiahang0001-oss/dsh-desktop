@@ -67,7 +67,12 @@ const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = 'f28b3917e722e1843aa28da324c84
 const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 251;
 const REQUIRED_HARNESS_BUILD_NODE = 'v24.19.0';
 const REQUIRED_HARNESS_BUILD_PNPM = '11.7.0';
-const REQUIRED_HARNESS_DEPENDENCY_RESOLUTION = 'upstream-frozen-lockfile';
+const REQUIRED_HARNESS_DEPENDENCY_RESOLUTION = 'desktop-security-frozen-lockfile';
+const SECURITY_POLICY = require('../runtime/harness-security/overrides.json');
+const REQUIRED_HARNESS_SECURITY = {
+  revision: SECURITY_POLICY.revision, overrides: SECURITY_POLICY.overrides,
+  workspaceSha256: SECURITY_POLICY.workspaceSha256, lockSha256: SECURITY_POLICY.lockSha256
+};
 const REQUIRED_HARNESS_PACKAGE_PAYLOAD = 'upstream-pnpm-pack';
 const REQUIRED_HARNESS_INSTALL_SCRIPTS = Object.freeze(['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local', 'fs-ext']);
 const REQUIRED_HARNESS_VENDOR_PACKAGES = new Set([
@@ -89,7 +94,7 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', '9e7754a66531b71efba97ace29b7577dcc276963ec64eae92c1a07dc17e5916a']
+  ['THIRD_PARTY_LICENSES.md', '4881877753515cc85ab52880101666da92df31f900106e18ea68b21b477eb042']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -505,6 +510,7 @@ const inspectPackageLayout = async (rootPath) => {
     harnessRuntime.buildNode = typeof provenance?.build?.node === 'string' ? provenance.build.node : '';
     harnessRuntime.buildPnpm = typeof provenance?.build?.pnpm === 'string' ? provenance.build.pnpm : '';
     harnessRuntime.dependencyResolution = typeof provenance?.build?.dependencyResolution === 'string' ? provenance.build.dependencyResolution : '';
+    harnessRuntime.security = provenance?.build?.security || null;
     harnessRuntime.packagePayload = typeof provenance?.build?.packagePayload === 'string' ? provenance.build.packagePayload : '';
     harnessRuntime.installScripts = Array.isArray(provenance?.build?.installScripts)
       ? provenance.build.installScripts.filter((value) => typeof value === 'string')
@@ -545,6 +551,7 @@ const inspectPackageLayout = async (rootPath) => {
     && harnessRuntime.buildNode === REQUIRED_HARNESS_BUILD_NODE
     && harnessRuntime.buildPnpm === REQUIRED_HARNESS_BUILD_PNPM
     && harnessRuntime.dependencyResolution === REQUIRED_HARNESS_DEPENDENCY_RESOLUTION
+    && JSON.stringify(harnessRuntime.security) === JSON.stringify(REQUIRED_HARNESS_SECURITY)
     && harnessRuntime.packagePayload === REQUIRED_HARNESS_PACKAGE_PAYLOAD
     && JSON.stringify(harnessRuntime.installScripts) === JSON.stringify(REQUIRED_HARNESS_INSTALL_SCRIPTS)
     && harnessRuntime.dshPackageCount === REQUIRED_HARNESS_DSH_PACKAGE_COUNT

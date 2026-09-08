@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
-const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.3-alpha.2', 'node_modules');
+const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.3-alpha.2-desktop-security-1', 'node_modules');
 const directPackageRoots = [
   path.join(root, 'node_modules', '@xmldom', 'xmldom'),
   path.join(root, 'node_modules', 'pnpm'),

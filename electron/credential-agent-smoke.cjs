@@ -1,7 +1,6 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { randomBytes, createHash } = require('node:crypto');
-const { DocumentIntake, documentReference } = require('./document-intake.cjs');
 const { synchronizeHarnessWorkspace } = require('./harness-workspace-sync.cjs');
 const { establishHarnessSession, createAuthenticatedHarnessFetch } = require('./harness-supervisor.cjs');
 const { callHarnessApi } = require('./harness-workspace-sync.cjs');
@@ -9,7 +8,7 @@ const { callHarnessRemote, sanitizePluginInventory } = require('./extension-cent
 
 const selectSmokePermission = async (apiCall, origin, sessionId, fetchImpl) => {
   const receipt = await callHarnessRemote(origin, 'commands', 'execute', {
-    agentId: sessionId, line: '/permission danger-full-access', images: []
+    agentId: sessionId, line: '/permission danger-full-access', submittedAttachments: []
   }, { fetchImpl });
   if (!receipt || receipt.result?.kind !== 'success') throw new Error('真实验收没有接受隔离目录的 Full Access 权限。');
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -42,8 +41,8 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     await fsp.writeFile(xlsxPath, createZip(workbookEntries(excelSpec({ sheets: [{ name: '数据', rows: [['项目', '金额'], ['甲', left], ['乙', right]] }] }))));
     await fsp.writeFile(docxPath, createZip(documentEntries(wordSpec({ title: '读取验收', sections: [{ kind: 'paragraph', text: `本次文档标记是 ${token}。` }] }))));
     if (!readZip(await fsp.readFile(docxPath)).get('word/document.xml').toString('utf8').includes(token)) throw new Error('Word 测试资料缺少预期标记，拒绝浪费模型调用。');
-    const imported = await new DocumentIntake().importFiles({ workspacePath, paths: [xlsxPath, docxPath] });
-    if (imported.items.length !== 2) throw new Error('Office 测试资料导入失败。');
+    const sourceFiles = [xlsxPath, docxPath];
+    const sourceHashes = await Promise.all(sourceFiles.map(async (file) => createHash('sha256').update(await fsp.readFile(file)).digest('hex')));
     supervisor = createSupervisor(smokeRoot, workspacePath);
     const auth = await establishHarnessSession(await supervisor.start());
     const origin = auth.origin, fetchImpl = createAuthenticatedHarnessFetch(auth);
@@ -66,11 +65,21 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     // so this credential/Office acceptance does not stall on an unattended
     // escalation. Normal product sessions are never changed by this smoke.
     await selectSmokePermission(apiCall, origin, workspace.sessionId, fetchImpl);
+    const fileContent = [];
+    for (const file of sourceFiles) {
+      const query = new URLSearchParams({ sessionId: workspace.sessionId, name: path.basename(file) });
+      const response = await fetchImpl(`${origin}/api/session/uploadFileBinary?${query}`, {
+        method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: await fsp.readFile(file), signal: AbortSignal.timeout(30000)
+      });
+      if (!response.ok) throw new Error(`Official file upload HTTP ${response.status}`);
+      const uploaded = await response.json();
+      if (!uploaded.ok || typeof uploaded.value?.receiptId !== 'string') throw new Error('Official file upload did not return a receipt.');
+      fileContent.push({ type: 'file', receiptId: uploaded.value.receiptId });
+    }
     const prompt = ['/excel-xlsx 请使用软件内置的 Excel/Word Skills 读取以下两个真实文件，只使用本机工具，不安装依赖，不访问网络。',
       'Excel 的金额列求和，Word 取出 DOC_ 开头的文档标记。将结果写到工作区 intake-result.json，格式是 {"excelTotal": 数字, "wordMarker": "标记"}。',
-      '可使用软件内置的 Word/Excel 工具或 Node.js 从 OOXML ZIP 读取，不能猜测文件内容。除结果文件外不要修改文件。',
-      ...imported.items.map(documentReference)].join('\n');
-    const receipt = await apiCall(origin, 'session.prompt', { sessionId: workspace.sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] });
+      '可使用软件内置的 Word/Excel 工具或 Node.js 从 OOXML ZIP 读取，不能猜测文件内容。如格式工具需要工作区副本，可将我选择的官方附件以不覆盖方式复制到工作区，再做检查和读取；不得修改附件原件。'].join('\n');
+    const receipt = await apiCall(origin, 'session.prompt', { sessionId: workspace.sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }, ...fileContent] });
     if (!receipt.accepted) throw new Error('真实任务没有被 Harness 接受。');
     const deadline = Date.now() + 300000; let observed, sawRunning = false, polls = 0;
     while (Date.now() < deadline) {
@@ -96,9 +105,12 @@ const runCredentialAgentSmoke = async ({ output, source, smokeRoot, createSuperv
     let noPlaintext = status?.configured === true;
     for (const file of checks) { const content = await fsp.readFile(file, 'utf8'); noPlaintext &&= supervisor.credentialHost.redact(content) === content; }
     const originalUnchanged = createHash('sha256').update(await fsp.readFile(source)).digest('hex') === sourceDigest;
-    result = { ok: observed?.excelTotal === left + right && observed?.wordMarker === token && migrated && status?.encrypted && noPlaintext && originalUnchanged,
+    const currentHashes = await Promise.all(sourceFiles.map(async (file) => createHash('sha256').update(await fsp.readFile(file)).digest('hex')));
+    const originalDocumentsUnchanged = currentHashes.every((hash, index) => hash === sourceHashes[index]);
+    result = { ok: observed?.excelTotal === left + right && observed?.wordMarker === token && migrated && status?.encrypted && noPlaintext && originalUnchanged && originalDocumentsUnchanged,
       version, realModel: true, excelReadVerified: observed?.excelTotal === left + right, wordReadVerified: observed?.wordMarker === token,
       legacyRemovedAfterEncryption: !encryptedSource && migrated, encryptedSource, encryptedStatus: status, noPlaintextInVaultOrLog: noPlaintext, sourceCredentialUnmodified: originalUnchanged,
+      officialAttachmentReceipts: fileContent.length, originalDocumentsUnchanged,
       permissionPreset: 'danger-full-access', boundary: 'isolated generated workspace with explicit Full Access; XLSX and DOCX real reads; PDF import/render is separate, OCR not included' };
   } catch (error) { result = { ok: false, version, error: String(error.message).replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]') }; }
   finally { await supervisor?.stop(); await fsp.mkdir(path.dirname(output), { recursive: true }); await fsp.writeFile(output, `${JSON.stringify(result, null, 2)}\n`); }

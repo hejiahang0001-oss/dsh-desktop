@@ -125,9 +125,9 @@ DSH Desktop itself is MIT licensed. The inventory below records package-manifest
 | @protobufjs/utf8 | 1.1.1 |
 | buffer-equal-constant-time | 1.0.1 |
 | diff | 9.0.0 |
-| fast-uri | 3.1.3 |
-| protobufjs | 7.6.4 |
-| qs | 6.15.3 |
+| fast-uri | 3.1.6 |
+| protobufjs | 7.6.5 |
+| qs | 6.16.0 |
 
 ## ISC
 
@@ -414,7 +414,7 @@ DSH Desktop itself is MIT licensed. The inventory below records package-manifest
 | @deepseek-ai/schemastery | 3.18.2 |
 | @earendil-works/pi-ai | 0.85.1 |
 | @earendil-works/pi-telemetry | 0.85.1 |
-| @hono/node-server | 1.19.14 |
+| @hono/node-server | 1.19.15 |
 | @img/colour | 1.1.0 |
 | @joplin/turndown-plugin-gfm | 1.0.67 |
 | @koromix/koffi-win32-x64 | 3.1.1 |
@@ -510,12 +510,12 @@ DSH Desktop itself is MIT licensed. The inventory below records package-manifest
 | gopd | 1.2.0 |
 | has-symbols | 1.1.0 |
 | hasown | 2.0.4 |
-| hono | 4.12.29 |
+| hono | 4.12.34 |
 | http-errors | 2.0.1 |
 | http-proxy-agent | 7.0.2 |
 | https-proxy-agent | 7.0.6 |
 | iconv-lite | 0.7.3 |
-| ip-address | 10.2.0 |
+| ip-address | 10.3.1 |
 | ipaddr.js | 1.9.1 |
 | is-docker | 3.0.0 |
 | is-in-ssh | 1.0.0 |
@@ -524,7 +524,7 @@ DSH Desktop itself is MIT licensed. The inventory below records package-manifest
 | is-wsl | 3.1.1 |
 | jose | 6.2.3 |
 | js-tokens | 4.0.0 |
-| js-yaml | 4.2.0 |
+| js-yaml | 4.3.1 |
 | json-bigint | 1.0.0 |
 | json-schema-to-ts | 3.1.1 |
 | json-schema-traverse | 1.0.0 |

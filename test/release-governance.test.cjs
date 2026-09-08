@@ -70,7 +70,11 @@ const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = 
       pnpm: '11.7.0',
       packageCount: 260,
       packageInventorySha256: 'f28b3917e722e1843aa28da324c849f4bfd0a5f912d907365a6963b3e976a6e9',
-      dependencyResolution: 'upstream-frozen-lockfile',
+      dependencyResolution: 'desktop-security-frozen-lockfile',
+      security: (() => {
+        const policy = require('../runtime/harness-security/overrides.json');
+        return { revision: policy.revision, overrides: policy.overrides, workspaceSha256: policy.workspaceSha256, lockSha256: policy.lockSha256 };
+      })(),
       packagePayload: 'upstream-pnpm-pack',
       installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local', 'fs-ext'],
       runtimePayload,
@@ -359,6 +363,11 @@ test('package layout requires exact Harness source-build provenance', async (con
   assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
 
   writeHarnessFixture(root, { build: { node: 'v99.0.0' } });
+  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+
+  writeHarnessFixture(root, { build: { security: null } });
+  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  writeHarnessFixture(root, { build: { dependencyResolution: 'upstream-frozen-lockfile' } });
   assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
 
   writeHarnessFixture(root, { driftedPackage: 'dsh-acp' });
