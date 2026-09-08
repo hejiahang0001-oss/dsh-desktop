@@ -1,6 +1,6 @@
 # DSH Desktop V1.1.10
 
-DeepSeek Harness `0.1.3-alpha.2` 适配与官方文件流程收口。按维护者确认补充最小依赖安全修复，完成实际运行库审计、打包态和安装态验收后更新 Latest；Stable 保持 V1.1.0。当前发布状态见[验证记录](VALIDATION.md)。
+DeepSeek Harness `0.1.3-alpha.2` 适配与官方文件流程收口。已按维护者确认补充最小依赖安全修复，完成实际运行库审计、打包态和安装态验收，并公开为 Latest / Pre-release；Stable 保持 V1.1.0。发布证据见[验证记录](VALIDATION.md)。
 
 ## 范围
 
@@ -20,4 +20,4 @@ DeepSeek Harness `0.1.3-alpha.2` 适配与官方文件流程收口。按维护�
 
 ## 验证状态
 
-开发中，结果以 [验证记录](VALIDATION.md) 的本版条目为准。尚未通过的门禁不能由源码版本号代替。
+完整源码测试 585/585 通过；固定运行库安全审计、会话迁移/冷读、打包文件一致性、生命周期及安全退出通过。本机已覆盖安装 V1.1.10，官方附件 GUI 和真实 DeepSeek Excel/Word 读取通过；旧会话、设置和加密 Key 保持不变。四项资产全部上传并核对大小及摘要后，已公开 [V1.1.10](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.10)；匿名完整下载 4/4、下载的校验清单 3/3 通过。详细证据见 [验证记录](VALIDATION.md)。
