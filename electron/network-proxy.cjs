@@ -71,14 +71,15 @@ const sessionProxyConfig = (settings) => {
 };
 
 const buildHarnessProxyEnvironment = (effectiveProxyUrl) => {
-  if (!effectiveProxyUrl) return Object.freeze({});
-  const proxyUrl = normalizeProxyUrl(effectiveProxyUrl);
-  return Object.freeze({
-    HTTP_PROXY: proxyUrl,
-    HTTPS_PROXY: proxyUrl,
-    NO_PROXY: LOOPBACK_BYPASS,
-    NODE_USE_ENV_PROXY: '1'
-  });
+  const proxyUrl = effectiveProxyUrl ? normalizeProxyUrl(effectiveProxyUrl) : '';
+  // Explicit empty values keep Harness-home .env from refilling software-owned settings.
+  // Supply both spellings for POSIX; Windows collapses them to the same value on spawn.
+  const environment = Object.fromEntries(Object.entries({
+    HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ALL_PROXY: '',
+    NO_PROXY: proxyUrl ? LOOPBACK_BYPASS : ''
+  }).flatMap(([name, value]) => [[name, value], [name.toLowerCase(), value]]));
+  if (proxyUrl) environment.NODE_USE_ENV_PROXY = '1';
+  return Object.freeze(environment);
 };
 
 const proxySettingsEqual = (left, right) => {

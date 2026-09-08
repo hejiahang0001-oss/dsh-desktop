@@ -6,10 +6,10 @@
   const selection = () => localStorage.getItem('dsh.sessions.current') || '';
   const show = (text) => { if (status?.isConnected) status.textContent = text; };
   const mount = () => {
-    const bar = document.querySelector('.dsh-document-intake'); if (!bar) return;
-    if (status?.isConnected && status.parentElement === bar) return;
-    status?.remove(); status = document.createElement('div'); status.className = 'dsh-document-status';
-    status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); bar.append(status);
+    const card = document.querySelector('[data-composer-card]'); if (!card) return;
+    if (status?.isConnected && status.previousElementSibling === card) return;
+    status?.remove(); status = document.createElement('div'); status.className = 'dsh-document-status dsh-continuity-status';
+    status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); card.insertAdjacentElement('afterend', status);
   };
   const persist = (record) => {
     const text = record.latest;

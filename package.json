@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -10,7 +10,7 @@
   "private": true,
   "scripts": {
     "start": "node scripts/start-electron.cjs",
-    "test": "node --test test/*.test.cjs",
+    "test": "node --test --test-concurrency=4 test/*.test.cjs",
     "electron:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-electron-runtime.ps1",
     "runtime:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-node-runtime.ps1",
     "runtime:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-harness-runtime.ps1",
@@ -30,7 +30,8 @@
     "electron": "43.4.1",
     "electron-builder": "26.11.1",
     "harness-build-pnpm": "npm:pnpm@11.7.0",
-    "pnpm": "11.19.0"
+    "pnpm": "11.19.0",
+    "semver": "7.8.5"
   },
   "build": {
     "appId": "com.dsh.desktop",
@@ -129,11 +130,11 @@
         ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.2-rc.1/node_modules",
+        "from": "vendor/harness-hoisted-0.1.3-alpha.2-desktop-security-1/node_modules",
         "to": "harness/node_modules"
       },
       {
-        "from": "vendor/harness-hoisted-0.1.2-rc.1/harness-runtime.json",
+        "from": "vendor/harness-hoisted-0.1.3-alpha.2-desktop-security-1/harness-runtime.json",
         "to": "harness/harness-runtime.json"
       },
       {

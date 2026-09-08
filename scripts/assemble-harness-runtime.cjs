@@ -1,12 +1,11 @@
 const { spawn } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
 
-const EXPECTED_HARNESS_VERSION = '0.1.2-rc.1';
-const EXPECTED_DSH_PACKAGES = 242;
+const EXPECTED_HARNESS_VERSION = '0.1.3-alpha.2';
+const EXPECTED_DSH_PACKAGES = 251;
 const EXPECTED_VENDOR_PACKAGES = 9;
 const MAX_PACK_OUTPUT = 1024 * 1024;
 const MAX_RUNTIME_ENTRIES = 60_000;
@@ -102,7 +101,9 @@ const assertInside = (parent, child) => {
 
 const hydratePackages = async ({ archives, expectedPackages, runtimeRoot }) => {
   const nodeModules = path.join(runtimeRoot, 'node_modules');
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-harness-pack-'));
+  // Extraction and destination must share a volume: Windows CI keeps TEMP on
+  // C: and the checkout on D:, where rename would otherwise fail with EXDEV.
+  const scratch = fs.mkdtempSync(path.join(runtimeRoot, '.dsh-harness-pack-'));
   const expected = new Map(expectedPackages.map(({ manifest }) => [manifest.name, manifest.version]));
   const seen = new Set();
   try {
@@ -127,8 +128,7 @@ const hydratePackages = async ({ archives, expectedPackages, runtimeRoot }) => {
       seen.add(manifest.name);
     }
   } finally {
-    const tempPrefix = `${path.resolve(os.tmpdir())}${path.sep}`.toLowerCase();
-    if (!path.resolve(scratch).toLowerCase().startsWith(tempPrefix)) throw new Error(`Unsafe scratch path: ${scratch}`);
+    assertInside(runtimeRoot, scratch);
     fs.rmSync(scratch, { recursive: true, force: true });
   }
   if (seen.size !== expected.size) {
@@ -218,9 +218,10 @@ const main = async () => {
       packageInventorySha256: createHash('sha256')
         .update(`${releasePackages.map(({ manifest }) => `${manifest.name}@${manifest.version}`).sort((left, right) => left.localeCompare(right, 'en')).join('\n')}\n`)
         .digest('hex'),
-      dependencyResolution: 'upstream-frozen-lockfile',
+      dependencyResolution: 'desktop-security-frozen-lockfile',
+      security: require('./apply-harness-security.cjs').verifySecurity(sourceRoot),
       packagePayload: 'upstream-pnpm-pack',
-      installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local'],
+      installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local', 'fs-ext'],
       // Only node_modules is shipped as the executable Harness payload. The
       // pnpm deploy staging files at runtimeRoot are build inputs, not package
       // resources, so binding them would make an intact package look altered.
@@ -232,7 +233,9 @@ const main = async () => {
   process.stdout.write(`${JSON.stringify({ ok: true, provenance, layout })}\n`);
 };
 
-void main().catch((error) => {
+module.exports = { hydratePackages };
+
+if (require.main === module) void main().catch((error) => {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;
 });

@@ -53,11 +53,22 @@ const assistantTexts = (history) => (Array.isArray(history?.events) ? history.ev
 
 const toolCallsOf = (history) => (Array.isArray(history?.events) ? history.events : [])
   .filter((entry) => entry?.event?.type === 'tool/call')
-  .map((entry) => ({
-    name: String(entry.event.data?.name || ''),
-    arguments: JSON.stringify(entry.event.data?.arguments || {}),
-    rawArguments: entry.event.data?.arguments || {}
-  }));
+  .map((entry) => {
+    const raw = entry.event.data?.arguments;
+    if (typeof raw !== 'string') throw new Error('Harness tool/call arguments must be the official raw JSON string.');
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { throw new Error('Harness tool/call arguments contain invalid JSON.'); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Harness tool/call arguments must describe an object.');
+    return { name: String(entry.event.data?.name || ''), arguments: raw, rawArguments: parsed };
+  });
+
+const createSyntheticHistory = (rawSecret, now = Date.now()) => ({
+  hasMore: false, throughSeq: 2,
+  events: [
+    { type: 'event', event: { seq: 1, time: now - 1000, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: `请记住 DSH_HISTORY_REAL_VERIFIED。DEEPSEEK_API_KEY=${rawSecret}` }] } } },
+    { type: 'event', event: { seq: 2, time: now, type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: '历史导入必须保持原始会话只读，并先预览再确认。' }] }, stream: [] } } }
+  ]
+});
 
 const main = async () => {
   const outputFile = readArgument('output');
@@ -105,13 +116,7 @@ const main = async () => {
   const sourcePrepared = await prepareDshHistorySource({
     apiCall: async (_origin, method) => {
       if (method !== 'session.history') throw new Error(`unexpected method ${method}`);
-      return {
-        hasMore: false,
-        events: [
-          { event: { seq: 1, time: Date.now() - 1000, type: 'user/message', data: { message: { role: 'user', content: [{ type: 'text', text: `请记住 DSH_HISTORY_REAL_VERIFIED。DEEPSEEK_API_KEY=${rawSecret}` }] } } } },
-          { event: { seq: 2, time: Date.now(), type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: '历史导入必须保持原始会话只读，并先预览再确认。' }] } } } }
-        ]
-      };
+      return createSyntheticHistory(rawSecret);
     },
     origin: 'http://127.0.0.1:1',
     summaries: [summary],
@@ -232,7 +237,9 @@ const main = async () => {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 };
 
-void main().catch((error) => {
+module.exports = { assistantTexts, toolCallsOf, createSyntheticHistory };
+
+if (require.main === module) void main().catch((error) => {
   process.stderr.write(`${redact(error?.stack || error?.message || String(error))}\n`);
   process.exitCode = 1;
 });

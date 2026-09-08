@@ -115,7 +115,7 @@ test('a selected session missing from the live list is not silently reopened', a
   assert.equal(result.sessionCreated, true);
 });
 
-test('legacy prompt and history calls use the official Remote wire shape', async () => {
+test('prompt keeps official Remote wire and history uses the private cold-read bridge', async () => {
   const fixture = createFetch();
   const receipt = await callHarnessApi('http://127.0.0.1:54321', 'session.prompt', {
     sessionId: SESSION_ID,
@@ -128,18 +128,43 @@ test('legacy prompt and history calls use the official Remote wire shape', async
   assert.equal(typeof prompt.payload.args.request.requestId, 'string');
   assert.equal(prompt.payload.args.request.sessionId, SESSION_ID);
 
+  const historyCalls = [], requestsBeforeHistory = fixture.calls.length;
   const history = await callHarnessApi('http://127.0.0.1:54321', 'session.history', {
     sessionId: SESSION_ID,
     maxMessages: 2
-  }, { fetchImpl: fixture.fetchImpl });
+  }, { fetchImpl: fixture.fetchImpl, readHistoryPage: async (payload, options) => {
+    historyCalls.push({ payload, options });
+    return { events: [], hasMore: false, throughSeq: -1, projections: { asOfSeq: -1, values: {} } };
+  } });
   assert.deepEqual(history.events, []);
   assert.equal(history.projections.asOfSeq, -1);
-  assert.deepEqual(fixture.calls.slice(-2).map((call) => call.method), ['session/list', 'session/page']);
-  assert.deepEqual(fixture.calls.at(-1).payload.args.request, {
-    address: { kind: 'session', sessionId: SESSION_ID },
-    throughSeq: -1,
-    maxMessages: 2
-  });
+  assert.equal(fixture.calls.length, requestsBeforeHistory, 'reading history must not list stale hints or follow/activate');
+  assert.deepEqual(historyCalls, [{ payload: { sessionId: SESSION_ID, maxMessages: 2 }, options: { timeoutMs: 8000 } }]);
+});
+
+test('history adapter forwards the fixed backwards cut without discarding event records', async () => {
+  const expected = { events: [{ type: 'event', event: { seq: 4, type: 'assistant/attempt', data: { stream: [{ text: 'chunk' }] } } }],
+    hasMore: true, throughSeq: 8, projections: { asOfSeq: 12, values: {} } };
+  const result = await callHarnessApi('http://127.0.0.1:54321', 'session.history', {
+    sessionId: SESSION_ID, beforeSeq: 5, throughSeq: 8, maxMessages: 1, unrelated: 'not forwarded'
+  }, { timeoutMs: 2000, readHistoryPage: async (payload, options) => {
+    assert.deepEqual(payload, { sessionId: SESSION_ID, beforeSeq: 5, throughSeq: 8, maxMessages: 1 });
+    assert.deepEqual(options, { timeoutMs: 2000 }); return expected;
+  } });
+  assert.deepEqual(result, expected);
+});
+
+test('history reads fail closed without IPC or with incomplete responses, never falling back to follow', async () => {
+  const request = { sessionId: SESSION_ID };
+  await assert.rejects(callHarnessApi('http://127.0.0.1:54321', 'session.history', request), (e) => e.code === 'history-reader-unavailable');
+  await assert.rejects(callHarnessApi('http://remote.invalid:54321', 'session.history', request, {
+    readHistoryPage: async () => assert.fail('unsafe origin must not reach IPC')
+  }), (e) => e.code === 'unsafe-origin');
+  for (const response of [{}, { events: [], hasMore: false }, { events: [], throughSeq: 0 }]) {
+    await assert.rejects(callHarnessApi('http://127.0.0.1:54321', 'session.history', request, {
+      readHistoryPage: async () => response
+    }), (e) => e.code === 'invalid-response');
+  }
 });
 
 test('alpha.2 Remote failures retain namespaced codes and details without retry or result unwrapping', async () => {

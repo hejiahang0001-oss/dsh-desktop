@@ -40,20 +40,21 @@ const extractWikiSessionCandidates = (history, { maxItems = MAX_CANDIDATES } = {
   for (let index = events.length - 1; index >= 0 && candidates.length < boundedItems; index -= 1) {
     const entry = events[index];
     if (entry?.event?.type === 'turn/end') {
-      interrupted = entry.event.data?.reason?.kind === 'aborted';
+      interrupted = ['aborted', 'interrupted'].includes(entry.event.data?.reason?.kind);
       continue;
     }
     const text = assistantText(entry);
     if (!text) continue;
-    const seq = Number.isInteger(entry.seq) && entry.seq >= 0 ? entry.seq : index;
-    const sourceTime = Number.isFinite(entry.time) ? entry.time : null;
+    const seq = entry.event.seq;
+    if (!Number.isSafeInteger(seq) || seq < 0) continue;
+    const sourceTime = Number.isFinite(entry.event.time) ? entry.event.time : null;
     candidates.push(Object.freeze({
       seq,
       sourceTime,
       title: candidateTitle(text, seq),
       preview: oneLine(text, 240),
       text,
-      interrupted
+      interrupted: entry.event.data?.interrupted === true || interrupted
     }));
     interrupted = false;
   }

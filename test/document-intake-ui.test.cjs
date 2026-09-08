@@ -22,15 +22,17 @@ test('upstream editing bridge preserves rich chips and checks session immediatel
   assert.match(bridge, /!guard\(\)/);
   assert.doesNotMatch(bridge, /innerHTML\s*=|__lexicalEditor/);
   const intake = read('assets/document-intake.js');
-  assert.match(intake, /before\.context !== after\.context/);
+  assert.doesNotMatch(intake, /api\.choose\(/, 'new imports are owned by official attachments');
+  assert.match(intake, /selected !== localStorage\.getItem/);
   assert.match(intake, /aria-live', 'polite/);
   assert.match(intake, /原文件和已导入副本未删除/);
 });
-test('document intake is visually grouped with the composer and exposes its hint to assistive technology', () => {
+test('legacy references are accessible and the unused compatibility bar stays hidden', () => {
   const intake = read('assets/document-intake.js');
   const css = read('assets/document-intake.css');
-  assert.match(intake, /hint\.id = 'dsh-document-intake-hint'/);
-  assert.match(intake, /aria-describedby', hint\.id/);
+  assert.match(intake, /aria-label', '旧版文件引用'/);
+  assert.match(intake, /bar\.hidden = !visible/);
+  assert.match(css, /\.dsh-document-intake\[hidden\]/);
   assert.match(css, /--dsh-document-surface:/);
   assert.match(css, /\.dsh-document-intake:focus-within/);
   assert.match(css, /prefers-contrast:\s*more/);

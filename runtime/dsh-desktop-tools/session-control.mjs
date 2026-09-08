@@ -5,6 +5,42 @@ const CHANNEL = 'dsh-session-control-v1';
 const validId = (id) => /^session-[a-f0-9-]{36}$/i.test(id || '');
 const pathKey = (value) => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
 const digest = (events) => createHash('sha256').update(JSON.stringify(events)).digest('hex');
+async function historyPage(ctx, request) {
+  const maxMessages = request.maxMessages ?? 50;
+  if (!Number.isSafeInteger(maxMessages) || maxMessages < 1 || maxMessages > 1000
+    || (request.beforeSeq !== undefined && (!Number.isSafeInteger(request.beforeSeq) || request.beforeSeq < 0 || Object.is(request.beforeSeq, -0)))
+    || (request.throughSeq !== undefined && (!Number.isSafeInteger(request.throughSeq) || request.throughSeq < -1 || Object.is(request.throughSeq, -0)))) {
+    throw new Error('历史分页位置或消息数量无效。');
+  }
+  const signal = AbortSignal.timeout(Math.min(60000, Math.max(250, Number(request.timeoutMs) || 8000)));
+  // Official observations do not publish a Session or activate an Agent.
+  // Retain the exact cut while official page performs message-aligned slicing.
+  const observation = await ctx.sessionQuery.observeSession(request.sessionId, { signal, projectionMode: 'all' });
+  try {
+    const { header, cursor } = observation;
+    if (header.id !== request.sessionId || header.origin === 'subagent' || typeof header.cwd !== 'string' || !path.isAbsolute(header.cwd)) {
+      throw new Error('历史记录不属于可读取的普通工作区会话。');
+    }
+    const throughSeq = request.throughSeq ?? cursor;
+    if (!Number.isSafeInteger(cursor) || cursor < -1 || throughSeq > cursor) throw new Error('历史快照位置已失效，请重新读取。');
+    const page = await ctx.sessionController.page({ address: { kind: 'session', sessionId: request.sessionId }, throughSeq,
+      maxMessages, ...(request.beforeSeq === undefined ? {} : { beforeSeq: request.beforeSeq }) }, signal);
+    signal.throwIfAborted();
+    const records = page?.records;
+    if (!Array.isArray(records) || typeof page.hasMore !== 'boolean' || records.length > 20000) throw new Error('历史分页返回无效或超过安全上限。');
+    const end = Math.min(throughSeq + 1, request.beforeSeq ?? throughSeq + 1);
+    const firstSeq = records[0]?.event?.seq ?? end;
+    if (!Number.isSafeInteger(firstSeq) || firstSeq < 0 || firstSeq + records.length !== end
+      || page.hasMore !== (firstSeq > 0) || (page.hasMore && !records.length)
+      || records.some((record, index) => record?.type !== 'event' || record.event?.seq !== firstSeq + index)) {
+      throw new Error('历史分页事件不连续，未返回可能缺失的记录。');
+    }
+    const result = { events: records, hasMore: page.hasMore, throughSeq,
+      projections: observation.projections || { asOfSeq: cursor, values: {} } };
+    if (Buffer.byteLength(JSON.stringify(result)) > 8 * 1024 * 1024) throw new Error('历史分页超过安全传输上限，请缩小读取范围。');
+    return result;
+  } finally { observation[Symbol.dispose](); }
+}
 async function canonicalDirectory(value) {
   if (typeof value !== 'string' || value.length > 2048 || !path.isAbsolute(value) || /[\0-\x1f]/.test(value)) throw new Error('无效的任务工作区。');
   const stat = await lstat(value), resolved = await realpath(value);
@@ -41,7 +77,8 @@ function summary(ctx, observation, control, withHistory = true) {
     liveJobs: jobs.filter((job) => ['running', 'stopping'].includes(job.status)).length, turnOpen, lastTurnReason };
 }
 export async function sessionControl(ctx, operation, request) {
-  if (!['inspect', 'status', 'workspace-status', 'fork', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
+  if (!['inspect', 'status', 'history-page', 'workspace-status', 'fork', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');
+  if (operation === 'history-page') return historyPage(ctx, request);
   const sourcePath = await canonicalDirectory(request.workspacePath);
   if (operation === 'workspace-status') return workspaceActivity(ctx, sourcePath);
   if (operation === 'task-create') {
@@ -55,7 +92,9 @@ export async function sessionControl(ctx, operation, request) {
     if (!agent || preset?.sandbox !== 'workspace-write' || preset?.approval !== 'ask') throw new Error('后台权限预设不满足工作区写入和逐项审批要求，未发送任务。');
     permissions.set(agent.session, 'workspace-write');
     if (permissions.current(agent.session) !== 'workspace-write') throw new Error('后台权限设置未通过校验。');
-    await ctx.sessionPersistence.ensureMaterialized(agent.session);
+    // alpha.2 owns each write handle inside AgentLoop. The public durability
+    // barrier drains those existing owners; never reopen an owned write handle.
+    await ctx.sessionPersistence.flush();
     const workspace = await ctx.workspaceRegistry.create(sourcePath);
     await workspace.attachSession(created.sessionId);
     return { sessionId: created.sessionId, workspacePath: sourcePath, permission: 'workspace-write', approval: 'ask' };
@@ -110,16 +149,18 @@ export async function sessionControl(ctx, operation, request) {
     }, agentOptions: ctx.agentDefaultModel.currentSelection(),
     setup: (agentCtx) => sourceAgent ? void ctx.agentPresets.composeFrom(agentCtx, sourceAgent.ctx) : ctx.agentPresets.mount(agentCtx, preset).then(() => {}) });
     const child = handle.agent.session;
-    await ctx.sessionPersistence.ensureMaterialized(child);
+    await ctx.sessionPersistence.flush();
     const workspace = await ctx.workspaceRegistry.create(targetPath);
     await workspace.attachSession(child.id);
     const verified = await ctx.sessionController.inspect(child.id);
     const inherited = verified.events.slice(0, observation.events.length), appended = verified.events.slice(observation.events.length);
-    // Public Session.create appends one empty end-seed boundary when needed.
-    // Validate the exact inherited prefix, metadata AND the allowed boundary.
+    // V2 seeded creation always appends one tagged end-seed boundary, even
+    // when the inherited prefix ends with a parent's own boundary.
+    // Validate the exact inherited prefix, metadata AND this single marker.
     if (pathKey(verified.meta.cwd) !== pathKey(targetPath) || verified.meta.parentSession !== request.sessionId
       || verified.meta.isSeeded !== true || verified.inheritedEventCount !== observation.events.length || digest(inherited) !== state.historyHash
-      || appended.length > 1 || appended.some((event) => event.type !== 'session/end-seed' || Object.keys(event.data).length)) throw new Error('交接持久化校验失败；原会话和目标目录均保留。');
+      || appended.length !== 1 || appended.some((event) => event.type !== 'session/end-seed' || event.seq !== observation.events.length
+        || event.data?.inherited !== true || Object.keys(event.data).length !== 1)) throw new Error('交接持久化校验失败；原会话和目标目录均保留。');
     return { ...state, sessionId: child.id, sourceSessionId: request.sessionId, workspacePath: targetPath, workspaceId: workspace.id, inheritedEvents: observation.events.length };
   } finally { observation[Symbol.dispose](); }
 }

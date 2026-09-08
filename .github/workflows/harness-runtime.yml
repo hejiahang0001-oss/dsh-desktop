@@ -1,0 +1,55 @@
+name: Pinned Harness Windows runtime
+
+on:
+  push:
+    branches: [codex/v1.1.10-harness-alpha.2]
+    paths:
+      - .github/workflows/harness-runtime.yml
+      - scripts/build-harness-runtime.ps1
+      - scripts/assemble-harness-runtime.cjs
+      - scripts/harness-runtime-integrity.cjs
+      - scripts/apply-harness-security.cjs
+      - scripts/audit-harness-runtime.cjs
+      - runtime/harness-security/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.19.0
+      - name: Install fixed build dependencies
+        shell: pwsh
+        run: |
+          npm install --global pnpm@11.19.0
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm bootstrap failed' }
+          pnpm install --frozen-lockfile --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'locked dependencies failed' }
+          ./scripts/fetch-node-runtime.ps1
+      - name: Build official pinned source and native addons
+        shell: pwsh
+        run: ./scripts/build-harness-runtime.ps1
+      - name: Archive the verified runtime
+        shell: pwsh
+        run: |
+          $runtimeArchive = Join-Path $env:GITHUB_WORKSPACE 'harness-runtime-win32-x64.zip'
+          Push-Location vendor/harness-hoisted-0.1.3-alpha.2-desktop-security-1
+          try {
+            & 7z a -tzip -mx=1 $runtimeArchive node_modules harness-runtime.json security-audit.json
+            if ($LASTEXITCODE -ne 0) { throw 'runtime archive failed' }
+          } finally { Pop-Location }
+          Get-FileHash -LiteralPath $runtimeArchive -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: harness-0.1.3-alpha.2-desktop-security-1-win32-x64
+          path: harness-runtime-win32-x64.zip
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

@@ -31,7 +31,7 @@ async function runHandoffSmoke({ window, dock, supervisor, selected, workspacePa
     }
     await waitFor(() => evaluate('window.__DSH_CONTINUITY__?.ready()'), 'draft initialized');
     await evaluate('window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "交接验收草稿，不要发送。")');
-    await evaluate('document.querySelector(".dsh-document-actions button").click()');
+    await require('./legacy-reference-smoke.cjs').seedLegacyReference(evaluate);
     await waitFor(() => evaluate('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()'), 'document attachment');
     await evaluate('window.__DSH_CONTINUITY__.flush()'); const draft = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
     const index = git(workspacePath, ['write-tree']), status = git(workspacePath, ['status', '--porcelain']), childPid = supervisor.child.pid;

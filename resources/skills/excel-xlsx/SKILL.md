@@ -57,6 +57,8 @@ Available styles are `normal`, `title`, `subtitle`, `header`, `text`, `integer`,
 
 ## Import CSV
 
+Official conversation attachments live in read-only Harness storage, possibly outside the workspace. For a file explicitly attached by the user, copy only its exact supplied path to an unused filename inside the active workspace before calling this tool. Run `inspect --strict` on an XLSX copy before editing it; import CSV from its workspace copy. Never scan attachment storage, copy credentials, modify the original attachment, or change `DSH_CWD` to bypass the workspace boundary. If the supplied attachment path cannot be read, ask the user to select it with “导入工作区”.
+
 CSV content remains text by default, including cells beginning with `=`, `+`, `-`, or `@`. Use `--infer-numbers` only when numeric inference is appropriate and identifiers with leading zeroes are not at risk.
 
 ```text

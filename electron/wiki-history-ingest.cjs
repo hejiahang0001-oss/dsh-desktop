@@ -159,7 +159,9 @@ const messageText = (entry) => {
   const type = entry?.event?.type;
   if (type !== 'user/message' && type !== 'assistant/message') return null;
   const expectedRole = type === 'user/message' ? 'user' : 'assistant';
-  const message = entry.event.data?.message;
+  // V2 retains the official asymmetric payload: user data IS UserMessage,
+  // while assistant data wraps message plus its compact stream/usage.
+  const message = type === 'user/message' ? entry.event.data : entry.event.data?.message;
   if (message?.role && message.role !== expectedRole) return null;
   const blocks = Array.isArray(message?.content) ? message.content : [];
   const text = blocks
@@ -205,12 +207,16 @@ const extractHistoryMessages = (entries) => {
 const loadSessionHistory = async (apiCall, origin, summary) => {
   const entries = new Map();
   let beforeSeq;
+  let throughSeq;
   let hasMore = false;
   let pages = 0;
   do {
     const payload = { sessionId: summary.sessionId, maxMessages: MAX_HISTORY_PAGE_MESSAGES };
     if (beforeSeq !== undefined) payload.beforeSeq = beforeSeq;
+    if (throughSeq !== undefined) payload.throughSeq = throughSeq;
     const result = await apiCall(origin, 'session.history', payload, { timeoutMs: 10000 });
+    if (throughSeq === undefined && Number.isSafeInteger(result?.throughSeq) && result.throughSeq >= -1) throughSeq = result.throughSeq;
+    else if (throughSeq !== undefined && result?.throughSeq !== throughSeq) throw new DshHistoryError('invalid-history-pagination', 'DSH 历史分页快照位置发生变化。');
     const page = Array.isArray(result?.events) ? result.events : [];
     if (page.length > MAX_HISTORY_EVENTS_PER_PAGE) throw new DshHistoryError('history-page-too-large', 'DSH 历史分页事件数超出安全上限。');
     let minimumSeq = Number.POSITIVE_INFINITY;

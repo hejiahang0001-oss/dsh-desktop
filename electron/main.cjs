@@ -617,7 +617,11 @@ const clearHarnessAuthentication = () => {
 
 const authenticatedHarnessApi = (origin, method, payload, options = {}) => {
   if (!harnessFetch) throw new Error('Harness 本地认证尚未就绪。');
-  return callHarnessApi(origin, method, payload, { ...options, fetchImpl: harnessFetch });
+  if (origin !== harnessOrigin) throw new Error('Harness 请求与当前已认证进程不匹配。');
+  return callHarnessApi(origin, method, payload, {
+    ...options, fetchImpl: harnessFetch,
+    readHistoryPage: (request, { timeoutMs }) => supervisor.credentialHost.sessionControl.request('history-page', { ...request, timeoutMs })
+  });
 };
 
 const authenticatedHarnessRemote = (origin, namespace, method, args = {}, options = {}) => {
@@ -6602,7 +6606,13 @@ const runHarnessSmoke = async (target) => {
     const probe = authentication.probe;
     const smokeFetch = createAuthenticatedHarnessFetch(authentication);
     const rootResponse = await smokeFetch(authentication.origin);
-    const smokeApi = (origin, method, payload, options = {}) => callHarnessApi(origin, method, payload, { ...options, fetchImpl: smokeFetch });
+    const smokeApi = (origin, method, payload, options = {}) => callHarnessApi(origin, method, payload, {
+      ...options, fetchImpl: smokeFetch,
+      readHistoryPage: (request, { timeoutMs }) => {
+        if (origin !== authentication.origin) throw new Error('Harness history IPC origin does not match its authenticated process.');
+        return supervisor.credentialHost.sessionControl.request('history-page', { ...request, timeoutMs });
+      }
+    });
     const workspaceSync = await synchronizeHarnessWorkspace({
       origin: authentication.origin,
       workspacePath: supervisor.getState().workspacePath,
@@ -6858,13 +6868,15 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     }
     documentIntakeController.chooseFiles = async () => [source];
     documentIntakeController.confirmImport = async () => true;
-    await evaluate('(async()=>{await window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "请汇总测试数据，保留这段草稿。"); document.querySelector(".dsh-document-actions button").click()})()');
+    const officialFileEntryOnly = await evaluate('!document.querySelector(".dsh-document-actions") && document.querySelector(".dsh-document-intake").hidden');
+    await evaluate('window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), "请汇总测试数据，保留这段草稿。")');
+    await require('./legacy-reference-smoke.cjs').seedLegacyReference(evaluate);
     await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
     const chosen = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
     await evaluate('document.querySelector(".dsh-document-chip button").click()');
     await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
     const removed = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
-    await evaluate('document.querySelector(".dsh-document-actions button").click()');
+    await require('./legacy-reference-smoke.cjs').seedLegacyReference(evaluate);
     await waitFor('document.querySelectorAll(".dsh-document-chip").length === 1 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
     // CDP supplies a real disk-backed File to the isolated preload; this is not a synthetic File constructor.
     wc.debugger.attach('1.3');
@@ -6875,31 +6887,12 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     nativeFileResult = await evaluate('(async()=>{const state=await desktopAPI.documents.getState(); return desktopAPI.documents.importFiles(Array.from(document.getElementById("dsh-smoke-native-file").files),state.context)})()');
     await evaluate('document.querySelector(".dsh-document-chip button").click()');
     await waitFor('!window.__DSH_COMPOSER_TEXT__.read().includes("参考资料")');
-    const dragPoint = await evaluate('(()=>{const r=document.querySelector("[data-composer-card]").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
-    const dragData = { items: [], files: [source], dragOperationsMask: 1 };
-    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'dragEnter', ...dragPoint, data: dragData });
-    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'dragOver', ...dragPoint, data: dragData });
-    await waitFor('document.querySelector(".dsh-document-drop-hint")?.hidden === false');
-    const imageOverlayAbsent = await evaluate('!Array.from(document.querySelectorAll("[role=status]")).some(el=>/Drop images here|图片拖动到此处即可添加|拖入图片/.test(el.textContent))');
-    if (!imageOverlayAbsent) throw new Error('Document drag activated the upstream image-only overlay');
-    await fsp.writeFile(`${resolvedTarget}.drag.png`, (await wc.capturePage()).toPNG());
-    await wc.debugger.sendCommand('Input.dispatchDragEvent', { type: 'drop', ...dragPoint, data: dragData });
-    await waitFor('window.__DSH_COMPOSER_TEXT__.read().includes("参考资料") && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
-    if (!await evaluate('document.querySelector(".dsh-document-drop-hint")?.hidden === true')) throw new Error('Drag feedback was not cleared after drop');
     const runtime = resolveHarnessRuntimePaths({ rootDir, resourcesPath: process.resourcesPath, isPackaged: app.isPackaged });
-    const word = require(runtime.docxToolPath), excel = require(runtime.xlsxToolPath);
-    const officeFixtures = [
-      ['拖入表格.xlsx', word.createZip(excel.workbookEntries(excel.normalizeSpec({ sheets: [{ name: '数据', rows: [['项目', '金额'], ['测试', 123]] }] })))],
-      ['拖入文档.docx', word.createZip(word.documentEntries(word.normalizeSpec({ title: '拖拽验证', sections: [{ kind: 'paragraph', text: '这是隔离测试文件。' }] })))],
-      ['拖入资料.pdf', buildPdfSmokeDocument()]
-    ];
-    const officePaths = [];
-    for (const [name, bytes] of officeFixtures) { const file = path.join(smokeRoot, name); await fsp.writeFile(file, bytes); officePaths.push(file); }
-    const officeDrag = { items: [], files: officePaths, dragOperationsMask: 1 };
-    for (const type of ['dragEnter', 'dragOver', 'drop']) await wc.debugger.sendCommand('Input.dispatchDragEvent', { type, ...dragPoint, data: officeDrag });
-    await waitFor('document.querySelectorAll(".dsh-document-chip").length === 4 && !window.__DSH_DOCUMENT_INTAKE__.isPending()');
-    const officeSourceUnchanged = (await Promise.all(officePaths.map(async (file, index) => (await fsp.readFile(file)).equals(officeFixtures[index][1])))).every(Boolean);
-    if (!officeSourceUnchanged) throw new Error('Document drag modified an original fixture');
+    const officialAttachments = await require('./official-attachment-smoke.cjs').runOfficialAttachmentSmoke({
+      window: mainWindow, BrowserWindow, nativeImage: require('electron').nativeImage, runtime,
+      smokeRoot, workspacePath: selected.workspacePath, selected, origin: harnessOrigin,
+      api: authenticatedHarnessApi, evaluate, waitFor, target: resolvedTarget
+    });
     const fake = await evaluate('(async()=>{const state=await desktopAPI.documents.getState();return desktopAPI.documents.importFiles([new File(["x"],"fake.csv")],state.context)})()');
     await wc.debugger.sendCommand('Fetch.enable', { patterns: [{ urlPattern: '*api/session/prompt', requestStage: 'Request' }] });
     await fsp.writeFile(`${resolvedTarget}.before-send.png`, (await wc.capturePage()).toPNG());
@@ -6913,16 +6906,19 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     while (!submitted && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 100));
     await fsp.writeFile(`${resolvedTarget}.png`, (await wc.capturePage()).toPNG());
     const originalUnchanged = await fsp.readFile(source, 'utf8') === '名称,金额\n测试甲,12\n测试乙,18\n';
+    const officialReceiptCount = (submitted.match(/"receiptId"\s*:/g) || []).length;
     result = { ok: chosen.includes('参考资料') && chosen.includes('保留这段草稿') && !removed.includes('参考资料') && removed.includes('保留这段草稿')
-      && nativeFileResult.ok && fake.ok === false && originalUnchanged && submitted.includes('dsh-attachments') && submitted.includes('保留这段草稿'),
+      && nativeFileResult.ok && fake.ok === false && originalUnchanged && officialFileEntryOnly && !submitted.includes('dsh-attachments') && submitted.includes('保留这段草稿') && officialReceiptCount === 3,
       version: app.getVersion(), evidence: 'real Harness renderer + native disk File + intercepted upstream send; no model request',
       inputKind: 'Lexical contenteditable', chooseInserted: chosen.includes('参考资料'), removalPreservedDraft: !removed.includes('参考资料') && removed.includes('保留这段草稿'),
       nativeFileImported: Boolean(nativeFileResult.ok), syntheticFileRejected: fake.ok === false, originalUnchanged,
-      nativeFileDropInserted: true,
-      completeNativeDragLifecycle: true, imageOverlayAbsent, crossWorkspace: process.argv.includes('--smoke-cross-workspace'),
-      officeFormatsDragged: ['xlsx', 'docx', 'pdf'], officeSourceUnchanged,
+      officialAttachments,
+      officialFileEntryOnly,
+      officialReceiptCount,
+      completeNativeDragLifecycle: officialAttachments.checks.onlyOfficialDropFeedback, crossWorkspace: process.argv.includes('--smoke-cross-workspace'),
+      officeFormatsDragged: officialAttachments.formats, officeSourceUnchanged: officialAttachments.checks.originalFilesUnchanged,
       selectedWorkspaceConfirmed: (await documentIntakeController.getContext()).workspacePath === selected.workspacePath,
-      upstreamPayloadContainsReference: submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
+      upstreamPayloadHasNoLegacyReference: !submitted.includes('dsh-attachments'), upstreamPayloadPreservesDraft: submitted.includes('保留这段草稿') };
   } catch (error) { result = { ok: false, version: app.getVersion(), error: error.message, stage, rendererErrors: rendererErrors.slice(-5) }; }
   finally {
     await backgroundTasks?.stop();

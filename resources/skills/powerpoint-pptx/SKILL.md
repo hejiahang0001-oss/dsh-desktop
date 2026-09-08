@@ -81,6 +81,8 @@ Supported element kinds are `text`, `shape`, `table`, `chart`, and `image`. Coor
 
 ## Replace exact text
 
+Official conversation attachments live in read-only Harness storage, possibly outside the workspace. For a presentation explicitly attached by the user, copy only its exact supplied path to an unused filename inside the active workspace, then run `inspect --strict` before editing the copy. Never scan attachment storage, copy credentials, modify the original attachment, or change `DSH_CWD` to bypass the workspace boundary. If the supplied attachment path cannot be read, ask the user to select it with “导入工作区”.
+
 Write a replacement specification:
 
 ```json
