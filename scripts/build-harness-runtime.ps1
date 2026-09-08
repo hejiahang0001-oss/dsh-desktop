@@ -64,7 +64,9 @@ if ($PnpmManifest.version -ne $PnpmVersion) { throw "Expected pnpm $PnpmVersion,
 $Succeeded = $false
 try {
   if ($OwnSource) {
-    Invoke-Checked -FilePath 'git.exe' -Arguments @('clone', '--depth', '1', '--branch', $Tag, '--single-branch', $Repository, $SourceDirectory) -WorkingDirectory ([IO.Path]::GetTempPath())
+    # Match the Windows local checkout: documentation links remain Git link
+    # blobs, not filesystem links. Runtime assembly still rejects all links.
+    Invoke-Checked -FilePath 'git.exe' -Arguments @('clone', '--config', 'core.symlinks=false', '--depth', '1', '--branch', $Tag, '--single-branch', $Repository, $SourceDirectory) -WorkingDirectory ([IO.Path]::GetTempPath())
   }
   if (-not (Test-Path -LiteralPath (Join-Path $SourceDirectory '.git'))) { throw "Harness source is not a Git checkout: $SourceDirectory" }
   $ActualCommit = (& git.exe -C $SourceDirectory rev-parse HEAD).Trim()
