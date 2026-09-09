@@ -1,0 +1,49 @@
+name: Exact release byte transfer
+on:
+  workflow_dispatch:
+    inputs:
+      transfer_sha256:
+        description: SHA-256 of the locally verified transfer archive
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  transfer:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TRANSFER_SHA256: ${{ inputs.transfer_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Verify draft and obtain bounded transfer archive
+        shell: pwsh
+        run: |
+          if ($env:TRANSFER_SHA256 -notmatch '^[a-f0-9]{64}$') { throw 'Expected fixed SHA-256' }
+          $release = gh api repos/hejiahang0001-oss/dsh-desktop/releases/385243350 | ConvertFrom-Json
+          if (!$release.draft -or !$release.prerelease -or $release.tag_name -ne 'v1.1.11' -or $release.target_commitish -ne '1a904a886c7043a54cb614283c20eed8f11b7148') { throw 'Unexpected release identity/state' }
+          New-Item -ItemType Directory -Path transfer | Out-Null
+          gh release download v1.1.11 --repo hejiahang0001-oss/dsh-desktop --pattern dsh-v1.1.11-transfer.zip --dir transfer
+          if ($LASTEXITCODE -ne 0) { throw 'Transfer download failed' }
+          $archive = Get-Item transfer/dsh-v1.1.11-transfer.zip
+          if ($archive.Length -gt 33554432 -or (Get-FileHash $archive.FullName).Hash.ToLowerInvariant() -ne $env:TRANSFER_SHA256) { throw 'Transfer archive identity mismatch' }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath transfer
+          gh release download v1.1.10 --repo hejiahang0001-oss/dsh-desktop --pattern DSH-Desktop-Setup-1.1.10.exe --dir transfer
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline download failed' }
+      - name: Reconstruct exact approved bytes without running them
+        shell: pwsh
+        run: |
+          $expected = '[{"name":"DSH-Desktop-Setup-1.1.11.exe","bytes":190333477,"sha256":"bc1a3c1cd54c8128b81d015de87ac086b9006f4a29a814830b297de827f7ac6c"},{"name":"DSH-Desktop-Portable-1.1.11.exe","bytes":189640077,"sha256":"e98aeb1db053c2723cf2f13fd2bb3fbc729aefedfdf1b11b36bcbe1e7c6f3f7b"}]'
+          node scripts/reconstruct-release-transfer.cjs transfer $expected
+          if ($LASTEXITCODE -ne 0) { throw 'Exact byte reconstruction failed' }
+      - name: Upload binaries to the existing draft only
+        shell: pwsh
+        run: |
+          $release = gh api repos/hejiahang0001-oss/dsh-desktop/releases/385243350 | ConvertFrom-Json
+          if (!$release.draft -or !$release.prerelease -or $release.tag_name -ne 'v1.1.11') { throw 'Release changed before upload' }
+          gh release upload v1.1.11 --repo hejiahang0001-oss/dsh-desktop transfer/DSH-Desktop-Setup-1.1.11.exe transfer/DSH-Desktop-Portable-1.1.11.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Draft binary upload failed' }
