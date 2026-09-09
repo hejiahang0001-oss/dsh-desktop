@@ -9,7 +9,8 @@ const filesCss = fs.readFileSync(path.join(root, 'assets', 'workbench-files.css'
 const reviewScript = fs.readFileSync(path.join(root, 'assets', 'workbench-panel.js'), 'utf8');
 
 test('workspace file UI stays read-only and uses the bounded preload surface', () => {
-  assert.match(filesScript, /api\.files\.list/);
+  assert.doesNotMatch(filesScript, /api\.files\.list/);
+  assert.match(filesScript, /普通文件浏览请使用官方右侧文件面板/);
   assert.match(filesScript, /api\.files\.read/);
   assert.match(filesScript, /api\.files\.search/);
   assert.match(filesScript, /api\.files\.preview/);
@@ -37,4 +38,13 @@ test('workspace file UI exposes accessible layout and Diff reveal hooks', () => 
   assert.match(filesCss, /data-dsh-files-open/);
   assert.match(reviewScript, /查看文件/);
   assert.match(reviewScript, /__DSH_FILES__\?\.reveal/);
+});
+
+test('official fullscreen file controls respect desktop side and bottom insets', () => {
+  const layout = fs.readFileSync(path.join(root, 'assets', 'workbench-native-layout.css'), 'utf8');
+  assert.match(layout, /\[data-sidebar-right-panel="fullscreen"\]/);
+  assert.match(layout, /left: var\(--dsh-sidebar-left-inset\) !important/);
+  assert.match(layout, /right: var\(--dsh-sidebar-right-inset\) !important/);
+  assert.match(layout, /bottom: var\(--dsh-native-dock-height, 0px\) !important/);
+  assert.match(layout, /width: auto !important/);
 });

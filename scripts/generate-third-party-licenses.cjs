@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
-const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.3-alpha.2-desktop-security-1', 'node_modules');
+const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.5-alpha.1-desktop-security-2', 'node_modules');
 const directPackageRoots = [
   path.join(root, 'node_modules', '@xmldom', 'xmldom'),
   path.join(root, 'node_modules', 'pnpm'),
@@ -55,7 +55,7 @@ const packages = [...new Map(packageRows.map((entry) => [`${entry.name}@${entry.
   .sort((left, right) => left.license.localeCompare(right.license, 'en')
     || left.name.localeCompare(right.name, 'en')
     || left.version.localeCompare(right.version, 'en'));
-if (packages.length !== 545) throw new Error(`Expected 545 packaged JavaScript packages, found ${packages.length}.`);
+if (packages.length !== 553) throw new Error(`Expected 553 packaged JavaScript packages, found ${packages.length}.`);
 
 const groups = new Map();
 for (const entry of packages) {
@@ -72,7 +72,7 @@ const lines = [
   '',
   '## Runtime provenance',
   '',
-  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.3-alpha.2`, source tag `dsh-v0.1.3-alpha.2`, commit `82a5fd61a7cf5c293cec4bdff68f455398d685e9`.',
+  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.5-alpha.1`, source tag `dsh-v0.1.5-alpha.1`, commit `5dda764ed3aa172535a7967b06ff95d9cbfe536a`.',
   '- Node.js: `v24.19.0`; its official `LICENSE` file is bundled beside `node.exe`.',
   '- Electron: `43.4.1`; Electron and Chromium notices are emitted by the Windows packaging runtime.',
   '- pnpm: `11.19.0` is bundled for controlled extension lifecycle operations; `11.7.0` is used only to reproduce the upstream Harness source build.',

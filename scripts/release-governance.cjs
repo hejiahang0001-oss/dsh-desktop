@@ -57,14 +57,14 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.10';
+const REQUIRED_DESKTOP_VERSION = '1.1.11';
 const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
-const REQUIRED_HARNESS_TAG = 'dsh-v0.1.3-alpha.2';
-const REQUIRED_HARNESS_VERSION = '0.1.3-alpha.2';
-const REQUIRED_HARNESS_COMMIT = '82a5fd61a7cf5c293cec4bdff68f455398d685e9';
-const REQUIRED_HARNESS_PACKAGE_COUNT = 260;
-const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = 'f28b3917e722e1843aa28da324c849f4bfd0a5f912d907365a6963b3e976a6e9';
-const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 251;
+const REQUIRED_HARNESS_TAG = 'dsh-v0.1.5-alpha.1';
+const REQUIRED_HARNESS_VERSION = '0.1.5-alpha.1';
+const REQUIRED_HARNESS_COMMIT = '5dda764ed3aa172535a7967b06ff95d9cbfe536a';
+const REQUIRED_HARNESS_PACKAGE_COUNT = 267;
+const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = '8efa42e476fd2da21ad1dafeb53ad2dc63dbf606c4a79099e8726814a35d13dd';
+const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 258;
 const REQUIRED_HARNESS_BUILD_NODE = 'v24.19.0';
 const REQUIRED_HARNESS_BUILD_PNPM = '11.7.0';
 const REQUIRED_HARNESS_DEPENDENCY_RESOLUTION = 'desktop-security-frozen-lockfile';
@@ -74,7 +74,7 @@ const REQUIRED_HARNESS_SECURITY = {
   workspaceSha256: SECURITY_POLICY.workspaceSha256, lockSha256: SECURITY_POLICY.lockSha256
 };
 const REQUIRED_HARNESS_PACKAGE_PAYLOAD = 'upstream-pnpm-pack';
-const REQUIRED_HARNESS_INSTALL_SCRIPTS = Object.freeze(['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local', 'fs-ext']);
+const REQUIRED_HARNESS_INSTALL_SCRIPTS = Object.freeze(['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local']);
 const REQUIRED_HARNESS_VENDOR_PACKAGES = new Set([
   '@deepseek-ai/cordis',
   '@deepseek-ai/cordis-plugin-group',
@@ -94,7 +94,7 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', '4881877753515cc85ab52880101666da92df31f900106e18ea68b21b477eb042']
+  ['THIRD_PARTY_LICENSES.md', 'a5f0a07fc6531cbb19e5c50d22eb1a9b90fb0c1cb214c9bd8b55852b3658abfa']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');

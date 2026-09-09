@@ -10,6 +10,18 @@ html { overflow: hidden; }
 html[data-dsh-review-open="true"] #root { width: calc(100vw - var(--dsh-review-width)) !important; max-width: calc(100vw - var(--dsh-review-width)) !important; }
 html[data-dsh-files-open="true"] #root { width: calc(100vw - var(--dsh-files-width)) !important; max-width: calc(100vw - var(--dsh-files-width)) !important; margin-left: var(--dsh-files-width) !important; }
 html[data-dsh-files-open="true"][data-dsh-review-open="true"] #root { width: calc(100vw - var(--dsh-files-width) - var(--dsh-review-width)) !important; max-width: calc(100vw - var(--dsh-files-width) - var(--dsh-review-width)) !important; }
+/* Official Sidebar fullscreen is fixed to the browser viewport. Keep its
+   controls inside the host's usable area when desktop tools reserve space.
+   Do not toggle the user's panel state or change the official layout mode. */
+html { --dsh-sidebar-left-inset: 0px; --dsh-sidebar-right-inset: 0px; }
+html[data-dsh-files-open="true"] { --dsh-sidebar-left-inset: var(--dsh-files-width); }
+html[data-dsh-review-open="true"] { --dsh-sidebar-right-inset: var(--dsh-review-width); }
+[data-sidebar-right-panel="fullscreen"] {
+  left: var(--dsh-sidebar-left-inset) !important;
+  right: var(--dsh-sidebar-right-inset) !important;
+  bottom: var(--dsh-native-dock-height, 0px) !important;
+  width: auto !important;
+}
 [data-composer-card]:focus-within { border-color: color-mix(in srgb, var(--dsh-workbench-focus) 62%, transparent) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsh-workbench-focus) 34%, transparent), 0 10px 28px rgb(0 0 0 / 10%) !important; }
 @media (prefers-contrast: more) { [data-composer-card]:focus-within { outline: 2px solid var(--dsh-workbench-focus); outline-offset: 2px; box-shadow: none !important; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

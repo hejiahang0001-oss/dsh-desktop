@@ -29,7 +29,7 @@ const normalizeWorkbenchState = (value = {}) => {
     ? Math.round(value.terminalPanelHeight)
     : DEFAULT_TERMINAL_HEIGHT;
   return Object.freeze({
-    filePanelOpen: typeof value.filePanelOpen === 'boolean' ? value.filePanelOpen : true,
+    filePanelOpen: typeof value.filePanelOpen === 'boolean' ? value.filePanelOpen : false,
     filePanelWidth: Math.min(MAX_FILE_WIDTH, Math.max(MIN_FILE_WIDTH, fileWidth)),
     previewPanelOpen: typeof value.previewPanelOpen === 'boolean' ? value.previewPanelOpen : false,
     reviewPanelOpen: typeof value.reviewPanelOpen === 'boolean' ? value.reviewPanelOpen : true,

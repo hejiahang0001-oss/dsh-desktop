@@ -159,7 +159,7 @@ const messageText = (entry) => {
   const type = entry?.event?.type;
   if (type !== 'user/message' && type !== 'assistant/message') return null;
   const expectedRole = type === 'user/message' ? 'user' : 'assistant';
-  // V2 retains the official asymmetric payload: user data IS UserMessage,
+  // V2/V3 retain the official asymmetric payload: user data IS UserMessage,
   // while assistant data wraps message plus its compact stream/usage.
   const message = type === 'user/message' ? entry.event.data : entry.event.data?.message;
   if (message?.role && message.role !== expectedRole) return null;

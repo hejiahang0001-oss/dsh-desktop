@@ -116,7 +116,7 @@ test('software direct and custom settings survive child spawn and home .env back
 });
 
 test('official Harness launch snapshot keeps software settings above mixed-case home proxies', (context) => {
-  const sourceRoot = path.join(root, 'vendor', 'harness-source-0.1.3-alpha.2', 'packages', 'util');
+  const sourceRoot = path.join(root, 'vendor', 'harness-source-0.1.5-alpha.1', 'packages', 'util');
   const modules = [path.join(sourceRoot, 'launch-environment', 'src', 'index.ts'), path.join(sourceRoot, 'http-proxy', 'src', 'policy.ts')];
   if (modules.some((file) => !fs.existsSync(file))) {
     context.skip('The pinned upstream source checkout is only present in dependency-upgrade verification.');

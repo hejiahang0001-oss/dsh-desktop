@@ -72,12 +72,19 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   const stopped = await inspect();
   checks.officialStopSettled = !stopped.running && stopped.pending === 0;
 
+  // Official header/sidebar controls intentionally do not exist on a blank session.
+  const sidebar = await require('./official-sidebar-smoke.cjs').runOfficialSidebarSmoke({
+    window, workspacePath, evaluate, target,
+    waitFor: (code) => wait(() => evaluate(code), `sidebar: ${code}`, 15000)
+  });
+  checks.officialSidebar = sidebar.ok;
   await fsp.writeFile(`${target}.workflow.png`, (await wc.capturePage()).toPNG());
   return {
     ok: Object.values(checks).every(Boolean),
     version,
     realModel: true,
     crossWorkspace,
+    sidebar,
     checks,
     remainingDraft: await evaluate('window.__DSH_COMPOSER_TEXT__.read()'),
     evidence: 'Real DeepSeek calls exercised the unmodified official Harness queue, queued-message up-arrow, Ctrl+Enter steer and Stop controls; marker files prove the steered messages executed.'

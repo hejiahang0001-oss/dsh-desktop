@@ -132,7 +132,9 @@ export async function sessionControl(ctx, operation, request) {
       agent.cancel({ kind: 'user' }, { keepInbox: false });
       return { accepted: true };
     }
-    if (state.running || state.pending || state.liveJobs || state.approvals || state.turnOpen || ctx.agents.get(request.sessionId)?.inbox?.hasPending) throw new Error('请先结束执行、排队消息、审批和后台命令，再交接会话。');
+    const liveAgent = ctx.agents.get(request.sessionId);
+    const livePending = liveAgent ? liveAgent.inbox.nextTurn.length + liveAgent.inbox.nextStep.length : 0;
+    if (state.running || state.pending || state.liveJobs || state.approvals || state.turnOpen || livePending) throw new Error('请先结束执行、排队消息、审批和后台命令，再交接会话。');
     if (request.historyHash !== state.historyHash || !validId(request.childId) || request.childId === request.sessionId || pathKey(sourcePath) === pathKey(targetPath)) throw new Error('会话或交接目标已变化，请重新确认。');
     if (observation.events.length > 20000 || Buffer.byteLength(JSON.stringify(observation.events)) > 8 * 1024 * 1024) throw new Error('会话历史超过安全交接上限，请先压缩上下文。');
     if (ctx.sessions.get(request.childId)) throw new Error('交接目标会话已存在，请打开已有恢复记录，不能重复创建。');
@@ -154,7 +156,7 @@ export async function sessionControl(ctx, operation, request) {
     await workspace.attachSession(child.id);
     const verified = await ctx.sessionController.inspect(child.id);
     const inherited = verified.events.slice(0, observation.events.length), appended = verified.events.slice(observation.events.length);
-    // V2 seeded creation always appends one tagged end-seed boundary, even
+    // V3 seeded creation always appends one tagged end-seed boundary, even
     // when the inherited prefix ends with a parent's own boundary.
     // Validate the exact inherited prefix, metadata AND this single marker.
     if (pathKey(verified.meta.cwd) !== pathKey(targetPath) || verified.meta.parentSession !== request.sessionId

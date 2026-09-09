@@ -5203,7 +5203,7 @@ function installApplicationMenu() {
         },
         { type: 'separator' },
         {
-          label: '显示工作区文件',
+          label: '显示文件搜索',
           type: 'checkbox',
           accelerator: 'CmdOrCtrl+Alt+E',
           checked: getWorkbenchState().filePanelOpen,

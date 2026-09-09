@@ -67,6 +67,15 @@ test('history selection normalizes numeric and ISO Harness timestamps consistent
   assert.equal(catalog.resolve({ ids: [rows[0].id] }, fresh, 'C:\\repo')[0].sessionId, 'newer');
 });
 
+test('V3 system messages never become Wiki user questions or assistant conclusions', () => {
+  const extracted = extractHistoryMessages([
+    { event: { type: 'system/message', seq: 0, time: 0, surfaceOp: 'append', data: { message: { role: 'system', content: [{ type: 'text', text: 'PRIVATE SYSTEM INSTRUCTIONS' }] } } } },
+    message(1, 'user', '用户问题'), message(2, 'assistant', '可引用结论')
+  ]);
+  assert.equal(extracted.messages.length, 2);
+  assert.doesNotMatch(JSON.stringify(extracted), /PRIVATE SYSTEM/);
+});
+
 test('history extraction keeps only user and assistant text and redacts fixed credentials', () => {
   const extracted = extractHistoryMessages([
     message(1, 'user', 'DEEPSEEK_API_KEY=super-secret-value'),

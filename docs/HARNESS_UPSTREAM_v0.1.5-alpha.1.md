@@ -19,6 +19,10 @@ The official desktop's pnpm and documentation/testing dependencies are not adopt
 
 ## Acceptance
 
-Baseline V1.1.10: frozen install, root production audit, 585/585 tests and Windows unpacked build pass. Candidate runtime build, migration/cold history, official Sidebar, packaged/installed smokes, overwrite retention and public asset verification are pending. This file must not be interpreted as release approval.
+Baseline V1.1.10: frozen install, root production audit, 585/585 tests and Windows unpacked build pass. Windows runtime [build 34310570995](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34310570995) passes official invariants and native checks. Independent physical runtime audit covers 550 package names with no known findings. The 553-row license inventory is separately bound by SHA-256.
+
+Actual plain/Zstd Session V2→V3 tests preserve message/tool/stream semantics, reject a concurrent writer, reopen and append successfully, and restore an independent old-format backup. The old reader refuses the upgraded generation. Cold history preserves 22 events over five pages with zero Agents, no write effects, exact fixed cuts and invalid-operation refusal. Real DeepSeek handoff preserves history/cwd and rejects conflicting returns; randomized Excel/Word reads through official uploads preserve originals and the DPAPI source.
+
+The desktop host reserves fullscreen Sidebar bounds for its own side/bottom tools; upstream components and layout-state logic remain unchanged. Final package/install and public asset acceptance is recorded in `VALIDATION.md`; source-only results are not release approval.
 
 Source: https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.5-alpha.1
