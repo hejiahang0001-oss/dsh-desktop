@@ -1,6 +1,6 @@
 (() => {
   const api = window.desktopAPI;
-  const bootstrap = window.__DSH_WORKBENCH_BOOTSTRAP__ || { filePanelOpen: true, filePanelWidth: 260 };
+  const bootstrap = window.__DSH_WORKBENCH_BOOTSTRAP__ || { filePanelOpen: false, filePanelWidth: 260 };
   if (!api?.files || !api?.workspace || !api?.workbench) return false;
   if (window.__DSH_FILES__) {
     window.__DSH_FILES__.applyLayout(bootstrap);
@@ -12,11 +12,6 @@
     if (className) node.className = className;
     if (typeof text === 'string') node.textContent = text;
     return node;
-  };
-  const parentPath = (value) => {
-    const parts = String(value || '').split('/').filter(Boolean);
-    parts.pop();
-    return parts.join('/');
   };
   const formatSize = (bytes) => {
     const size = Number(bytes) || 0;
@@ -39,7 +34,7 @@
   const panel = create('aside');
   panel.id = 'dsh-workbench-files';
   panel.setAttribute('role', 'complementary');
-  panel.setAttribute('aria-label', '工作区文件');
+  panel.setAttribute('aria-label', '工作区文件搜索');
 
   const resizer = create('div', 'dsh-files-resizer');
   resizer.tabIndex = 0;
@@ -52,14 +47,14 @@
 
   const header = create('header', 'dsh-files-header');
   const heading = create('div', 'dsh-files-heading');
-  const title = create('h2', '', '工作区');
+  const title = create('h2', '', '文件搜索');
   const workspaceName = create('p', 'dsh-files-workspace', '正在读取…');
   heading.append(title, workspaceName);
   const headerActions = create('div', 'dsh-files-header-actions');
   const refreshButton = create('button', 'dsh-files-icon-button', '↻');
   refreshButton.type = 'button';
-  refreshButton.title = '刷新文件';
-  refreshButton.setAttribute('aria-label', '刷新文件');
+  refreshButton.title = '重置搜索';
+  refreshButton.setAttribute('aria-label', '重置搜索');
   const closeButton = create('button', 'dsh-files-icon-button', '×');
   closeButton.type = 'button';
   closeButton.title = '隐藏文件面板';
@@ -78,9 +73,9 @@
 
   const tree = create('div', 'dsh-files-tree');
   tree.setAttribute('role', 'tree');
-  tree.setAttribute('aria-label', '当前工作区文件树');
+  tree.setAttribute('aria-label', '当前工作区文件搜索结果');
   tree.tabIndex = -1;
-  const status = create('p', 'dsh-files-status', '仅读取当前工作区；凭据、链接和二进制文件受保护。');
+  const status = create('p', 'dsh-files-status', '普通文件浏览请使用官方右侧文件面板；这里提供文件名搜索和只读预览。');
   status.setAttribute('aria-live', 'polite');
   panel.append(header, searchLabel, tree, status);
 
@@ -162,8 +157,6 @@
 
   let layout = { ...bootstrap };
   let workspace = {};
-  let directoryCache = new Map();
-  const expanded = new Set(['']);
   let searchResults = null;
   let selectedPath = '';
   let previewRequest = 0;
@@ -241,14 +234,6 @@
     previousPage.hidden = !pdf;
     pageLabel.hidden = !pdf;
     nextPage.hidden = !pdf;
-  };
-
-  const loadDirectory = async (pathValue = '', { refresh = false } = {}) => {
-    if (!refresh && directoryCache.has(pathValue)) return directoryCache.get(pathValue);
-    const result = await api.files.list(pathValue);
-    if (!result?.available) throw new Error(result?.message || '目录暂不可用。');
-    directoryCache.set(pathValue, result);
-    return result;
   };
 
   const setSelectedRow = () => {
@@ -331,22 +316,10 @@
 
   const onRowKeyDown = async (event) => {
     const button = event.currentTarget;
-    const kind = button.dataset.kind;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       button.click();
       return;
-    }
-    if (kind === 'directory' && event.key === 'ArrowRight') {
-      event.preventDefault();
-      if (!expanded.has(button.dataset.path)) button.click();
-      return;
-    }
-    if (kind === 'directory' && event.key === 'ArrowLeft' && expanded.has(button.dataset.path)) {
-      event.preventDefault();
-      expanded.delete(button.dataset.path);
-      renderTree();
-      buttonForPath(button.dataset.path)?.focus();
     }
   };
 
@@ -358,59 +331,19 @@
     row.setAttribute('role', 'treeitem');
     row.setAttribute('aria-level', String(level));
     row.setAttribute('aria-selected', String(entry.path === selectedPath));
-    if (entry.kind === 'directory') row.setAttribute('aria-expanded', String(expanded.has(entry.path)));
     row.title = entry.path;
-    const disclosure = create('span', 'dsh-files-disclosure', entry.kind === 'directory' ? (expanded.has(entry.path) ? '▾' : '▸') : '');
+    const disclosure = create('span', 'dsh-files-disclosure', '');
     const icon = create('span', 'dsh-files-kind', entry.restricted ? '⌕' : entry.kind === 'directory' ? '▰' : entry.kind === 'link' ? '↗' : '·');
     icon.setAttribute('aria-hidden', 'true');
     const name = create('span', 'dsh-files-name', entry.name);
     row.append(disclosure, icon, name);
     row.addEventListener('keydown', onRowKeyDown);
     row.addEventListener('click', async () => {
-      if (entry.kind === 'directory') {
-        if (expanded.has(entry.path)) {
-          expanded.delete(entry.path);
-          renderTree();
-          buttonForPath(entry.path)?.focus();
-          return;
-        }
-        setStatus(`正在展开 ${entry.name}…`);
-        try {
-          await loadDirectory(entry.path);
-          expanded.add(entry.path);
-          renderTree();
-          buttonForPath(entry.path)?.focus();
-          setStatus('目录已展开。');
-        } catch (error) {
-          setStatus(error.message);
-        }
-        return;
-      }
       if (entry.kind === 'file') await openPreview(entry.path, row);
       else setStatus('链接和特殊文件不会在桌面面板中打开。');
     });
     return row;
   };
-
-  const appendDirectory = (container, directoryPath, level) => {
-    const result = directoryCache.get(directoryPath);
-    if (!result) return;
-    for (const entry of result.entries || []) {
-      const wrapper = create('div', 'dsh-files-node');
-      wrapper.append(createRow(entry, level));
-      if (entry.kind === 'directory' && expanded.has(entry.path)) {
-        const group = create('div', 'dsh-files-group');
-        group.setAttribute('role', 'group');
-        appendDirectory(group, entry.path, level + 1);
-        wrapper.append(group);
-      }
-      container.append(wrapper);
-    }
-  };
-
-  function buttonForPath(pathValue) {
-    return [...tree.querySelectorAll('.dsh-files-row')].find((button) => button.dataset.path === pathValue);
-  }
 
   function renderTree() {
     tree.replaceChildren();
@@ -424,58 +357,24 @@
       }
       return;
     }
-    const root = directoryCache.get('');
-    if (!root) {
-      tree.append(create('p', 'dsh-files-empty', '正在读取文件…'));
-      return;
-    }
-    appendDirectory(tree, '', 1);
-    if ((root.entries || []).length === 0) tree.append(create('p', 'dsh-files-empty', '工作区中没有可显示的文件。'));
+    tree.append(create('p', 'dsh-files-empty', '输入文件名搜索。浏览目录和打开文本标签请使用官方右侧文件面板。'));
   }
 
   const refreshFiles = async () => {
-    refreshButton.disabled = true;
-    setStatus('正在刷新工作区文件…');
-    directoryCache = new Map();
+    clearTimeout(searchTimer);
+    searchRequest += 1;
     searchResults = null;
     searchInput.value = '';
-    expanded.clear();
-    expanded.add('');
     renderTree();
-    try {
-      const root = await loadDirectory('', { refresh: true });
-      renderTree();
-      setStatus(root.truncated ? '根目录条目过多，仅显示安全上限内的项目。' : '文件已刷新。');
-    } catch (error) {
-      tree.replaceChildren(create('p', 'dsh-files-empty', error.message));
-      setStatus('文件面板暂不可用。');
-    } finally {
-      refreshButton.disabled = false;
-    }
+    setStatus('普通文件浏览请使用官方右侧文件面板；搜索只读取当前工作区。');
   };
 
   const reveal = async (pathValue) => {
     if (typeof pathValue !== 'string' || !pathValue) return false;
     if (!layout.filePanelOpen) applyLayout(await api.workbench.setFilePanelOpen(true));
-    searchInput.value = '';
-    searchResults = null;
-    const directory = parentPath(pathValue);
-    const parts = directory ? directory.split('/') : [];
+    await refreshFiles();
     try {
-      await loadDirectory('');
-      let current = '';
-      for (const part of parts) {
-        current = current ? `${current}/${part}` : part;
-        await loadDirectory(current);
-        expanded.add(current);
-      }
-      renderTree();
-      const button = buttonForPath(pathValue);
-      await openPreview(pathValue, button || searchInput);
-      if (button) {
-        button.scrollIntoView({ block: 'nearest' });
-        button.focus();
-      }
+      await openPreview(pathValue, searchInput);
       return true;
     } catch (error) {
       setStatus(error.message);
@@ -485,18 +384,19 @@
 
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
+    const request = ++searchRequest;
     const query = searchInput.value.trim();
     if (!query) {
-      searchRequest += 1;
       searchResults = null;
       renderTree();
-      setStatus('显示按需展开的工作区文件。');
+      setStatus('输入文件名搜索；普通浏览使用官方右侧文件面板。');
       return;
     }
     searchTimer = setTimeout(async () => {
-      const request = ++searchRequest;
       setStatus(`正在搜索“${query}”…`);
-      const result = await api.files.search(query);
+      let result;
+      try { result = await api.files.search(query); }
+      catch (error) { result = { available: false, message: error.message || '搜索暂不可用。' }; }
       if (request !== searchRequest || searchInput.value.trim() !== query) return;
       if (!result?.available) {
         searchResults = [];

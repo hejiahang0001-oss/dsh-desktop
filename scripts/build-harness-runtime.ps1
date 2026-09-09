@@ -8,15 +8,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Repository = 'https://github.com/deepseek-ai/deepseek-harness.git'
-$Tag = 'dsh-v0.1.3-alpha.2'
-$Commit = '82a5fd61a7cf5c293cec4bdff68f455398d685e9'
-$HarnessVersion = '0.1.3-alpha.2'
+$Tag = 'dsh-v0.1.5-alpha.1'
+$Commit = '5dda764ed3aa172535a7967b06ff95d9cbfe536a'
+$HarnessVersion = '0.1.5-alpha.1'
 $PnpmVersion = '11.7.0'
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Node = Join-Path $Root 'vendor\runtime\win32-x64\node.exe'
 $Pnpm = Join-Path $Root 'node_modules\harness-build-pnpm\bin\pnpm.cjs'
 $Assembler = Join-Path $PSScriptRoot 'assemble-harness-runtime.cjs'
-if ($OutputDirectory -eq '') { $OutputDirectory = Join-Path $Root "vendor\harness-hoisted-$HarnessVersion-desktop-security-1" }
+if ($OutputDirectory -eq '') { $OutputDirectory = Join-Path $Root "vendor\harness-hoisted-$HarnessVersion-desktop-security-2" }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $StagingDirectory = "$OutputDirectory.staging-$([guid]::NewGuid().ToString('N'))"
 $OwnSource = $SourceDirectory -eq ''
@@ -103,11 +103,6 @@ try {
   Invoke-Checked -FilePath $Node -Arguments @('scripts\post-install.js') -WorkingDirectory $NodePty
   $SubprocessLocal = Join-Path $StagingDirectory 'node_modules\@deepseek-ai\dsh-subprocess-local'
   Invoke-Checked -FilePath $Node -Arguments @('scripts\ensure-spawn-helper.mjs') -WorkingDirectory $SubprocessLocal
-  # fs-ext is imported by Session persistence even when Windows uses the
-  # native semaphore backend. Build its real addon for the pinned Node ABI.
-  $FsExt = Join-Path $StagingDirectory 'node_modules\fs-ext'
-  $NodeGyp = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $Pnpm) '..\dist\node_modules\node-gyp\bin\node-gyp.js'))
-  Invoke-Checked -FilePath $Node -Arguments @($NodeGyp, 'rebuild') -WorkingDirectory $FsExt
 
   Invoke-Checked -FilePath $Node -Arguments @(
     $Assembler,
@@ -120,7 +115,7 @@ try {
     "--commit=$Commit"
   ) -WorkingDirectory $Root
   Invoke-Checked -FilePath $Node -Arguments @((Join-Path $StagingDirectory 'node_modules\@deepseek-ai\dsh\lib\bin.js'), '--version') -WorkingDirectory $Root
-  Invoke-Checked -FilePath $Node -Arguments @('-e', "if (typeof require('./node_modules/fs-ext').flock !== 'function') process.exit(1)") -WorkingDirectory $StagingDirectory
+  Invoke-Checked -FilePath $Node -Arguments @('-e', "if (typeof require('@deepseek-ai/node-addon-system/flock').tryLockExclusive !== 'function') process.exit(1)") -WorkingDirectory $StagingDirectory
   Invoke-Checked -FilePath $Node -Arguments @((Join-Path $PSScriptRoot 'audit-harness-runtime.cjs'), "--runtime-root=$StagingDirectory", "--output=$(Join-Path $StagingDirectory 'security-audit.json')") -WorkingDirectory $Root
   Move-Item -LiteralPath $StagingDirectory -Destination $OutputDirectory
   $Succeeded = $true

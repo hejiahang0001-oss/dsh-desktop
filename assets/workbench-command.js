@@ -76,7 +76,7 @@
     { id: 'word-docx.invoke', title: '创建或修改 Word 文档', detail: '加载内置 /word-docx Skill，在当前工作区生成可编辑 DOCX', shortcut: '', run: () => invokeSkill('word-docx') },
     { id: 'excel-xlsx.invoke', title: '创建或修改 Excel 工作簿', detail: '加载内置 /excel-xlsx Skill，在当前工作区生成可编辑 XLSX', shortcut: '', run: () => invokeSkill('excel-xlsx') },
     { id: 'powerpoint-pptx.invoke', title: '创建或修改 PowerPoint 演示文稿', detail: '加载内置 /powerpoint-pptx Skill，在当前工作区生成可编辑 PPTX', shortcut: '', run: () => invokeSkill('powerpoint-pptx') },
-    { id: 'files.toggle', title: '显示或隐藏工作区文件', detail: '切换左侧文件面板', shortcut: 'Ctrl+Alt+E', run: () => togglePanel('filePanelOpen', api.workbench.setFilePanelOpen) },
+    { id: 'files.toggle', title: '显示或隐藏文件搜索', detail: '普通文件浏览使用官方右侧面板', shortcut: 'Ctrl+Alt+E', run: () => togglePanel('filePanelOpen', api.workbench.setFilePanelOpen) },
     { id: 'files.focus', title: '聚焦文件搜索', detail: '打开文件面板并选中搜索框', shortcut: 'Ctrl+Alt+F', run: () => openAndFocus('filePanelOpen', api.workbench.setFilePanelOpen, '__DSH_FILES__') },
     { id: 'preview.toggle', title: '显示或隐藏应用预览', detail: '切换 HTML 与本机服务预览', shortcut: 'Ctrl+Alt+P', run: () => togglePanel('previewPanelOpen', api.workbench.setPreviewPanelOpen) },
     { id: 'preview.focus', title: '聚焦应用预览', detail: '打开预览并聚焦地址栏', shortcut: 'Ctrl+Alt+L', run: () => openAndFocus('previewPanelOpen', api.workbench.setPreviewPanelOpen, '__DSH_PREVIEW__') },

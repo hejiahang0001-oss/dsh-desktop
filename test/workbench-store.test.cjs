@@ -26,7 +26,7 @@ const {
 
 test('workbench layout defaults and clamps persisted panel sizes', () => {
   assert.deepEqual(normalizeWorkbenchState(), {
-    filePanelOpen: true,
+    filePanelOpen: false,
     filePanelWidth: DEFAULT_FILE_WIDTH,
     previewPanelOpen: false,
     reviewPanelOpen: true,

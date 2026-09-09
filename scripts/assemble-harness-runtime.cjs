@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
 
-const EXPECTED_HARNESS_VERSION = '0.1.3-alpha.2';
-const EXPECTED_DSH_PACKAGES = 251;
+const EXPECTED_HARNESS_VERSION = '0.1.5-alpha.1';
+const EXPECTED_DSH_PACKAGES = 258;
 const EXPECTED_VENDOR_PACKAGES = 9;
 const MAX_PACK_OUTPUT = 1024 * 1024;
 const MAX_RUNTIME_ENTRIES = 60_000;
@@ -221,7 +221,7 @@ const main = async () => {
       dependencyResolution: 'desktop-security-frozen-lockfile',
       security: require('./apply-harness-security.cjs').verifySecurity(sourceRoot),
       packagePayload: 'upstream-pnpm-pack',
-      installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local', 'fs-ext'],
+      installScripts: ['koffi', 'node-pty', '@deepseek-ai/dsh-subprocess-local'],
       // Only node_modules is shipped as the executable Harness payload. The
       // pnpm deploy staging files at runtimeRoot are build inputs, not package
       // resources, so binding them would make an intact package look altered.

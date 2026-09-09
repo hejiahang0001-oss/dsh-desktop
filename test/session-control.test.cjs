@@ -21,7 +21,7 @@ async function sdkFixture(t) {
   const source = path.join(root, 'source'), target = path.join(root, 'target'); await fsp.mkdir(source); await fsp.mkdir(target);
   const id = `session-${randomUUID()}`, events = [{ type: 'permission/preset', seq: 0, time: 1, data: { preset: 'workspace-write' } }];
   const entries = new Map([[id, { header: { id, cwd: source, agentPreset: 'standard' }, events, cursor: 0, [Symbol.dispose]() {} }]]);
-  const agents = new Map([[id, { status: 'idle', ctx: {}, inbox: { hasPending: false } }]]);
+  const agents = new Map([[id, { status: 'idle', ctx: {}, inbox: { nextTurn: [], nextStep: [] } }]]);
   let createOptions, flushes = 0;
   const ctx = {
     sessions: { get: (key) => entries.get(key) },
@@ -43,7 +43,7 @@ function taskSdk(f, preset = { sandbox: 'workspace-write', approval: 'ask' }) {
       assert.equal(observed, session, 'alpha.2 permission projection requires the Session, not its event array');
       return observed.events.findLast((e) => e.type === 'permission/preset')?.data.preset;
     }, set: (_s, name) => session.events.push({ type: 'permission/preset', data: { preset: name } }) };
-    f.entries.set(session.id, session); f.agents.set(session.id, { session, status: 'idle', inbox: { hasPending: false }, ctx: { get: (name) => name === 'permissionPresets' ? permissions : undefined }, cancel() { this.status = 'idle'; } });
+    f.entries.set(session.id, session); f.agents.set(session.id, { session, status: 'idle', inbox: { nextTurn: [], nextStep: [] }, ctx: { get: (name) => name === 'permissionPresets' ? permissions : undefined }, cancel() { this.status = 'idle'; } });
     return { sessionId: session.id };
   };
   f.ctx.sessionController.prompt = async (request, signal) => { signal.throwIfAborted(); sent++; f.entries.get(request.sessionId).events.push({ type: 'user/message', data: { source: { kind: 'user', rpcId: request.requestId } } }); return { accepted: true }; };
@@ -77,6 +77,17 @@ test('background SDK rejects occupied directories and attributes outcomes only t
   assert.equal((await f.sessionControl(f.ctx, 'task-status', r)).outcome, 'completed');
   assert.equal((await f.sessionControl(f.ctx, 'task-status', { ...r, requestId: randomUUID() })).outcome, null);
 });
+test('handoff refuses live queued or steering input through the public Inbox lists', async (t) => {
+  for (const target of ['nextTurn', 'nextStep']) {
+    const f = await sdkFixture(t), request = { sessionId: f.id, workspacePath: f.source };
+    f.agents.get(f.id).inbox = { nextTurn: [], nextStep: [], [target]: [{ id: 'pending-message' }] };
+    const state = await f.sessionControl(f.ctx, 'inspect', request);
+    await assert.rejects(f.sessionControl(f.ctx, 'fork', { ...request, childId: `session-${randomUUID()}`,
+      targetPath: f.target, historyHash: state.historyHash }), /排队消息/);
+    assert.equal(f.created(), undefined, 'must not create a child while live input is pending');
+  }
+});
+
 test('SDK handoff creates composed Agent with immutable inherited history and permits only the seed marker', async (t) => {
   const f = await sdkFixture(t), request = { sessionId: f.id, workspacePath: f.source }, original = JSON.stringify(f.events);
   const state = await f.sessionControl(f.ctx, 'inspect', request);
