@@ -48,10 +48,10 @@ const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = 
       version: localName === driftedPackage ? '0.1.2-alpha.5' : version
     }));
   }
-  for (const name of ['node-addon-landlock-run', 'node-addon-landlock-run-linux-arm64', 'node-addon-landlock-run-linux-x64']) {
+  for (const name of ['node-addon-system', 'node-addon-system-darwin-arm64', 'node-addon-system-darwin-x64', 'node-addon-system-linux-arm64', 'node-addon-system-linux-x64']) {
     writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', name, 'package.json'), JSON.stringify({
       name: `@deepseek-ai/${name}`,
-      version: '0.1.1'
+      version: '0.1.2'
     }));
   }
   const runtimePayload = inspectHarnessRuntimePayload(path.join(harnessRoot, 'node_modules'));
@@ -335,7 +335,7 @@ test('package layout requires exact Harness source-build provenance', async (con
   assert.equal(ready.requiredHarnessRuntimeReady, true);
   assert.equal(ready.harnessRuntime.dshPackageCount, 258);
   assert.equal(ready.harnessRuntime.vendorPackageCount, 9);
-  assert.equal(ready.harnessRuntime.auxiliaryPackageCount, 3);
+  assert.equal(ready.harnessRuntime.auxiliaryPackageCount, 5);
   assert.equal(ready.harnessRuntime.packageInventorySha256, '8efa42e476fd2da21ad1dafeb53ad2dc63dbf606c4a79099e8726814a35d13dd');
   assert.deepEqual(ready.harnessRuntime.mismatchedPackages, []);
 

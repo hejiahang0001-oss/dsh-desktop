@@ -87,9 +87,11 @@ const REQUIRED_HARNESS_VENDOR_PACKAGES = new Set([
   '@deepseek-ai/schemastery'
 ]);
 const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
-  ['@deepseek-ai/node-addon-landlock-run', '0.1.1'],
-  ['@deepseek-ai/node-addon-landlock-run-linux-arm64', '0.1.1'],
-  ['@deepseek-ai/node-addon-landlock-run-linux-x64', '0.1.1']
+  ['@deepseek-ai/node-addon-system', '0.1.2'],
+  ['@deepseek-ai/node-addon-system-darwin-arm64', '0.1.2'],
+  ['@deepseek-ai/node-addon-system-darwin-x64', '0.1.2'],
+  ['@deepseek-ai/node-addon-system-linux-arm64', '0.1.2'],
+  ['@deepseek-ai/node-addon-system-linux-x64', '0.1.2']
 ]);
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
