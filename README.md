@@ -24,13 +24,13 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; V1.1.10 Latest pins `dsh-v0.1.3-alpha.2` at `82a5fd61a7cf5c293cec4bdff68f455398d685e9` with the documented `desktop-security-1` dependency fixes.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. DeepSeek Harness remains a developer preview. V1.1.0 Stable retains alpha.1; V1.1.11 Latest pins `dsh-v0.1.5-alpha.1` at `5dda764ed3aa172535a7967b06ff95d9cbfe536a` with the documented `desktop-security-2` dependency fixes.
 
 ## Why DSH Desktop
 
-V1.1.10 (`DSH-Desktop-Setup-1.1.10.exe`) is the published Latest / Pre-release. It adapts Harness `0.1.3-alpha.2`, uses official attachments as the only new-file entry, and keeps older references and optional Office Skills. Seven exact security fixes are applied without changing upstream application sources; this is a documented desktop security build, not an unchanged official runtime. Stable remains V1.1.0. See the [release notes](docs/RELEASE_NOTES_v1.1.10.md) and [validation evidence](docs/VALIDATION.md).
+V1.1.11 (`DSH-Desktop-Setup-1.1.11.exe`) is the published Latest / Pre-release and is installed and verified locally. It adapts Harness `0.1.5-alpha.1`, Session V3 and the official file Sidebar; desktop file search, media preview, legacy references and optional Office Skills remain. Eight exact runtime security fixes are documented without changing upstream application sources. Stable remains V1.1.0. See the [release notes](docs/RELEASE_NOTES_v1.1.11.md) and [validation evidence](docs/VALIDATION.md).
 
-V1.1.11 (`DSH-Desktop-Setup-1.1.11.exe`) is currently a development candidate for Harness `0.1.5-alpha.1`, Session V3 and the official right Sidebar. It is not yet installed or publicly released; the download links below remain the last verified release.
+Session V3 upgrades require an independent pre-upgrade data backup. Do not let an older executable resume an upgraded active profile.
 
 V1.1.9 (`DSH-Desktop-Setup-1.1.9.exe`) strengthens the existing Word, Excel and PowerPoint tools with shared package/XML safety checks and verified on-disk delivery receipts. It preserves the Wiki workflow and official Harness chat controls. See the [release notes](docs/RELEASE_NOTES_v1.1.9.md) and [validation evidence](docs/VALIDATION.md) for current acceptance and publication status.
 
@@ -87,11 +87,11 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.10 official file workflow and Harness adaptation** removes the duplicate workspace-import entry while preserving old references, draft recovery and optional Office format tools. Session v2/history and configuration compatibility are verified against a fixed security-patched runtime. The installer remains unsigned, with automatic installation disabled; Portable cold-start performance remains a known limitation. See the [release notes](docs/RELEASE_NOTES_v1.1.10.md), [validation record](docs/VALIDATION.md), and [alpha.2 compatibility map](docs/HARNESS_UPSTREAM_v0.1.3-alpha.2.md).
+**V1.1.11 official Sidebar and Session V3 adaptation** removes duplicate desktop directory expansion, uses public Inbox lists, and keeps cold history free of Agent activation. The host reserves fullscreen file controls around desktop tools, including compact layouts. The installer remains unsigned, with automatic installation disabled; Portable cold-start performance remains a known limitation. See the [release notes](docs/RELEASE_NOTES_v1.1.11.md), [validation record](docs/VALIDATION.md), and [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.5-alpha.1.md).
 
 **[V1.1.0 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.0)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-08-31. It adds independently isolated background tasks, local schedules, durable run history, approval/completion notifications and conservative restart recovery. Release artifacts are `DSH-Desktop-Setup-1.1.0.exe` and `DSH-Desktop-Portable-1.1.0.exe`. Promotion preserves the previously tested binaries and SHA-256 values. See [background task boundaries and known limitations](docs/RELEASE_NOTES_v1.1.0.md) and [credential migration](docs/KEY_STORAGE.md). Release gates are tracked in [PROGRESS.md](PROGRESS.md).
 
-**[Latest / V1.1.10 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.10)** uses the official new-file workflow and adapts Harness alpha.2. Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.10/DSH-Desktop-Setup-1.1.10.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.10/DSH-Desktop-Portable-1.1.10.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.10/SHA256SUMS-v1.1.10.txt). See [release notes](docs/RELEASE_NOTES_v1.1.10.md) and [validation evidence](docs/VALIDATION.md). This does not promote or replace Stable.
+**[Latest / V1.1.11 Pre-release](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.11)** adopts official file Sidebar and Harness V3 sessions. Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.11/DSH-Desktop-Setup-1.1.11.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.11/DSH-Desktop-Portable-1.1.11.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.11/SHA256SUMS-v1.1.11.txt). See [release notes](docs/RELEASE_NOTES_v1.1.11.md) and [validation evidence](docs/VALIDATION.md). This does not promote or replace Stable.
 
 **[V1.0.5 previous version](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.0.5)** is retained, not a second Stable. The 2026-08-31 cleanup retained V1.0.5 and V1.1.0; future Latest iterations can add new releases. Source tags, history and test records remain available. Back up application data before downgrading; retaining an installer does not guarantee future data-format compatibility.
 
@@ -176,7 +176,7 @@ DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面
 
 发布通道规则：V1.1.0 为当前 Stable 和 GitHub `Latest release`，于 2026-08-31 经维护者明确授权晋升。后续版本作为产品 Latest，在验证通过后按维护者明确的覆盖和发布授权执行；已有持续授权的日常迭代不反复确认，未获授权或超出原范围时仍须取得新指令。Pre-release 必须通过发布门禁，草稿上传不等于公开可下载。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升；Stable 不代表安装器已签名或已完成 24 小时老化，边界见[发布说明](docs/RELEASE_NOTES_v1.1.0.md)。
 
-本轮 [V1.1.10 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.10) 已发布：新文件统一走官方附件、拖拽和图文混排，移除重复导入栏；旧引用、草稿和 Word/Excel/PPT 格式工具、安全检查与备份收据保留。内核适配至 `0.1.3-alpha.2`，七项最小安全补丁单独记录；本机已覆盖安装并通过真实 Excel/Word 读取，Stable 保持 V1.1.0。Session v2 升级前需独立备份，旧版本不能直接打开已迁移的活动数据目录。已验证范围见[验证记录](docs/VALIDATION.md)。
+本轮 [V1.1.11 Latest](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.11) 已发布并覆盖安装：内核固定 `0.1.5-alpha.1`，采用官方文件树/文本标签、Session V3 和公开 Inbox，修复窄窗口全屏控制被桌面审查面板遮挡的问题。新文件仍统一走官方附件；文件搜索、媒体预览、旧引用、草稿、Office/Wiki 工具和安全收据保留。595 项测试及真实插话、交接、Excel/Word 读取通过。Stable 保持 V1.1.0；已保留升级前独立备份，旧版本不能直接打开 V3 活动数据。已验证范围见[验证记录](docs/VALIDATION.md)。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
