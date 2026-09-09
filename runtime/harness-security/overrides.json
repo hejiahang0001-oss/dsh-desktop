@@ -1,17 +1,19 @@
 {
-  "revision": "desktop-security-1",
-  "upstreamCommit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
-  "upstreamWorkspaceSha256": "69ff4f54c74c012bff3223fab195583b2108f90efa068d69595da94853af8a4d",
-  "upstreamLockSha256": "a97c388b9f68649122e7b134c913da227ab41697a58d84e6b1ec47a258aa4ae3",
-  "workspaceSha256": "bdb95341d94989d436bb1c9bb817e1ffea70e80f8db0b7c469d313da862a9904",
-  "lockSha256": "c2249475d8c65c196ad3ab5d8c53c47a306244122c67e82545e0e238da9395db",
+  "revision": "desktop-security-2",
+  "upstreamCommit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+  "upstreamWorkspaceSha256": "6567f8643b8b6ede7a7920e9e5b5fddc762e51d3b17e1104686c6fe04d4757f6",
+  "upstreamLockSha256": "bdccf20a5cc4fea5bc5754aec56ea322c366bcdd437afab63f7c142d5233887e",
+  "workspaceSha256": "490e626d207081b8d4b1b4e23a785b7561abba05574bc7c2d269d733b739de97",
+  "lockSha256": "ed7b1cbb34a06665f948455c5284407f44c049e38c1bf3e8218ace7fb8e56077",
   "overrides": {
-    "js-yaml@4.2.0": "4.3.1",
+    "js-yaml@4.2.0": "4.3.2",
+    "js-yaml@4.3.1": "4.3.2",
     "protobufjs@7.6.4": "7.6.5",
     "fast-uri@3.1.3": "3.1.6",
     "ip-address@10.2.0": "10.3.1",
-    "hono@4.12.29": "4.12.34",
+    "hono@4.12.29": "4.13.5",
     "@hono/node-server@1.19.14": "1.19.15",
-    "qs@6.15.3": "6.16.0"
+    "qs@6.15.3": "6.16.0",
+    "sharp@0.35.3": "0.35.4"
   }
 }
