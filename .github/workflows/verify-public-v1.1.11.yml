@@ -1,0 +1,48 @@
+name: Verify public V1.1.11 anonymously
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fully download four public assets without credentials
+        shell: pwsh
+        run: |
+          $assets = @(
+            @{name='DSH-Desktop-Setup-1.1.11.exe';bytes=190333477;sha256='bc1a3c1cd54c8128b81d015de87ac086b9006f4a29a814830b297de827f7ac6c'},
+            @{name='DSH-Desktop-Portable-1.1.11.exe';bytes=189640077;sha256='e98aeb1db053c2723cf2f13fd2bb3fbc729aefedfdf1b11b36bcbe1e7c6f3f7b'},
+            @{name='DSH-Desktop-Setup-1.1.11.exe.blockmap';bytes=196254;sha256='89a3005a24df336b328cb0bc2e7911b7cd326ecf4a28be94b1467ba459f0735f'},
+            @{name='SHA256SUMS-v1.1.11.txt';bytes=297;sha256='bbf9d6d393dd7bcac317dd869dae96aacdf32e36d127fb423d497e6f838fda22'}
+          )
+          New-Item -ItemType Directory -Path public-verification | Out-Null
+          $results = @()
+          foreach ($asset in $assets) {
+            $destination = Join-Path public-verification $asset.name
+            $uri = 'https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.11/' + $asset.name
+            $response = Invoke-WebRequest -Uri $uri -OutFile $destination -PassThru -TimeoutSec 300 -MaximumRedirection 5
+            if ($response.StatusCode -ne 200) { throw 'Expected anonymous HTTP 200' }
+            $bytes = (Get-Item -LiteralPath $destination).Length
+            $digest = (Get-FileHash -LiteralPath $destination).Hash.ToLowerInvariant()
+            if ($bytes -ne $asset.bytes -or $digest -ne $asset.sha256) { throw ('Public asset mismatch: ' + $asset.name) }
+            $results += @{name=$asset.name;bytes=$bytes;sha256=$digest;ok=$true;httpStatus=200}
+          }
+          $lines = @(Get-Content public-verification/SHA256SUMS-v1.1.11.txt)
+          if ($lines.Count -ne 3) { throw 'Expected three checksum entries' }
+          $seen = @{}
+          foreach ($line in $lines) {
+            if ($line -notmatch '^([a-f0-9]{64})  ([A-Za-z0-9.-]+)$') { throw 'Malformed checksum entry' }
+            $digest = $Matches[1]; $name = $Matches[2]
+            $expected = @($assets | Where-Object { $_.name -eq $name -and $_.sha256 -eq $digest -and !$_.name.EndsWith('.txt') })
+            if ($seen.ContainsKey($name) -or $expected.Count -ne 1) { throw 'Checksum manifest mismatch' }
+            $seen[$name] = $true
+          }
+          $result = @{ok=$true;version='1.1.11';authentication='none';location='GitHub windows-latest independent runner';assets=$results;checksumEntries=3;releaseCommit='1a904a886c7043a54cb614283c20eed8f11b7148';checkedAt=[DateTime]::UtcNow.ToString('o')}
+          $result | ConvertTo-Json -Depth 6 | Set-Content public-verification/verification.json -Encoding utf8
+      - uses: actions/upload-artifact@v7
+        with:
+          name: public-v1.1.11-verification
+          path: public-verification/verification.json
+          if-no-files-found: error
