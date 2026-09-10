@@ -57,14 +57,14 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.11';
+const REQUIRED_DESKTOP_VERSION = '1.1.12';
 const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
-const REQUIRED_HARNESS_TAG = 'dsh-v0.1.5-alpha.1';
-const REQUIRED_HARNESS_VERSION = '0.1.5-alpha.1';
-const REQUIRED_HARNESS_COMMIT = '5dda764ed3aa172535a7967b06ff95d9cbfe536a';
-const REQUIRED_HARNESS_PACKAGE_COUNT = 267;
-const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = '8efa42e476fd2da21ad1dafeb53ad2dc63dbf606c4a79099e8726814a35d13dd';
-const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 258;
+const REQUIRED_HARNESS_TAG = 'dsh-v0.1.5-rc.2';
+const REQUIRED_HARNESS_VERSION = '0.1.5-rc.2';
+const REQUIRED_HARNESS_COMMIT = 'fb2c4b9e698e30edb738bca4cf0618587db7d203';
+const REQUIRED_HARNESS_PACKAGE_COUNT = 274;
+const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = 'a1f8b0b3f6491a9111ef0e512e9523a0fb6e138bd14aaf31926a165338348585';
+const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 265;
 const REQUIRED_HARNESS_BUILD_NODE = 'v24.19.0';
 const REQUIRED_HARNESS_BUILD_PNPM = '11.7.0';
 const REQUIRED_HARNESS_DEPENDENCY_RESOLUTION = 'desktop-security-frozen-lockfile';
@@ -96,7 +96,7 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', 'a5f0a07fc6531cbb19e5c50d22eb1a9b90fb0c1cb214c9bd8b55852b3658abfa']
+  ['THIRD_PARTY_LICENSES.md', '6379108ad233b53aae7da49429b5df49d3bea931c5cfdb59fece830ba9362e12']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -566,7 +566,7 @@ const inspectPackageLayout = async (rootPath) => {
     && harnessRuntime.mismatchedPackages.length === 0;
   const requiredDesktopPlugins = ['dsh-desktop-shell-env/index.mjs', 'dsh-desktop-shell-env/package.json',
     'dsh-desktop-credentials/index.mjs', 'dsh-desktop-credentials/package.json',
-    'dsh-desktop-tools/index.mjs', 'dsh-desktop-tools/session-control.mjs', 'dsh-desktop-tools/package.json'];
+    'dsh-desktop-tools/index.mjs', 'dsh-desktop-tools/session-control.mjs', 'dsh-desktop-tools/client.js', 'dsh-desktop-tools/package.json'];
   const desktopPluginsMissing = [];
   for (const relative of requiredDesktopPlugins) {
     const info = await fsp.lstat(path.join(root, 'resources', 'harness-plugins', relative)).catch(() => null);

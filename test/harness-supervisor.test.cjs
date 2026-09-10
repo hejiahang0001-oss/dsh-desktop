@@ -422,6 +422,19 @@ test('desktop shell environment plugin is provisioned into the Harness profile f
   }
 });
 
+test('desktop tools provisioning retains the public browser entry and session control', async (t) => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-tools-client-provision-'));
+  t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
+  const sourceDir = path.resolve(__dirname, '../runtime/dsh-desktop-tools');
+  const targetDir = await provisionDesktopShellEnvPlugin({ homeDir, sourceDir, expectedName: 'dsh-desktop-tools' });
+  const manifest = JSON.parse(fs.readFileSync(path.join(targetDir, 'package.json'), 'utf8'));
+  assert.deepEqual(manifest.exports, { '.': './index.mjs', './client': './client.js' });
+  assert.equal(manifest.dsh.client.platform, 'web');
+  for (const file of ['index.mjs', 'client.js', 'session-control.mjs']) {
+    assert.deepEqual(fs.readFileSync(path.join(targetDir, file)), fs.readFileSync(path.join(sourceDir, file)));
+  }
+});
+
 test('probeHarness verifies a successful HTML response', async () => {
   const response = new Response('<title>DeepSeek Harness</title>', {
     status: 200,

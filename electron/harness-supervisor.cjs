@@ -47,7 +47,10 @@ const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName
   const sourceManifestPath = path.join(sourceDir, 'package.json');
   const sourceModulePath = path.join(sourceDir, 'index.mjs');
   const manifest = JSON.parse(await fsp.readFile(sourceManifestPath, 'utf8'));
-  if (manifest.name !== expectedName || manifest.exports !== './index.mjs') {
+  const validExports = expectedName === 'dsh-desktop-tools'
+    ? manifest.exports?.['.'] === './index.mjs' && manifest.exports?.['./client'] === './client.js'
+    : manifest.exports === './index.mjs';
+  if (manifest.name !== expectedName || !validExports) {
     const error = new Error('DSH Desktop 的固定工具环境桥接组件清单无效。请重新安装应用。');
     error.code = 'HARNESS_SHELL_ENV_PLUGIN_INVALID';
     throw error;
@@ -70,7 +73,9 @@ const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName
     ['package.json', `${JSON.stringify(manifest, null, 2)}\n`],
     ['index.mjs', await fsp.readFile(sourceModulePath, 'utf8')]
   ];
-  if (expectedName === 'dsh-desktop-tools') files.push(['session-control.mjs', await fsp.readFile(path.join(sourceDir, 'session-control.mjs'), 'utf8')]);
+  if (expectedName === 'dsh-desktop-tools') {
+    for (const name of ['session-control.mjs', 'client.js']) files.push([name, await fsp.readFile(path.join(sourceDir, name), 'utf8')]);
+  }
   for (const [name, content] of files) {
     const targetPath = path.join(targetDir, name);
     try {

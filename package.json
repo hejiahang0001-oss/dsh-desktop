@@ -201,6 +201,7 @@
         "filter": [
           "index.mjs",
           "session-control.mjs",
+          "client.js",
           "package.json"
         ]
       },

@@ -101,6 +101,7 @@ const { SideChatController, SideChatError } = require('./side-chat.cjs');
 const { DocumentIntakeController } = require('./document-intake-controller.cjs');
 const { contextKey } = require('./document-intake-controller.cjs');
 const { resolveHarnessSessionContext } = require('./harness-session-context.cjs');
+const { createOfficialFilePreview } = require('./official-file-preview.cjs');
 const { createDesktopCredentialHost } = require('./desktop-credential-host.cjs');
 const { NativeWorkbenchDock } = require('./native-workbench-dock.cjs');
 const { DockLayoutStore, TOOLS: DOCK_TOOLS } = require('./dock-layout.cjs');
@@ -5586,6 +5587,13 @@ ipcMain.handle('files:preview', (event, filePath) => (
 ipcMain.handle('files:search', (event, query) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.search(query))
 ));
+const officialFilePreview = createOfficialFilePreview({
+  getContext: () => documentIntakeController.getContext(),
+  getWorkspacePath: () => getWorkspaceState().activePath
+});
+ipcMain.handle('files:resolve-preview', (event, request) => (
+  runWorkspaceFilesRequest(event, () => officialFilePreview.resolve(request))
+));
 ipcMain.handle('preview:get-state', (event) => (
   harnessIpcAllowed(event) && previewManager
     ? previewManager.getState()
@@ -6836,6 +6844,11 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
         if (!result.ok) process.exitCode = 1;
         return;
       }
+      if (dock && process.argv.includes('--smoke-file-preview')) {
+        result = await require('./official-file-preview-smoke.cjs').runOfficialFilePreviewSmoke({ window: mainWindow, BrowserWindow, workspacePath, evaluate, waitFor, target: resolvedTarget, version: app.getVersion() });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
       if (dock && process.argv.includes('--smoke-workflow')) {
         if (!process.argv.includes('--smoke-real-model')) throw new Error('Workflow acceptance requires the real model flag.');
         result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath: selected.workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi,
@@ -6948,6 +6961,9 @@ const runIpcSecuritySmoke = async (target) => {
     'Object.keys(window.desktopAPI?.terminal || {}).sort()',
     true
   );
+  const rejectedFilePreview = await mainWindow.webContents.executeJavaScript(
+    'window.desktopAPI.files.resolvePreview({path:".env",sessionId:"session-11111111-1111-4111-8111-111111111111",workspacePath:"C:/"})', true
+  );
   await createTerminalWindow();
   const localTerminalKeys = await terminalWindow.webContents.executeJavaScript(
     'Object.keys(window.terminalAPI || {}).sort()',
@@ -6968,11 +6984,13 @@ const runIpcSecuritySmoke = async (target) => {
   const result = {
     ok: remoteTerminalKeys.length === 1
       && remoteTerminalKeys[0] === 'openWindow'
+      && rejectedFilePreview?.available === false && !rejectedFilePreview.address
       && JSON.stringify(localTerminalKeys) === JSON.stringify(expectedLocalKeys)
       && localState?.state?.status === 'unavailable'
       && screenshotSize.width > 0
       && screenshotSize.height > 0,
     remoteTerminalKeys,
+    untrustedFilePreviewRejected: rejectedFilePreview?.available === false && !rejectedFilePreview.address,
     localTerminalKeys,
     localTerminalStatus: localState?.state?.status || 'missing',
     screenshot: {

@@ -1,5 +1,16 @@
 # Validation evidence
 
+## V1.1.12 Harness RC.2 / official document preview (2026-09-11, release acceptance)
+
+Evidence root: `artifacts/v1.1.12-release-candidate/`. Installed/public baseline is still V1.1.11 until the separate gates below complete. Stable remains V1.1.0.
+
+- Exact official source: `dsh-v0.1.5-rc.2`, `fb2c4b9e698e30edb738bca4cf0618587db7d203`; no upstream application edits. [Windows runtime build 34499214988](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34499214988) and archive size/SHA-256 pass. All 274 release packages (265 DSH/9 Cordis) and the eight pinned security dependency patches retain fixed provenance.
+- Baseline 595/595; final product-source suite **602/602**, zero skips/failures (`tests-final.log`); post-review focused checks 15/15. Production, physical runtime and new embedded PDF.js/clsx audits report no known findings, not a clean bill for the whole upstream monorepo. Notices cover 537 physical manifest identities plus ten PDF.js bundled notices.
+- `source-file-preview-3/result.json`: real official Markdown/code/image/sandboxed HTML/PDF, three Chinese PDF pages including the last-page canvas, native Enter search activation, protected-path rejection and unchanged originals. Screenshots visually inspected. The real gate found/fixed an invalid host-workspace variable missed by mocks. Stale/concurrent Session, workspace, link and Windows-path checks remain fail-closed; ordinary preview UI is deleted, Office validation/receipts retained.
+- `source-workflow-3/result.json`: real Queue/up-arrow/Ctrl+Enter/Stop/present card+preview, double text tabs, fullscreen/compact hit-testing and return to composer all pass. Earlier smoke assumptions were corrected by closing the delivery tab and using the official file refresh after fixture creation; no private official APIs or upstream UI patches were introduced.
+- `migration-v3/result.json`: synthetic plain/Zstd migration, reopen/append, independent backup and downgrade boundary pass. `artifacts/v1.1.12-cold-read-1DttZL/result.json`: 22 events/five pages, fixed cuts over an external writer, zero Agents/model calls and unchanged logs pass.
+- Pre-final unpacked six-route no-Key suite passes (Harness, official attachments, continuity, Office, Wiki, IPC). Intermediate installer compression was deliberately canceled to include the completed smoke correction. Final installer/payload binding, overwrite retention, installed tests and public anonymous downloads remain required. Large/encrypted files, split-pane dragging, Office visual layout, a second Windows machine, signing and 24-hour aging are not claimed.
+
 This page records versioned local engineering evidence without making the README front page carry the full verification ledger. Earlier extension-health, durable-state, context, permission, checkpoint, proxy, clipboard, preview, terminal, and workbench evidence remains below because later versions preserve those surfaces.
 
 ## V1.1.11 Session V3 and official Sidebar (2026-09-09)

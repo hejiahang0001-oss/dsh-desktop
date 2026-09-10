@@ -209,6 +209,18 @@ class WorkspaceFiles {
     });
   }
 
+  async describeFile(relativePath) {
+    const resolved = this._resolve(relativePath);
+    if (isRestrictedWorkspaceFile(resolved.relativePath)) {
+      throw new WorkspaceFilesError('restricted', '疑似凭据或私钥文件不从桌面搜索入口打开。');
+    }
+    await this._assertNoLinkTraversal(resolved);
+    if (!(await fsp.lstat(resolved.absolutePath)).isFile()) {
+      throw new WorkspaceFilesError('not-file', '请选择普通文件。');
+    }
+    return Object.freeze({ path: resolved.relativePath });
+  }
+
   async readFile(relativePath, { maxBytes = MAX_FILE_BYTES } = {}) {
     const resolved = this._resolve(relativePath);
     if (isRestrictedWorkspaceFile(resolved.relativePath)) {

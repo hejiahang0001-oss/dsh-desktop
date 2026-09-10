@@ -11,6 +11,9 @@ async function runOfficialSidebarSmoke({ window, workspacePath, evaluate, waitFo
   await waitFor('Boolean(document.querySelector("[data-sidebar-right-panel][data-sidebar-right-open]"))');
   await evaluate('document.querySelector("[data-sidebar-right-guide-entry=files]")?.click()');
   await waitFor('Boolean(document.querySelector("[data-files-state=tree]"))');
+  // present may already have populated the official directory cache before
+  // these isolated fixtures were created. Exercise its public refresh control.
+  await evaluate('document.querySelector("[data-files-reload]").click()');
   const fileRow = (name) => `Array.from(document.querySelectorAll('[data-files-entry=file]')).find(row=>row.textContent.trim()===${JSON.stringify(name)})`;
   const fileTab = `Array.from(document.querySelectorAll('[data-dockkit-tab]')).find(tab=>tab.querySelector('[data-dockkit-tab-title]')?.textContent.trim()==='文件')`;
   for (const [index, [name, content]] of fixtures.entries()) {
