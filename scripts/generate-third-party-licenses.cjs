@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
-const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.5-alpha.1-desktop-security-2', 'node_modules');
+const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.5-rc.2-desktop-security-1', 'node_modules');
 const directPackageRoots = [
   path.join(root, 'node_modules', '@xmldom', 'xmldom'),
   path.join(root, 'node_modules', 'pnpm'),
@@ -55,7 +55,14 @@ const packages = [...new Map(packageRows.map((entry) => [`${entry.name}@${entry.
   .sort((left, right) => left.license.localeCompare(right.license, 'en')
     || left.name.localeCompare(right.name, 'en')
     || left.version.localeCompare(right.version, 'en'));
-if (packages.length !== 553) throw new Error(`Expected 553 packaged JavaScript packages, found ${packages.length}.`);
+if (packages.length !== 537) throw new Error(`Expected 537 packaged JavaScript manifest identities, found ${packages.length}.`);
+
+// Browser-only dependencies can ship inside client.js without a runtime manifest.
+const previewBundle = fs.readFileSync(path.join(harnessModules, '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js'), 'utf8');
+const pdfNotices = ['LICENSE', 'cmaps/LICENSE', 'standard_fonts/LICENSE_FOXIT', 'standard_fonts/LICENSE_LIBERATION',
+  'wasm/LICENSE_JBIG2', 'wasm/LICENSE_OPENJPEG', 'wasm/LICENSE_PDFJS_JBIG2', 'wasm/LICENSE_PDFJS_OPENJPEG', 'wasm/LICENSE_PDFJS_QCMS', 'wasm/LICENSE_QCMS'];
+if (!previewBundle.includes('pdfjs-dist@6.3.289') || !previewBundle.includes('//! Bundled PDF.js license notices')
+  || pdfNotices.some((notice) => !previewBundle.includes(`// ${notice}\n`))) throw new Error('Official PDF.js bundle or license notices are incomplete.');
 
 const groups = new Map();
 for (const entry of packages) {
@@ -72,11 +79,12 @@ const lines = [
   '',
   '## Runtime provenance',
   '',
-  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.5-alpha.1`, source tag `dsh-v0.1.5-alpha.1`, commit `5dda764ed3aa172535a7967b06ff95d9cbfe536a`.',
+  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.5-rc.2`, source tag `dsh-v0.1.5-rc.2`, commit `fb2c4b9e698e30edb738bca4cf0618587db7d203`.',
   '- Node.js: `v24.19.0`; its official `LICENSE` file is bundled beside `node.exe`.',
   '- Electron: `43.4.1`; Electron and Chromium notices are emitted by the Windows packaging runtime.',
   '- pnpm: `11.19.0` is bundled for controlled extension lifecycle operations; `11.7.0` is used only to reproduce the upstream Harness source build.',
-  `- JavaScript packages inventoried: **${packages.length}**; no package in this fixed set is missing a declared license identifier.`,
+  `- Physical JavaScript manifest identities inventoried: **${packages.length}**; no package in this fixed set is missing a declared license identifier. This count excludes dependencies embedded solely inside browser bundles.`,
+  '- Official document preview embeds `pdfjs-dist@6.3.289` (Apache-2.0) inside `@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js`, including its PDF worker, font data and decoders. All ten upstream PDF.js and bundled-data license notices are retained verbatim in that shipped file; this generator verifies their presence.',
   '',
   '## Declared license summary',
   '',

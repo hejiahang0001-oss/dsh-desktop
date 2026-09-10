@@ -42,7 +42,7 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   const steerResult = path.join(workspacePath, 'steer-result.txt');
 
   await start();
-  await type(`取消之前的重复输出任务，现在只做这件事：把 ${marker} 写入当前工作区 queue-result.txt，然后结束。不要继续此前任务。`);
+  await type(`取消之前的重复输出任务，现在只做这件事：把 ${marker} 写入当前工作区 queue-result.txt，写入完成后必须调用 present 工具把此文件交付给用户，然后结束。不要继续此前任务。`);
   await pressEnter(false);
   await wait(async () => (await inspect()).pending > 0 && !(await evaluate('window.__DSH_COMPOSER_TEXT__.read()')).trim(), 'official queue accepted');
   checks.officialQueueAccepted = true;
@@ -54,6 +54,13 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
     return !state.running && !state.pending && (await fsp.readFile(queueResult, 'utf8').catch(() => '')).trim() === marker;
   }, 'official queued steer completed');
   checks.officialQueuedSteerReplied = true;
+  await wait(() => evaluate('Array.from(document.querySelectorAll("[data-presented-file]")).some(el=>el.textContent.includes("queue-result.txt"))'), 'official present card', 15000);
+  await evaluate('Array.from(document.querySelectorAll("[data-presented-file]")).find(el=>el.textContent.includes("queue-result.txt")).querySelector("button").click()');
+  await wait(() => evaluate(`document.querySelector('[data-textpreview-state=text]')?.textContent.includes(${JSON.stringify(marker)})`), 'official present preview', 15000);
+  checks.officialPresentDeliveredAndPreviewed = true;
+  await fsp.writeFile(`${target}.official-present.png`, (await wc.capturePage()).toPNG());
+  await evaluate('Array.from(document.querySelectorAll("[data-dockkit-tab]")).find(tab=>tab.querySelector("[data-dockkit-tab-title]")?.textContent.trim()==="queue-result.txt").querySelector("[data-dockkit-tab-close]").click()');
+  await evaluate('document.querySelector("[data-sidebar-right-toggle]")?.click()');
 
   await start();
   await type(`立即改做这件事：仅把 ${marker} 写入当前工作区 steer-result.txt，不继续数字解释。`);

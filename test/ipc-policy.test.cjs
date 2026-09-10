@@ -50,6 +50,8 @@ test('terminal owner binding rejects another frame and changes after navigation'
 
 test('every previously unguarded desktop handler now validates its sender', () => {
   const main = read('electron/main.cjs');
+  assert.match(main, /files:resolve-preview', \(event, request\) => \([\s\S]*?runWorkspaceFilesRequest\(event, \(\) => officialFilePreview\.resolve\(request\)\)/);
+  assert.match(main, /createOfficialFilePreview\(\{\s*getContext: \(\) => documentIntakeController\.getContext\(\),\s*getWorkspacePath: \(\) => getWorkspaceState\(\)\.activePath/);
   assert.match(main, /const desktopIpcAllowed = \(event\) => isTrustedMainFrameEvent/);
   assert.match(main, /workspace:get-state', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);
   assert.match(main, /workspace:choose', \(event\)[\s\S]*?desktopIpcAllowed\(event\)/);

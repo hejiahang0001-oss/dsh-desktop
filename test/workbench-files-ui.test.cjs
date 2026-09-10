@@ -11,25 +11,23 @@ const reviewScript = fs.readFileSync(path.join(root, 'assets', 'workbench-panel.
 test('workspace file UI stays read-only and uses the bounded preload surface', () => {
   assert.doesNotMatch(filesScript, /api\.files\.list/);
   assert.match(filesScript, /普通文件浏览请使用官方右侧文件面板/);
-  assert.match(filesScript, /api\.files\.read/);
+  assert.doesNotMatch(filesScript, /api\.files\.read/);
   assert.match(filesScript, /api\.files\.search/);
-  assert.match(filesScript, /api\.files\.preview/);
+  assert.doesNotMatch(filesScript, /api\.files\.preview/);
+  assert.match(filesScript, /__DSH_OFFICIAL_FILES__/);
+  assert.match(filesScript, /bridge\.openFile\(pathValue, workspace\.activePath\)/);
   assert.match(filesScript, /textContent/);
   assert.match(filesScript, /name: entry\.path/);
   assert.match(filesScript, /window\.__DSH_FILES__/);
   assert.doesNotMatch(filesScript, /innerHTML|eval\(|writeFile|unlink|rename/);
 });
 
-test('workspace file UI has dedicated local image and PDF controls with explicit failure handling', () => {
-  assert.match(filesScript, /PNG、JPEG、WebP、GIF 和 PDF|mediaKindForPath/);
-  assert.match(filesScript, /适合窗口/);
-  assert.match(filesScript, /PDF 页码/);
-  assert.match(filesScript, /create\('embed'/);
-  assert.match(filesScript, /图片解码失败/);
-  assert.match(filesScript, /URL\.revokeObjectURL/);
-  assert.match(filesCss, /dsh-file-preview-media/);
-  assert.match(filesCss, /dsh-file-preview-pdf/);
-  assert.match(filesCss, /dsh-file-preview-page\[hidden\]/);
+test('workspace file UI retires the duplicate document viewer and reports official navigation failures', () => {
+  assert.doesNotMatch(filesScript, /create\('embed'|createObjectURL|PDF 页码|dsh-file-preview/);
+  assert.doesNotMatch(filesCss, /dsh-file-preview/);
+  assert.match(filesScript, /官方文件面板尚未就绪/);
+  assert.match(filesScript, /request !== previewRequest/);
+  assert.match(filesScript, /内容加载状态请查看该面板/);
 });
 
 test('workspace file UI exposes accessible layout and Diff reveal hooks', () => {

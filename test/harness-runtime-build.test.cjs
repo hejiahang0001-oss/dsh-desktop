@@ -5,9 +5,9 @@ const test = require('node:test');
 const { createRequire } = require('node:module');
 
 const ROOT = path.resolve(__dirname, '..');
-const VERSION = '0.1.5-alpha.1';
-const COMMIT = '5dda764ed3aa172535a7967b06ff95d9cbfe536a';
-const runtimeRoot = path.join(ROOT, 'vendor', `harness-hoisted-${VERSION}-desktop-security-2`);
+const VERSION = '0.1.5-rc.2';
+const COMMIT = 'fb2c4b9e698e30edb738bca4cf0618587db7d203';
+const runtimeRoot = path.join(ROOT, 'vendor', `harness-hoisted-${VERSION}-desktop-security-1`);
 
 test('V1 runtime recipe pins the official source identity and narrow build policy', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -20,7 +20,7 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   assert.match(manifest.scripts['runtime:deploy'], /build-harness-runtime\.ps1/);
   assert.deepEqual(runtimeManifest.dshDesktop, {
     repository: 'https://github.com/deepseek-ai/deepseek-harness.git',
-    tag: 'dsh-v0.1.5-alpha.1',
+    tag: 'dsh-v0.1.5-rc.2',
     commit: COMMIT,
     package: '@deepseek-ai/dsh',
     packageVersion: VERSION,
@@ -37,7 +37,7 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   assert.match(buildScript, /apply-harness-security\.cjs/);
   assert.match(buildScript, /audit-harness-runtime\.cjs/);
   assert.doesNotMatch(buildScript, /dangerously-allow-all-builds/);
-  assert.match(assembler, /EXPECTED_DSH_PACKAGES = 258/);
+  assert.match(assembler, /EXPECTED_DSH_PACKAGES = 265/);
   assert.match(assembler, /EXPECTED_VENDOR_PACKAGES = 9/);
   assert.match(assembler, /koffiPackage\.version !== '3\.1\.1'/);
 });
@@ -53,14 +53,14 @@ test('assembled Harness runtime carries exact provenance and no linked paths', (
   assert.equal(dsh.version, VERSION);
   assert.equal(koffi.version, '3.1.1');
   assert.equal(provenance.harness.commit, COMMIT);
-  assert.equal(provenance.harness.tag, 'dsh-v0.1.5-alpha.1');
+  assert.equal(provenance.harness.tag, 'dsh-v0.1.5-rc.2');
   assert.equal(provenance.build.node, 'v24.19.0');
   assert.equal(provenance.build.pnpm, '11.7.0');
-  assert.equal(provenance.build.packageCount, 267);
+  assert.equal(provenance.build.packageCount, 274);
   assert.equal(provenance.build.dependencyResolution, 'desktop-security-frozen-lockfile');
-  assert.equal(provenance.build.security.revision, 'desktop-security-2');
+  assert.equal(provenance.build.security.revision, 'desktop-security-1');
   assert.equal(provenance.build.security.lockSha256, require('../runtime/harness-security/overrides.json').lockSha256);
-  assert.equal(provenance.build.packageInventorySha256, '8efa42e476fd2da21ad1dafeb53ad2dc63dbf606c4a79099e8726814a35d13dd');
+  assert.equal(provenance.build.packageInventorySha256, 'a1f8b0b3f6491a9111ef0e512e9523a0fb6e138bd14aaf31926a165338348585');
   assert.deepEqual(provenance.build.runtimePayload, require('../scripts/harness-runtime-integrity.cjs').inspectHarnessRuntimePayload(path.join(runtimeRoot, 'node_modules')));
 
   const queue = [runtimeRoot];

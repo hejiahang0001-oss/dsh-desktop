@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
 
-const EXPECTED_HARNESS_VERSION = '0.1.5-alpha.1';
-const EXPECTED_DSH_PACKAGES = 258;
+const EXPECTED_HARNESS_VERSION = '0.1.5-rc.2';
+const EXPECTED_DSH_PACKAGES = 265;
 const EXPECTED_VENDOR_PACKAGES = 9;
 const MAX_PACK_OUTPUT = 1024 * 1024;
 const MAX_RUNTIME_ENTRIES = 60_000;

@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.11",
+  "version": "1.1.12",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -130,11 +130,11 @@
         ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.5-alpha.1-desktop-security-2/node_modules",
+        "from": "vendor/harness-hoisted-0.1.5-rc.2-desktop-security-1/node_modules",
         "to": "harness/node_modules"
       },
       {
-        "from": "vendor/harness-hoisted-0.1.5-alpha.1-desktop-security-2/harness-runtime.json",
+        "from": "vendor/harness-hoisted-0.1.5-rc.2-desktop-security-1/harness-runtime.json",
         "to": "harness/harness-runtime.json"
       },
       {
@@ -201,6 +201,7 @@
         "filter": [
           "index.mjs",
           "session-control.mjs",
+          "client.js",
           "package.json"
         ]
       },

@@ -8,15 +8,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Repository = 'https://github.com/deepseek-ai/deepseek-harness.git'
-$Tag = 'dsh-v0.1.5-alpha.1'
-$Commit = '5dda764ed3aa172535a7967b06ff95d9cbfe536a'
-$HarnessVersion = '0.1.5-alpha.1'
+$Tag = 'dsh-v0.1.5-rc.2'
+$Commit = 'fb2c4b9e698e30edb738bca4cf0618587db7d203'
+$HarnessVersion = '0.1.5-rc.2'
 $PnpmVersion = '11.7.0'
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Node = Join-Path $Root 'vendor\runtime\win32-x64\node.exe'
 $Pnpm = Join-Path $Root 'node_modules\harness-build-pnpm\bin\pnpm.cjs'
 $Assembler = Join-Path $PSScriptRoot 'assemble-harness-runtime.cjs'
-if ($OutputDirectory -eq '') { $OutputDirectory = Join-Path $Root "vendor\harness-hoisted-$HarnessVersion-desktop-security-2" }
+if ($OutputDirectory -eq '') { $OutputDirectory = Join-Path $Root "vendor\harness-hoisted-$HarnessVersion-desktop-security-1" }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $StagingDirectory = "$OutputDirectory.staging-$([guid]::NewGuid().ToString('N'))"
 $OwnSource = $SourceDirectory -eq ''

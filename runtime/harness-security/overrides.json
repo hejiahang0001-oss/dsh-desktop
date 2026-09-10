@@ -1,10 +1,10 @@
 {
-  "revision": "desktop-security-2",
-  "upstreamCommit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+  "revision": "desktop-security-1",
+  "upstreamCommit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
   "upstreamWorkspaceSha256": "6567f8643b8b6ede7a7920e9e5b5fddc762e51d3b17e1104686c6fe04d4757f6",
-  "upstreamLockSha256": "bdccf20a5cc4fea5bc5754aec56ea322c366bcdd437afab63f7c142d5233887e",
+  "upstreamLockSha256": "a6515566578a26c29b5faddaf94abb5ec452ce6e533f8957e813328ebd4b3c27",
   "workspaceSha256": "490e626d207081b8d4b1b4e23a785b7561abba05574bc7c2d269d733b739de97",
-  "lockSha256": "ed7b1cbb34a06665f948455c5284407f44c049e38c1bf3e8218ace7fb8e56077",
+  "lockSha256": "f3f01139aa96acd0d5feafe774d79ad5f2bb82e3f055209fd716196400f3797b",
   "overrides": {
     "js-yaml@4.2.0": "4.3.2",
     "js-yaml@4.3.1": "4.3.2",

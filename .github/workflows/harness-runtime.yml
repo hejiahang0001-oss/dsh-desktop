@@ -2,7 +2,7 @@ name: Pinned Harness Windows runtime
 
 on:
   push:
-    branches: [codex/v1.1.11-harness-0.1.5-alpha.1]
+    branches: [codex/v1.1.12-harness-rc.2]
     paths:
       - .github/workflows/harness-runtime.yml
       - scripts/build-harness-runtime.ps1
@@ -40,7 +40,7 @@ jobs:
         shell: pwsh
         run: |
           $runtimeArchive = Join-Path $env:GITHUB_WORKSPACE 'harness-runtime-win32-x64.zip'
-          Push-Location vendor/harness-hoisted-0.1.5-alpha.1-desktop-security-2
+          Push-Location vendor/harness-hoisted-0.1.5-rc.2-desktop-security-1
           try {
             & 7z a -tzip -mx=1 $runtimeArchive node_modules harness-runtime.json security-audit.json
             if ($LASTEXITCODE -ne 0) { throw 'runtime archive failed' }
@@ -48,7 +48,7 @@ jobs:
           Get-FileHash -LiteralPath $runtimeArchive -Algorithm SHA256 | Format-List
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: harness-0.1.5-alpha.1-desktop-security-2-win32-x64
+          name: harness-0.1.5-rc.2-desktop-security-1-win32-x64
           path: harness-runtime-win32-x64.zip
           compression-level: 0
           retention-days: 7
