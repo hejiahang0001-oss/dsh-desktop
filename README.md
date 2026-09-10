@@ -1,6 +1,6 @@
 # DSH Desktop
 
-> V1.1.12 candidate in development: Harness `0.1.5-rc.2` and official previews/deliverables. Planned installer: `DSH-Desktop-Setup-1.1.12.exe`; not installed or published yet. Public Latest remains V1.1.11; Stable remains V1.1.0.
+> V1.1.12 candidate and four GitHub draft assets are verified: Harness `0.1.5-rc.2` and official previews/deliverables. Installer: `DSH-Desktop-Setup-1.1.12.exe`. Awaiting the running old application to exit safely, then overwrite/install acceptance and publication. Public Latest and the installed version remain V1.1.11; Stable remains V1.1.0.
 
 <p align="center">
   <img src="docs/assets/social-preview.png" alt="DSH Desktop — DeepSeek Harness on Windows" width="100%">

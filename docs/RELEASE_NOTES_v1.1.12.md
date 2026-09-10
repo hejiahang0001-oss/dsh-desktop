@@ -1,6 +1,6 @@
 # DSH Desktop V1.1.12 — Latest candidate
 
-发布验收中，未覆盖安装、未公开。Stable 保持 V1.1.0。
+源码、候选安装包和四项 GitHub 草稿资产已验收。等待本机旧版安全退出后覆盖安装；未公开，Stable 保持 V1.1.0。
 
 - 固定 Harness `0.1.5-rc.2`，采用官方 Flash 模型接入、文档预览、`present` 文件交付和反馈/可靠性修复。
 - 桌面文件搜索与 Git Review 的查看入口已转到官方 Sidebar，删除重复的普通文档/图片/PDF 预览界面。Office 校验、摘要回执、备份恢复、Wiki、原生代理和最高优先级加密 Key 保留。
