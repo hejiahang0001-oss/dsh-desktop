@@ -1,6 +1,6 @@
 # Harness 0.1.5-rc.2 — V1.1.12
 
-Status: installed and published as Latest / Pre-release on 2026-09-12. Installed preview, real model, data retention and anonymous public downloads pass; see [validation evidence](VALIDATION.md). Stable remains V1.1.0.
+Status: installed, publicly verified, then promoted to V1.1.12 Stable by explicit maintainer instruction on 2026-09-12. Promotion preserves the original binaries, fixed Harness and hashes; see [validation evidence](VALIDATION.md). The desktop channel does not promote the upstream RC to a stable API.
 
 - Official tag `dsh-v0.1.5-rc.2`, commit `fb2c4b9e698e30edb738bca4cf0618587db7d203`; Node 24.19.0, build pnpm 11.7.0, user pnpm 11.19.0 and Electron 43.4.1 stay fixed.
 - Release inventory: 265 DSH packages plus 9 Cordis packages, SHA-256 `a1f8b0b3f6491a9111ef0e512e9523a0fb6e138bd14aaf31926a165338348585`. Experimental Agent Teams packages are published upstream but are not enabled by the desktop overlay.

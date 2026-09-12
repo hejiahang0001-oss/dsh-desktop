@@ -1,5 +1,12 @@
 # DSH Desktop 执行进度
 
+## V1.1.12 Stable 晋升与旧安装包清理（2026-09-12）
+
+- 用户明确要求最新版本发布到 Stable 并清理旧安装包；原发布 `386457813` 已改为 `prerelease:false` 且成为 GitHub Latest，四项资产、标签目标和 SHA-256 不变，没有重新构建或安装。
+- GitHub 七个历史版本的 28 项安装附件已删除，发布说明和源码标签保留并添加历史下载提示。本地 `dist` / `artifacts` 下 93 个旧安装包、配套文件和重复传输包共 9,182,675,847 字节进入回收站，93/93 回收站内容摘要核对通过；不清空回收站、不删除用户资料、独立备份、源码和验收记录。
+- 当前 `dist` 保留 V1.1.12 Setup、Portable、blockmap、SHA-256 清单及本版构建/验收文件。Stable 默认下载清单和 [匿名完整下载 34698352085](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34698352085) 4/4 通过；证据在 `artifacts/v1.1.12-stable-promotion`。
+- 此为维护者批准的发布通道晋升，不新增签名、双机或 24 小时老化声明。之后仍按 Latest / Pre-release 迭代，Stable 不自动改变。以下为原版本交付时的历史记录。
+
 ## V1.1.12 Harness RC2 / 官方预览与交付（2026-09-12，已安装并公开）
 
 - 用户接受相邻版本对比建议，固定 `dsh-v0.1.5-rc.2` / `fb2c4b9e698e30edb738bca4cf0618587db7d203`，只更新 Latest；Stable V1.1.0 不动。

@@ -1,8 +1,18 @@
 # Validation evidence
 
+## V1.1.12 Stable promotion and installer cleanup (2026-09-12)
+
+Evidence root: `artifacts/v1.1.12-stable-promotion/`. This explicit maintainer-approved channel change supersedes the original Pre-release/Stable states recorded below, not the historical test results.
+
+- Existing release ID 386457813 is `draft:false`, `prerelease:false` and GitHub Latest (`promotion.json`, `github-final.json`). Tag/commit remains `v1.1.12` / `8ebccb74554d139354e12c8ffe4b14febd3327c6`; the four asset IDs, sizes and SHA-256 values match the already tested build. No rebuild, reinstall, model call or user-profile mutation was performed for promotion.
+- [Independent anonymous verification 34698352085](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34698352085) again fully downloads all four unchanged assets, HTTP 200 and exact hashes, checksum entries 3/3. The public `/releases/latest/download/SHA256SUMS-v1.1.12.txt` download independently matches the approved manifest. This verifies the default Stable route as well as fixed-tag assets.
+- Seven historical release records and source tags are retained; their 28 old installer/Portable/blockmap/checksum assets (2,647,693,069 bytes) were removed by exact reviewed asset IDs after current Stable verification (`github-before.json`, `github-cleanup-plan.json`, `github-cleanup.json`). Historical bodies now direct users to V1.1.12. Final remote old-asset count is zero.
+- Local cleanup is limited to exact regular release files under resolved `dist` and `artifacts`, rejecting linked paths and versions newer than V1.1.12. It sent 93 obsolete assets/current duplicate binaries/completed transfer ZIPs (9,182,675,847 bytes) to Windows Recycle Bin. Original-path absence and 93/93 recycled payload SHA-256 values pass (`local-cleanup-plan.json`, `local-cleanup.json`). No recursive directory deletion, recycle-bin emptying, source deletion, user-data deletion, rollback-backup deletion or runtime dependency cleanup occurred. Recycled bytes are recoverable and are not described as disk space already freed.
+- The four current dist assets are preserved with exact original hashes. Small current download evidence, build metadata and all historical test evidence remain. Promotion adds no code-signing, second-Windows or 24-hour-aging claim; future iterations remain independent Pre-releases until explicitly promoted.
+
 ## V1.1.12 Harness RC.2 / official document preview (2026-09-12, installed and public)
 
-Evidence root: `artifacts/v1.1.12-release-candidate/`. Installed/public Latest is V1.1.12; Stable remains V1.1.0. Source/package gates were completed on September 10–11; overwrite and public-download gates below were completed on September 12.
+Evidence root: `artifacts/v1.1.12-release-candidate/`. At the original Pre-release handoff, installed/public Latest was V1.1.12 and Stable was V1.1.0; the later explicit promotion is recorded above. Source/package gates were completed on September 10–11; overwrite and public-download gates below were completed on September 12.
 
 - Exact official source: `dsh-v0.1.5-rc.2`, `fb2c4b9e698e30edb738bca4cf0618587db7d203`; no upstream application edits. [Windows runtime build 34499214988](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34499214988) and archive size/SHA-256 pass. All 274 release packages (265 DSH/9 Cordis) and the eight pinned security dependency patches retain fixed provenance.
 - Baseline 595/595; final product-source suite **602/602**, zero skips/failures (`tests-final.log`); post-review focused checks 15/15. Production, physical runtime and new embedded PDF.js/clsx audits report no known findings, not a clean bill for the whole upstream monorepo. Notices cover 537 physical manifest identities plus ten PDF.js bundled notices.

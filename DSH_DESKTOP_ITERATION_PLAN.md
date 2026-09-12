@@ -8,7 +8,7 @@
 > 技术底座：**DeepSeek Harness**  
 > 首发平台：Windows 10/11 x64  
 > 默认节奏：按用户既有“新版本覆盖旧版、迭代版作为 Latest”授权推进打包、验证、覆盖及 Pre-release 发布；遇到新的风险或范围变化再请求指令。Stable 不按日程自动晋升，只有明确“更新 Stable”命令后才更新。
-> 执行状态：V1.1.12 已覆盖安装并公开 Latest / Pre-release；安装态预览、真实插话及 Excel/Word 读取、38 份语义资料与三个加密相关文件保留、四项资产匿名完整下载验证均通过。Stable 保持 V1.1.0；本轮收口，不自动执行后续版本。
+> 执行状态：V1.1.12 已在 2026-09-12 按维护者命令晋升 Stable / GitHub Latest，沿用已安装并验收的原包。旧版安装附件已清理，源码、历史和备份保留；之后从 V1.1.13 继续独立 Latest / Pre-release，不自动修改 Stable。本次只处理晋升和清理，不开始下一版。
 > 产品对标证据：[Claude Code 产品能力基线](CLAUDE_CODE_PRODUCT_BENCHMARK.md)  
 > 工程实现参考：[DeepSeek Harness 同源桌面项目](GITHUB_DEEPSEEK_HARNESS_DESKTOP_REFERENCE.md)
 
@@ -74,13 +74,13 @@
 - 本轮只发布一个 Latest / Pre-release；Stable V1.1.0 不变。官方桌面壳只列为独立评估候选，不自动迁移。
 - 已通过 595 项测试、实际迁移/交接、安装前后数据保留、真实插话与文件读取以及四资产匿名完整下载。窄窗全屏遮挡已修复；原生键盘、拖动分屏、超大文本深分页及高缩放组合仍纳入后续兼容检查，不追记为已验收。
 
-### V1.1.12：Harness 0.1.5-rc.2 与官方预览/文件交付（已安装并公开）
+### V1.1.12：Harness 0.1.5-rc.2 与官方预览/文件交付（已安装并晋升 Stable）
 
 - 固定 tag、commit、发布包清单和安全锁，不同时升级 Electron、Node 或用户 pnpm。
 - 普通 Markdown/代码/HTML/PDF/图片预览与文件交付使用官方能力，移除完整重复的桌面入口；文件名搜索、Git Review 与隔离应用运行只保留官方未覆盖的必要部分。
 - 保留 Office 格式/内容校验、摘要回执和备份恢复；官方 `present` 只登记当前源文件路径，不保存文件快照，不替代校验。
 - 跟随 Flash 模型接入、模型设置恢复、MCP 分页保护及反馈交互；不擅自改用户已选择的模型、不默认启用实验性 Agent Teams。
-- 回归全局面板接口、会话切换和冷读、官方 Queue/Steer/Stop、文件交付/预览、软件 Key 优先级、代理、凭据及用户数据保留。只发布一个 Latest / Pre-release，Stable V1.1.0 不动。
+- 回归全局面板接口、会话切换和冷读、官方 Queue/Steer/Stop、文件交付/预览、软件 Key 优先级、代理、凭据及用户数据保留。原 Latest 交付后，维护者另行批准晋升 V1.1.12 Stable；后续版本不能自动改变该基线。
 - 已安装版本验证六项基础、五类预览、真实 Queue/向上插话/Ctrl+Enter/Stop/present 及 Excel/Word 读取；升级前后数据和加密文件摘要不变。四项公开资产完成独立匿名完整下载；没有签名、双机或 24 小时老化声明。
 
 ### V1.1.13：Office 恢复交互与 Portable 性能
