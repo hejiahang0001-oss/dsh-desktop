@@ -171,7 +171,7 @@ const createHarness = () => {
     wiki: { openWindow: success },
     delivery: { openWindow: success },
     support: { exportDiagnostics: success, createBackup: success, validateBackup: success },
-    terminal: { openWindow: success },
+    terminal: { openWindow: success, openOfficial: success },
     checkpoints: { create: success, restoreLatest: success }
   };
   const window = { desktopAPI, location: { reload() {} } };

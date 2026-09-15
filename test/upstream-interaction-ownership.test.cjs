@@ -28,9 +28,12 @@ test('official Harness owns queue, steer and stop interaction', (context) => {
   const clientRoot = path.join(sourceRoot, 'packages', 'client', 'ui-conversation', 'src', 'client');
   const inputBar = read(path.join(clientRoot, 'skeleton', 'InputBar.tsx'));
   const inputHub = read(path.join(clientRoot, 'input', 'hub.ts'));
+  const editorBinding = read(path.join(clientRoot, 'input', 'editor', 'view-binding.ts'));
   const submission = read(path.join(clientRoot, 'input', 'submission-policy.ts'));
 
-  assert.match(inputBar, /keyboard\.steerQueue\(\)/);
+  assert.match(inputBar, /installDraftKeymap\(editor, keyboard, gate\)/);
+  assert.match(editorBinding, /accelerated && g\.canSteerQueue/);
+  assert.match(editorBinding, /keyboard\.steerQueue\(\)/);
   assert.match(inputHub, /updateQueue\(item\.id, \{ kind: 'steer' \}\)/);
   assert.match(submission, /BusyEnterBehavior/);
   assert.match(inputBar, /onClick=\{stop\}/);

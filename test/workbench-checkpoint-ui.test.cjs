@@ -2,9 +2,43 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+
+test('checkpoint ownership excludes terminal and settings textareas and stays within each official chat card', () => {
+  class Element {
+    constructor({ card, official = false, tag = 'TEXTAREA', desktop = false, hidden = false } = {}) {
+      Object.assign(this, { card, official, tagName: tag, desktop, hidden });
+    }
+    closest(selector) { return selector === '[data-composer-card]' ? this.card : this.desktop ? {} : null; }
+    getClientRects() { return this.hidden ? [] : [{}]; }
+    getAttribute(name) { return name === 'placeholder' ? 'message' : null; }
+    matches(selector) { return selector === 'textarea, [contenteditable="true"]' || this.official || Boolean(this.card && this.tagName === 'TEXTAREA'); }
+  }
+  class Button extends Element {
+    getAttribute(name) { return name === 'aria-label' ? 'Send message' : null; }
+  }
+  const first = {}, second = {}, inputs = [];
+  const composer = new Element({ card: first, official: true, tag: 'DIV' });
+  const otherComposer = new Element({ card: second, official: true, tag: 'DIV' });
+  const send = new Button({ card: first }), otherSend = new Button({ card: second });
+  first.querySelectorAll = () => [send]; second.querySelectorAll = () => [otherSend];
+  inputs.push(composer, otherComposer);
+  const source = read('assets/workbench-checkpoint.js');
+  const predicates = vm.runInNewContext(`${source.slice(source.indexOf('  const visible ='), source.indexOf('  const toast ='))}\n({isComposer,isSendButton,findSendButton})`, {
+    HTMLElement: Element, HTMLButtonElement: Button, document: { querySelectorAll: () => inputs }
+  });
+  for (const node of [new Element(), new Element({tag:'DIV'}), new Element({card:first,official:true,hidden:true}), new Element({card:first,official:true,desktop:true})]) {
+    assert.equal(predicates.isComposer(node), false);
+    assert.equal(predicates.findSendButton(node), null);
+  }
+  assert.equal(predicates.isSendButton(new Button()), false);
+  assert.equal(predicates.isComposer(composer), true);
+  assert.equal(predicates.findSendButton(composer), send);
+  assert.equal(predicates.findSendButton(otherComposer), otherSend);
+});
 
 test('automatic checkpoint UI ignores page autofocus, arms on user composer intent, and waits before a verified send action', () => {
   const source = read('assets/workbench-checkpoint.js');

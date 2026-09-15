@@ -1922,6 +1922,13 @@ const createTerminalWindow = async () => {
   return created;
 };
 
+const openOfficialTerminalWindow = () => require('./official-terminal.cjs').openOfficialTerminal({
+  getWindow: () => mainWindow,
+  getContext: () => ({ ...workspaceSyncDiagnostics }),
+  ready: () => !appIsClosing() && harnessUiReady(),
+  collapse: async () => { await nativeDock?.collapse(); }
+});
+
 const openTerminalWindow = async () => {
   if (appIsClosing()) return applicationClosingResult();
   if (terminalWindow && !terminalWindow.isDestroyed()) {
@@ -5250,13 +5257,15 @@ function installApplicationMenu() {
         },
         { type: 'separator' },
         {
-          label: '打开安全终端窗口',
+          label: '打开官方终端',
           accelerator: 'CmdOrCtrl+Alt+T',
           enabled: Boolean(mainWindow),
-          click: () => { void openTerminalWindow(); }
+          click: () => { void openOfficialTerminalWindow().then((result) => {
+            if (!result.ok) dialog.showErrorBox('官方终端', result.message);
+          }); }
         },
         {
-          label: '聚焦安全终端窗口',
+          label: '打开兼容终端（可授权给助手读取）',
           accelerator: 'CmdOrCtrl+Alt+K',
           enabled: Boolean(mainWindow),
           click: () => { void openTerminalWindow(); }
@@ -5622,6 +5631,11 @@ ipcMain.handle('terminal:open-window', (event) => (
   harnessIpcAllowed(event)
     ? openTerminalWindow()
     : { ok: false, message: '终端窗口请求来源未通过安全校验。' }
+));
+ipcMain.handle('terminal:open-official', (event) => (
+  harnessIpcAllowed(event)
+    ? openOfficialTerminalWindow()
+    : { ok: false, message: '终端请求来源未通过安全校验。' }
 ));
 ipcMain.handle('terminal:get-state', (event) => {
   if (!terminalIpcAllowed(event) || !terminalRunner) {
@@ -6844,6 +6858,20 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
         if (!result.ok) process.exitCode = 1;
         return;
       }
+      if (dock && process.argv.includes('--smoke-official-terminal')) {
+        result = await require('./official-terminal-smoke.cjs').runOfficialTerminalSmoke({ window: mainWindow, selected, workspacePath,
+          nodePath: harnessRuntimePaths.nodePath,
+          origin: harnessOrigin, fetchImpl: harnessFetch, evaluate, waitFor, open: openOfficialTerminalWindow,
+          target: resolvedTarget, version: app.getVersion() });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
+      if (dock && process.argv.includes('--smoke-official-archive')) {
+        result = await require('./official-archive-smoke.cjs').runOfficialArchiveSmoke({ window: mainWindow, selected,
+          origin: harnessOrigin, fetchImpl: harnessFetch, evaluate, waitFor, target: resolvedTarget, version: app.getVersion() });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
       if (dock && process.argv.includes('--smoke-file-preview')) {
         result = await require('./official-file-preview-smoke.cjs').runOfficialFilePreviewSmoke({ window: mainWindow, BrowserWindow, workspacePath, evaluate, waitFor, target: resolvedTarget, version: app.getVersion() });
         if (!result.ok) process.exitCode = 1;
@@ -6964,6 +6992,9 @@ const runIpcSecuritySmoke = async (target) => {
   const rejectedFilePreview = await mainWindow.webContents.executeJavaScript(
     'window.desktopAPI.files.resolvePreview({path:".env",sessionId:"session-11111111-1111-4111-8111-111111111111",workspacePath:"C:/"})', true
   );
+  const rejectedOfficialTerminal = await mainWindow.webContents.executeJavaScript(
+    'window.desktopAPI.terminal.openOfficial()', true
+  );
   await createTerminalWindow();
   const localTerminalKeys = await terminalWindow.webContents.executeJavaScript(
     'Object.keys(window.terminalAPI || {}).sort()',
@@ -6982,14 +7013,16 @@ const runIpcSecuritySmoke = async (target) => {
   const screenshotSize = screenshot.getSize();
   const expectedLocalKeys = ['getState', 'onOutput', 'onState', 'resize', 'start', 'stop', 'write'];
   const result = {
-    ok: remoteTerminalKeys.length === 1
-      && remoteTerminalKeys[0] === 'openWindow'
+    ok: JSON.stringify(remoteTerminalKeys) === JSON.stringify(['openOfficial', 'openWindow'])
+      && rejectedOfficialTerminal?.ok === false
       && rejectedFilePreview?.available === false && !rejectedFilePreview.address
       && JSON.stringify(localTerminalKeys) === JSON.stringify(expectedLocalKeys)
       && localState?.state?.status === 'unavailable'
       && screenshotSize.width > 0
       && screenshotSize.height > 0,
+    version: app.getVersion(),
     remoteTerminalKeys,
+    untrustedOfficialTerminalRejected: rejectedOfficialTerminal?.ok === false,
     untrustedFilePreviewRejected: rejectedFilePreview?.available === false && !rejectedFilePreview.address,
     localTerminalKeys,
     localTerminalStatus: localState?.state?.status || 'missing',

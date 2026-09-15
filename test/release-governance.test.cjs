@@ -12,6 +12,7 @@ const {
   compareBlockmaps,
   decodeBlockmap,
   inspectPackageLayout,
+  REQUIRED_DESKTOP_VERSION,
   parsePeCertificateTable
 } = require('../scripts/release-governance.cjs');
 
@@ -40,7 +41,7 @@ const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = 
     .filter(({ name }) => name === '@deepseek-ai/dsh'
       || name.startsWith('@deepseek-ai/dsh-')
       || HARNESS_VENDOR_PACKAGES.includes(name.slice('@deepseek-ai/'.length)));
-  assert.equal(releasePackages.length, 274);
+  assert.equal(releasePackages.length, 294);
   for (const { name, version } of releasePackages) {
     const localName = name.slice('@deepseek-ai/'.length);
     writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', localName, 'package.json'), JSON.stringify({
@@ -59,17 +60,17 @@ const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = 
     version: 1,
     harness: {
       name: '@deepseek-ai/dsh',
-      version: '0.1.5-rc.2',
+      version: '0.1.6-alpha.1',
       repository: 'https://github.com/deepseek-ai/deepseek-harness.git',
-      tag: 'dsh-v0.1.5-rc.2',
-      commit: 'fb2c4b9e698e30edb738bca4cf0618587db7d203',
+      tag: 'dsh-v0.1.6-alpha.1',
+      commit: '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d',
       ...harness
     },
     build: {
       node: 'v24.19.0',
       pnpm: '11.7.0',
-      packageCount: 274,
-      packageInventorySha256: 'a1f8b0b3f6491a9111ef0e512e9523a0fb6e138bd14aaf31926a165338348585',
+      packageCount: 294,
+      packageInventorySha256: 'fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d',
       dependencyResolution: 'desktop-security-frozen-lockfile',
       security: (() => {
         const policy = require('../runtime/harness-security/overrides.json');
@@ -163,15 +164,16 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.equal(report.pnpmRuntime.wrapperValid, false);
 });
 
-test('package layout binds the inspected app.asar to the V1.1.12 desktop manifest', async (context) => {
+test('package layout binds the inspected app.asar to the V1.1.13 desktop manifest', async (context) => {
+  assert.equal(REQUIRED_DESKTOP_VERSION, require('../package.json').version, 'release gate must track the product version');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-app-version-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const appRoot = path.join(root, 'app-source');
-  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.12' }));
+  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.13' }));
   fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   const ready = await inspectPackageLayout(root);
-  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.12' });
+  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.13' });
   assert.equal(ready.requiredPackagedAppReady, true);
 
   writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.5' }));
@@ -333,18 +335,18 @@ test('package layout requires exact Harness source-build provenance', async (con
   writeHarnessFixture(root);
   const ready = await inspectPackageLayout(root);
   assert.equal(ready.requiredHarnessRuntimeReady, true);
-  assert.equal(ready.harnessRuntime.dshPackageCount, 265);
+  assert.equal(ready.harnessRuntime.dshPackageCount, 285);
   assert.equal(ready.harnessRuntime.vendorPackageCount, 9);
   assert.equal(ready.harnessRuntime.auxiliaryPackageCount, 5);
-  assert.equal(ready.harnessRuntime.packageInventorySha256, 'a1f8b0b3f6491a9111ef0e512e9523a0fb6e138bd14aaf31926a165338348585');
+  assert.equal(ready.harnessRuntime.packageInventorySha256, 'fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d');
   assert.deepEqual(ready.harnessRuntime.mismatchedPackages, []);
 
   fs.rmSync(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-acp'), { recursive: true, force: true });
   writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-fake', 'package.json'), JSON.stringify({
-    name: '@deepseek-ai/dsh-fake', version: '0.1.5-rc.2'
+    name: '@deepseek-ai/dsh-fake', version: '0.1.6-alpha.1'
   }));
   const substituted = await inspectPackageLayout(root);
-  assert.equal(substituted.harnessRuntime.dshPackageCount, 265);
+  assert.equal(substituted.harnessRuntime.dshPackageCount, 285);
   assert.equal(substituted.requiredHarnessRuntimeReady, false);
   assert.notEqual(substituted.harnessRuntime.packageInventorySha256, ready.harnessRuntime.packageInventorySha256);
   fs.rmSync(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-fake'), { recursive: true, force: true });

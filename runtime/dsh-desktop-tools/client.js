@@ -8,6 +8,15 @@ window.__ModuleLoader__.load({
         let live = true;
         let request = 0;
         const bridge = Object.freeze({
+          openTerminal(expectedSessionId) {
+            const selected = ctx.sessions.list.getSnapshot();
+            if (!live || !expectedSessionId || selected.current !== expectedSessionId
+              || selected.currentAddress || selected.phase !== 'ready') {
+              throw new Error('请先选择已就绪的主会话，再打开官方终端。');
+            }
+            ctx.sidebarRight.openTab('terminal');
+            return true;
+          },
           async openFile(path, workspacePath) {
             const selected = ctx.sessions.list.getSnapshot();
             if (!selected.current || selected.currentAddress || selected.phase !== 'ready') {

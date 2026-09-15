@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSH 安全终端</title>
+  <title>DSH 兼容终端</title>
   <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="assets/terminal-window.css">
   <script defer src="node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -15,7 +15,7 @@
   <header class="terminal-toolbar">
     <div class="terminal-identity">
       <div class="terminal-title-row">
-        <h1>安全终端</h1>
+        <h1>兼容终端</h1>
         <span class="terminal-mode">隔离窗口 · PTY</span>
       </div>
       <p id="terminal-cwd" class="terminal-cwd">正在读取工作区…</p>
@@ -29,7 +29,7 @@
   </header>
   <main id="terminal-viewport" class="terminal-viewport" aria-label="PowerShell 交互区"></main>
   <footer class="terminal-footer">
-    <span id="terminal-security">本窗口只加载本地资源；Harness 页面不能写入终端；软件 Key 不会进入终端。</span>
+    <span id="terminal-security">助手读取这里的输出需要你的授权；不会读取官方终端。软件 Key 不会进入本终端。</span>
     <span>Ctrl+Alt+K 聚焦</span>
   </footer>
 </body>
