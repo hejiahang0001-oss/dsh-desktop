@@ -1,6 +1,6 @@
 # DSH Desktop
 
-> V1.1.13 (`DSH-Desktop-Setup-1.1.13.exe`) is **installed and verified locally; public assets are pending**, adapting fixed Harness `0.1.6-alpha.1`. The official terminal is the primary entry; the consent-based compatibility terminal remains explicitly labelled. Extra canonical session-log upload is disabled in the desktop overlay. See the [release notes](docs/RELEASE_NOTES_v1.1.13.md). The Stable download below remains V1.1.12 until explicitly promoted.
+> V1.1.13 (`DSH-Desktop-Setup-1.1.13.exe`) is **installed and verified locally; publication is paused at a private draft because Portable checks failed**, adapting fixed Harness `0.1.6-alpha.1`. The official terminal is the primary entry; the consent-based compatibility terminal remains explicitly labelled. Extra canonical session-log upload is disabled in the desktop overlay. See the [release notes](docs/RELEASE_NOTES_v1.1.13.md). The Stable download below remains V1.1.12 until explicitly promoted.
 
 > [V1.1.12 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.12) is installed, verified and promoted by the maintainer on 2026-09-12. The four original release assets are unchanged. Old installer assets have been removed; source tags, release notes and verification history are retained.
 
