@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
-const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.5-rc.2-desktop-security-1', 'node_modules');
+const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.6-alpha.1-desktop-security-1', 'node_modules');
 const directPackageRoots = [
   path.join(root, 'node_modules', '@xmldom', 'xmldom'),
   path.join(root, 'node_modules', 'pnpm'),
@@ -55,7 +55,7 @@ const packages = [...new Map(packageRows.map((entry) => [`${entry.name}@${entry.
   .sort((left, right) => left.license.localeCompare(right.license, 'en')
     || left.name.localeCompare(right.name, 'en')
     || left.version.localeCompare(right.version, 'en'));
-if (packages.length !== 537) throw new Error(`Expected 537 packaged JavaScript manifest identities, found ${packages.length}.`);
+if (packages.length !== 560) throw new Error(`Expected 560 packaged JavaScript manifest identities, found ${packages.length}.`);
 
 // Browser-only dependencies can ship inside client.js without a runtime manifest.
 const previewBundle = fs.readFileSync(path.join(harnessModules, '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js'), 'utf8');
@@ -79,7 +79,7 @@ const lines = [
   '',
   '## Runtime provenance',
   '',
-  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.5-rc.2`, source tag `dsh-v0.1.5-rc.2`, commit `fb2c4b9e698e30edb738bca4cf0618587db7d203`.',
+  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.6-alpha.1`, source tag `dsh-v0.1.6-alpha.1`, commit `0a15e36e7f82b6ed45af6fa9759f29b40dcd965d`.',
   '- Node.js: `v24.19.0`; its official `LICENSE` file is bundled beside `node.exe`.',
   '- Electron: `43.4.1`; Electron and Chromium notices are emitted by the Windows packaging runtime.',
   '- pnpm: `11.19.0` is bundled for controlled extension lifecycle operations; `11.7.0` is used only to reproduce the upstream Harness source build.',

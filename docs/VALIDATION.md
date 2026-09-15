@@ -1,5 +1,20 @@
 # Validation evidence
 
+## V1.1.13 fixed Harness alpha.1 candidate (2026-09-16, in progress)
+
+Evidence root: `artifacts/v1.1.13-release-candidate/`. Stable V1.1.12 is unchanged. No candidate installation or publication has occurred.
+
+- Baseline: 602/602 tests, zero failures/skips, 238823 ms; fixed-lock install, root production audit and unpacked Windows build passed. Baseline output is isolated under `baseline-build`.
+- New source: `dsh-v0.1.6-alpha.1` / `0a15e36e7f82b6ed45af6fa9759f29b40dcd965d`. Inventory 294 = 285 DSH + 9 Cordis; identity digest `fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d`. The new upstream lock is re-resolved with only the existing reviewed eight-package security overrides. [Windows build 34992044265](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34992044265) succeeded. Downloaded inner ZIP: 70,980,705 bytes, SHA-256 `c170ddb92f1bd533a861cc2206e3becbc837e15c2d36e86604fa5048a71e239a`. Local physical audit: 557 package names, no known findings (`runtime-audit-local.json`); this does not certify unrelated upstream test dependencies.
+- 19/19 targeted tests pass for official terminal public navigation, ready/current main-session and stale/disposed guards, desktop entry errors, file-preview boundaries, command behavior, compatibility-terminal consent/cancellation/redaction and IPC isolation. A mutable-context test found and fixed the need to copy identity before an asynchronous boundary.
+- Extra canonical Session-log contribution explicitly disabled in the desktop overlay. No official `follow` call is used for model reads because it takes exclusive input control. The compatibility terminal remains labelled and protected; no claim that it has been removed.
+- Full suite 608/608, no failures/skips, 227742 ms (`tests-final.log`); review follow-up 26/26 (`tests-post-review.log`). Review caught/fixed a stale desktop version in the package gate, with an added assertion against the product manifest.
+- `source-terminal-10/result.json`: actual official sidebar, Electron native Return, Windows cmd PTY executing bundled Node, exact workspace, multiple terminal identities, read-only metadata preserving input ownership, explicit close and 1024x720 rendering. Screenshots inspected. The regression exposed the old checkpoint textarea heuristic intercepting terminal Enter; ownership is now limited to the official chat card and matching send button. Earlier failed attempts are retained. Windows PowerShell child execution was unsuitable for this fixture; the successful command uses bundled Node, not a claimed PowerShell fix.
+- `source-archive/result.json`: official archive Remote, Settings recovery row, UI unarchive and persistence across reload. Synthetic data only; no large archive or running-session-race claim.
+- `artifacts/v1.1.13-cold-read-lmUCKI/result.json`: synthetic V3 history, 22 events/5 pages, no model call/Agent creation/live activation, concurrent writer, fixed/fresh cut semantics, released write lock and refused invalid/write/terminal reads.
+- `source-real-files-2/result.json`: paid model reads XLSX totals and random DOCX marker through two official attachment receipts. DPAPI Key configured; source credentials/documents unchanged; no plaintext Key in tested vault/log. Test permission is explicitly Full Access in generated isolated data only.
+- Pending: packaged tests, official document drag/preview and paid Queue/Steer/Stop on this build, overwrite retention, installed validation and public release assets. MCP resource plugins are bundled; external servers remain unverified. No signing/second-host/24-hour claim.
+
 ## V1.1.12 Stable promotion and installer cleanup (2026-09-12)
 
 Evidence root: `artifacts/v1.1.12-stable-promotion/`. This explicit maintainer-approved channel change supersedes the original Pre-release/Stable states recorded below, not the historical test results.

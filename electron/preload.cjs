@@ -110,7 +110,8 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     }
   }),
   terminal: Object.freeze({
-    openWindow: () => ipcRenderer.invoke('terminal:open-window')
+    openWindow: () => ipcRenderer.invoke('terminal:open-window'),
+    openOfficial: () => ipcRenderer.invoke('terminal:open-official')
   }),
   sideChat: Object.freeze({
     openWindow: () => ipcRenderer.invoke('side-chat:open-window')

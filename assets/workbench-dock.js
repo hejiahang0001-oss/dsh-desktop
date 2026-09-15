@@ -1,6 +1,6 @@
 (() => {
   const api = window.dockAPI, tabs = document.getElementById('dock-tabs'), status = document.getElementById('dock-status');
-  const labels = { terminal: '终端', office: 'Office', tasks: '任务', extensions: '扩展', wiki: 'Wiki', worktrees: '工作树' };
+  const labels = { terminal: '兼容终端', office: 'Office', tasks: '任务', extensions: '扩展', wiki: 'Wiki', worktrees: '工作树' };
   const act = async (action, value) => { try { status.textContent = ''; await api.act(action, value); } catch (error) { status.textContent = error.message || '操作失败，请重试'; } };
   for (const [id, label] of Object.entries(labels)) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.dataset.tool = id; button.setAttribute('role', 'tab');

@@ -1922,6 +1922,13 @@ const createTerminalWindow = async () => {
   return created;
 };
 
+const openOfficialTerminalWindow = () => require('./official-terminal.cjs').openOfficialTerminal({
+  getWindow: () => mainWindow,
+  getContext: () => ({ ...workspaceSyncDiagnostics }),
+  ready: () => !appIsClosing() && harnessUiReady(),
+  collapse: async () => { await nativeDock?.collapse(); }
+});
+
 const openTerminalWindow = async () => {
   if (appIsClosing()) return applicationClosingResult();
   if (terminalWindow && !terminalWindow.isDestroyed()) {
@@ -5250,13 +5257,15 @@ function installApplicationMenu() {
         },
         { type: 'separator' },
         {
-          label: '打开安全终端窗口',
+          label: '打开官方终端',
           accelerator: 'CmdOrCtrl+Alt+T',
           enabled: Boolean(mainWindow),
-          click: () => { void openTerminalWindow(); }
+          click: () => { void openOfficialTerminalWindow().then((result) => {
+            if (!result.ok) dialog.showErrorBox('官方终端', result.message);
+          }); }
         },
         {
-          label: '聚焦安全终端窗口',
+          label: '打开兼容终端（可授权给助手读取）',
           accelerator: 'CmdOrCtrl+Alt+K',
           enabled: Boolean(mainWindow),
           click: () => { void openTerminalWindow(); }
@@ -5622,6 +5631,11 @@ ipcMain.handle('terminal:open-window', (event) => (
   harnessIpcAllowed(event)
     ? openTerminalWindow()
     : { ok: false, message: '终端窗口请求来源未通过安全校验。' }
+));
+ipcMain.handle('terminal:open-official', (event) => (
+  harnessIpcAllowed(event)
+    ? openOfficialTerminalWindow()
+    : { ok: false, message: '终端请求来源未通过安全校验。' }
 ));
 ipcMain.handle('terminal:get-state', (event) => {
   if (!terminalIpcAllowed(event) || !terminalRunner) {
@@ -6841,6 +6855,20 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
             await supervisor.credentialHost.verifyReady(harnessOrigin, harnessFetch);
             backgroundTasks = null; return initializeBackgroundTasks();
           } });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
+      if (dock && process.argv.includes('--smoke-official-terminal')) {
+        result = await require('./official-terminal-smoke.cjs').runOfficialTerminalSmoke({ window: mainWindow, selected, workspacePath,
+          nodePath: harnessRuntimePaths.nodePath,
+          origin: harnessOrigin, fetchImpl: harnessFetch, evaluate, waitFor, open: openOfficialTerminalWindow,
+          target: resolvedTarget, version: app.getVersion() });
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
+      if (dock && process.argv.includes('--smoke-official-archive')) {
+        result = await require('./official-archive-smoke.cjs').runOfficialArchiveSmoke({ window: mainWindow, selected,
+          origin: harnessOrigin, fetchImpl: harnessFetch, evaluate, waitFor, target: resolvedTarget, version: app.getVersion() });
         if (!result.ok) process.exitCode = 1;
         return;
       }

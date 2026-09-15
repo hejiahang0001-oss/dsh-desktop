@@ -6,29 +6,25 @@
   const visible = (node) => Boolean(node && !node.hidden && node.getClientRects().length);
   const isComposer = (node) => {
     if (!(node instanceof HTMLElement) || node.closest('[id^="dsh-"]')) return false;
-    const editable = node.matches('textarea, [contenteditable="true"]');
-    if (!editable || !visible(node)) return false;
-    const hint = `${node.getAttribute('placeholder') || ''} ${node.getAttribute('data-placeholder') || ''}`;
-    return /描述|构建|消息|ask|message|prompt/i.test(hint) || node.tagName === 'TEXTAREA';
+    // A terminal also contains a textarea. Only the official chat card owns a
+    // composer; never infer ownership from a tag name or translated placeholder.
+    return Boolean(node.closest('[data-composer-card]')) && visible(node)
+      && node.matches('[data-composer-input][contenteditable="true"], [data-composer-card] textarea');
   };
   const composers = () => [...document.querySelectorAll('textarea, [contenteditable="true"]')].filter(isComposer);
   const findComposerForButton = (button) => {
-    const form = button?.closest('form');
-    if (form) return composers().find((node) => node.closest('form') === form) || null;
+    const card = button?.closest('[data-composer-card]');
+    if (card) return composers().find((node) => node.closest('[data-composer-card]') === card) || null;
     return null;
   };
   const isSendButton = (button) => {
-    if (!(button instanceof HTMLButtonElement) || !visible(button) || button.closest('[id^="dsh-"]')) return false;
+    if (!(button instanceof HTMLButtonElement) || !visible(button) || button.closest('[id^="dsh-"]') || !findComposerForButton(button)) return false;
     const label = `${button.getAttribute('aria-label') || ''} ${button.title || ''} ${button.textContent || ''}`;
     return /发送|send|submit/i.test(label) || (button.type === 'submit' && Boolean(findComposerForButton(button)));
   };
   const findSendButton = (composer) => {
-    const form = composer?.closest('form');
-    if (form) {
-      const submit = [...form.querySelectorAll('button')].find((button) => isSendButton(button));
-      if (submit) return submit;
-    }
-    return [...document.querySelectorAll('button')].find((button) => isSendButton(button)) || null;
+    if (!isComposer(composer)) return null;
+    return [...composer.closest('[data-composer-card]').querySelectorAll('button')].find(isSendButton) || null;
   };
 
   const toast = document.createElement('div');

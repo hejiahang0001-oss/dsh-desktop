@@ -2,6 +2,12 @@
 # Keep executable text and raw tool output intact while making every generated,
 # user-facing natural-language field follow the user's language.
 
+# Do not attach the canonical session log to ordinary model requests.
+# This is separate from the messages the user intentionally sends to the model.
+- id: session-log-deepseek
+  config:
+    enabled: false
+
 - insert:
     - id: dsh-desktop-shell-env
       name: dsh-desktop-shell-env
