@@ -1,8 +1,8 @@
 # Validation evidence
 
-## V1.1.13 fixed Harness alpha.1 candidate (2026-09-16, in progress)
+## V1.1.13 fixed Harness alpha.1 (2026-09-16, installed; publication pending)
 
-Evidence root: `artifacts/v1.1.13-release-candidate/`. Stable V1.1.12 is unchanged. No candidate installation or publication has occurred.
+Evidence root: `artifacts/v1.1.13-release-candidate/`. Stable V1.1.12 is unchanged. The local installation is V1.1.13; public-release verification is a separate remaining gate.
 
 - Baseline: 602/602 tests, zero failures/skips, 238823 ms; fixed-lock install, root production audit and unpacked Windows build passed. Baseline output is isolated under `baseline-build`.
 - New source: `dsh-v0.1.6-alpha.1` / `0a15e36e7f82b6ed45af6fa9759f29b40dcd965d`. Inventory 294 = 285 DSH + 9 Cordis; identity digest `fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d`. The new upstream lock is re-resolved with only the existing reviewed eight-package security overrides. [Windows build 34992044265](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34992044265) succeeded. Downloaded inner ZIP: 70,980,705 bytes, SHA-256 `c170ddb92f1bd533a861cc2206e3becbc837e15c2d36e86604fa5048a71e239a`. Local physical audit: 557 package names, no known findings (`runtime-audit-local.json`); this does not certify unrelated upstream test dependencies.
@@ -13,7 +13,11 @@ Evidence root: `artifacts/v1.1.13-release-candidate/`. Stable V1.1.12 is unchang
 - `source-archive/result.json`: official archive Remote, Settings recovery row, UI unarchive and persistence across reload. Synthetic data only; no large archive or running-session-race claim.
 - `artifacts/v1.1.13-cold-read-lmUCKI/result.json`: synthetic V3 history, 22 events/5 pages, no model call/Agent creation/live activation, concurrent writer, fixed/fresh cut semantics, released write lock and refused invalid/write/terminal reads.
 - `source-real-files-2/result.json`: paid model reads XLSX totals and random DOCX marker through two official attachment receipts. DPAPI Key configured; source credentials/documents unchanged; no plaintext Key in tested vault/log. Test permission is explicitly Full Access in generated isolated data only.
-- Pending: packaged tests, official document drag/preview and paid Queue/Steer/Stop on this build, overwrite retention, installed validation and public release assets. MCP resource plugins are bundled; external servers remain unverified. No signing/second-host/24-hour claim.
+- `packaged-final/result.json` and `installed-final/result.json`: ten phases each passed: Harness, document intake, continuity, Office, Wiki, IPC isolation, official terminal, official archive, file preview and real-model workflow. Includes native Excel/Word/PDF drag with mixed images, removal/session restoration, five previews/three-page Chinese PDF, keyboard search, Queue/up-arrow/Ctrl+Enter/Stop/present, compact controls and return to composer. An earlier IPC smoke expected the old API inventory; the exact approved inventory and actual untrusted official-terminal rejection are now both asserted. Earlier failures remain evidence, not final passes.
+- `release-governance.json`: packageReady true, V1.1.13 identity, physical payload/source/legal binding and byte-exact Setup/Portable payload accepted. Unsigned: automatic installation stays disabled. `asset-metadata.json` binds all four final assets; no build follows this evidence. [CI 34998883559](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/34998883559) passed all three checks.
+- No production DSH process was running before installation. `pre-upgrade-backup` contains 41 semantic files, no credential copies; protected credential/Local State hashes are recorded separately. Silent Setup exited 0, EXE product/file version is 1.1.13, and `post-install-retention.json` confirms all 41 semantic plus three protected files unchanged.
+- `installed-real-files/result.json`: real paid XLSX total and DOCX random-marker reads pass through two official attachment receipts with the encrypted software Key. Original documents/credentials unchanged; no plaintext Key in tested vault/log. Isolated generated workspace only.
+- Pending: final Portable startup, post-test retention and public release/download checks. MCP resource plugins are bundled; external servers remain unverified. No signing/physical IME/second-host/24-hour claim.
 
 ## V1.1.12 Stable promotion and installer cleanup (2026-09-12)
 
