@@ -6992,6 +6992,9 @@ const runIpcSecuritySmoke = async (target) => {
   const rejectedFilePreview = await mainWindow.webContents.executeJavaScript(
     'window.desktopAPI.files.resolvePreview({path:".env",sessionId:"session-11111111-1111-4111-8111-111111111111",workspacePath:"C:/"})', true
   );
+  const rejectedOfficialTerminal = await mainWindow.webContents.executeJavaScript(
+    'window.desktopAPI.terminal.openOfficial()', true
+  );
   await createTerminalWindow();
   const localTerminalKeys = await terminalWindow.webContents.executeJavaScript(
     'Object.keys(window.terminalAPI || {}).sort()',
@@ -7010,14 +7013,16 @@ const runIpcSecuritySmoke = async (target) => {
   const screenshotSize = screenshot.getSize();
   const expectedLocalKeys = ['getState', 'onOutput', 'onState', 'resize', 'start', 'stop', 'write'];
   const result = {
-    ok: remoteTerminalKeys.length === 1
-      && remoteTerminalKeys[0] === 'openWindow'
+    ok: JSON.stringify(remoteTerminalKeys) === JSON.stringify(['openOfficial', 'openWindow'])
+      && rejectedOfficialTerminal?.ok === false
       && rejectedFilePreview?.available === false && !rejectedFilePreview.address
       && JSON.stringify(localTerminalKeys) === JSON.stringify(expectedLocalKeys)
       && localState?.state?.status === 'unavailable'
       && screenshotSize.width > 0
       && screenshotSize.height > 0,
+    version: app.getVersion(),
     remoteTerminalKeys,
+    untrustedOfficialTerminalRejected: rejectedOfficialTerminal?.ok === false,
     untrustedFilePreviewRejected: rejectedFilePreview?.available === false && !rejectedFilePreview.address,
     localTerminalKeys,
     localTerminalStatus: localState?.state?.status || 'missing',

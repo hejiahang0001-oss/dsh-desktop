@@ -68,6 +68,8 @@ test('terminal IPC remains main-frame scoped and does not expose PTY control or 
   assert.match(preload, /openOfficial: \(\) => ipcRenderer\.invoke\('terminal:open-official'\)/);
   assert.doesNotMatch(preload, /terminal:write|terminal:start|terminal:resize|terminal:stop/);
   assert.doesNotMatch(plugin, /\.follow\(|\.view\(|\.owners|\.views|__react/);
+  assert.match(main, /JSON\.stringify\(remoteTerminalKeys\) === JSON\.stringify\(\['openOfficial', 'openWindow'\]\)/);
+  assert.match(main, /untrustedOfficialTerminalRejected: rejectedOfficialTerminal\?\.ok === false/);
 });
 
 test('desktop overlay explicitly opts out of extra canonical session-log upload', () => {
