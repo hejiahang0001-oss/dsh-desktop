@@ -95,7 +95,7 @@
 - 固定目标 `dsh-v0.1.6-alpha.2` / `ddefc45fbc7f8e46dd73185e68295696d1297887`；已接受引擎体积，源码候选为 V1.1.14，当前安装继续保留 V1.1.13 / alpha.1 直到完整验收。
 - 已通过固定安全运行库、596 包名审计、621 项源码回归与真实侧栏中文 Office 三格式预览。新增 ZIP64 精确安全补丁，并适配插件原生后备路径与 PDF 懒加载许可检查；不修改上游应用源码。Windows 深路径风险、字体替代及 VC++ 前置条件仍需安装/其他电脑验证。
 - 使用公开 binding 兼容新 Session 所有权；拟采用官方 Office 预览、侧栏计划/Subagent 和布局恢复。保留软件优先加密 Key、代理、Office/Wiki 校验备份、Git Review 和 Windows 生命周期保护。
-- 剩余优先项：核实 Office kit 声明但返回 404 的源码仓库；补齐同 ID 重载、两个会话、插件热卸载/固定 pnpm、真实模型 Queue/Steer/Stop、文件拖入与退出回执，之后才继续整包、覆盖安装和公开验证。向官方发 Issue 尚待授权；不将源码可获取性“未核实”写成违规结论。已经有效的构建、下载和回归不重复从头做。
+- 剩余优先项：核实 Office kit 声明但返回 404 的源码仓库；补齐同 ID 重载、两个会话、插件热卸载/固定 pnpm、真实模型 Queue/Steer/Stop、文件拖入与退出回执，之后才继续整包、覆盖安装和公开验证。已获授权并按官方反馈入口提交 [Discussion #7026](https://github.com/deepseek-ai/deepseek-harness/discussions/7026)，等待源码与分发说明；不将“未核实”写成违规结论，提问本身不解除门禁。已经有效的构建、下载和回归不重复从头做。
 - 本轮对比见 [alpha.2 预检](docs/HARNESS_UPSTREAM_v0.1.6-alpha.2.md)。未解决的 Portable 必需门禁不能推给未来版本后放行；不擅自替维护者决定 V1.1.13 的公开范围。
 
 ### V1.1.15：Office 恢复交互与 Portable 性能
