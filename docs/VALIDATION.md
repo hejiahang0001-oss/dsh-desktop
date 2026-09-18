@@ -1,5 +1,16 @@
 # Validation evidence
 
+## V1.1.14 alpha.2 preflight (2026-09-18, source preparation only)
+
+Evidence root: `artifacts/v1.1.14-alpha2-preflight/`. Official target is `dsh-v0.1.6-alpha.2` / `ddefc45fbc7f8e46dd73185e68295696d1297887`; release/tag, clean source checkout and npm identity were checked. The application manifest, installed build and fixed runtime remain V1.1.13 / alpha.1. No alpha.2 package was built or installed.
+
+- New-contract regression before the adapter: 5 tests, 2 pass / 3 fail. The old bridge refused the new catalog without `current`. The failing state is summarized in `check.json`; the test cases remain in `test/harness-alpha2-bridge.test.cjs`.
+- New/legacy bridge verification after the fix: 16/16, zero skips/failures. Explicit desktop target, public main-view ownership and binding, closed/errored/subagent states, disposal and same-id generation replacement are covered. Navigation neither calls `retain` nor creates an Agent. This is contract simulation, not assembled alpha.2 browser acceptance.
+- Fresh complete source suite: **613/613**, zero failures/skips/cancellations, **222077.9444 ms**, exit 0; `source-tests.log`. Root package/lock and all Harness runtime/security bindings are unchanged. The old 608-test result was the preserved baseline, not rerun as a separate preflight.
+- Read-only delivery recheck: installed EXE file/product identity 1.1.13 / 1.1.13.0; v1.1.13 release 389338033 remains a private pre-release draft with four uploaded assets. Stable/GitHub Latest is still v1.1.12. No new public-download or user-data-retention test is claimed for this source patch.
+- New packaging decision: official Windows Office engine `@deepseek-ai/libreoffice-kit-win32-x64@0.0.1` has npm unpacked size 340,863,092 bytes, 2,050 files, MPL-2.0. Requested user acceptance before adding this dependency. It was not downloaded; final installer delta, conversion behavior, fonts and lifecycle are unverified.
+- Not executed: alpha.2 security-lock resolution, production runtime audit, native engine verification, actual multi-Session/Sidebar/plugin HMR tests, real model/file tests, package build, installation or publication. Existing V1.1.13 Portable failures and the separate delivery-scope choice remain blocking for public delivery; no gate was relaxed.
+
 ## V1.1.13 fixed Harness alpha.1 (2026-09-16, installed; publication pending)
 
 Evidence root: `artifacts/v1.1.13-release-candidate/`. Stable V1.1.12 is unchanged. The local installation is V1.1.13; public-release verification is a separate remaining gate.
