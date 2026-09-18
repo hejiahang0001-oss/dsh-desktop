@@ -1,10 +1,10 @@
 {
   "revision": "desktop-security-1",
-  "upstreamCommit": "0a15e36e7f82b6ed45af6fa9759f29b40dcd965d",
-  "upstreamWorkspaceSha256": "36bbdcf3e7c660a934879d6ba0608012adc95c46e47b2b0073050ed864b8f9d7",
-  "upstreamLockSha256": "762874d3d5a751c2362b60aa515be707b7bda6e325bdc47cdd1ea31ace6f8608",
-  "workspaceSha256": "c5963e8d368c77c2d6461da7a6170d99c51694fbe223d7e6f7d2537f787ddf7a",
-  "lockSha256": "59d89d40cf66d952b6f9ac15c878606a94e0db0e9c9d0586dcbe1bc4bb9ca5d2",
+  "upstreamCommit": "ddefc45fbc7f8e46dd73185e68295696d1297887",
+  "upstreamWorkspaceSha256": "4aa5f70b1c0be1e3d517fd56a19842e09b6c7b9f1833d4f2c9b04d02052a7dd2",
+  "upstreamLockSha256": "72523ca50bd34e3e21d07c82e1cedfdb91b17e1bcd83006c645e8dc6e0786fe0",
+  "workspaceSha256": "b6179c0bda6b466a4aaaa8de6f57a2bda9e8c42b349f29affa8153210c58480c",
+  "lockSha256": "d2bed98f1902e2f02d18cffc89cccba090d40cbb39452a9ea2af842105e84476",
   "overrides": {
     "js-yaml@4.2.0": "4.3.2",
     "js-yaml@4.3.1": "4.3.2",

@@ -8,9 +8,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Repository = 'https://github.com/deepseek-ai/deepseek-harness.git'
-$Tag = 'dsh-v0.1.6-alpha.1'
-$Commit = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d'
-$HarnessVersion = '0.1.6-alpha.1'
+$Tag = 'dsh-v0.1.6-alpha.2'
+$Commit = 'ddefc45fbc7f8e46dd73185e68295696d1297887'
+$HarnessVersion = '0.1.6-alpha.2'
 $PnpmVersion = '11.7.0'
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $Node = Join-Path $Root 'vendor\runtime\win32-x64\node.exe'
