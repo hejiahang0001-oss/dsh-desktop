@@ -11,7 +11,7 @@ const { HarnessSupervisor } = require(path.join(repo, 'electron/harness-supervis
 const { authenticateHarnessSupervisor } = require(path.join(repo, 'scripts/harness-smoke-auth.cjs'));
 const { createSessionReadHost } = require(path.join(repo, 'scripts/harness-session-read-host.cjs'));
 const { callHarnessApi } = require(path.join(repo, 'electron/harness-workspace-sync.cjs'));
-const runtime = path.join(repo, 'vendor/harness-hoisted-0.1.6-alpha.1-desktop-security-1');
+const runtime = path.join(repo, 'vendor/harness-hoisted-0.1.6-alpha.2-desktop-security-1');
 const resolve = createRequire(path.join(runtime, 'cold-read-gate.cjs'));
 const load = (name) => import(pathToFileURL(resolve.resolve(name)).href);
 const sha = (value) => createHash('sha256').update(value).digest('hex');
@@ -143,7 +143,7 @@ async function main() {
     const nativeCredentials = resolve('js-yaml').load(await fs.readFile(path.join(homeDir, '.credentials.yaml'), 'utf8'));
     assert.deepEqual(Object.keys(nativeCredentials).sort(), ['records', 'version']);
     assert.deepEqual(Object.keys(nativeCredentials.records), ['client-connection/browser-session']);
-    const result = { ok: true, runtime: '0.1.6-alpha.1', fixture: 'synthetic-two-completed-v3-tool-turns',
+    const result = { ok: true, runtime: '0.1.6-alpha.2', fixture: 'synthetic-two-completed-v3-tool-turns',
       modelCredentialsLoaded: false, officialBrowserSessionRecordOnly: true,
       modelCalls: 0, agentsCreated: 0, liveSessionPublished: false,
       events: expected.length, pages, authenticatedPrivateHistory: true, oldHttpRouteStatus: oldRoute.status,

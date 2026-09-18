@@ -32,6 +32,8 @@
 
 ## Why DSH Desktop
 
+V1.1.14 is an unpublished source candidate for Harness `0.1.6-alpha.2`. Its 621 source tests and real source-mode Office sidebar preview pass, but package/install and Office-kit source-availability gates remain open. `DSH-Desktop-Setup-1.1.14.exe` is the planned filename, not a currently available download. See the [candidate notes](docs/RELEASE_NOTES_v1.1.14.md). The installed daily build remains V1.1.13; Stable downloads remain V1.1.12.
+
 V1.1.12 (`DSH-Desktop-Setup-1.1.12.exe`) is the current Stable and is installed and verified locally. It adapts Harness `0.1.5-rc.2`, official Markdown/code/image/HTML/PDF previews and `present` deliverables. Duplicate ordinary desktop previews are removed; bounded search, Git Review, legacy references, Wiki and Office validation/receipts remain. Eight exact runtime security fixes are documented without changing upstream application sources. See the [release notes](docs/RELEASE_NOTES_v1.1.12.md) and [validation evidence](docs/VALIDATION.md).
 
 Session V3 upgrades require an independent pre-upgrade data backup. Do not let an older executable resume an upgraded active profile.

@@ -41,7 +41,7 @@ const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = 
     .filter(({ name }) => name === '@deepseek-ai/dsh'
       || name.startsWith('@deepseek-ai/dsh-')
       || HARNESS_VENDOR_PACKAGES.includes(name.slice('@deepseek-ai/'.length)));
-  assert.equal(releasePackages.length, 294);
+  assert.equal(releasePackages.length, 302);
   for (const { name, version } of releasePackages) {
     const localName = name.slice('@deepseek-ai/'.length);
     writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', localName, 'package.json'), JSON.stringify({
@@ -55,22 +55,27 @@ const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = 
       version: '0.1.2'
     }));
   }
+  for (const name of ['libreoffice-kit', 'libreoffice-kit-win32-x64']) {
+    writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', name, 'package.json'), JSON.stringify({
+      name: `@deepseek-ai/${name}`, version: '0.0.1'
+    }));
+  }
   const runtimePayload = inspectHarnessRuntimePayload(path.join(harnessRoot, 'node_modules'));
   writeFile(path.join(harnessRoot, 'harness-runtime.json'), JSON.stringify({
     version: 1,
     harness: {
       name: '@deepseek-ai/dsh',
-      version: '0.1.6-alpha.1',
+      version: '0.1.6-alpha.2',
       repository: 'https://github.com/deepseek-ai/deepseek-harness.git',
-      tag: 'dsh-v0.1.6-alpha.1',
-      commit: '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d',
+      tag: 'dsh-v0.1.6-alpha.2',
+      commit: 'ddefc45fbc7f8e46dd73185e68295696d1297887',
       ...harness
     },
     build: {
       node: 'v24.19.0',
       pnpm: '11.7.0',
-      packageCount: 294,
-      packageInventorySha256: 'fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d',
+      packageCount: 302,
+      packageInventorySha256: '3878c3777df3c28def80ccda2f8041b4af211ee717c5737e41e0b20e171ccde7',
       dependencyResolution: 'desktop-security-frozen-lockfile',
       security: (() => {
         const policy = require('../runtime/harness-security/overrides.json');
@@ -164,16 +169,16 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.equal(report.pnpmRuntime.wrapperValid, false);
 });
 
-test('package layout binds the inspected app.asar to the V1.1.13 desktop manifest', async (context) => {
+test('package layout binds the inspected app.asar to the V1.1.14 desktop manifest', async (context) => {
   assert.equal(REQUIRED_DESKTOP_VERSION, require('../package.json').version, 'release gate must track the product version');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-app-version-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const appRoot = path.join(root, 'app-source');
-  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.13' }));
+  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.14' }));
   fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   const ready = await inspectPackageLayout(root);
-  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.13' });
+  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.14' });
   assert.equal(ready.requiredPackagedAppReady, true);
 
   writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.5' }));
@@ -335,18 +340,18 @@ test('package layout requires exact Harness source-build provenance', async (con
   writeHarnessFixture(root);
   const ready = await inspectPackageLayout(root);
   assert.equal(ready.requiredHarnessRuntimeReady, true);
-  assert.equal(ready.harnessRuntime.dshPackageCount, 285);
+  assert.equal(ready.harnessRuntime.dshPackageCount, 293);
   assert.equal(ready.harnessRuntime.vendorPackageCount, 9);
-  assert.equal(ready.harnessRuntime.auxiliaryPackageCount, 5);
-  assert.equal(ready.harnessRuntime.packageInventorySha256, 'fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d');
+  assert.equal(ready.harnessRuntime.auxiliaryPackageCount, 7);
+  assert.equal(ready.harnessRuntime.packageInventorySha256, '3878c3777df3c28def80ccda2f8041b4af211ee717c5737e41e0b20e171ccde7');
   assert.deepEqual(ready.harnessRuntime.mismatchedPackages, []);
 
   fs.rmSync(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-acp'), { recursive: true, force: true });
   writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-fake', 'package.json'), JSON.stringify({
-    name: '@deepseek-ai/dsh-fake', version: '0.1.6-alpha.1'
+    name: '@deepseek-ai/dsh-fake', version: '0.1.6-alpha.2'
   }));
   const substituted = await inspectPackageLayout(root);
-  assert.equal(substituted.harnessRuntime.dshPackageCount, 285);
+  assert.equal(substituted.harnessRuntime.dshPackageCount, 293);
   assert.equal(substituted.requiredHarnessRuntimeReady, false);
   assert.notEqual(substituted.harnessRuntime.packageInventorySha256, ready.harnessRuntime.packageInventorySha256);
   fs.rmSync(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-fake'), { recursive: true, force: true });
@@ -382,6 +387,17 @@ test('package layout requires exact Harness source-build provenance', async (con
 
   writeHarnessFixture(root, { harness: { tag: 'dsh-v0.1.2-alpha.5' } });
   assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+});
+
+test('package layout refuses missing native Office engine even when other runtime metadata exists', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-office-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const report = await inspectPackageLayout(root);
+  assert.equal(report.requiredOfficeEngineReady, false);
+  assert.equal(report.officeEngine.actual, null);
+  assert.ok(report.officeEngine.error);
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/release-governance.cjs'), 'utf8');
+  assert.match(source, /&& packageLayout\.requiredOfficeEngineReady/);
 });
 
 test('package manifest and layout include user-readable legal notices', async (context) => {

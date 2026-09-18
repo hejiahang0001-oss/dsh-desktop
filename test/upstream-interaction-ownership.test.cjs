@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 
 const read = (file) => fs.readFileSync(file, 'utf8');
 const projectRoot = path.resolve(__dirname, '..');
@@ -24,7 +25,16 @@ test('official Harness owns queue, steer and stop interaction', (context) => {
   assert.equal(git('rev-parse', 'HEAD'), identity.commit);
   assert.equal(git('rev-parse', `${identity.tag}^{commit}`), identity.commit);
   assert.equal(git('remote', 'get-url', 'origin'), identity.repository);
-  assert.equal(git('status', '--porcelain', '--untracked-files=no'), '');
+  const changed = git('diff', 'HEAD', '--name-only').split(/\r?\n/).filter(Boolean).sort();
+  if (changed.length) {
+    // Security resolution is an exact reviewed overlay, never an upstream UI edit.
+    assert.deepEqual(changed, ['pnpm-lock.yaml', 'pnpm-workspace.yaml']);
+    const policy = require('../runtime/harness-security/overrides.json');
+    assert.equal(policy.upstreamCommit, identity.commit);
+    for (const [file, expected] of [['pnpm-lock.yaml', policy.lockSha256], ['pnpm-workspace.yaml', policy.workspaceSha256]]) {
+      assert.equal(createHash('sha256').update(fs.readFileSync(path.join(sourceRoot, file))).digest('hex'), expected);
+    }
+  }
   const clientRoot = path.join(sourceRoot, 'packages', 'client', 'ui-conversation', 'src', 'client');
   const inputBar = read(path.join(clientRoot, 'skeleton', 'InputBar.tsx'));
   const inputHub = read(path.join(clientRoot, 'input', 'hub.ts'));

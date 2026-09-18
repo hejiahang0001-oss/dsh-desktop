@@ -7,6 +7,7 @@ const { promisify } = require('node:util');
 const zlib = require('node:zlib');
 const { extractFile } = require('@electron/asar');
 const { inspectHarnessRuntimePayload } = require('./harness-runtime-integrity.cjs');
+const { inspectOfficeEngine } = require('./harness-office-engine.cjs');
 const { inspectReleasePayloadBinding } = require('./release-payload-binding.cjs');
 
 const execFileAsync = promisify(execFile);
@@ -57,14 +58,14 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.13';
+const REQUIRED_DESKTOP_VERSION = '1.1.14';
 const REQUIRED_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
-const REQUIRED_HARNESS_TAG = 'dsh-v0.1.6-alpha.1';
-const REQUIRED_HARNESS_VERSION = '0.1.6-alpha.1';
-const REQUIRED_HARNESS_COMMIT = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d';
-const REQUIRED_HARNESS_PACKAGE_COUNT = 294;
-const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = 'fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d';
-const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 285;
+const REQUIRED_HARNESS_TAG = 'dsh-v0.1.6-alpha.2';
+const REQUIRED_HARNESS_VERSION = '0.1.6-alpha.2';
+const REQUIRED_HARNESS_COMMIT = 'ddefc45fbc7f8e46dd73185e68295696d1297887';
+const REQUIRED_HARNESS_PACKAGE_COUNT = 302;
+const REQUIRED_HARNESS_PACKAGE_INVENTORY_SHA256 = '3878c3777df3c28def80ccda2f8041b4af211ee717c5737e41e0b20e171ccde7';
+const REQUIRED_HARNESS_DSH_PACKAGE_COUNT = 293;
 const REQUIRED_HARNESS_BUILD_NODE = 'v24.19.0';
 const REQUIRED_HARNESS_BUILD_PNPM = '11.7.0';
 const REQUIRED_HARNESS_DEPENDENCY_RESOLUTION = 'desktop-security-frozen-lockfile';
@@ -91,12 +92,14 @@ const REQUIRED_HARNESS_AUXILIARY_PACKAGES = new Map([
   ['@deepseek-ai/node-addon-system-darwin-arm64', '0.1.2'],
   ['@deepseek-ai/node-addon-system-darwin-x64', '0.1.2'],
   ['@deepseek-ai/node-addon-system-linux-arm64', '0.1.2'],
-  ['@deepseek-ai/node-addon-system-linux-x64', '0.1.2']
+  ['@deepseek-ai/node-addon-system-linux-x64', '0.1.2'],
+  ['@deepseek-ai/libreoffice-kit', '0.0.1'],
+  ['@deepseek-ai/libreoffice-kit-win32-x64', '0.0.1']
 ]);
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', '89c0c2b609ab99b5f10eeb66c33117935c3a1aa8caa35cbb00b646053144c1d3']
+  ['THIRD_PARTY_LICENSES.md', '65e2336fad001c7ec599e7a101845d9e6aae43f2a00837501b508f5c8e1c5d34']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');
@@ -324,6 +327,7 @@ const inspectPackageLayout = async (rootPath) => {
     unexpectedDeepSeekPackages: [],
     mismatchedPackages: []
   };
+  const officeEngine = { declared: null, actual: null, error: '' };
   const harnessProcessHost = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
   const terminalProcessHost = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
   const nodeRuntime = { present: false, bytes: 0, sha256: '', expectedSha256: '' };
@@ -513,6 +517,7 @@ const inspectPackageLayout = async (rootPath) => {
     harnessRuntime.buildPnpm = typeof provenance?.build?.pnpm === 'string' ? provenance.build.pnpm : '';
     harnessRuntime.dependencyResolution = typeof provenance?.build?.dependencyResolution === 'string' ? provenance.build.dependencyResolution : '';
     harnessRuntime.security = provenance?.build?.security || null;
+    officeEngine.declared = provenance?.build?.officeEngine || null;
     harnessRuntime.packagePayload = typeof provenance?.build?.packagePayload === 'string' ? provenance.build.packagePayload : '';
     harnessRuntime.installScripts = Array.isArray(provenance?.build?.installScripts)
       ? provenance.build.installScripts.filter((value) => typeof value === 'string')
@@ -564,6 +569,13 @@ const inspectPackageLayout = async (rootPath) => {
     && harnessRuntime.unexpectedDeepSeekPackages.length === 0
     && JSON.stringify(harnessRuntime.runtimePayload) === JSON.stringify(harnessRuntime.actualRuntimePayload)
     && harnessRuntime.mismatchedPackages.length === 0;
+  try {
+    officeEngine.actual = inspectOfficeEngine(path.join(root, 'resources', 'harness', 'node_modules'));
+  } catch (error) {
+    officeEngine.error = error.message;
+  }
+  const requiredOfficeEngineReady = officeEngine.actual !== null
+    && JSON.stringify(officeEngine.actual) === JSON.stringify(officeEngine.declared);
   const requiredDesktopPlugins = ['dsh-desktop-shell-env/index.mjs', 'dsh-desktop-shell-env/package.json',
     'dsh-desktop-credentials/index.mjs', 'dsh-desktop-credentials/package.json',
     'dsh-desktop-tools/index.mjs', 'dsh-desktop-tools/session-control.mjs', 'dsh-desktop-tools/client.js', 'dsh-desktop-tools/package.json'];
@@ -612,6 +624,8 @@ const inspectPackageLayout = async (rootPath) => {
     )),
     harnessRuntime,
     requiredHarnessRuntimeReady,
+    officeEngine,
+    requiredOfficeEngineReady,
     reparsePoints
   };
 };
@@ -673,6 +687,7 @@ const main = async () => {
     && packageLayout.requiredWikiSkillFilesReady
     && packageLayout.requiredLegalNoticesReady
     && packageLayout.requiredHarnessRuntimeReady
+    && packageLayout.requiredOfficeEngineReady
     && packageLayout.requiredHarnessProcessHostReady
     && packageLayout.requiredDesktopPluginsReady
     && packageLayout.reparsePoints === 0;

@@ -8,7 +8,7 @@ const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
 const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DSH_BIN', 'DSH_DESKTOP_PATCH']);
-const HARNESS_VERSION = '0.1.6-alpha.1';
+const HARNESS_VERSION = '0.1.6-alpha.2';
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
 const redactHarnessLog = (value) => stripAnsi(value).replace(
@@ -56,17 +56,22 @@ const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName
     throw error;
   }
 
-  const targetDir = path.join(homeDir, 'profiles', 'node_modules', expectedName);
-  try {
-    const stat = await fsp.lstat(targetDir);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      const error = new Error('DSH Desktop 的固定工具环境桥接目录不安全。');
-      error.code = 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE';
-      throw error;
+  // alpha.2 ignores the old shared profiles/node_modules projection. Its
+  // resolver continues native lookup from DSH_HOME after the official table.
+  // Keep host-owned packages outside the profile's pnpm-managed directory.
+  const targetDir = path.join(homeDir, 'node_modules', expectedName);
+  for (const directory of [homeDir, path.join(homeDir, 'node_modules'), targetDir]) {
+    try {
+      const stat = await fsp.lstat(directory);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        const error = new Error('DSH Desktop 的固定工具环境桥接目录不安全。');
+        error.code = 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE';
+        throw error;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      await fsp.mkdir(directory, { recursive: true });
     }
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-    await fsp.mkdir(targetDir, { recursive: true });
   }
 
   const files = [

@@ -47,7 +47,7 @@ const writeHarnessPackage = (binPath, content = '// test') => {
   fs.writeFileSync(binPath, content);
   fs.writeFileSync(path.resolve(path.dirname(binPath), '..', 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh',
-    version: '0.1.6-alpha.1'
+    version: '0.1.6-alpha.2'
   }));
 };
 
@@ -244,7 +244,7 @@ test('runtime resolver prefers explicit, existing paths', () => {
     isPackaged: false,
     env: { DSH_DESKTOP_NODE: nodePath, DSH_DESKTOP_DSH_BIN: dshPath, DSH_DESKTOP_PATCH: patchPath }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office, version: '0.1.6-alpha.1' });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office, version: '0.1.6-alpha.2' });
 });
 
 test('Harness process host uses fixed development and packaged paths', () => {
@@ -280,7 +280,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
   const packageDir = path.join(
     nodeModules,
     '.pnpm',
-    '@deepseek-ai+dsh@0.1.6-alpha.1_test',
+    '@deepseek-ai+dsh@0.1.6-alpha.2_test',
     'node_modules',
     '@deepseek-ai',
     'dsh',
@@ -295,7 +295,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
   fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(linkedBin, 'top-level copy without dependency links');
-  fs.writeFileSync(path.resolve(path.dirname(linkedBin), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.6-alpha.1' }));
+  fs.writeFileSync(path.resolve(path.dirname(linkedBin), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.6-alpha.2' }));
   fs.writeFileSync(pnpmBin, 'real package');
   fs.mkdirSync(path.dirname(patchPath), { recursive: true });
   fs.writeFileSync(patchPath, '[]');
@@ -333,7 +333,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
       DSH_DESKTOP_PATCH: externalPatchPath
     }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version: '0.1.6-alpha.1' });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version: '0.1.6-alpha.2' });
 });
 
 test('packaged runtime fails closed instead of falling back to external overrides', () => {
@@ -350,10 +350,10 @@ test('packaged runtime fails closed instead of falling back to external override
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, target.endsWith('.yml') ? '[]' : 'test');
   }
-  fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.6-alpha.1' }));
+  fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.6-alpha.2' }));
   for (const target of [
     path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'node.exe' : 'bin/node'),
-    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.6-alpha.1-desktop-security-1', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.6-alpha.2-desktop-security-1', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -400,7 +400,7 @@ test('runtime resolver fails closed when the desktop language patch is missing',
   }), (error) => error?.code === 'HARNESS_PATCH_MISSING');
 });
 
-test('desktop shell environment plugin is provisioned into the Harness profile fallback', async () => {
+test('desktop shell environment plugin uses the home fallback outside profile package-manager ownership', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-shell-plugin-provision-test-'));
   const sourceDir = path.join(root, 'source');
   const homeDir = path.join(root, 'home');
@@ -412,14 +412,30 @@ test('desktop shell environment plugin is provisioned into the Harness profile f
     exports: './index.mjs'
   }));
   fs.writeFileSync(path.join(sourceDir, 'index.mjs'), 'export const name = "dsh-desktop-shell-env";');
+  const legacy = path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env', 'index.mjs');
+  fs.mkdirSync(path.dirname(legacy), { recursive: true });
+  fs.writeFileSync(legacy, 'legacy rollback bytes');
   try {
     const targetDir = await provisionDesktopShellEnvPlugin({ homeDir, sourceDir });
-    assert.equal(targetDir, path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env'));
+    assert.equal(targetDir, path.join(homeDir, 'node_modules', 'dsh-desktop-shell-env'));
     assert.match(fs.readFileSync(path.join(targetDir, 'index.mjs'), 'utf8'), /dsh-desktop-shell-env/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(targetDir, 'package.json'), 'utf8')).name, 'dsh-desktop-shell-env');
+    assert.equal(fs.readFileSync(legacy, 'utf8'), 'legacy rollback bytes');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('desktop provisioning refuses a linked home module directory without writing outside it', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-plugin-home-boundary-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const homeDir = path.join(root, 'home'), outside = path.join(root, 'outside');
+  fs.mkdirSync(homeDir); fs.mkdirSync(outside);
+  fs.symlinkSync(outside, path.join(homeDir, 'node_modules'), 'junction');
+  await assert.rejects(provisionDesktopShellEnvPlugin({ homeDir,
+    sourceDir: path.resolve(__dirname, '../runtime/dsh-desktop-shell-env')
+  }), error => error.code === 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE');
+  assert.deepEqual(fs.readdirSync(outside), []);
 });
 
 test('desktop tools provisioning retains the public browser entry and session control', async (t) => {

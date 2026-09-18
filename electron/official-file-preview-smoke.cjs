@@ -32,6 +32,8 @@ async function runOfficialFilePreviewSmoke({ window, BrowserWindow, workspacePat
   checks.pdfLastPageRendered = true;
   await fsp.writeFile(`${target}.official-pdf.png`, (await wc.capturePage()).toPNG());
   checks.noDuplicatePreview = await evaluate(`!document.querySelector('#dsh-file-preview, embed[type="application/pdf"]')`);
+  const office = await require('./official-office-preview-smoke.cjs').runOfficialOfficePreviewSmoke({ window, workspacePath, evaluate, waitFor, target });
+  checks.officeNativePreviews = office.ok;
   await evaluate('window.__DSH_FILES__.focus()');
   await evaluate('(()=>{const el=document.querySelector(".dsh-files-search-input");el.value="官方预览 #说明";el.dispatchEvent(new Event("input",{bubbles:true}))})()');
   await waitFor('document.querySelectorAll(".dsh-files-row").length === 1');
@@ -44,6 +46,6 @@ async function runOfficialFilePreviewSmoke({ window, BrowserWindow, workspacePat
   checks.protectedPathRejected = !await evaluate('window.__DSH_FILES__.reveal(".env")');
   checks.originalBytesUnchanged = (await Promise.all(fixtures.map(async ([name, bytes]) => digest(await fsp.readFile(path.join(workspacePath, name))) === digest(bytes)))).every(Boolean);
   if (!Object.values(checks).every(Boolean)) throw new Error(`Official preview checks failed: ${JSON.stringify(checks)}`);
-  return { ok: true, version, checks, modelCalls: 0, evidence: 'Real official browser plugin, guarded desktop IPC, native keyboard search and rendered PDF canvases; only isolated fixture files.', unverified: ['large-file limits', 'encrypted PDF', 'native drag of Sidebar split panes'] };
+  return { ok: true, version, checks, office, modelCalls: 0, evidence: 'Real official browser plugin, guarded desktop IPC, native keyboard search and rendered PDF/Office canvases; only isolated fixture files.', unverified: ['large-file limits', 'encrypted PDF', 'native drag of Sidebar split panes'] };
 }
 module.exports = { runOfficialFilePreviewSmoke };
