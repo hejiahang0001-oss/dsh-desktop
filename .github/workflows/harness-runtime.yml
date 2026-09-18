@@ -37,6 +37,16 @@ jobs:
       - name: Build official pinned source and native addons
         shell: pwsh
         run: ./scripts/build-harness-runtime.ps1
+      - name: Preserve failed runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: harness-alpha2-failed-diagnostics
+          path: |
+            vendor/*.staging-*/harness-runtime.json
+            vendor/*.staging-*/security-audit.json
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Archive the verified runtime
         shell: pwsh
         run: |

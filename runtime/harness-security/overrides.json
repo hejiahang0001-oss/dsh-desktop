@@ -3,8 +3,8 @@
   "upstreamCommit": "ddefc45fbc7f8e46dd73185e68295696d1297887",
   "upstreamWorkspaceSha256": "4aa5f70b1c0be1e3d517fd56a19842e09b6c7b9f1833d4f2c9b04d02052a7dd2",
   "upstreamLockSha256": "72523ca50bd34e3e21d07c82e1cedfdb91b17e1bcd83006c645e8dc6e0786fe0",
-  "workspaceSha256": "b6179c0bda6b466a4aaaa8de6f57a2bda9e8c42b349f29affa8153210c58480c",
-  "lockSha256": "d2bed98f1902e2f02d18cffc89cccba090d40cbb39452a9ea2af842105e84476",
+  "workspaceSha256": "ae4db20094a6c4e1fb6b669fc2fac302f5f07203844073a493821e5e9cc34005",
+  "lockSha256": "0b81b747c3ca5ee6ff7e73bdc53e29b94c562c224eebceb878312b54739158d7",
   "overrides": {
     "js-yaml@4.2.0": "4.3.2",
     "js-yaml@4.3.1": "4.3.2",
@@ -14,6 +14,7 @@
     "hono@4.12.29": "4.13.5",
     "@hono/node-server@1.19.14": "1.19.15",
     "qs@6.15.3": "6.16.0",
-    "sharp@0.35.3": "0.35.4"
+    "sharp@0.35.3": "0.35.4",
+    "fflate@0.8.2": "0.8.3"
   }
 }
