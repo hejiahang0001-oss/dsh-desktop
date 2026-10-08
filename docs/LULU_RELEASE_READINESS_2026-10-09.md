@@ -50,3 +50,16 @@
 保留的软件补充：软件优先的加密 Key、代理、Office/Wiki 校验与备份、Git Review、Windows 宿主保护。Agent、会话、权限、队列、文件与 Office 主能力使用固定官方内核，不重新接管官方输入/Stop 协议。
 
 用户分别接受的显卡缓存宽权限与既有 Windows 祖先权限风险仍存在，原失败不改写，不修改 DACS/沙箱/系统 ACL。只承诺 Windows 11 x64 已验证；未签名，无 `latest.yml`，不承诺自动升级。Windows 10、其他电脑、长期老化和未覆盖 IME 边界仍未验证。噜噜素材分发权未独立核实，用户要求继续使用不等于已获得版权证明；本项目不是 DeepSeek 官方产品。
+
+## 源码公开与 CI 补证（01:27 北京时间）
+
+- 最初适配提交 `9e412408596e48785693063e45f2dcf595785df7` 已推送，[PR #85](https://github.com/hejiahang0001-oss/dsh-desktop/pull/85) 已创建。223 项白名单不含个人表格、产物、备份或凭据。
+- 提交前发现 Windows Git 自动换行会改变固定上游来源摘要；仅对 runtime 下 TS/patch/txt/map 固定 LF。4 类修改前后对照及提交中全部19个相关文件检出过滤验证通过，补丁中79行合法空白上下文保留，不修改来源内容或包。
+- 首次 [CI 37816195306](https://github.com/hejiahang0001-oss/dsh-desktop/actions/runs/37816195306) 的包契约和生产审计成功，源码测试为911项 / 905 pass / 1 fail / 5 skip。唯一失败是 `harness-package-mapping.test.cjs` 的复制契约测试读取了未捆绑到Git的本地完整runtime metadata，干净runner报ENOENT；不是产品包缺失内核的证据。
+- 处理边界：复制契约使用独立小型夹具始终运行，真实metadata摘要与复制检查仍作为单独的本机runtime集成断言保留。不会把原测试整体跳过，也不会将fixture通过冒充实际运行库验收。修复及复验结果另记；首次失败保留在GitHub及本地 `release/ci-1791480377638.json`（SHA `7df35010a4aac4808a521bd83e33c008369c99989bbeccb61ba04dcebe6b4ce3`）。
+
+### CI 夹具修复后的实际复验
+
+仅修改上述测试文件。真实vendor专项2/2；无vendor隔离副本1 pass及1项明确集成skip；存在空runtime和错误descriptor各自确实失败且0 skip，未移动或篡改真实vendor。证据 `install/mapping-copy-test-review.json`（SHA `7275c7e23c1b463ae2b6acdbde6dd111e0dd1515f619f4f7dcb682ddc13e5af4`）。
+
+修复后实际 `pnpm test` 为 **912/912，0 fail/skip，317.97秒**，exit0、childClosed、输入不变；`test-RlVX4H/result.json` SHA `220626b2eac6145192d4b9ffb8b07f771778256f630f1cd439ea118e81b42210`，stdout SHA `dcbaad5f79a06c7c66018549513a7d22a211acb8f724fecbfc267edd1700fdcc`。391输入相对上一有效全测仅该测试文件改变，应用、运行库及安装包未变；不重建冻结包。下一步推送测试修正后提交并等待该提交的新CI，不沿用首轮失败run为成功。

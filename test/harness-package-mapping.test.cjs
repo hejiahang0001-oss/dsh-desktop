@@ -26,7 +26,7 @@ async function filesUnder(root, relative = '') {
   return result.sort();
 }
 
-test('fixed electron-builder copies the central Harness metadata and complete node_modules mapping', async context => {
+async function assertHarnessResourceCopy(context, descriptor, manifest) {
   assert.equal(builderRequire('electron-builder/package.json').version, application.devDependencies['electron-builder']);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-harness-mapping-'));
   context.after(() => fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
@@ -51,11 +51,6 @@ test('fixed electron-builder copies the central Harness metadata and complete no
     await fs.mkdir(path.dirname(path.join(source, relative)), { recursive: true });
     await fs.writeFile(path.join(source, relative), bytes);
   }
-  // Real metadata bytes, tiny synthetic payload: this tests copying semantics,
-  // while the separate package gate validates the actual complete runtime tree.
-  const descriptor = await fs.readFile(path.join(projectRoot, from, binding.descriptor.file));
-  assert.equal(sha256(descriptor), binding.descriptor.sha256);
-  const manifest = await fs.readFile(path.join(projectRoot, from, 'package.json'));
   await fs.writeFile(path.join(source, binding.descriptor.file), descriptor);
   await fs.writeFile(path.join(source, 'package.json'), manifest);
   const matchers = getFileMatchers({ extraResources: mappings }, 'extraResources', output, {
@@ -64,9 +59,32 @@ test('fixed electron-builder copies the central Harness metadata and complete no
   });
   await copyFiles(matchers, undefined, false);
   const packaged = path.join(output, 'harness');
-  assert.deepEqual(await fs.readFile(path.join(packaged, binding.descriptor.file)), descriptor, 'Do not rewrite the official descriptor');
+  assert.deepEqual(await fs.readFile(path.join(packaged, binding.descriptor.file)), descriptor, 'Preserve descriptor bytes exactly');
   assert.deepEqual(await fs.readFile(path.join(packaged, 'package.json')), manifest);
   assert.deepEqual(await filesUnder(packaged), [binding.descriptor.file, 'package.json', ...Object.keys(payload)].sort(),
     'electron-builder must not omit the runtime root node_modules or nested dependencies');
   for (const [relative, bytes] of Object.entries(payload)) assert.equal(await fs.readFile(path.join(packaged, relative), 'utf8'), bytes);
+}
+
+test('fixed electron-builder copies synthetic Harness metadata and complete node_modules mapping without vendor', async context => {
+  // These explicit fixtures test copying semantics even in a source-only checkout.
+  const descriptor = Buffer.from(JSON.stringify({ fixture: 'synthetic-copy-only', version: binding.packageVersion }));
+  const manifest = Buffer.from(JSON.stringify({ name: 'synthetic-harness-copy-fixture', version: binding.packageVersion, private: true }));
+  await assertHarnessResourceCopy(context, descriptor, manifest);
+});
+
+test('fixed electron-builder preserves SHA-pinned real Harness metadata bytes when the runtime is deployed', async context => {
+  const runtimeRoot = path.join(projectRoot, 'vendor', binding.runtimeDirectory);
+  try {
+    assert.ok((await fs.stat(runtimeRoot)).isDirectory(), 'The deployed Harness runtime must be a directory');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    context.skip('The deployed Harness runtime is absent; synthetic mapping still runs and full package gates remain required');
+    return;
+  }
+  // A present but incomplete or corrupted runtime must fail, never silently skip.
+  const descriptor = await fs.readFile(path.join(runtimeRoot, binding.descriptor.file));
+  assert.equal(sha256(descriptor), binding.descriptor.sha256);
+  const manifest = await fs.readFile(path.join(runtimeRoot, 'package.json'));
+  await assertHarnessResourceCopy(context, descriptor, manifest);
 });
