@@ -3,6 +3,8 @@
 const { createHash } = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { verifyPackagedPowerShell } = require('./verify-powershell-package.cjs');
+const { verifyPackagedHarness } = require('./verify-harness-package.cjs');
 
 const DEFAULT_APP_RELATIVE = path.join('resources', 'default_app.asar');
 const EXPECTED_DEFAULT_APP_BYTES = 111_073;
@@ -50,7 +52,11 @@ const removeDefaultElectronApp = async (
   return Object.freeze({ removed: true, reason: 'verified-electron-default-app' });
 };
 
-const afterPack = async (context) => removeDefaultElectronApp(context);
+const afterPack = async (context) => {
+  await verifyPackagedHarness(context);
+  verifyPackagedPowerShell(context);
+  return removeDefaultElectronApp(context);
+};
 
 module.exports = afterPack;
 module.exports.DEFAULT_APP_RELATIVE = DEFAULT_APP_RELATIVE;

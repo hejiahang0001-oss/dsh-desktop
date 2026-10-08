@@ -28,14 +28,16 @@ test('release-facing files follow the package version', () => {
   assert.match(read('PROGRESS.md'), new RegExp(`V${version.replaceAll('.', '\\.')}`));
 });
 
-test('Windows executable resources identify DSH Desktop instead of the Electron shell', () => {
+test('Windows executable resources show lulu while retaining the legacy executable identity', () => {
   const manifest = JSON.parse(read('package.json'));
   const verifier = read('scripts/verify-windows-version-info.ps1');
   const governance = read('scripts/release-governance.cjs');
   const payloadBinding = read('scripts/release-payload-binding.cjs');
   const lifecycleSmoke = read('scripts/smoke-packaged-lifecycle.cjs');
   const safeExitSmoke = read('scripts/smoke-packaged-safe-exit.cjs');
-  assert.equal(manifest.build.productName, 'DSH Desktop');
+  assert.equal(manifest.build.productName, 'lulu');
+  assert.equal(manifest.build.win.executableName, 'DSH Desktop');
+  assert.equal(manifest.build.nsis.shortcutName, 'lulu');
   assert.equal(manifest.devDependencies['electron-builder'], '26.11.1');
   assert.equal(manifest.devDependencies['7zip-bin'], '5.2.0');
   assert.equal(manifest.build.toolsets, undefined);
@@ -52,7 +54,12 @@ test('Windows executable resources identify DSH Desktop instead of the Electron 
   assert.equal(manifest.scripts['smoke:packaged-lifecycle'], 'node scripts/smoke-packaged-lifecycle.cjs');
   assert.equal(manifest.scripts['smoke:packaged-safe-exit'], 'node scripts/smoke-packaged-safe-exit.cjs');
   assert.match(manifest.scripts['verify:windows-identity'], /verify-windows-version-info\.ps1/);
-  assert.match(verifier, /InternalName -eq \$ExpectedProductName/);
+  assert.match(verifier, /ExpectedProductName = 'lulu'/);
+  assert.match(verifier, /ExpectedExecutableName = 'DSH Desktop'/);
+  assert.match(verifier, /ProductName -eq \$ExpectedProductName/);
+  assert.match(verifier, /FileDescription -eq \$ExpectedProductName/);
+  assert.match(verifier, /InternalName -eq \$ExpectedExecutableName/);
+  assert.match(verifier, /expectedOriginalFilename = "\$ExpectedExecutableName\.exe"/);
   assert.match(verifier, /OriginalFilename -ne 'electron\.exe'/);
   assert.match(governance, /requiredExecutableIdentityReady: executableIdentity\.ok === true/);
   assert.match(governance, /readArgument\('portable'\)/);
@@ -82,15 +89,34 @@ test('update dialog does not hard-code a superseded Stable version', () => {
   assert.doesNotMatch(dialog, /V\d+\.\d+\.\d+ Stable/);
 });
 
+test('lulu display branding retains existing profile, update and backup compatibility identities', () => {
+  const manifest = JSON.parse(read('package.json'));
+  const main = read('electron/main.cjs');
+  const update = read('electron/release-update.cjs');
+  const backup = read('electron/support-backup.cjs');
+  assert.equal(manifest.name, 'dsh-desktop');
+  assert.equal(manifest.build.appId, 'com.dsh.desktop');
+  assert.equal(manifest.build.win.artifactName, 'DSH-Desktop-Setup-${version}.${ext}');
+  assert.equal(manifest.build.portable.artifactName, 'DSH-Desktop-Portable-${version}.${ext}');
+  assert.match(main, /app\.setName\('DSH Desktop'\)/);
+  assert.match(main, /app\.setAppUserModelId\('com\.dsh\.desktop'\)/);
+  assert.match(main, /mainWindow\.setTitle\(`lulu — \$\{workspace\.displayName\}`\)/);
+  assert.match(main, /appTray\.setToolTip\(`lulu · /);
+  assert.match(main, /label: `关于 lulu V\$\{app\.getVersion\(\)\}/);
+  assert.match(update, /api\.github\.com\/repos\/hejiahang0001-oss\/dsh-desktop\/releases/);
+  assert.match(backup, /product: 'DSH Desktop'/);
+  assert.match(backup, /manifest\.product !== 'DSH Desktop'/);
+});
+
 test('the current release pins the reviewed Electron 43 runtime and reports it in packaged smoke', () => {
   const manifest = JSON.parse(read('package.json'));
   const fetchScript = read('scripts/fetch-electron-runtime.ps1');
   const main = read('electron/main.cjs');
 
-  assert.equal(manifest.devDependencies.electron, '43.4.1');
-  assert.equal(manifest.build.electronDist, 'build/electron-v43.4.1-win32-x64.zip');
-  assert.match(fetchScript, /Version = 'v43\.4\.1'/);
-  assert.match(fetchScript, /ExpectedSha256 = 'c2ef9a5f65472c34d14bd3e67b7d14e66b0c01f124aba45263d6a4232160e13a'/);
+  assert.equal(manifest.devDependencies.electron, '43.5.0');
+  assert.equal(manifest.build.electronDist, 'build/electron-v43.5.0-win32-x64.zip');
+  assert.match(fetchScript, /Version = 'v43\.5\.0'/);
+  assert.match(fetchScript, /ExpectedSha256 = '1fc131e62cafa02f0c94b5ec730c4eb1e8ce75e5f5b84f3c52a3443d86058184'/);
   assert.match(fetchScript, /\$partial = "\$target\.partial"/);
   assert.match(fetchScript, /for \(\$attempt = 1; \$attempt -le \$MaxAttempts;/);
   assert.match(fetchScript, /Move-Item -LiteralPath \$partial -Destination \$target -Force/);

@@ -1,0 +1,194 @@
+diff --git a/packages/sandbox/sandbox-local/src/private-powershell.ts b/packages/sandbox/sandbox-local/src/private-powershell.ts
+index be3896d..3177b82 100644
+--- a/packages/sandbox/sandbox-local/src/private-powershell.ts
++++ b/packages/sandbox/sandbox-local/src/private-powershell.ts
+@@ -8,6 +8,10 @@ import { win32 as path } from 'node:path'
+  * Only the exact existing command or PowerShell-PTY argv forms opt in.
+  * The PTY flag is distinct: it MUST NOT detach or create a private console.
+  * Other runners and spec.env/dshEnv are out of scope.
++ * @param argv - executable and arguments before sandbox confinement.
++ * @param managedPath - host-verified private PS7 executable path; defaults to DSH_DESKTOP_PWSH.
++ * @param platform - platform used to decide whether Windows-only dispatch applies.
++ * @returns the command or PTY opt-in flag followed by the managed path, or an empty list when no reviewed argv form matches.
+  */
+ export function privatePowerShellRunnerArgs(
+   argv: readonly string[],
+diff --git a/packages/sandbox/sandbox-windows-acl/src/private-console.ts b/packages/sandbox/sandbox-windows-acl/src/private-console.ts
+index 8d3ae94..9541211 100644
+--- a/packages/sandbox/sandbox-windows-acl/src/private-console.ts
++++ b/packages/sandbox/sandbox-windows-acl/src/private-console.ts
+@@ -6,6 +6,7 @@ import type { NativePtr, Win32ProcessBindings } from '@deepseek-ai/dsh-win32-pro
+ type Koffi = typeof import('koffi')['default']
+ const requireKoffi = createLazyRequire<Koffi>('koffi', import.meta.url)
+ 
++/** Native process and console operations needed to own a hidden, pipe-backed runner console. */
+ export interface PrivateConsoleBindings extends Win32ProcessBindings {
+   freeConsole(): number
+   allocConsole(): number
+@@ -20,7 +21,10 @@ export interface PrivateConsoleBindings extends Win32ProcessBindings {
+   isWindowVisible(window: NativePtr): number
+ }
+ 
+-/** Load these additional APIs only for the explicitly opted-in private shell. */
++/**
++ * Load these additional APIs only for the explicitly opted-in private shell.
++ * @returns process bindings extended with console ownership, code-page, standard-handle, and window APIs.
++ */
+ export function privateConsoleBindings(): PrivateConsoleBindings {
+   const koffi = requireKoffi()
+   const pointer = koffi.pointer('void')
+@@ -44,6 +48,10 @@ export function privateConsoleBindings(): PrivateConsoleBindings {
+  * The caller MUST be the one-shot ACL runner, not the desktop/Harness process.
+  * No PowerShell preamble, shared-console setter, child NEW_CONSOLE, or ACL change.
+  * Pipes and optional control FD 7 stay identical across AllocConsole.
++ * @param api - native bindings used to allocate, verify, configure, and free the runner-owned console.
++ * @param ownPid - current one-shot runner PID, which must be the console's sole attached process during setup.
++ * @param controlFileDescriptor - optional inherited control pipe FD 7 whose native handle must survive console allocation.
++ * @returns a lease whose dispose frees the owned console and restores inherited standard handles without rechecking the already-handed-off control FD.
+  */
+ export function acquirePrivateUtf8Console(
+   api: PrivateConsoleBindings,
+diff --git a/packages/sandbox/sandbox-windows-acl/src/pty-console.ts b/packages/sandbox/sandbox-windows-acl/src/pty-console.ts
+index 66e25af..027ca16 100644
+--- a/packages/sandbox/sandbox-windows-acl/src/pty-console.ts
++++ b/packages/sandbox/sandbox-windows-acl/src/pty-console.ts
+@@ -5,6 +5,7 @@ import type { Win32ProcessBindings, NativePtr } from '@deepseek-ai/dsh-win32-pro
+ 
+ type Koffi = typeof import('koffi')['default']
+ const requireKoffi = createLazyRequire<Koffi>('koffi', import.meta.url)
++/** Native process and console operations for verifying and configuring an inherited PTY without replacing it. */
+ export interface PtyConsoleBindings extends Win32ProcessBindings {
+   getConsoleMode(handle: NativePtr, mode: Buffer): number
+   getConsoleProcessList(buffer: Buffer, length: number): number
+@@ -14,7 +15,10 @@ export interface PtyConsoleBindings extends Win32ProcessBindings {
+   setConsoleCP(codePage: number): number
+   setConsoleOutputCP(codePage: number): number
+ }
+-/** No detach/allocation, stdio replacement, or hidden-window operations. */
++/**
++ * No detach/allocation, stdio replacement, or hidden-window operations.
++ * @returns process bindings extended only with inherited-console mode, membership, identity, and code-page APIs.
++ */
+ export function ptyConsoleBindings(): PtyConsoleBindings {
+   const pointer = requireKoffi().pointer('void')
+   return extendWin32ProcessBindings(({ kernel32, bind }) => ({
+@@ -28,7 +32,12 @@ export function ptyConsoleBindings(): PtyConsoleBindings {
+   })) as PtyConsoleBindings
+ }
+ 
+-/** Only the explicitly selected one-shot ConPTY runner may call this function. */
++/**
++ * Only the explicitly selected one-shot ConPTY runner may call this function.
++ * @param api - native bindings for checking inherited-console ownership and changing its code pages.
++ * @param ownPid - current one-shot runner PID, required to be the console's sole attached process before setters run.
++ * @returns a lease to dispose after the native Job settles; it restores saved code pages only while console identity and exclusive ownership still match.
++ */
+ export function acquireInheritedPtyUtf8Console(api: PtyConsoleBindings, ownPid: number): { dispose(): void } {
+   assertInheritedPtyConsole(api, ownPid)
+   const address = (pointer: NativePtr | null): bigint => pointer === null ? 0n
+@@ -69,7 +78,11 @@ export function acquireInheritedPtyUtf8Console(api: PtyConsoleBindings, ownPid:
+   // process is still attached or this runner changed console association.
+   return { dispose: restore }
+ }
+-/** Shape is necessary, not proof of ConPTY origin; trusted host selects this route. */
++/**
++ * Shape is necessary, not proof of ConPTY origin; trusted host selects this route.
++ * @param api - native bindings used to check inherited console standard handles and attached process IDs.
++ * @param ownPid - current runner PID, which must be the only process attached to the inherited console.
++ */
+ export function assertInheritedPtyConsole(api: PtyConsoleBindings, ownPid: number): void {
+   if (ownPid !== process.pid) throw new Error('PTY console owner must be the current runner')
+   for (const id of [-10, -11, -12]) {
+diff --git a/packages/shell/pwsh-local/src/resolve.ts b/packages/shell/pwsh-local/src/resolve.ts
+index 08a135d..eb04b4a 100644
+--- a/packages/shell/pwsh-local/src/resolve.ts
++++ b/packages/shell/pwsh-local/src/resolve.ts
+@@ -79,6 +79,10 @@ function checkedPrivatePwshPath(declared: string): string {
+  * private PS7 executable. Explicit other executables retain official behavior.
+  * The launching desktop strips ambient/override values before supplying this
+  * managed path; the CLI's .env loader already refuses all DSH_ bootstrap names.
++ * @param executable - selected shell executable whose normalized absolute path is compared with the host-managed path.
++ * @param env - environment carrying the host's DSH_DESKTOP_PWSH selection; defaults to the process environment.
++ * @param platform - platform used to decide whether private Windows PS7 selection applies.
++ * @returns an empty prefix after matching private-executable integrity checks succeed, or the legacy encoding preamble for other selections.
+  */
+ export function encodingPreambleForPwsh(
+   executable: string,
+@@ -92,7 +96,13 @@ export function encodingPreambleForPwsh(
+   return ''
+ }
+ 
+-/** Recognize only the provider's explicit native option and unchanged payload tail. */
++/**
++ * Recognize only the provider's explicit native option and unchanged payload tail.
++ * @param original - executable and arguments before sandbox confinement.
++ * @param confined - runner argv containing the explicit private-shell option followed by -- and the unchanged original argv.
++ * @param kind - command or inherited-PTY route whose exact flags and argument count must match.
++ * @returns whether the selected route preserves the expected argv and resolves to the verified private PS7 executable; matching invalid executables still fail integrity checks by throwing.
++ */
+ export function privatePwshRunnerSelected(
+   original: readonly string[],
+   confined: readonly string[],
+diff --git a/packages/subprocess/win32-process/src/extension-points.ts b/packages/subprocess/win32-process/src/extension-points.ts
+index e3dc809..a4ed7c4 100644
+--- a/packages/subprocess/win32-process/src/extension-points.ts
++++ b/packages/subprocess/win32-process/src/extension-points.ts
+@@ -7,8 +7,11 @@ import { requireKoffi } from './koffi.ts'
+ import { Win32Error } from './errors.ts'
+ import type { NativePtr, Win32ProcessBindings } from './ffi.ts'
+ 
++/** Explicit creation-policy identifier for the pinned noninteractive private PowerShell route. */
+ export const POWERSHELL_EXTENSION_POINT_POLICY = 'lulu-private-powershell-7.6.6' as const
++/** Separate creation-policy identifier for pinned private PowerShell on an inherited PTY. */
+ export const POWERSHELL_PTY_EXTENSION_POINT_POLICY = 'lulu-private-powershell-7.6.6-pty' as const
++/** Win32 process-creation flag indicating that lpStartupInfo points to STARTUPINFOEX. */
+ export const EXTENDED_STARTUPINFO_PRESENT = 0x80000
+ const PRIVATE_PWSH_SHA256 = 'bfb46af89433268872ddb43d1ca7a3f433452ee91ed356a9786940f90118e285'
+ const MAX_EXECUTABLE_BYTES = 16 * 1024 * 1024
+@@ -67,7 +70,12 @@ function assertPrivatePowerShellExecutable(command: string, expectedPath: string
+   assertPinnedExecutable(expectedPath)
+ }
+ 
+-/** Strict interactive argv for the separately verified inherited ConPTY route. */
++/**
++ * Strict interactive argv for the separately verified inherited ConPTY route.
++ * @param command - executable path to verify against the pinned private Windows x64 PowerShell binary.
++ * @param args - executable arguments, required to be exactly -NoLogo and -NoProfile in that order, ignoring case.
++ * @param expectedPath - explicit trusted-host private executable path; missing or mismatched values are rejected.
++ */
+ export function assertPrivatePowerShellPtyPolicy(command: string, args: readonly string[], expectedPath: string | undefined): void {
+   assertPrivatePowerShellExecutable(command, expectedPath)
+   if (args.length !== 2 || args[0]?.toLowerCase() !== '-nologo' || args[1]?.toLowerCase() !== '-noprofile') {
+@@ -75,7 +83,12 @@ export function assertPrivatePowerShellPtyPolicy(command: string, args: readonly
+   }
+ }
+ 
+-/** Fail closed rather than quietly applying a mitigation to another program. */
++/**
++ * Fail closed rather than quietly applying a mitigation to another program.
++ * @param command - executable path to verify against the pinned private Windows x64 PowerShell binary.
++ * @param args - noninteractive argv requiring -NoProfile, -NonInteractive, and one final command or encoded-command payload, with only optional -NoLogo otherwise.
++ * @param expectedPath - explicit trusted-host private executable path; missing or mismatched values are rejected.
++ */
+ export function assertRestrictedPowerShellPolicy(command: string, args: readonly string[], expectedPath: string | undefined): void {
+   assertPrivatePowerShellExecutable(command, expectedPath)
+   const seen = new Set<string>()
+@@ -97,6 +110,7 @@ export function assertRestrictedPowerShellPolicy(command: string, args: readonly
+   }
+ }
+ 
++/** Native creation return value and cleanup errors deferred until the caller secures any created child in its Job. */
+ export interface MitigatedCreationResult {
+   value: number
+   /** Report only after the original Job owner has acquired the created child. */
+@@ -107,6 +121,10 @@ export interface MitigatedCreationResult {
+  * Add one STARTUPINFOEX attribute without changing token, stdio or Job policy.
+  * Own native storage keeps lpValue alive until DeleteProcThreadAttributeList.
+  * After successful creation this helper MUST NOT throw before Job assignment.
++ * @param api - native process bindings including the required extension-point mitigation attribute APIs.
++ * @param startupInfo - pointer to the caller's x64 STARTUPINFOW, copied into temporary extended startup storage.
++ * @param create - synchronous native creation callback receiving the temporary STARTUPINFOEX pointer and returning its Win32 result.
++ * @returns the creation callback's result and collected cleanup errors; callers defer reporting those errors until Job ownership of a successfully created child is established.
+  */
+ export function createWithExtensionPointsDisabled(
+   api: Win32ProcessBindings,

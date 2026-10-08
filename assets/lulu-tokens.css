@@ -1,0 +1,185 @@
+/* Display-only theme. Runtime names, data identity and official controls stay unchanged. */
+:root, html:not([data-lulu-surface]) body:not([data-ds-dark-theme]) {
+  --lulu-font: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  --lulu-mono: "Cascadia Code", Consolas, monospace;
+  --lulu-bg: #f7f3eb;
+  --lulu-surface: #fffdf8;
+  --lulu-raised: #ffffff;
+  --lulu-subtle: #eee6d7;
+  --lulu-text: #302a23;
+  --lulu-muted: #706456;
+  --lulu-border: #d6cabb;
+  --lulu-control-border: #97836b;
+  --lulu-accent: #985010;
+  --lulu-accent-hover: #783d0b;
+  --lulu-on-accent: #ffffff;
+  --lulu-accent-soft: #f6e7d1;
+  --lulu-success: #376541;
+  --lulu-success-soft: #e7efe4;
+  --lulu-warning: #7b571d;
+  --lulu-warning-soft: #fff2d8;
+  --lulu-danger: #9a352a;
+  --lulu-danger-soft: #fbede9;
+  --lulu-focus: #985010;
+  --lulu-radius-control: 6px;
+  --lulu-radius-panel: 10px;
+  --lulu-terminal-black: #302a23;
+  --lulu-terminal-red: #9a352a;
+  --lulu-terminal-green: #376541;
+  --lulu-terminal-yellow: #7b571d;
+  --lulu-terminal-blue: #315f8a;
+  --lulu-terminal-magenta: #7e477e;
+  --lulu-terminal-cyan: #276b6b;
+  --lulu-terminal-white: #706456;
+  --lulu-terminal-bright-black: #786a58;
+  --lulu-terminal-bright-red: #b33c2f;
+  --lulu-terminal-bright-green: #397646;
+  --lulu-terminal-bright-yellow: #92600b;
+  --lulu-terminal-bright-blue: #286d9f;
+  --lulu-terminal-bright-magenta: #955692;
+  --lulu-terminal-bright-cyan: #247d7a;
+  --lulu-terminal-bright-white: #302a23;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lulu-bg: #201e1a;
+    --lulu-surface: #28251f;
+    --lulu-raised: #302c25;
+    --lulu-subtle: #393329;
+    --lulu-text: #f4ede1;
+    --lulu-muted: #c3b8a7;
+    --lulu-border: #62584a;
+    --lulu-control-border: #9e907c;
+    --lulu-accent: #ffc078;
+    --lulu-accent-hover: #ffd49f;
+    --lulu-on-accent: #302313;
+    --lulu-accent-soft: #493620;
+    --lulu-success: #aad0a4;
+    --lulu-success-soft: #283428;
+    --lulu-warning: #ecd296;
+    --lulu-warning-soft: #40351f;
+    --lulu-danger: #ffb7a8;
+    --lulu-danger-soft: #472d28;
+    --lulu-focus: #ffc078;
+    --lulu-terminal-black: #201e1a;
+    --lulu-terminal-red: #ffb7a8;
+    --lulu-terminal-green: #aad0a4;
+    --lulu-terminal-yellow: #ecd296;
+    --lulu-terminal-blue: #a7c9ee;
+    --lulu-terminal-magenta: #dfb6df;
+    --lulu-terminal-cyan: #a5d5d0;
+    --lulu-terminal-white: #f4ede1;
+    --lulu-terminal-bright-black: #b0a28e;
+    --lulu-terminal-bright-red: #ffccbf;
+    --lulu-terminal-bright-green: #c1e6bb;
+    --lulu-terminal-bright-yellow: #f4dfb4;
+    --lulu-terminal-bright-blue: #c3dfff;
+    --lulu-terminal-bright-magenta: #efd0ef;
+    --lulu-terminal-bright-cyan: #c0e8e2;
+    --lulu-terminal-bright-white: #fffdf8;
+  }
+}
+
+/* Harness owns its appearance setting; do not change its theme attribute. */
+body[data-ds-dark-theme] {
+  --lulu-bg: #201e1a;
+  --lulu-surface: #28251f;
+  --lulu-raised: #302c25;
+  --lulu-subtle: #393329;
+  --lulu-text: #f4ede1;
+  --lulu-muted: #c3b8a7;
+  --lulu-border: #62584a;
+  --lulu-control-border: #9e907c;
+  --lulu-accent: #ffc078;
+  --lulu-accent-hover: #ffd49f;
+  --lulu-on-accent: #302313;
+  --lulu-accent-soft: #493620;
+  --lulu-success: #aad0a4;
+  --lulu-success-soft: #283428;
+  --lulu-warning: #ecd296;
+  --lulu-warning-soft: #40351f;
+  --lulu-danger: #ffb7a8;
+  --lulu-danger-soft: #472d28;
+  --lulu-focus: #ffc078;
+}
+
+:root, html:not([data-lulu-surface]) body, body[data-ds-dark-theme] {
+  --dsh-panel-surface: var(--lulu-surface);
+  --dsh-panel-raised: var(--lulu-raised);
+  --dsh-panel-subtle: var(--lulu-subtle);
+  --dsh-panel-text: var(--lulu-text);
+  --dsh-panel-muted: var(--lulu-muted);
+  --dsh-panel-border: var(--lulu-border);
+  --dsh-panel-accent: var(--lulu-accent);
+  --dsh-panel-danger: var(--lulu-danger);
+  --dsh-panel-success: var(--lulu-success);
+  --dsh-panel-warning: var(--lulu-warning);
+  --dsh-panel-focus: var(--lulu-focus);
+  --dsh-workbench-focus: var(--lulu-focus);
+}
+
+/* Generic legacy aliases are limited to our own documents, never official UI. */
+/* Accent foreground follows the actual theme, including manual Harness theme switches. */
+html .dsh-network-primary,
+html .dsh-preview-primary,
+html .dsh-review-button[data-action="accept"] {
+  color: var(--lulu-on-accent);
+}
+
+html[data-lulu-surface] {
+  color-scheme: light dark;
+  --surface: var(--lulu-surface);
+  --surface-strong: var(--lulu-subtle);
+  --surface-subtle: var(--lulu-bg);
+  --text: var(--lulu-text);
+  --muted: var(--lulu-muted);
+  --border: var(--lulu-border);
+  --accent: var(--lulu-accent);
+  --accent-hover: var(--lulu-accent-hover);
+  --danger: var(--lulu-danger);
+  --focus: var(--lulu-focus);
+  --blue: var(--lulu-accent);
+  --green: var(--lulu-success);
+  --amber: var(--lulu-warning);
+  --red: var(--lulu-danger);
+  --dock-surface: var(--lulu-surface);
+  --dock-surface-raised: var(--lulu-raised);
+  --dock-hover: var(--lulu-subtle);
+  --dock-selected: var(--lulu-accent-soft);
+  --dock-selected-border: var(--lulu-accent);
+  --dock-text: var(--lulu-text);
+  --dock-muted: var(--lulu-muted);
+  --dock-border: var(--lulu-border);
+  --dock-accent: var(--lulu-accent);
+  --dock-danger: var(--lulu-danger);
+  --dock-focus: var(--lulu-focus);
+}
+
+@media (prefers-contrast: more) {
+  :root, body[data-ds-dark-theme], html:not([data-lulu-surface]) body:not([data-ds-dark-theme]) { --lulu-border: var(--lulu-muted); --lulu-control-border: var(--lulu-text); }
+}
+
+@media (forced-colors: active) {
+  :root, body[data-ds-dark-theme], html:not([data-lulu-surface]) body:not([data-ds-dark-theme]) {
+    --lulu-bg: Canvas;
+    --lulu-surface: Canvas;
+    --lulu-raised: Canvas;
+    --lulu-subtle: Canvas;
+    --lulu-text: CanvasText;
+    --lulu-muted: CanvasText;
+    --lulu-border: CanvasText;
+    --lulu-control-border: ButtonText;
+    --lulu-accent: Highlight;
+    --lulu-accent-hover: Highlight;
+    --lulu-on-accent: HighlightText;
+    --lulu-accent-soft: Canvas;
+    --lulu-success: CanvasText;
+    --lulu-success-soft: Canvas;
+    --lulu-warning: CanvasText;
+    --lulu-warning-soft: Canvas;
+    --lulu-danger: CanvasText;
+    --lulu-danger-soft: Canvas;
+    --lulu-focus: Highlight;
+  }
+}

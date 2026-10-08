@@ -7,6 +7,7 @@ const { EventEmitter } = require('node:events');
 const { spawn: spawnProcess } = require('node:child_process');
 const {
   HarnessSupervisor,
+  HARNESS_VERSION,
   buildHarnessEnvironment,
   createAuthenticatedHarnessFetch,
   establishHarnessSession,
@@ -20,6 +21,7 @@ const {
   resolveHarnessRuntimePaths,
   stripAnsi
 } = require('../electron/harness-supervisor.cjs');
+const { HARNESS_RUNTIME_DIRECTORY } = require('../electron/harness-desktop-runtime.cjs');
 
 const writeBundledOfficeSkills = (root) => {
   const bundledSkillDir = path.join(root, 'resources', 'skills');
@@ -47,7 +49,7 @@ const writeHarnessPackage = (binPath, content = '// test') => {
   fs.writeFileSync(binPath, content);
   fs.writeFileSync(path.resolve(path.dirname(binPath), '..', 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh',
-    version: '0.1.6-alpha.1'
+    version: HARNESS_VERSION
   }));
 };
 
@@ -143,6 +145,7 @@ const createSupervisorFixture = (options = {}) => {
     logFile: path.join(root, 'logs', 'harness.log'),
     startTimeoutMs: 1000,
     stopTimeoutMs: 50,
+    verifyRuntime: async () => ({ powerShellExecutable: path.join(root, 'private-powershell', 'pwsh.exe') }),
     env: {
       DSH_DESKTOP_NODE: nodePath,
       DSH_DESKTOP_DSH_BIN: dshPath,
@@ -159,6 +162,7 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
     deepseek_api_key: 'legacy-secret',
     dsh_desktop_dsh_bin: 'C:\\stale-dsh-bin.js',
     dsh_desktop_patch: 'C:\\stale-patch.yml',
+    dSh_DeSkToP_PwSh: 'C:\\untrusted-pwsh.exe',
     http_proxy: 'http://inherited-proxy:8080',
     NO_PROXY: '*'
   };
@@ -168,6 +172,7 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
     HTTPS_PROXY: 'http://software-proxy:7890',
     NO_PROXY: '127.0.0.1,localhost,::1',
     NODE_USE_ENV_PROXY: '1',
+    dsh_desktop_pwsh: 'C:\\override-pwsh.exe',
     DSH_TEST_FLAG: 'kept'
   };
   const environment = buildHarnessEnvironment({
@@ -179,6 +184,7 @@ test('software-managed credential policy removes inherited DeepSeek keys case-in
   assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DEEPSEEK_API_KEY'), false);
   assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DSH_DESKTOP_DSH_BIN'), false);
   assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DSH_DESKTOP_PATCH'), false);
+  assert.equal(Object.keys(environment).some((name) => name.toUpperCase() === 'DSH_DESKTOP_PWSH'), false);
   assert.equal(environment.DSH_TEST_FLAG, 'kept');
   assert.equal(environment.HTTP_PROXY, 'http://software-proxy:7890');
   assert.equal(environment.HTTPS_PROXY, 'http://software-proxy:7890');
@@ -244,7 +250,7 @@ test('runtime resolver prefers explicit, existing paths', () => {
     isPackaged: false,
     env: { DSH_DESKTOP_NODE: nodePath, DSH_DESKTOP_DSH_BIN: dshPath, DSH_DESKTOP_PATCH: patchPath }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office, version: '0.1.6-alpha.1' });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: dshPath, patchPath, ...office, version: HARNESS_VERSION });
 });
 
 test('Harness process host uses fixed development and packaged paths', () => {
@@ -280,7 +286,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
   const packageDir = path.join(
     nodeModules,
     '.pnpm',
-    '@deepseek-ai+dsh@0.1.6-alpha.1_test',
+    `@deepseek-ai+dsh@${HARNESS_VERSION}_test`,
     'node_modules',
     '@deepseek-ai',
     'dsh',
@@ -295,7 +301,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
   fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(nodePath, 'test');
   fs.writeFileSync(linkedBin, 'top-level copy without dependency links');
-  fs.writeFileSync(path.resolve(path.dirname(linkedBin), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.6-alpha.1' }));
+  fs.writeFileSync(path.resolve(path.dirname(linkedBin), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: HARNESS_VERSION }));
   fs.writeFileSync(pnpmBin, 'real package');
   fs.mkdirSync(path.dirname(patchPath), { recursive: true });
   fs.writeFileSync(patchPath, '[]');
@@ -333,7 +339,7 @@ test('packaged runtime resolves DSH only from the fixed top-level package path',
       DSH_DESKTOP_PATCH: externalPatchPath
     }
   });
-  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version: '0.1.6-alpha.1' });
+  assert.deepEqual(resolved, { nodePath, dshBinPath: linkedBin, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir, version: HARNESS_VERSION });
 });
 
 test('packaged runtime fails closed instead of falling back to external overrides', () => {
@@ -350,10 +356,10 @@ test('packaged runtime fails closed instead of falling back to external override
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, target.endsWith('.yml') ? '[]' : 'test');
   }
-  fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.1.6-alpha.1' }));
+  fs.writeFileSync(path.resolve(path.dirname(dshPath), '..', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: HARNESS_VERSION }));
   for (const target of [
     path.join(rootDir, 'vendor', 'runtime', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'node.exe' : 'bin/node'),
-    path.join(rootDir, 'vendor', 'harness-hoisted-0.1.6-alpha.1-desktop-security-1', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    path.join(rootDir, 'vendor', HARNESS_RUNTIME_DIRECTORY, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
     path.join(rootDir, 'config', 'dsh-desktop.patch.yml')
   ]) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -400,7 +406,7 @@ test('runtime resolver fails closed when the desktop language patch is missing',
   }), (error) => error?.code === 'HARNESS_PATCH_MISSING');
 });
 
-test('desktop shell environment plugin is provisioned into the Harness profile fallback', async () => {
+test('desktop shell environment plugin uses the home fallback outside profile package-manager ownership', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-shell-plugin-provision-test-'));
   const sourceDir = path.join(root, 'source');
   const homeDir = path.join(root, 'home');
@@ -412,14 +418,30 @@ test('desktop shell environment plugin is provisioned into the Harness profile f
     exports: './index.mjs'
   }));
   fs.writeFileSync(path.join(sourceDir, 'index.mjs'), 'export const name = "dsh-desktop-shell-env";');
+  const legacy = path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env', 'index.mjs');
+  fs.mkdirSync(path.dirname(legacy), { recursive: true });
+  fs.writeFileSync(legacy, 'legacy rollback bytes');
   try {
     const targetDir = await provisionDesktopShellEnvPlugin({ homeDir, sourceDir });
-    assert.equal(targetDir, path.join(homeDir, 'profiles', 'node_modules', 'dsh-desktop-shell-env'));
+    assert.equal(targetDir, path.join(homeDir, 'node_modules', 'dsh-desktop-shell-env'));
     assert.match(fs.readFileSync(path.join(targetDir, 'index.mjs'), 'utf8'), /dsh-desktop-shell-env/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(targetDir, 'package.json'), 'utf8')).name, 'dsh-desktop-shell-env');
+    assert.equal(fs.readFileSync(legacy, 'utf8'), 'legacy rollback bytes');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('desktop provisioning refuses a linked home module directory without writing outside it', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-plugin-home-boundary-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const homeDir = path.join(root, 'home'), outside = path.join(root, 'outside');
+  fs.mkdirSync(homeDir); fs.mkdirSync(outside);
+  fs.symlinkSync(outside, path.join(homeDir, 'node_modules'), 'junction');
+  await assert.rejects(provisionDesktopShellEnvPlugin({ homeDir,
+    sourceDir: path.resolve(__dirname, '../runtime/dsh-desktop-shell-env')
+  }), error => error.code === 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE');
+  assert.deepEqual(fs.readdirSync(outside), []);
 });
 
 test('desktop tools provisioning retains the public browser entry and session control', async (t) => {
@@ -604,6 +626,7 @@ test('Windows shutdown uses taskkill for the exact owned process tree', async (c
   assert.equal(path.basename(launches[0].args[0]), 'harness-process-host.cjs');
   assert.equal(path.basename(launches[0].args[1]), 'fake-harness.cjs');
   assert.equal(launches[0].options.stdio[0], 'pipe');
+  assert.equal(launches[0].options.env.DSH_DESKTOP_PWSH, path.join(root, 'private-powershell', 'pwsh.exe'));
   assert.equal(invocations.length, 1);
   assert.equal(invocations[0].command, 'taskkill.exe');
   assert.deepEqual(invocations[0].args, ['/PID', '42002', '/T', '/F']);
@@ -611,6 +634,51 @@ test('Windows shutdown uses taskkill for the exact owned process tree', async (c
   assert.equal(invocations[0].options.windowsHide, true);
   assert.equal(supervisor.child, null);
   assert.equal(supervisor.getState().status, 'stopped');
+});
+
+test('supervisor refuses to spawn when its fixed runtime verifier rejects', async (context) => {
+  let spawned = 0, credentialsCreated = 0;
+  const failure = Object.assign(new Error('fixed payload changed'), { code: 'HARNESS_DESKTOP_RUNTIME_INVALID' });
+  const { root, supervisor } = createSupervisorFixture({
+    verifyRuntime: async () => { throw failure; },
+    createCredentialHost: async () => { credentialsCreated++; },
+    spawnImpl: () => { spawned++; assert.fail('unverified runtime must never execute'); }
+  });
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  await assert.rejects(supervisor.start(), error => error === failure);
+  assert.equal(spawned, 0); assert.equal(credentialsCreated, 0);
+  assert.equal(supervisor.getState().status, 'failed');
+  assert.equal(supervisor.child, null);
+});
+
+test('stopping during runtime verification cannot later launch a stale process', async (context) => {
+  let finish, entered = false, spawned = 0;
+  const { root, supervisor } = createSupervisorFixture({
+    verifyRuntime: (_options, _runtime, signal) => { entered = true; return new Promise((resolve, reject) => {
+      finish = resolve;
+      signal.addEventListener('abort', () => setImmediate(() => reject(Object.assign(new Error('cancelled'), { code: 'HARNESS_START_ABORTED' }))), { once: true });
+    }); },
+    spawnImpl: () => { spawned++; assert.fail('cancelled verification must not spawn'); }
+  });
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const started = supervisor.start();
+  const stopped = assert.rejects(started, /取消|停止|stop|cancel/i);
+  await waitUntil(() => entered);
+  await supervisor.stop();
+  finish({ powerShellExecutable: path.join(root, 'verified-pwsh.exe') });
+  await stopped;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(spawned, 0); assert.equal(supervisor.getState().status, 'stopped');
+});
+
+test('the default verifier rejects a synthetic runtime even when its manifest names the fixed version', async (context) => {
+  const { root, supervisor } = createSupervisorFixture({
+    verifyRuntime: undefined,
+    spawnImpl: () => assert.fail('manifest-only identity is not executable approval')
+  });
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  await assert.rejects(supervisor.start(), error => error.code === 'HARNESS_DESKTOP_RUNTIME_INVALID');
+  assert.equal(supervisor.child, null);
 });
 
 test('Windows shutdown accepts a taskkill race when the owned child already exited', async (context) => {
@@ -831,7 +899,8 @@ test('supervisor launches Harness in the selected workspace directory', async (c
       DSH_DESKTOP_WIKI_TOOL: 'C:\\untrusted-wiki-tool.cjs',
       DSH_DESKTOP_WIKI_CONFIG: 'C:\\untrusted-wiki-config.json',
       DSH_DESKTOP_WIKI_HISTORY_SOURCE: 'C:\\untrusted-history-source.json'
-    }
+    },
+    verifyRuntime: async () => ({ powerShellExecutable: path.join(root, 'private-powershell', 'pwsh.exe') })
   });
   context.after(async () => {
     await supervisor.stop();

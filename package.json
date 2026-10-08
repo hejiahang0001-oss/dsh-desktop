@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "1.1.13",
+  "version": "1.1.14",
   "description": "A Windows desktop host for DeepSeek Harness.",
   "main": "electron/main.cjs",
   "author": "DSH Desktop",
@@ -13,7 +13,9 @@
     "test": "node --test --test-concurrency=4 test/*.test.cjs",
     "electron:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-electron-runtime.ps1",
     "runtime:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-node-runtime.ps1",
-    "runtime:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-harness-runtime.ps1",
+    "runtime:powershell:fetch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-powershell-runtime.ps1",
+    "runtime:deploy": "node scripts/deploy-reviewed-harness-runtime.cjs",
+    "runtime:deploy:legacy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-harness-runtime.ps1",
     "validate:third-party-plugin": "node scripts/validate-third-party-plugin.cjs",
     "validate:controlled-plugin-install": "node scripts/validate-controlled-plugin-install.cjs",
     "release:governance": "node scripts/release-governance.cjs",
@@ -27,7 +29,7 @@
   "devDependencies": {
     "7zip-bin": "5.2.0",
     "@electron/asar": "3.4.1",
-    "electron": "43.4.1",
+    "electron": "43.5.0",
     "electron-builder": "26.11.1",
     "harness-build-pnpm": "npm:pnpm@11.7.0",
     "pnpm": "11.19.0",
@@ -35,17 +37,22 @@
   },
   "build": {
     "appId": "com.dsh.desktop",
-    "productName": "DSH Desktop",
+    "productName": "lulu",
     "afterPack": "scripts/after-pack.cjs",
     "asar": true,
     "npmRebuild": false,
     "compression": "store",
-    "electronDist": "build/electron-v43.4.1-win32-x64.zip",
+    "electronDist": "build/electron-v43.5.0-win32-x64.zip",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
+      "assets/lulu-tokens.css",
+      "assets/lulu-surfaces.css",
+      "assets/lulu-harness-theme.css",
+      "assets/lulu/mascot.png",
+      "assets/lulu/SOURCE.md",
       "harness-status.html",
       "assets/harness-status.css",
       "assets/harness-status.js",
@@ -117,9 +124,16 @@
       "!node_modules/@xterm/addon-fit/lib/*.map",
       "!node_modules/@xterm/addon-fit/lib/*.mjs",
       "electron/**/*",
+      "runtime/powershell/profile.json",
+      "runtime/harness/package.json",
+      "runtime/harness-official/**/*",
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "vendor/powershell/7.6.6/win32-x64",
+        "to": "powershell/7.6.6/win32-x64"
+      },
       {
         "from": "vendor/runtime/win32-x64",
         "to": "runtime",
@@ -130,12 +144,16 @@
         ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.6-alpha.1-desktop-security-1/node_modules",
-        "to": "harness/node_modules"
+        "from": "vendor/harness-desktop-0.2.1-alpha.1-attachment-1",
+        "to": "harness",
+        "filter": [
+          "package.json",
+          "desktop-runtime.json"
+        ]
       },
       {
-        "from": "vendor/harness-hoisted-0.1.6-alpha.1-desktop-security-1/harness-runtime.json",
-        "to": "harness/harness-runtime.json"
+        "from": "vendor/harness-desktop-0.2.1-alpha.1-attachment-1/node_modules",
+        "to": "harness/node_modules"
       },
       {
         "from": "electron/terminal-pty-host.cjs",
@@ -215,7 +233,11 @@
       {
         "from": "node_modules/@xmldom/xmldom",
         "to": "skills/node_modules/@xmldom/xmldom",
-        "filter": ["lib/**/*", "package.json", "LICENSE"]
+        "filter": [
+          "lib/**/*",
+          "package.json",
+          "LICENSE"
+        ]
       },
       {
         "from": "LICENSE",
@@ -227,6 +249,7 @@
       }
     ],
     "win": {
+      "executableName": "DSH Desktop",
       "signAndEditExecutable": true,
       "signExecutable": false,
       "verifyUpdateCodeSignature": false,
@@ -254,7 +277,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "DSH Desktop",
+      "shortcutName": "lulu",
       "runAfterFinish": false,
       "installerLanguages": [
         "zh_CN",

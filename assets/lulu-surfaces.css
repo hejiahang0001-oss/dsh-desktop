@@ -1,0 +1,118 @@
+/* Only local, explicitly marked documents use this surface layer. */
+html[data-lulu-surface] { color-scheme: light dark; color: var(--lulu-text); background: var(--lulu-bg); font-family: var(--lulu-font); }
+[data-lulu-surface] body { color: var(--lulu-text); background: var(--lulu-bg); font: 13px/1.5 var(--lulu-font); }
+[data-lulu-surface] * { scrollbar-color: var(--lulu-control-border) var(--lulu-bg); }
+[data-lulu-surface] ::selection { color: var(--lulu-on-accent); background: var(--lulu-accent); }
+[data-lulu-surface] :is(input, textarea) { caret-color: var(--lulu-accent); }
+[data-lulu-surface] :is(button, input, textarea, select, summary):focus-visible { outline: 2px solid var(--lulu-focus); outline-offset: 2px; }
+[data-lulu-surface] :is(button, input, textarea, select) { font-family: var(--lulu-font); border-color: var(--lulu-control-border); border-radius: var(--lulu-radius-control); color: var(--lulu-text); background: var(--lulu-raised); }
+[data-lulu-surface] :is(input, textarea)::placeholder { color: var(--lulu-muted); opacity: 1; }
+/* One form language across native tools; never resize checkbox/radio controls or the compact dock. */
+[data-lulu-surface]:not([data-lulu-surface="dock"]) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]), select) { min-height: 36px; }
+[data-lulu-surface] :is(.section-heading, .profile-header, .catalog-header) { gap: 12px; }
+[data-lulu-surface] :is(.section-heading h2, .surface-header h2) { line-height: 1.4; text-wrap: balance; }
+[data-lulu-surface] :is(.empty-state, .error-state, .surface-message, .profile-message, .detail) { overflow-wrap: anywhere; line-height: 1.6; }
+[data-lulu-surface] :is(.badge, .mode, .read-only, .mini-status, .format, .check-count) { font-size: 11px; line-height: 1.5; }
+[data-lulu-surface] button { min-height: 32px; }
+[data-lulu-surface] button:hover:not(:disabled) { color: var(--lulu-text); border-color: var(--lulu-accent); background: var(--lulu-subtle); }
+[data-lulu-surface] button:disabled { opacity: .6; }
+[data-lulu-surface] :is(button.primary, button.primary-button, button.invoke) { color: var(--lulu-on-accent); border-color: var(--lulu-accent); background: var(--lulu-accent); }
+[data-lulu-surface] :is(button.primary, button.primary-button, button.invoke):hover:not(:disabled) { color: var(--lulu-on-accent); background: var(--lulu-accent-hover); }
+[data-lulu-surface] :is(button.secondary, button.ghost, .link-button, .mini-link) { color: var(--lulu-accent); border-color: var(--lulu-control-border); background: var(--lulu-surface); }
+[data-lulu-surface] :is(button.danger, .subagent-actions .danger, .uninstall-button) { color: var(--lulu-danger); border-color: var(--lulu-danger); }
+[data-lulu-surface] :is(a, .history-row code) { color: var(--lulu-accent); text-underline-offset: .2em; }
+[data-lulu-surface] :is(.toolbar, .terminal-toolbar, footer) { color: var(--lulu-muted); border-color: var(--lulu-border); background: var(--lulu-surface); backdrop-filter: none; }
+[data-lulu-surface] .toolbar { gap: 12px; padding: 16px 20px; }
+[data-lulu-surface] :is(h1, h2, h3, h4) { color: var(--lulu-text); font-family: var(--lulu-font); }
+[data-lulu-surface] .toolbar h1 { margin: 0; font-size: 20px; letter-spacing: -.02em; line-height: 1.3; }
+[data-lulu-surface] :is(.toolbar .identity p, .toolbar > div > p) { color: var(--lulu-muted); margin-top: 4px; }
+[data-lulu-surface] :is(.lulu-version, .section-label, .eyebrow) { color: var(--lulu-muted); font: 12px/1.5 var(--lulu-font); letter-spacing: normal; text-transform: none; }
+[data-lulu-surface] .lulu-version { display: block; margin: 4px 0 0; }
+[data-lulu-surface] :is(.panel, .readiness, .notice, .office-card, .integration-card, .layer-card, .memory-card, .source-row, .surface-card, .runtime-card, .catalog-card, .profile-card, .summary-card, .worktree-card, .pr-card, .result, .candidate, .subagent-row, .job-row, .background-card, .summary article) { color: var(--lulu-text); border-color: var(--lulu-border); border-radius: var(--lulu-radius-panel); background: var(--lulu-surface); box-shadow: none; }
+[data-lulu-surface] :is(.onboarding-steps li, .capability, .health-item, .metrics div, .surface-metrics div, .catalog-targets > div, .package-columns li, .history-row, .capabilities li) { color: var(--lulu-text); border-color: var(--lulu-border); background: var(--lulu-subtle); }
+[data-lulu-surface] :is(.preview, .issue-row, .extension-issue-row, .empty-state, .query-form input, .editor-grid input, .editor-grid textarea, .background-form input, .background-form select) { color: var(--lulu-text); border-color: var(--lulu-border); background: var(--lulu-raised); }
+/* Keep state colors after same-specificity base fields; invalid wins over focus. */
+[data-lulu-surface] :is(input, textarea, select):focus-visible { border-color: var(--lulu-focus); }
+[data-lulu-surface] :is(input, textarea)[aria-invalid="true"] { border-color: var(--lulu-danger); }
+[data-lulu-surface] :is(.worktree-card.current, .subagent-row.current) { border-color: var(--lulu-accent); background: var(--lulu-accent-soft); }
+[data-lulu-surface] :is(.workspace-path, .root-path, .repository-path, .worktree-path, .worktree-meta, .terminal-cwd, .terminal-state, .card-meta, .layer-card p, .memory-card p, .source-row p, .section-heading p, .surface-header p, .surface-message, .surface-metrics span, .surface-facts dt, .surface-facts dd, .extension-issue-row > span:first-child, .runtime-card > p, .profile-header p, .profile-message, .metrics span, .catalog-card > p, .catalog-targets span, .package-columns h4, .package-columns span, .package-columns .empty-package, .summary-card span, .summary span, .summary small, .summary small, .commit-panel label, .commit-footer, .muted, .pr-title small, .check-item, .check-dot, .history-copy small, .identity p, .empty-state, .detail, .empty, .meta, .result p, .candidate p, .onboarding-steps p, .capability small, .health-item dt, .health-item small, .query-form label, .editor-grid label, .summary, .boundary, .integration-card p, .notice p, .job-duration, .job-status, .background-note, .background-meta) { color: var(--lulu-muted); }
+[data-lulu-surface] :is(.surface-facts dd, .extension-issue-row code, .issue-row code, .catalog-header code, .package-columns .compatibility-detail, .path, .health-item dd) { color: var(--lulu-text); }
+[data-lulu-surface] :is(.summary strong, .metrics strong, .surface-metrics strong, .health-item dd, .runtime-meta dd) { font-variant-numeric: tabular-nums; }
+[data-lulu-surface] :is(.badge, .mode, .terminal-mode, .read-only, .signal, .mini-status, .format, .status, .boundary, .check-count, .job-kind) { color: var(--lulu-muted); border-color: var(--lulu-border); background: var(--lulu-subtle); }
+[data-lulu-surface] :is(.mode, .terminal-mode, .read-only) { font-family: var(--lulu-font); }
+[data-lulu-surface] :is(.badge.active, .badge.current, .task-tabs [aria-pressed="true"]) { color: var(--lulu-accent); border-color: var(--lulu-accent); background: var(--lulu-accent-soft); }
+[data-lulu-surface] :is(.badge.healthy, .badge.ready, .badge.verified, .badge.installed, .badge.clean, .badge.live, .signal.ready, .mini-status.ready, .status.ready, .check-count.passed, .inventory-ok, .preview.success) { color: var(--lulu-success); border-color: var(--lulu-success); background: var(--lulu-success-soft); }
+[data-lulu-surface] :is(.badge.waiting, .badge.dirty, .badge.warning, .badge.degraded, .badge.missing, .badge.misdirected, .badge.invalid, .badge.blocked, .badge.review, .badge.not-bundle, .badge.disabled, .badge.pending, .badge.loading, .badge.unloading, .status.needs-init, .check-count.pending, .preview.warning, .background-warning) { color: var(--lulu-warning); border-color: var(--lulu-warning); background: var(--lulu-warning-soft); }
+[data-lulu-surface] :is(.badge.danger, .badge.failed, .status.unavailable, .check-count.failed, .empty-state.error, .error-state) { color: var(--lulu-danger); border-color: var(--lulu-danger); background: var(--lulu-danger-soft); }
+[data-lulu-surface] :is(.badge.unsupported, .badge.unavailable, .check-count.neutral) { color: var(--lulu-muted); background: var(--lulu-subtle); }
+[data-lulu-surface] :is(.health-item.is-ready dd, .check-item.passed .check-dot, .job-status.live, .terminal-state[data-status="completed"]) { color: var(--lulu-success); }
+[data-lulu-surface] :is(.health-item.is-warning dd, .check-item.pending .check-dot, .terminal-state[data-status="stopping"]) { color: var(--lulu-warning); }
+[data-lulu-surface] :is(.health-item.is-unavailable dd, .check-item.failed .check-dot, .terminal-state[data-status="failed"], .terminal-state[data-status="stopped"]) { color: var(--lulu-danger); }
+[data-lulu-surface] .terminal-state:is([data-status="starting"], [data-status="running"]) { color: var(--lulu-accent); }
+[data-lulu-surface] .recovery-callout { color: var(--lulu-warning); border-color: var(--lulu-warning); background: var(--lulu-warning-soft); }
+[data-lulu-surface] .recovery-callout :is(strong, p, .recovery-managed-pages, .recovery-guidance) { color: var(--lulu-warning); }
+[data-lulu-surface] .office-card::before { background: var(--lulu-accent); }
+[data-lulu-surface] .office-card.green::before { background: var(--lulu-success); }
+[data-lulu-surface] .office-card.orange::before { background: var(--lulu-warning); }
+[data-lulu-surface] :is(.office-mark, .notice-icon, .step-index) { color: var(--lulu-accent); border-color: var(--lulu-accent); background: var(--lulu-accent-soft); }
+[data-lulu-surface] .green .office-mark { color: var(--lulu-success); background: var(--lulu-success-soft); }
+[data-lulu-surface] .orange .office-mark { color: var(--lulu-warning); background: var(--lulu-warning-soft); }
+[data-lulu-surface] .dot { background: var(--lulu-muted); box-shadow: none; }
+[data-lulu-surface] .dot.live { background: var(--lulu-success); }
+[data-lulu-surface] .background-card:is(.is-waiting, .is-review) { border-color: var(--lulu-warning); }
+[data-lulu-surface] .background-card.is-failed { border-color: var(--lulu-danger); }
+
+/* Startup keeps real status, credentials and recovery controls in the foreground. */
+[data-lulu-surface="status"] .status-shell { padding: 24px; }
+[data-lulu-surface="status"] .status-card { width: min(100%, 600px); padding: 28px; border: 0; border-radius: var(--lulu-radius-panel); background: var(--lulu-surface); box-shadow: 0 12px 36px rgb(48 42 35 / 10%); }
+[data-lulu-surface="status"] .brand-row { margin-bottom: 24px; gap: 16px; }
+[data-lulu-surface="status"] .lulu-mascot { display: block; width: 76px; height: 76px; flex: none; object-fit: contain; }
+[data-lulu-surface="status"] .brand-row strong { color: var(--lulu-text); font-size: 32px; font-weight: 750; letter-spacing: -.035em; line-height: 1.1; }
+[data-lulu-surface="status"] .brand-row span { color: var(--lulu-muted); }
+[data-lulu-surface="status"] .brand-row > div { min-width: 0; }
+[data-lulu-surface="status"] .brand-row span { line-height: 1.6; }
+[data-lulu-surface="status"] h1 { font-size: clamp(23px, 3vw, 28px); }
+[data-lulu-surface="status"] .lulu-status-line { margin: 8px 0 0; color: var(--lulu-accent); font-size: 12px; font-weight: 600; }
+[data-lulu-surface="status"] .status-card:has([data-state="failed"]) .lulu-status-line { color: var(--lulu-danger); }
+[data-lulu-surface="status"] .description { margin: 12px 0 20px; }
+[data-lulu-surface="status"] .state-visual { width: 32px; height: 32px; margin-bottom: 12px; background: var(--lulu-accent-soft); }
+[data-lulu-surface="status"] .state-visual[data-state="failed"] { background: var(--lulu-danger-soft); }
+[data-lulu-surface="status"] .error-detail { border: 1px solid var(--lulu-danger); border-radius: var(--lulu-radius-control); background: var(--lulu-danger-soft); }
+[data-lulu-surface="status"] .runtime-meta { border-radius: var(--lulu-radius-control); }
+[data-lulu-surface="status"] .runtime-meta div { background: var(--lulu-raised); }
+[data-lulu-surface="status"] .actions { margin-top: 20px; }
+
+/* A dock is a compact control strip, not a second application header. */
+[data-lulu-surface="dock"] body { font-size: 12px; }
+[data-lulu-surface="dock"] :is(button, select) { min-height: 30px; color: var(--lulu-text); background: transparent; border-color: transparent; }
+[data-lulu-surface="dock"] :is(button, select):focus-visible { outline-offset: -2px; }
+[data-lulu-surface="dock"] select { border-color: var(--lulu-control-border); background: var(--lulu-raised); }
+[data-lulu-surface="dock"] button[aria-selected="true"] { color: var(--lulu-accent); border-color: var(--lulu-accent); background: var(--lulu-accent-soft); }
+[data-lulu-surface="dock"] #dock-status:not(:empty) { color: var(--lulu-danger); border-color: var(--lulu-danger); background: var(--lulu-danger-soft); }
+[data-lulu-surface="terminal"] .terminal-viewport { background: var(--lulu-bg); }
+[data-lulu-surface="terminal"] .terminal-mode { font-size: 10px; }
+[data-lulu-surface="terminal"] .terminal-toolbar { min-height: 56px; }
+
+@media (max-width: 1024px) {
+  [data-lulu-surface] .toolbar { flex-wrap: wrap; }
+  [data-lulu-surface] :is(.toolbar, .terminal-toolbar) { gap: 8px; }
+  [data-lulu-surface] .title-row { flex-wrap: wrap; }
+}
+@media (max-width: 560px) {
+  [data-lulu-surface="status"] .status-shell { padding: 16px; }
+  [data-lulu-surface="status"] .status-card { padding: 20px; }
+  [data-lulu-surface="status"] .brand-row { gap: 12px; margin-bottom: 20px; }
+  [data-lulu-surface="status"] .lulu-mascot { width: 60px; height: 60px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-lulu-surface] *, [data-lulu-surface] *::before, [data-lulu-surface] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (prefers-contrast: more) {
+  [data-lulu-surface="status"] .status-card { outline: 1px solid var(--lulu-text); box-shadow: none; }
+}
+@media (forced-colors: active) {
+  [data-lulu-surface] :is(.panel, .status-card, .office-card, .readiness, .summary-card, .surface-card, .notice, .worktree-card) { box-shadow: none; outline: 1px solid CanvasText; }
+  [data-lulu-surface] :is(button, input, textarea, select) { forced-color-adjust: auto; }
+  [data-lulu-surface] :is(input, textarea)[aria-invalid="true"] { border-style: dashed; border-color: CanvasText; }
+  [data-lulu-surface] button[aria-selected="true"], [data-lulu-surface] button[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

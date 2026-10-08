@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.1-alpha.1",
+  "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc",
+  "parentProfileSha256": "d2fc99e31af460d331086fd24d7bf34846e226219f75e6f3977d9444f7b25909",
+  "scope": "official-conversation-draft-reference-lifetime",
+  "patchSha256": "624309391147d079f54bdc1f0bfde4a8068c67fa50a7c90b3cbc4315d138917e",
+  "deployed": false,
+  "promotionAllowed": false,
+  "regression": {
+    "input": "navigation.client.spec.ts",
+    "path": "packages/client/ui-conversation/tests/attachment-navigation.client.spec.ts",
+    "sha256": "589c9014c67a09a37538b9cbe6fa47c9c00593aa4786ec51c3733fd02dd0bc38"
+  },
+  "files": [
+    { "path": "packages/client/ui-conversation/src/client/input/hub.ts", "beforeSha256": "9e55d5dd1bf9ee63b30c9c50fd5e2c12139e0c1863623af927d379312daea1dd", "afterSha256": "856e9a8894024436ae8949e26b4eb1cb67685b8ad84c893cfc0ac97672c2818b" },
+    { "path": "packages/client/ui-conversation/src/client/input/facade.ts", "beforeSha256": "df7cebc25208e80f04be7ec5e756157ae701d9906eb8ffe6878d2cb4ee579f34", "afterSha256": "abe907628f25314e60256f18e5b9eb3602462231da4f86f5d9b43f21804e2bd1" },
+    { "path": "packages/client/ui-conversation/tests/service-orchestration.client.spec.ts", "beforeSha256": "8fdecb47f0a29c7b267643cdf4b3de01486a4a790d67b510cabdbbb93cce2ae6", "afterSha256": "98bd45d4b36caa9da41d0154cac6b772907326a766db702a5f6acf42c5da6cc0" }
+  ]
+}

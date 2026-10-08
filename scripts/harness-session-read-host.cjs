@@ -3,13 +3,13 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { SessionControlClient } = require('../electron/session-control-client.cjs');
 const { callHarnessRemote, sanitizePluginInventory } = require('../electron/extension-center.cjs');
+const { resolveHarnessHostModules } = require('../electron/harness-host-modules.cjs');
 
 // Isolated CLI smokes need the same cold-read IPC as Electron, but must not
 // construct a credential vault or change the selected permission preset.
 const createSessionReadHost = async ({ homeDir, runtime, provisionPlugin,
   rootDir = path.resolve(__dirname, '..'), resourcesPath = rootDir, isPackaged = false }) => {
-  const toolsModule = path.resolve(path.dirname(runtime.dshBinPath), '../../dsh-tools/lib/index.js');
-  if (!(await fsp.stat(toolsModule)).isFile()) throw new Error('Harness read-only tools module is unavailable.');
+  const { toolsModule } = resolveHarnessHostModules({ dshBinPath: runtime.dshBinPath });
   const sourceDir = isPackaged ? path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-tools') : path.join(rootDir, 'runtime', 'dsh-desktop-tools');
   await provisionPlugin({ homeDir, sourceDir, expectedName: 'dsh-desktop-tools' });
   const basePatch = await fsp.readFile(runtime.patchPath, 'utf8');

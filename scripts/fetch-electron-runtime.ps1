@@ -1,6 +1,6 @@
 param(
-  [string]$Version = 'v43.4.1',
-  [string]$ExpectedSha256 = 'c2ef9a5f65472c34d14bd3e67b7d14e66b0c01f124aba45263d6a4232160e13a',
+  [string]$Version = 'v43.5.0',
+  [string]$ExpectedSha256 = '1fc131e62cafa02f0c94b5ec730c4eb1e8ce75e5f5b84f3c52a3443d86058184',
   [ValidateRange(1, 5)]
   [int]$MaxAttempts = 3
 )

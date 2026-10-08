@@ -5,27 +5,24 @@ const test = require('node:test');
 const { createRequire } = require('node:module');
 
 const ROOT = path.resolve(__dirname, '..');
-const VERSION = '0.1.6-alpha.1';
-const COMMIT = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d';
+const VERSION = '0.1.6-alpha.2';
+const COMMIT = 'ddefc45fbc7f8e46dd73185e68295696d1297887';
 const runtimeRoot = path.join(ROOT, 'vendor', `harness-hoisted-${VERSION}-desktop-security-1`);
 
-test('V1 runtime recipe pins the official source identity and narrow build policy', () => {
+test('legacy alpha.2 runtime recipe retains its original source identity and build policy', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const runtimeManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'runtime', 'harness', 'package.json'), 'utf8'));
   const buildScript = fs.readFileSync(path.join(ROOT, 'scripts', 'build-harness-runtime.ps1'), 'utf8');
   const assembler = fs.readFileSync(path.join(ROOT, 'scripts', 'assemble-harness-runtime.cjs'), 'utf8');
 
   assert.match(manifest.version, /^1\.\d+\.\d+$/, 'the pinned source runtime remains governed across V1 patch releases');
   assert.equal(manifest.devDependencies['harness-build-pnpm'], 'npm:pnpm@11.7.0');
-  assert.match(manifest.scripts['runtime:deploy'], /build-harness-runtime\.ps1/);
-  assert.deepEqual(runtimeManifest.dshDesktop, {
-    repository: 'https://github.com/deepseek-ai/deepseek-harness.git',
-    tag: 'dsh-v0.1.6-alpha.1',
-    commit: COMMIT,
-    package: '@deepseek-ai/dsh',
-    packageVersion: VERSION,
-    distribution: 'source-build'
-  });
+  assert.match(manifest.scripts['runtime:deploy:legacy'], /build-harness-runtime\.ps1/);
+  assert.match(manifest.scripts['runtime:deploy'], /deploy-reviewed-harness-runtime\.cjs/);
+  assert.match(buildScript, /\$Repository = 'https:\/\/github\.com\/deepseek-ai\/deepseek-harness\.git'/);
+  assert.equal(buildScript.match(/\$Tag = '([^']+)'/)?.[1], `dsh-v${VERSION}`);
+  assert.equal(buildScript.match(/\$Commit = '([^']+)'/)?.[1], COMMIT);
+  assert.equal(buildScript.match(/\$HarnessVersion = '([^']+)'/)?.[1], VERSION);
+  assert.match(assembler, /EXPECTED_HARNESS_VERSION = '0\.1\.6-alpha\.2'/);
   assert.match(buildScript, /--frozen-lockfile/);
   assert.match(buildScript, /--ignore-scripts/);
   assert.match(buildScript, /verify-built-package-invariants/);
@@ -37,14 +34,14 @@ test('V1 runtime recipe pins the official source identity and narrow build polic
   assert.match(buildScript, /apply-harness-security\.cjs/);
   assert.match(buildScript, /audit-harness-runtime\.cjs/);
   assert.doesNotMatch(buildScript, /dangerously-allow-all-builds/);
-  assert.match(assembler, /EXPECTED_DSH_PACKAGES = 285/);
+  assert.match(assembler, /EXPECTED_DSH_PACKAGES = 293/);
   assert.match(assembler, /EXPECTED_VENDOR_PACKAGES = 9/);
   assert.match(assembler, /koffiPackage\.version !== '3\.1\.1'/);
 });
 
-test('assembled Harness runtime carries exact provenance and no linked paths', (context) => {
+test('legacy alpha.2 assembled runtime retains original provenance and no linked paths', (context) => {
   if (!fs.existsSync(path.join(runtimeRoot, 'harness-runtime.json'))) {
-    context.skip('The source-built Harness runtime is intentionally not stored in Git.');
+    context.skip('Historical alpha.2 runtime is absent; this is not acceptance of the current product runtime.');
     return;
   }
   const provenance = JSON.parse(fs.readFileSync(path.join(runtimeRoot, 'harness-runtime.json'), 'utf8'));
@@ -53,14 +50,14 @@ test('assembled Harness runtime carries exact provenance and no linked paths', (
   assert.equal(dsh.version, VERSION);
   assert.equal(koffi.version, '3.1.1');
   assert.equal(provenance.harness.commit, COMMIT);
-  assert.equal(provenance.harness.tag, 'dsh-v0.1.6-alpha.1');
+  assert.equal(provenance.harness.tag, 'dsh-v0.1.6-alpha.2');
   assert.equal(provenance.build.node, 'v24.19.0');
   assert.equal(provenance.build.pnpm, '11.7.0');
-  assert.equal(provenance.build.packageCount, 294);
+  assert.equal(provenance.build.packageCount, 302);
   assert.equal(provenance.build.dependencyResolution, 'desktop-security-frozen-lockfile');
   assert.equal(provenance.build.security.revision, 'desktop-security-1');
   assert.equal(provenance.build.security.lockSha256, require('../runtime/harness-security/overrides.json').lockSha256);
-  assert.equal(provenance.build.packageInventorySha256, 'fe0500a4b25835d4d160c1d24482919b31746b9b820419267c64fd7160c7db9d');
+  assert.equal(provenance.build.packageInventorySha256, '3878c3777df3c28def80ccda2f8041b4af211ee717c5737e41e0b20e171ccde7');
   assert.deepEqual(provenance.build.runtimePayload, require('../scripts/harness-runtime-integrity.cjs').inspectHarnessRuntimePayload(path.join(runtimeRoot, 'node_modules')));
 
   const queue = [runtimeRoot];
@@ -76,9 +73,9 @@ test('assembled Harness runtime carries exact provenance and no linked paths', (
   }
 });
 
-test('security runtime preserves preset parsing, protobuf, URI, IP and HTTP behavior', async (context) => {
+test('legacy alpha.2 security runtime preserves its reviewed parser and HTTP behaviors', async (context) => {
   if (!fs.existsSync(path.join(runtimeRoot, 'harness-runtime.json'))) {
-    context.skip('Ignored Windows runtime is checked after the pinned build/download.'); return;
+    context.skip('Historical alpha.2 runtime is absent; current runtime security is verified separately.'); return;
   }
   const load = createRequire(path.join(runtimeRoot, 'security-behavior.cjs'));
   const policy = require('../runtime/harness-security/overrides.json');

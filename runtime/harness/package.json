@@ -1,13 +1,29 @@
 {
   "name": "dsh-harness-runtime",
-  "version": "0.1.6-alpha.1",
+  "version": "0.2.1-alpha.1",
   "private": true,
   "dshDesktop": {
     "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
-    "tag": "dsh-v0.1.6-alpha.1",
-    "commit": "0a15e36e7f82b6ed45af6fa9759f29b40dcd965d",
+    "tag": "dsh-v0.2.1-alpha.1",
+    "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc",
     "package": "@deepseek-ai/dsh",
-    "packageVersion": "0.1.6-alpha.1",
-    "distribution": "source-build"
+    "packageVersion": "0.2.1-alpha.1",
+    "distribution": "official-desktop-runtime",
+    "runtimeDirectory": "harness-desktop-0.2.1-alpha.1-attachment-1",
+    "descriptor": {
+      "file": "desktop-runtime.json",
+      "sha256": "b0692fff88311e8cc326b7a7792b8e66620716176f3865c9a188dbaffcff82a7"
+    },
+    "node": {
+      "version": "24.19.0",
+      "sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237"
+    },
+    "powerShell": {
+      "version": "7.6.6"
+    },
+    "reviewedSourceChain": {
+      "integrationSha256": "fa314f79fc5a080fa1a0393830097f6954b8a8f8ba6bd00fcc8978765b5ccd4c",
+      "assemblyInputsSha256": "446aea6fce28310d01564c158b7d819fd94a0434cb5e1556529e82717a9d8d75"
+    }
   }
 }

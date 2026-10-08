@@ -1,0 +1,118 @@
+diff --git a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
+index bebfb96c..f05490d1 100644
+--- a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
++++ b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
+@@ -20,8 +20,8 @@ export function electronFixture(initial?: BrowserTabState) {
+     }),
+   } satisfies DesktopBrowserBridge
+   const workspace = vi.fn(async (_signal: AbortSignal) => 'cwd:/workspace')
+-  const persist = vi.fn()
+-  const openRequested = vi.fn()
++  const persist = vi.fn<Parameters<typeof createElectronPage>[0]['persist']>()
++  const openRequested = vi.fn<Parameters<typeof createElectronPage>[0]['openRequested']>()
+   const page = createElectronPage({ initial, persist, openRequested }, bridge, workspace)
+   const presentation = page.presentation
+   if (!(presentation instanceof ElectronWebviewPresentation)) throw new Error('expected the Electron presentation')
+@@ -32,8 +32,8 @@ export function electronFixture(initial?: BrowserTabState) {
+     const state = { url: 'about:blank', title: '', loading: true, back: false, forward: false }
+     const methods = {
+       loadURL: vi.fn(async (_url: string) => {}), getURL: vi.fn(() => state.url), getTitle: vi.fn(() => state.title),
+-      canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn(),
+-      goBack: vi.fn(), goForward: vi.fn(), reload: vi.fn(), isLoading: () => state.loading,
++      canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn<() => void>(),
++      goBack: vi.fn<() => void>(), goForward: vi.fn<() => void>(), reload: vi.fn<() => void>(), isLoading: () => state.loading,
+     }
+     Object.assign(element, methods)
+     const emit = (type: string, fields: object = {}): void => { element.dispatchEvent(Object.assign(new Event(type), fields)) }
+diff --git a/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts b/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
+index 6e8b2fad..a3b9d2d3 100644
+--- a/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
++++ b/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
+@@ -8,7 +8,7 @@ import { Recording } from '../src/client/audio.ts'
+  * @returns the recording, device controls, and resource observations.
+  */
+ export function captureFixture(options: { empty?: boolean; recorderError?: boolean; constructError?: boolean } = {}) {
+-  const trackStop = vi.fn(), close = vi.fn(async () => {}), disposed = vi.fn()
++  const trackStop = vi.fn<() => void>(), close = vi.fn(async () => {}), disposed = vi.fn<() => void>()
+   const decoding = vi.fn(async (_data: ArrayBuffer) => ({ duration: 2 }))
+   const rendering = vi.fn(async () => ({ getChannelData: () => new Float32Array([0.5, -0.5]) }))
+   let failRecorder: () => void
+diff --git a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+index 6b362b18..015aa5c2 100644
+--- a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
++++ b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+@@ -15,7 +15,7 @@
+  */
+ import { existsSync, readFileSync, realpathSync } from 'node:fs'
+ import { createRequire } from 'node:module'
+-import { dirname, join } from 'node:path'
++import { basename, dirname, join } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+ import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+@@ -132,6 +132,12 @@ function readManifest(path: string): PackageManifest {
+ 
+ /** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+ function locateManifest(anchors: readonly string[], name: string): string | undefined {
++  // Workspace bundles may refer to themselves without a node_modules self-link.
++  for (const anchor of anchors) {
++    if (basename(anchor) === 'package.json' && readManifest(anchor).name === name) {
++      return realpathSync(anchor)
++    }
++  }
+   const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
+   for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+     for (const search of paths) {
+diff --git a/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts b/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
+index f9f86c12..0a379135 100644
+--- a/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
++++ b/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
+@@ -74,6 +74,20 @@ describe('bundleRoster on a scratch installation', () => {
+   const scratch = new Scratch()
+   afterAll(() => { rmSync(scratch.root, { recursive: true, force: true }) })
+ 
++  it('resolves a linked bundle self-reference without a node_modules self-link', () => {
++    const linked = new Scratch()
++    onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
++    const bundle = join(linked.root, 'workspace', 'self')
++    mkdirSync(bundle, { recursive: true })
++    writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: '@t/self', dsh: {
++      bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' },
++    } }))
++    writeFileSync(join(bundle, 'cordis.patch.yml'), "- insert:\n    - id: self\n      name: '@t/self'\n")
++    mkdirSync(join(linked.root, 'app', 'node_modules', '@t'), { recursive: true })
++    symlinkSync(bundle, join(linked.root, 'app', 'node_modules', '@t', 'self'), 'junction')
++    expect(linked.roster(['@t/self'])).toEqual(['@t/self'])
++  })
++
+   it('resolves a linked bundle dependency before an unrelated ancestor package', () => {
+     const linked = new Scratch()
+     onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
+diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
+index b9cf05ab..3e62050c 100644
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -15,6 +15,23 @@ packages:
+   - python/sdk-runtime
+ 
+ overrides:
++  # DSH isolated candidate: exact fixes for the recorded production audit.
++  'js-yaml@4.2.0': '4.3.2'
++  'js-yaml@4.3.1': '4.3.2'
++  'protobufjs@7.6.4': '7.6.5'
++  'fast-uri@3.1.3': '3.1.7'
++  'ip-address@10.2.0': '10.5.1'
++  'hono@4.12.29': '4.13.5'
++  '@hono/node-server@1.19.14': '1.19.15'
++  'qs@6.15.3': '6.16.0'
++  'sharp@0.35.3': '0.35.4'
++  'fflate@0.8.2': '0.8.3'
++  'postcss@8.5.15': '8.5.23'
++  'nanoid@3.3.12': '3.3.18'
++  'undici@7.28.0': '7.29.1'
++  'undici@8.10.0': '8.10.2'
++  'vitest@4.1.8': '4.1.11'
++  '@vitest/mocker@4.1.8': '4.1.11'
+   'extract-zip>yauzl': '3.4.0'
+   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
+   '@deepseek-ai/schemastery': 'link:vendor/schemastery'

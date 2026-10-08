@@ -2,6 +2,19 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { callHarnessRemote } = require('./extension-center.cjs');
+const { finishOfficialOnboarding } = require('./official-office-preview-contract.cjs');
+
+// Public DOM ownership only: never focus behind a blocking dialog, clear inert,
+// or read a credential input value to make a synthetic command reach the PTY.
+const terminalInputExpression = (focus = false) => `(() => {
+  const input = document.querySelector('[data-sidebar-terminal] .xterm-helper-textarea');
+  const visible = element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
+  if (!input || input.disabled || input.readOnly || input.closest('[inert]')
+    || document.getElementById('root')?.inert !== false
+    || [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(visible)) return false;
+  ${focus ? 'input.focus();' : ''}
+  return document.activeElement === input;
+})()`;
 
 async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodePath, origin, fetchImpl, evaluate, waitFor, open, target, version }) {
   const checks = {}, wc = window.webContents, owned = new Set();
@@ -18,6 +31,7 @@ async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodeP
   };
   if ((await list()).length) throw new Error('Terminal smoke requires a fresh isolated Session.');
   try {
+    await finishOfficialOnboarding({ evaluate });
     await waitFor('Boolean(window.__DSH_OFFICIAL_FILES__?.openTerminal)');
     const opened = await open();
     if (!opened.ok) throw new Error(opened.message);
@@ -37,10 +51,13 @@ async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodeP
     const script = `require('node:fs').writeFileSync('${filename}',JSON.stringify({cwd:process.cwd(),keyPresent:Boolean(process.env.DEEPSEEK_API_KEY),marker:'${marker}'})); console.log('DSH official terminal verified')`;
     if (!path.isAbsolute(nodePath) || !(await fs.stat(nodePath)).isFile()) throw new Error('Bundled Node fixture helper is unavailable.');
     const command = `${powershell ? '& ' : ''}"${nodePath}" -e "${script}"`;
-    await evaluate('document.querySelector("[data-sidebar-terminal] .xterm-helper-textarea").focus()');
+    window.focus(); wc.focus();
+    await waitFor(terminalInputExpression(true));
+    if (!await evaluate(terminalInputExpression())) throw new Error('Official terminal input lost focus before insertText.');
     await wc.insertText(command);
     await waitFor(`Array.from(document.querySelectorAll('[data-sidebar-terminal] .xterm-rows > div')).map(row => row.textContent).join('').replace(/\\s/g,'').includes(${JSON.stringify(marker)})`);
     window.focus(); wc.focus();
+    if (!await evaluate(terminalInputExpression())) throw new Error('Official terminal input lost focus before Return.');
     wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
     wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
     const receipt = await poll(async () => {
@@ -76,7 +93,7 @@ async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodeP
   } catch (error) {
     await fs.writeFile(`${target}.failure.png`, (await wc.capturePage()).toPNG());
     await fs.writeFile(`${target}.failure.json`, JSON.stringify({ terminals: await list(),
-      focused: { window: window.isFocused(), contents: wc.isFocused() },
+      focused: { window: window.isFocused(), contents: wc.isFocused(), terminalInput: await evaluate(terminalInputExpression()) },
       visibleTerminalText: await evaluate('Array.from(document.querySelectorAll("[data-sidebar-terminal] .xterm-rows > div")).map(row => row.textContent).join("\\n")') }, null, 2));
     throw error;
   } finally {

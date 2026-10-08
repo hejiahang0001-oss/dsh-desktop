@@ -1,0 +1,53 @@
+{
+  "version": "0.2.1-alpha.1",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+  "tag": "dsh-v0.2.1-alpha.1",
+  "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc",
+  "packageManager": "pnpm@11.7.0",
+  "patchSha256": "793617936b76cc3a630b8e8eaa22043dfd727f3e38dd8e008f91fb76b94f77e3",
+  "upstreamLockSha256": "2893d71a9ef07d2d72d47b2199e581b9e8d90638a15ee151908eebf69dfc637c",
+  "upstreamWorkspaceSha256": "ac1affbff56587495c72e9ca8be54093f71f6476b2fced8f3d591b99186a9f2c",
+  "lockSha256": "143bc6abfc8283456e79dae660a8a69cbe64dba73089e36d1f86cb330397d5c5",
+  "workspaceSha256": "20150bdf7b5583bd30cc50dce582ccb840aa1d83586922f21820d20ba9e0a27d",
+  "promotionAllowed": false,
+  "security": {
+    "status": "isolated-runtime-verified-host-acceptance-pending",
+    "checkedAt": "2026-10-07T07:54:37.210Z",
+    "dependenciesAudited": 662,
+    "knownFindings": 0,
+    "blockingAdvisories": [],
+    "reason": "Three separately reviewed groups are installed with fixed inputs: HCS 4.3.0 plus the exact local RFC patch, sharp 0.35.5/native group, and MCP client/core 2.2.0 with SDK 1.31.0. Server/core 2.0.0 remain unchanged. The 662-entry production audit reports zero advisories without ignores; natural installed consumers passed HCS 28+5, sharp 17, and MCP 16 focused checks. This establishes isolated runtime evidence only, not official CVE attestation or complete host/build/package/installation acceptance. OAuth first-use without expectedIssuer remains an explicit boundary; no new OAuth product capability is claimed. Promotion remains forbidden."
+  },
+  "addedFiles": [
+    {
+      "path": "patches/http-cache-semantics@4.3.0.patch",
+      "sha256": "c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403"
+    },
+    {
+      "path": "packages/subprocess/win32-process/src/extension-points.ts",
+      "sha256": "6a7a407eb272a313ec8f72234eb023f31c7c33c42061794925062256ae75d3a7"
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/private-console.ts",
+      "sha256": "4ff78061753d3298e35345946f8951e0245311f69be89f815a4683518c2d0a2d"
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/pty-console.ts",
+      "sha256": "fa76edb733364b2acd9d6b46a1d405202b8b19ac7e87e1e744ab6f94333fd21c"
+    },
+    {
+      "path": "packages/sandbox/sandbox-local/src/private-powershell.ts",
+      "sha256": "2b814d63800b858054935e46edcd965f9a3686c46c512f07f75b55e0fd21a782"
+    }
+  ],
+  "privatePowerShell": {
+    "version": "7.6.6",
+    "scope": "approved-private-runtime-no-global-or-system-changes",
+    "status": "reviewed-source-integrated-build-and-product-acceptance-pending",
+    "verifiedSourceFiles": 15,
+    "nativePtyCasesPassed": 7,
+    "sourceEvidence": "artifacts/powershell-pty-cancel-proposal-20261007/FINAL_INPUTS.json",
+    "shellFixturePassed": true,
+    "fullLoaderAccepted": false
+  }
+}

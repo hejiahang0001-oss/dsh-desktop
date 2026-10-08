@@ -91,9 +91,6 @@ contextBridge.exposeInMainWorld('desktopAPI', Object.freeze({
     }
   }),
   files: Object.freeze({
-    list: (directoryPath = '') => ipcRenderer.invoke('files:list', directoryPath),
-    read: (filePath) => ipcRenderer.invoke('files:read', filePath),
-    preview: (filePath) => ipcRenderer.invoke('files:preview', filePath),
     search: (query) => ipcRenderer.invoke('files:search', query),
     resolvePreview: (request) => ipcRenderer.invoke('files:resolve-preview', request)
   }),

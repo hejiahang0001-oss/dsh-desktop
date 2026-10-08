@@ -4,7 +4,9 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const { createCipheriv, createDecipheriv, randomBytes } = require('node:crypto');
-const { CredentialVault } = require('../electron/credential-vault.cjs');
+const { CredentialVault, attachCredentialChannel } = require('../electron/credential-vault.cjs');
+const { AtomicJsonFile } = require('../electron/atomic-json-store.cjs');
+const { EventEmitter } = require('node:events');
 
 const fixture = async (t) => {
   const homeDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dsh-vault-test-'));
@@ -82,4 +84,41 @@ test('legacy edits during deferred migration are never deleted', async (t) => {
   await fsp.writeFile(f.vault.legacyPath, modified);
   await assert.rejects(f.vault.finalizeMigration(), /被修改/);
   assert.equal(await fsp.readFile(f.vault.legacyPath, 'utf8'), modified);
+});
+
+const rejectedIpc = async error => {
+  const child = new EventEmitter(); child.connected = true;
+  const result = new Promise(resolve => { child.send = (response, callback) => { callback(); resolve(response); }; });
+  const detach = attachCredentialChannel(child, { handle: async () => { throw error; } });
+  child.emit('message', { channel: 'dsh-credential-v1', requestId: '12345678-1234-1234-1234-123456789abc', operation: 'snapshot' });
+  try { return await result; } finally { detach(); }
+};
+test('credential IPC keeps its protective message and exposes only trusted atomic phase and allowed filesystem code', async t => {
+  const f = await fixture(t), filePath = path.join(f.homeDir, 'synthetic.json'); let failure;
+  const injected = { ...fsp, mkdir: async () => { throw Object.assign(new Error('SYNTHETIC_PRIVATE key path stack'), { code: 'EACCES', path: 'SYNTHETIC_PRIVATE' }); } };
+  try { await new AtomicJsonFile({ filePath, fsPromises: injected }).write({ fixture: true }); } catch (error) { failure = error; }
+  const response = await rejectedIpc(failure);
+  assert.equal(response.error, '凭据读取或保存失败，原凭据未被空值覆盖。请检查 Windows 账户、文件权限后重试。 [phase=mkdir, code=EACCES]');
+  assert.equal(response.code, 'EACCES'); assert.equal(response.phase, 'mkdir');
+  assert.ok(!JSON.stringify(response).includes('SYNTHETIC_PRIVATE')); assert.ok(!Object.hasOwn(response, 'stack'));
+});
+test('non-storage exceptions cannot forge credential IPC diagnostic fields or disclose their payload', async () => {
+  const response = await rejectedIpc(Object.assign(new Error('SYNTHETIC_PRIVATE'), {
+    code: 'EACCES', fsCode: 'EACCES', phase: 'mkdir', path: 'SYNTHETIC_PRIVATE', stack: 'SYNTHETIC_PRIVATE'
+  }));
+  assert.ok(!Object.hasOwn(response, 'code')); assert.ok(!Object.hasOwn(response, 'phase'));
+  assert.ok(!JSON.stringify(response).includes('SYNTHETIC_PRIVATE'));
+});
+test('unknown storage codes expose only UNKNOWN and invalid phases cannot reach the startup error text', async t => {
+  const f = await fixture(t); let failure;
+  try { await new AtomicJsonFile({ filePath: path.join(f.homeDir, 'synthetic.json'), fsPromises: {
+    mkdir: async () => { throw Object.assign(new Error('SYNTHETIC_PRIVATE'), { code: 'SYNTHETIC_PRIVATE' }); }
+  } }).write({ fixture: true }); } catch (error) { failure = error; }
+  const safe = await rejectedIpc(failure);
+  assert.match(safe.error, /\[phase=mkdir, code=UNKNOWN\]$/); assert.equal(safe.code, 'UNKNOWN');
+  assert.ok(!JSON.stringify(safe).includes('SYNTHETIC_PRIVATE'));
+  failure.phase = 'SYNTHETIC_PRIVATE';
+  const rejected = await rejectedIpc(failure);
+  assert.equal(rejected.error, '凭据读取或保存失败，原凭据未被空值覆盖。请检查 Windows 账户、文件权限后重试。');
+  assert.ok(!Object.hasOwn(rejected, 'phase')); assert.ok(!Object.hasOwn(rejected, 'code'));
 });

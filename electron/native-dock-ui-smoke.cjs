@@ -28,6 +28,70 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
     await fsp.writeFile(`${target}.${label}.png`, source.thumbnail.toPNG());
   };
   try {
+    if (process.argv.includes('--smoke-lulu-layout')) {
+      return await require('./workbench-layout-smoke.cjs').runWorkbenchLayoutSmoke({ window, dock, target, version });
+    }
+    const brand = await window.webContents.executeJavaScript(`(() => {
+      const marks = [...document.querySelectorAll('svg[viewBox="0 0 23.16 17.04"]')].map(svg => ({
+        parent: svg.parentElement.className,
+        ancestors: [svg.parentElement, svg.parentElement.parentElement, svg.parentElement.parentElement.parentElement].map(e => ({ tag: e.tagName, cls: e.className })),
+        hidden: svg.getAttribute('aria-hidden'),
+        visibility: getComputedStyle(svg).visibility,
+        mascotBackground: getComputedStyle(svg.closest('.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark') || svg.parentElement).backgroundImage.startsWith('url("data:image/png;base64,')
+      }));
+      return { marks, configured: getComputedStyle(document.documentElement).getPropertyValue('--lulu-brand-image').includes('data:image/png;base64,') };
+    })()`);
+    await fsp.writeFile(`${target}.brand.json`, JSON.stringify(brand, null, 2));
+    assertions.luluMascot = brand.configured && brand.marks.length > 0 && brand.marks.every(mark => mark.visibility === 'hidden' && mark.mascotBackground);
+    if (process.argv.includes('--smoke-lulu-brand')) {
+      await window.webContents.executeJavaScript(`document.querySelectorAll('button').forEach(button => { if (button.textContent.trim() === '稍后配置') button.click(); })`, true);
+      const originalBounds = window.getBounds();
+      const originalDark = await window.webContents.executeJavaScript('document.body.getAttribute("data-ds-dark-theme")');
+      const appearances = [];
+      try {
+        for (const variant of [
+          { name: 'light', dark: false, width: 1280, height: 880 },
+          { name: 'dark', dark: true, width: 1280, height: 880 },
+          { name: 'compact', dark: false, width: 1024, height: 720 }
+        ]) {
+          window.setSize(variant.width, variant.height); dock.layout();
+          const state = await window.webContents.executeJavaScript(`(async () => {
+            document.body.toggleAttribute('data-ds-dark-theme', ${variant.dark});
+            const containers = [...document.querySelectorAll('.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark')];
+            const images = containers.map(element => getComputedStyle(element).backgroundImage);
+            const decoded = await Promise.all([...new Set(images)].map(async source => {
+              if (!source.startsWith('url("data:image/png;base64,') || !source.endsWith('")')) return false;
+              const image = new Image(); image.src = source.slice(5, -2);
+              await image.decode(); return image.naturalWidth > 0 && image.naturalHeight > 0;
+            }));
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const fits = element => {
+              if (!element) return false;
+              const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+              return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0
+                && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
+            };
+            const input = document.querySelector('[data-composer-input][contenteditable=true]');
+            input?.focus();
+            return { dark: document.body.hasAttribute('data-ds-dark-theme'), imageCount: images.length,
+              imagesDecoded: decoded.length > 0 && decoded.every(Boolean),
+              inputVisible: fits(input), inputFocusable: Boolean(input && document.activeElement === input),
+              navigationVisible: fits(document.querySelector('.ghK-Yq_root .ghK-Yq_toggle')),
+              noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1 };
+          })()`);
+          appearances.push({ ...variant, ...state });
+          assertions[`brand${variant.name}`] = state.dark === variant.dark && state.imagesDecoded
+            && state.inputVisible && state.inputFocusable && state.navigationVisible && state.noHorizontalOverflow;
+          await fsp.writeFile(`${target}.brand-${variant.name}.png`, (await window.webContents.capturePage()).toPNG());
+        }
+      } finally {
+        await window.webContents.executeJavaScript(`document.body.${originalDark === null ? 'removeAttribute("data-ds-dark-theme")' : `setAttribute("data-ds-dark-theme", ${JSON.stringify(originalDark)})`}`);
+        window.setBounds(originalBounds); dock.layout();
+      }
+      await fsp.writeFile(`${target}.appearances.json`, JSON.stringify(appearances, null, 2));
+      return { ok: Object.values(assertions).every(Boolean), version, assertions, appearances, realModel: false,
+        evidence: 'Real Harness decorative branding in light, dark and compact windows; images decoded before capture. No model request or full native tool assertions.' };
+    }
     await act('select', 'terminal');
     const surface = dock.surfaces.get('terminal'), terminalId = surface.webContents.id;
     const state = await surface.webContents.executeJavaScript('terminalAPI.start({cols:100,rows:24})', true);
@@ -36,7 +100,9 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
     const pid = terminal.getState().pid, marker = `DSH_DOCK_${randomBytes(8).toString('hex')}`;
     await surface.webContents.executeJavaScript(`terminalAPI.write(${JSON.stringify(`Write-Output '${marker}'\r`)})`, true);
     await waitFor(() => terminal.getSnapshot().output.includes(marker), 'PTY marker');
-    assertions.remoteCannotWrite = JSON.stringify(await window.webContents.executeJavaScript('Object.keys(desktopAPI.terminal)')) === '["openWindow"]';
+    // Both entries only open a terminal surface; neither grants write/resize/read access.
+    const remoteTerminalMethods = await window.webContents.executeJavaScript('Object.keys(desktopAPI.terminal).sort()');
+    assertions.remoteCannotWrite = JSON.stringify(remoteTerminalMethods) === '["openOfficial","openWindow"]';
     assertions.localSandbox = await surface.webContents.executeJavaScript('typeof require === "undefined" && typeof process === "undefined" && typeof terminalAPI.write === "function"');
     await act('collapse'); await act('select', 'terminal');
     assertions.collapsePreservesPty = terminal.getState().pid === pid && surface.webContents.id === terminalId && terminal.getSnapshot().output.includes(marker);

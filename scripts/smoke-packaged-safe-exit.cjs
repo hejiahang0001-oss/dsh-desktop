@@ -194,7 +194,7 @@ try {
       [uint32]$rootCode = 0; if (-not [DshJobLauncher]::GetExitCodeProcess($processHandle, [ref]$rootCode)) { [DshJobLauncher]::ThrowLast('GetExitCodeProcess') }
       Send-Frame ([ordered]@{ type='root-exit'; code=[uint32]$rootCode; activeProcesses=[uint32]$accounting.ActiveProcesses }); $rootReported = $true
     }
-    if ($accounting.ActiveProcesses -eq 0) { Send-Frame ([ordered]@{ type='empty'; activeProcesses=0; totalProcesses=[uint32]$accounting.TotalProcesses }); break }
+    if (($accounting.ActiveProcesses -eq 0) -and $rootReported) { Send-Frame ([ordered]@{ type='empty'; activeProcesses=0; totalProcesses=[uint32]$accounting.TotalProcesses }); break }
     Start-Sleep -Milliseconds 100
   }
 } catch {
@@ -253,6 +253,9 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
     let resolve;
     let reject;
     const promise = new Promise((onResolve, onReject) => { resolve = onResolve; reject = onReject; });
+    // Launch can fail before callers receive the root/empty wait methods.
+    // Observe rejection now, while preserving the original rejecting promise.
+    promise.catch(() => {});
     return { promise, resolve, reject, settled: false };
   };
   const readyFrame = deferred();
@@ -312,16 +315,30 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
       failPending(new Error(`Packaged Job guardian exited ${code ?? signal}: ${stderr}`));
     }
   });
+  const terminateGuardian = async () => {
+    closing = true;
+    if (guardian.exitCode === null && guardian.signalCode === null) {
+      // Only this launch's guardian is owned here. Its Job handle closes on
+      // termination; closing stdin alone cannot stop the guardian's loop.
+      try { guardian.kill(); } catch (error) {
+        if (guardian.exitCode === null && guardian.signalCode === null) throw error;
+      }
+    }
+    return waitBounded(guardianExit.promise, 10_000, 'Packaged Job guardian did not close in time.');
+  };
   let readyState;
   try {
     readyState = await waitBounded(readyFrame.promise, timeoutMs, 'Packaged Job guardian did not launch the app in time.');
+    if (!Number.isSafeInteger(readyState.pid) || readyState.pid <= 0 || !/^\d+$/.test(readyState.creationFileTime)) {
+      throw new Error('Packaged Job guardian returned an invalid app identity.');
+    }
   } catch (error) {
-    try { guardian.stdin.end(); } catch { /* The guardian may already have exited. */ }
-    await waitBounded(guardianExit.promise, 10_000, 'Failed packaged Job guardian did not close.').catch(() => undefined);
+    try {
+      await terminateGuardian();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Packaged Job launch failed and guardian cleanup did not complete.', { cause: error });
+    }
     throw error;
-  }
-  if (!Number.isSafeInteger(readyState.pid) || readyState.pid <= 0 || !/^\d+$/.test(readyState.creationFileTime)) {
-    throw new Error('Packaged Job guardian returned an invalid app identity.');
   }
   return {
     guardian,
@@ -337,8 +354,7 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
         const gracefulExit = await waitBounded(guardianExit.promise, 2_000, 'Packaged Job guardian is still closing.').catch(() => null);
         if (gracefulExit) return gracefulExit;
       }
-      try { guardian.kill(); } catch { /* Terminating the guardian closes the Job Object handle. */ }
-      return waitBounded(guardianExit.promise, 10_000, 'Packaged Job guardian did not close in time.');
+      return terminateGuardian();
     }
   };
 };

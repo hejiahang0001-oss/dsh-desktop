@@ -20,6 +20,8 @@ const FIXED_STATE_FILES = Object.freeze([
   'worktrees/ownership.json.bak',
   'harness/.anonymous-user-id',
   'harness/settings.yaml',
+  'harness/desktop-automation-web-migration.json',
+  'harness/storages/schedule.json',
   'harness/storages/session_project_catalog.json',
   'harness/storages/workspace.json'
 ]);
