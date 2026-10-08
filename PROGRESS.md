@@ -1,5 +1,7 @@
 # DSH Desktop 执行进度
 
+> 2026-10-09 02:46 收尾完成：本机 lulu1.1.14/0.2.1-alpha.1 已安装，真实资料退出保全与临停集成恢复通过。PR85、tag与成功CI37817814410绑定de113816；本地912/912，CI906通过/6环境跳过。四资产公开Pre-release并匿名完整下载/SHA核对通过，Portable一次网络中断后精确206续传，原失败及partial备份保留。wiki-update已实际写入原DSH项目7页和index/hot/log/manifest，11文件/2来源；影子、独审、写前和实际回读全部通过，250旧来源/2其他项目保留，QMD未配置跳过。事务证据 `artifacts/stable-readiness-20261007/wiki-release-20261009/tx-cdnmKe/verification.json`。确认范围内Stable-ready已完成，未晋升Stable，仍1.1.12；[实际发行与限制](docs/LULU_PUBLIC_DELIVERY_2026-10-09.md)。
+
 > 2026-10-09 01:14：用户确认第二次原资料托盘退出，同次clean/explicit-exit与原进程消失已验。first-profile-kfC60a完整选区比较和独立重算通过：28历史、7草稿、密文、代理及原设置保留，无新增V4待审。dsh_agent仅撤销16字节临停行，其他配置不变，CLI enabled=true。当前继续源码PR/CI/公开回下载，不以此阶段收口；Stable1.1.12不变。本轮Wiki最终更新待发行状态确定，[证据及限制](docs/LULU_RELEASE_READINESS_2026-10-09.md)。以下为各历史时点。
 
 > 本轮wiki-update已按原配置实写DSH项目7页及index/hot/log/manifest，11文件/1新来源；影子apply_patch、独审和实际回读通过，249旧来源及2其他项目保留，已安装两字段更新至1.1.14/0.2.1-alpha.1，Stable/公开/草稿不变。QMD未配置跳过，证据 `artifacts/stable-readiness-20261007/wiki-installed-20261009/tx-FoZLUZ/verification.json`。2026-10-08T17:05:44Z仍见原资料窗口PID11928/lifecycle running；等待用户第二次托盘正常退出，不能强杀或误用此前隔离窗口退出证明。dsh_agent仍临停，after保全完成后精确恢复。目标未完成、未公开发布。

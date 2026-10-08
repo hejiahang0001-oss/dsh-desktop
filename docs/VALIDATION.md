@@ -1,5 +1,7 @@
 # Validation evidence
 
+> 2026-10-09 最终交付：本地912/912且输入不变；发行提交de113816的CI37817814410三job成功（源码906通过/6项无vendor跳过）。四远端资产size/SHA与匿名实际下载完整文件一致，Setup/blockmap/checksum为200，Portable原200中断后精确206续传；原失败回执7f6ef2…4e920a保留，成功续传430fc5…5aedc4及聚合03c2e3…f784ce经主控和独立读回重算。既有安装与资料保全证据有效。Wiki事务tx-cdnmKe的11文件/2来源实写回读通过，旧来源/其他项目/历史风险保留；QMD未配置跳过。Stable-ready限已确认Windows11 x64手动未签名分发范围，未晋升Stable。[完整证据](LULU_PUBLIC_DELIVERY_2026-10-09.md)。
+
 > 2026-10-09 当前：原资料第二次正常退出后选区比较accepted=true，独立重算一致；28历史/7草稿/Key密文/代理保留、设置等字节import-rename、无新增V4。临停dsh_agent已只撤16字节并CLI enabled=true，其他配置字节保留。UI与磁盘证据分开、已接受主机风险不作消除声明。PR/CI和公开回下载尚待完成；[最终本地闭环证据](LULU_RELEASE_READINESS_2026-10-09.md)。
 
 > 2026-10-09：本机1.1.14/Harness0.2.1-alpha.1已覆盖，EXE/ASAR/完整运行库与安装前后选区保全通过。narrow-NOsHi8功能/fullACL/聚合均true，4交互断言、同次clean explicit-exit及root/Job/guardian归零；前两observer失败保留，真实DOM记录确认异步就绪竞态，产品/冻结包未变。live-ui-t9a56w原资料启动只读检查通过，当前空草稿不代表所有旧草稿UI逐一恢复；退出后选区/迁移比较及集成配置恢复仍待验。观察器7/7、保全工具独审9/9；不重复未变输入911项全测。未公开或Stable-ready。[安装态证据](LULU_INSTALLED_ACCEPTANCE_2026-10-09.md)。

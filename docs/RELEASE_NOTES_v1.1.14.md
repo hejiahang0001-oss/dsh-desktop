@@ -1,4 +1,6 @@
-# DSH Desktop V1.1.14 — 适配候选，未发布
+# lulu V1.1.14 — 已公开 Pre-release，Stable 就绪
+
+> 2026-10-09 最终状态：本机已覆盖安装、原资料保全及集成恢复完成；源码/PR/CI/tag、四资产公开及匿名完整下载摘要、Obsidian同步均完成。本地912/912；CI906通过/6项环境跳过，Portable下载中断后精确206续传，原失败保留。确认范围内可以晋升Stable，但本次没有晋升，Stable仍1.1.12。仅Windows11 x64已验证、未签名、既有主机风险未消除；[发布页](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.14)及[最终交付证据](LULU_PUBLIC_DELIVERY_2026-10-09.md)。以下段落为按日期保留的历史状态。
 
 > 2026-10-09 最新：lulu1.1.14已经完成覆盖及安装态交互、真实资料正常退出后保全，28历史/7草稿/Key/代理保留，临停集成已恢复。当前仅剩源码PR/CI和四资产公开下载交付，不把此状态称为已公开或Stable-ready。Stable1.1.12不变；[完整收尾证据](LULU_RELEASE_READINESS_2026-10-09.md)。
 
