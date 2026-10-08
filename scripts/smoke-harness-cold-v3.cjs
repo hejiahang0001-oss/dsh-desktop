@@ -75,7 +75,7 @@ async function main() {
       createCredentialHost: async (options) => {
         const host = await createSessionReadHost({ ...options, rootDir: repo });
         assert.equal(host.providerModule, undefined);
-        const pluginDir = path.join(homeDir, 'profiles/node_modules/dsh-cold-read-probe');
+        const pluginDir = path.join(homeDir, 'node_modules/dsh-cold-read-probe');
         await fs.mkdir(pluginDir, { recursive: true });
         await fs.copyFile(path.join(__dirname, 'cold-read-probe.mjs'), path.join(pluginDir, 'index.mjs'));
         await fs.writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({ name: 'dsh-cold-read-probe', type: 'module', exports: './index.mjs' }), { flag: 'wx' });

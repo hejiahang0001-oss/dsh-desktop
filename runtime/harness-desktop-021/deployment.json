@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "channel": "local-candidate",
+  "promotionAllowed": false,
+  "version": "0.2.1-alpha.1",
+  "sourceRuntime": "artifacts/runtime-assembly-20261007/payload-review/materialized-uZiveE/dsh",
+  "runtimeDirectory": "harness-desktop-0.2.1-alpha.1-attachment-1",
+  "descriptor": {
+    "file": "desktop-runtime.json",
+    "sha256": "b0692fff88311e8cc326b7a7792b8e66620716176f3865c9a188dbaffcff82a7"
+  },
+  "runtimeFiles": 14173,
+  "runtimeBytes": 387510086,
+  "sharedPackages": 289,
+  "office": {
+    "engine": "win32-x64",
+    "directory": "node_modules/@deepseek-ai/libreoffice-kit-win32-x64",
+    "manifest": "prebuilds.json",
+    "manifestSha256": "3adb5d722225f01156b717c135678d0634942e473a16bbd7cd48f8fc8f0576ca",
+    "files": 733
+  },
+  "powerShell": {
+    "version": "7.6.6",
+    "directory": "vendor/powershell/7.6.6/win32-x64"
+  },
+  "inputs": {
+    "sourceProfile": {
+      "path": "runtime/harness-021-candidate/profile.json",
+      "sha256": "d2fc99e31af460d331086fd24d7bf34846e226219f75e6f3977d9444f7b25909"
+    },
+    "sourcePatch": {
+      "path": "runtime/harness-021-candidate/source.patch",
+      "sha256": "793617936b76cc3a630b8e8eaa22043dfd727f3e38dd8e008f91fb76b94f77e3"
+    },
+    "sourceLock": {
+      "path": "artifacts/harness-021-final-replay/pnpm-lock.yaml",
+      "sha256": "143bc6abfc8283456e79dae660a8a69cbe64dba73089e36d1f86cb330397d5c5"
+    },
+    "sourceWorkspace": {
+      "path": "artifacts/harness-021-final-replay/pnpm-workspace.yaml",
+      "sha256": "20150bdf7b5583bd30cc50dce582ccb840aa1d83586922f21820d20ba9e0a27d"
+    },
+    "productionManifest": {
+      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/package.json",
+      "sha256": "72cf8b4dc08326261a5675b0fe76bba31aa0ed9dc16235e957ddeaf8cf00af05"
+    },
+    "productionWorkspace": {
+      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/pnpm-workspace.yaml",
+      "sha256": "631bd6b41032cdfe3ac8abd8c42c6efc36e7f2877a28297caf503cbc1c6e9c8b"
+    },
+    "packageSet": {
+      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/desktop-packages.json",
+      "sha256": "cebc75a32e4de970f67ac11bd4dd1abc3d7089ed2c68dfab420bf70cb224892d"
+    },
+    "productionLock": {
+      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/pnpm-lock.yaml",
+      "sha256": "6923f4310b4b65e48f1f4706bc71d00d7f89153a3aac9f8b4806d50fb9b6ac1e"
+    },
+    "lockReport": {
+      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/lock-verification.json",
+      "sha256": "d3c2135cec80727d6ae61ddfb4a7c30251b1985bd4c07d711e8654bda5858b78"
+    },
+    "installation": {
+      "path": "artifacts/runtime-assembly-20261007/install-Jnxy60/result.json",
+      "sha256": "20948e621c3e25dc1a7d47c47d780449699a8b6437ee7fa15b2470cc5a2e2823"
+    },
+    "materialization": {
+      "path": "artifacts/runtime-assembly-20261007/payload-review/materialized-uZiveE/result.json",
+      "sha256": "3272d4a6cf3acea408bf556b92576839f96484253c18c5e74eaa383bf36c9f92"
+    },
+    "nativeVerification": {
+      "path": "artifacts/runtime-assembly-20261007/payload-review/native-4Jgmkr/runtime-verification-report.json",
+      "sha256": "f0d49fc64d2cbee5fef75e5bce42f9e536aecf220e940c4a5b7b6c02660f1399"
+    },
+    "hostAcceptance": {
+      "path": "artifacts/runtime-assembly-20261007/host-review/acceptance-QecWws/report.json",
+      "sha256": "09f3185fdf77bac9dabbb07da97604fc4585f3ebfafb2ad1def816d16941d2d2"
+    },
+    "node": {
+      "path": "vendor/runtime/win32-x64/node.exe",
+      "sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237"
+    },
+    "powerShellProfile": {
+      "path": "runtime/powershell/profile.json",
+      "sha256": "c3f18d95834e2a10637c7f452ca4f30dec6c87e46ec1ac4a84e8b9ca1d1357a2"
+    },
+    "powerShellManifest": {
+      "path": "vendor/powershell/7.6.6/win32-x64/runtime-manifest.json",
+      "sha256": "2c50c31fc5b7ed15cab154bbfe3255749fb37f6b44cd62c8bfa7aede0508d5c4"
+    },
+    "powerShellExecutable": {
+      "path": "vendor/powershell/7.6.6/win32-x64/pwsh.exe",
+      "sha256": "bfb46af89433268872ddb43d1ca7a3f433452ee91ed356a9786940f90118e285"
+    },
+    "officialRuntimeTree": {
+      "path": "artifacts/harness-021-final-replay/apps/desktop/src/runtime-tree.ts",
+      "sha256": "aaef471a94c1bb295c7aecd080f2bf9f4fa037a8fc3f2d76c63db9b367c80778"
+    },
+    "officialCorePackageSet": {
+      "path": "artifacts/harness-021-final-replay/apps/desktop/src/core-package-set.ts",
+      "sha256": "578403a76103a378a6abff4257cf45ee65b9e31d0b87b83a475d12da33f85667"
+    },
+    "officialRelease": {
+      "path": "artifacts/harness-021-final-replay/apps/desktop/src/release.ts",
+      "sha256": "ab4c40200893effa8e3ea0840c43630ba10403242f90ecccba49ae9a11c82140"
+    },
+    "officialHostProtocol": {
+      "path": "artifacts/harness-021-final-replay/apps/desktop/src/host-protocol.ts",
+      "sha256": "3ac3b9c5416144de212ed2e1fae3ae17a12dedd9389df99f07283012df5d77b9"
+    },
+    "sourceIntegration": {
+      "path": "artifacts/stable-readiness-20261007/build/integration-final.json",
+      "sha256": "fa314f79fc5a080fa1a0393830097f6954b8a8f8ba6bd00fcc8978765b5ccd4c"
+    },
+    "sourceBuild": {
+      "path": "artifacts/stable-readiness-20261007/build/build-final-NEF5BV/result.json",
+      "sha256": "e2fc89855e5ce2ce603f03907b5bea73d8dd82d1abbc142b750569153ae53957"
+    },
+    "sourcePack": {
+      "path": "artifacts/stable-readiness-20261007/build/pack-final-Q7Wk5z/result.json",
+      "sha256": "a3724d39ecccd315176793b8c9e15abd82bdf5a40aac5c98fe46110370ca5748"
+    },
+    "assemblyInputs": {
+      "path": "artifacts/stable-readiness-20261007/build/assembly-DEQYlz/assembly-inputs.json",
+      "sha256": "446aea6fce28310d01564c158b7d819fd94a0434cb5e1556529e82717a9d8d75"
+    }
+  }
+}

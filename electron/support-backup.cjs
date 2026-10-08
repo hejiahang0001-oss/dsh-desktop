@@ -29,10 +29,17 @@ const FIXED_STATE_FILES = Object.freeze([
   'worktrees/ownership.json.bak',
   'harness/.anonymous-user-id',
   'harness/settings.yaml',
+  // Harness 0.1.7 imports legacy settings once into profile-owned patches.
+  // Keep both the import evidence and the home-level overlay for recovery.
+  'harness/settings.yaml.imported',
+  'harness/cordis.patch.yml',
+  'harness/desktop-automation-web-migration.json',
+  'harness/storages/schedule.json',
   'harness/storages/session_project_catalog.json',
   'harness/storages/workspace.json'
 ]);
 const PROFILE_STATE_NAMES = Object.freeze(new Set([
+  'cordis.patch.yml',
   'package.json',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',

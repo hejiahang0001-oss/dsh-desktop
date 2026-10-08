@@ -19,7 +19,7 @@ test('application preview UI uses a sandboxed iframe with explicit local-server 
   assert.doesNotMatch(source, /innerHTML|eval\(/);
 });
 
-test('packaged desktop includes application and dedicated file preview assets', () => {
+test('packaged desktop includes application preview without retired file-byte IPC', () => {
   const manifest = JSON.parse(read('package.json'));
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.ok(manifest.build.files.includes('assets/workbench-preview.css'));
@@ -33,5 +33,6 @@ test('packaged desktop includes application and dedicated file preview assets', 
   assert.match(main, /setPreviewPanelOpen/);
   assert.match(preload, /preview:open-file/);
   assert.match(preload, /preview:connect/);
-  assert.match(preload, /files:preview/);
+  assert.doesNotMatch(preload, /files:(?:list|read|preview)\b/);
+  assert.doesNotMatch(main, /ipcMain\.handle\('files:(?:list|read|preview)'/);
 });

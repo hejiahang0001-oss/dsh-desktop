@@ -64,12 +64,13 @@ class NativeWorkbenchDock {
     await this.store.update({ open: false }); this.layout(); this.window.webContents.focus();
   }
   async act(action, value) {
-    if (action === 'select') { const task = this.selectionQueue.then(async () => { await this.onSelect(value); await this.select(value); }); this.selectionQueue = task.catch(() => {}); await task; return this.state(); }
-    if (action === 'panel') { await this.onPanel(value); return this.state(); }
+    if (action === 'select') { const task = this.selectionQueue.then(async () => { await this.onSelect(value); await this.select(value); }); this.selectionQueue = task.catch(() => {}); await task; this.lastError = ''; return this.state(); }
+    if (action === 'panel') { await this.onPanel(value); this.lastError = ''; return this.state(); }
     if (action === 'collapse') await this.collapse();
     else if (action === 'height') { if (![240, 360, 500].includes(value)) throw new Error('无效面板高度。'); await this.store.update({ height: value }); this.layout(); }
     else if (action === 'detach') this.detach();
     else throw new Error('未知工作台操作。');
+    this.lastError = '';
     return this.state();
   }
   state() { return { ...this.store.getState(), opened: [...this.surfaces.keys()], floating: Boolean(this.surfaces.get(this.store.getState().active)?.floating), error: this.lastError || '' }; }
@@ -99,7 +100,8 @@ class NativeWorkbenchDock {
     }
     this.window.contentView.removeChildView(surface.view);
     const floating = new this.BrowserWindow({ width: Math.max(900, surface.options.width || 900), height: 680, minWidth: 720, minHeight: 420,
-      title: surface.options.title, show: false, autoHideMenuBar: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+      title: surface.options.title, icon: surface.options.icon || path.join(this.rootDir, 'build', 'icon.ico'),
+      show: false, autoHideMenuBar: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
     surface.floating = floating; floating.contentView.addChildView(surface.view); surface.view.setVisible(true);
     const resize = () => { const [width, height] = floating.getContentSize(); surface.view.setBounds({ x: 0, y: 0, width, height }); };
     floating.on('resize', resize); floating.on('closed', () => { if (surface.floating === floating) surface.destroy(); });

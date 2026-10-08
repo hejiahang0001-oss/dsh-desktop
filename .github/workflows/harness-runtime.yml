@@ -1,4 +1,5 @@
-name: Pinned Harness Windows runtime
+# Retained rollback recipe only. It does not build the new official-desktop-runtime candidate.
+name: Legacy alpha.2 Harness Windows runtime
 
 on:
   push:

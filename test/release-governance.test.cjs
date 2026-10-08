@@ -12,6 +12,7 @@ const {
   compareBlockmaps,
   decodeBlockmap,
   inspectPackageLayout,
+  inspectHarnessDesktopRuntime,
   REQUIRED_DESKTOP_VERSION,
   parsePeCertificateTable
 } = require('../scripts/release-governance.cjs');
@@ -21,26 +22,13 @@ const writeFile = (target, bytes = 'x') => {
   fs.writeFileSync(target, bytes);
 };
 
-const HARNESS_VENDOR_PACKAGES = [
-  'cordis',
-  'cordis-plugin-group',
-  'cordis-plugin-hmr',
-  'cordis-plugin-include',
-  'cordis-plugin-loader',
-  'cordis-plugin-logger-console',
-  'cordis-plugin-timer',
-  'cosmokit',
-  'schemastery'
-];
-
 const writeHarnessFixture = (root, { driftedPackage = '', build = {}, harness = {} } = {}) => {
   const harnessRoot = path.join(root, 'resources', 'harness');
-  const inventory = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'THIRD_PARTY_LICENSES.md'), 'utf8');
-  const releasePackages = [...inventory.matchAll(/^\| (@deepseek-ai\/[^ |]+) \| ([^ |]+) \|$/gm)]
-    .map(([, name, version]) => ({ name, version }))
-    .filter(({ name }) => name === '@deepseek-ai/dsh'
-      || name.startsWith('@deepseek-ai/dsh-')
-      || HARNESS_VENDOR_PACKAGES.includes(name.slice('@deepseek-ai/'.length)));
+  const inventory = fs.readFileSync(path.join(__dirname, 'fixtures/harness-legacy-package-identities.txt'), 'utf8');
+  const releasePackages = inventory.trim().split(/\r?\n/).map((identity) => {
+    const separator = identity.lastIndexOf('@');
+    return { name: identity.slice(0, separator), version: identity.slice(separator + 1) };
+  });
   assert.equal(releasePackages.length, 302);
   for (const { name, version } of releasePackages) {
     const localName = name.slice('@deepseek-ai/'.length);
@@ -333,13 +321,15 @@ test('package layout requires all six Wiki skills and the fixed offline Wiki too
   assert.equal(ready.wikiSkillRuntime.files, 7);
 });
 
-test('package layout requires exact Harness source-build provenance', async (context) => {
+test('legacy package provenance remains diagnostic and cannot approve the new runtime', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-harness-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const harnessRoot = path.join(root, 'resources', 'harness');
   writeHarnessFixture(root);
   const ready = await inspectPackageLayout(root);
-  assert.equal(ready.requiredHarnessRuntimeReady, true);
+  assert.equal(ready.requiredLegacyHarnessRuntimeReady, true);
+  assert.equal(ready.requiredHarnessRuntimeReady, false);
+  assert.equal(ready.requiredHarnessDesktopRuntimeReady, false);
   assert.equal(ready.harnessRuntime.dshPackageCount, 293);
   assert.equal(ready.harnessRuntime.vendorPackageCount, 9);
   assert.equal(ready.harnessRuntime.auxiliaryPackageCount, 7);
@@ -352,7 +342,7 @@ test('package layout requires exact Harness source-build provenance', async (con
   }));
   const substituted = await inspectPackageLayout(root);
   assert.equal(substituted.harnessRuntime.dshPackageCount, 293);
-  assert.equal(substituted.requiredHarnessRuntimeReady, false);
+  assert.equal(substituted.requiredLegacyHarnessRuntimeReady, false);
   assert.notEqual(substituted.harnessRuntime.packageInventorySha256, ready.harnessRuntime.packageInventorySha256);
   fs.rmSync(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh-fake'), { recursive: true, force: true });
 
@@ -361,32 +351,32 @@ test('package layout requires exact Harness source-build provenance', async (con
     name: '@deepseek-ai/unexpected-runtime', version: '9.9.9'
   }));
   const unexpected = await inspectPackageLayout(root);
-  assert.equal(unexpected.requiredHarnessRuntimeReady, false);
+  assert.equal(unexpected.requiredLegacyHarnessRuntimeReady, false);
   assert.deepEqual(unexpected.harnessRuntime.unexpectedDeepSeekPackages, ['@deepseek-ai/unexpected-runtime@9.9.9']);
   fs.rmSync(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'unexpected-runtime'), { recursive: true, force: true });
 
   writeHarnessFixture(root);
   writeFile(path.join(harnessRoot, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'), 'process.exit(99);');
-  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  assert.equal((await inspectPackageLayout(root)).requiredLegacyHarnessRuntimeReady, false);
 
   writeHarnessFixture(root, { build: { node: 'v99.0.0' } });
-  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  assert.equal((await inspectPackageLayout(root)).requiredLegacyHarnessRuntimeReady, false);
 
   writeHarnessFixture(root, { build: { security: null } });
-  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  assert.equal((await inspectPackageLayout(root)).requiredLegacyHarnessRuntimeReady, false);
   writeHarnessFixture(root, { build: { dependencyResolution: 'upstream-frozen-lockfile' } });
-  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  assert.equal((await inspectPackageLayout(root)).requiredLegacyHarnessRuntimeReady, false);
 
   writeHarnessFixture(root, { driftedPackage: 'dsh-acp' });
   const mixed = await inspectPackageLayout(root);
-  assert.equal(mixed.requiredHarnessRuntimeReady, false);
+  assert.equal(mixed.requiredLegacyHarnessRuntimeReady, false);
   assert.deepEqual(mixed.harnessRuntime.mismatchedPackages, ['@deepseek-ai/dsh-acp@0.1.2-alpha.5']);
 
   writeHarnessFixture(root, { harness: { repository: 'https://github.com/example/mixed-runtime.git' } });
-  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  assert.equal((await inspectPackageLayout(root)).requiredLegacyHarnessRuntimeReady, false);
 
   writeHarnessFixture(root, { harness: { tag: 'dsh-v0.1.2-alpha.5' } });
-  assert.equal((await inspectPackageLayout(root)).requiredHarnessRuntimeReady, false);
+  assert.equal((await inspectPackageLayout(root)).requiredLegacyHarnessRuntimeReady, false);
 });
 
 test('package layout refuses missing native Office engine even when other runtime metadata exists', async (context) => {
@@ -396,8 +386,39 @@ test('package layout refuses missing native Office engine even when other runtim
   assert.equal(report.requiredOfficeEngineReady, false);
   assert.equal(report.officeEngine.actual, null);
   assert.ok(report.officeEngine.error);
+  assert.equal(report.requiredPowerShellRuntimeReady, false);
+  assert.equal(report.powerShellRuntime.verified, false);
   const source = fs.readFileSync(path.join(__dirname, '../scripts/release-governance.cjs'), 'utf8');
   assert.match(source, /&& packageLayout\.requiredOfficeEngineReady/);
+});
+
+test('official desktop governance fails closed for missing or forged descriptors', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-desktop-descriptor-governance-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.equal((await inspectHarnessDesktopRuntime(root)).verified, false);
+  writeFile(path.join(root, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop-runtime', version: '0.2.1-alpha.1' }));
+  writeFile(path.join(root, 'desktop-runtime.json'), JSON.stringify({ schemaVersion: 1, release: { version: '0.2.1-alpha.1' }, sharedPackages: [], files: [] }));
+  const forged = await inspectHarnessDesktopRuntime(root);
+  assert.equal(forged.verified, false);
+  assert.equal(forged.schema, 'official-desktop-runtime');
+  assert.ok(forged.error);
+});
+
+test('official descriptor result is mandatory alongside PowerShell and other package gates', async (context) => {
+  const desktop = require('../electron/harness-desktop-runtime.cjs');
+  context.mock.method(desktop, 'verifyHarnessDesktopRuntime', async (runtimeRoot) => ({
+    runtimeRoot, verified: true, version: '0.2.1-alpha.1', descriptorSha256: 'a'.repeat(64),
+    descriptor: { sharedPackages: [{ name: '@deepseek-ai/dsh' }], files: [{ bytes: 3 }, { bytes: 5 }] }
+  }));
+  assert.deepEqual(await inspectHarnessDesktopRuntime('fixture'), {
+    schema: 'official-desktop-runtime', verified: true, version: '0.2.1-alpha.1', descriptorSha256: 'a'.repeat(64), sharedPackages: 1, files: 2, bytes: 8
+  });
+  desktop.verifyHarnessDesktopRuntime.mock.mockImplementation(async () => ({ verified: false }));
+  assert.equal((await inspectHarnessDesktopRuntime('fixture')).verified, false);
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/release-governance.cjs'), 'utf8');
+  assert.match(source, /&& packageLayout\.requiredHarnessDesktopRuntimeReady/);
+  assert.match(source, /&& packageLayout\.requiredPowerShellRuntimeReady/);
+  assert.doesNotMatch(source, /&& packageLayout\.requiredLegacyHarnessRuntimeReady/);
 });
 
 test('package manifest and layout include user-readable legal notices', async (context) => {

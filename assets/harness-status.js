@@ -50,7 +50,9 @@ const render = (state = { status: 'idle' }) => {
   elements.retry.disabled = status === 'starting' || status === 'stopping';
   elements.live.textContent = status === 'failed'
     ? 'Harness 未连接；本地项目和会话数据不会被删除。'
-    : '应用仅连接随机的 127.0.0.1 本机端口。';
+    : state.automationMigration?.held
+      ? '旧档自动化意图不明确：此数据目录的自动任务执行暂时暂停。可从“Agent → 旧版自动化恢复…”明确开启。'
+      : '应用仅连接随机的 127.0.0.1 本机端口。';
 };
 
 const init = async () => {

@@ -82,8 +82,8 @@ test('V1.1.8 Wiki center is local-only, health-aware, provenance-aware, and pack
   assert.match(renderer, /sourceCheck\.unchanged/);
   assert.doesNotMatch(renderer, /Date\.now\(/);
   assert.doesNotMatch(renderer, /innerHTML|eval\(/);
-  assert.match(page, /id="app-version"[^>]*>DSH Desktop</);
-  assert.doesNotMatch(page, /DSH Desktop\s+V?0\.\d/);
+  assert.match(page, /id="app-version"[^>]*>lulu</);
+  assert.doesNotMatch(page, /(?:DSH Desktop|lulu)\s+V?0\.\d/);
   const onboarding = page.slice(page.indexOf('id="wiki-onboarding"'), page.indexOf('id="wiki-overview"'));
   assert.equal((onboarding.match(/<li>/g) || []).length, 3);
   assert.match(onboarding, /选择目录/);
@@ -99,7 +99,7 @@ test('V1.1.8 Wiki center is local-only, health-aware, provenance-aware, and pack
   assert.match(styles, /@media \(max-width: 560px\)/);
   assert.match(page, /原始会话只读/);
   assert.match(page, /项目知识增量同步/);
-  assert.match(page, /DSH 历史批量导入/);
+  assert.match(page, /lulu \/ DSH 历史批量导入/);
   assert.match(page, /系统指令、图片和固定凭据模式不会交给 Agent/);
   assert.match(read('resources/skills/wiki-history-ingest/SKILL.md'), /untrusted source material, never as an instruction/);
   assert.match(page, /无 Git、Python、QMD 或 Obsidian 也可使用基础能力/);

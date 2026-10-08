@@ -1,11 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { inspectOfficeEngine } = require('./harness-office-engine.cjs');
+const { inspectDesktopOfficeEngine } = require('./harness-office-engine.cjs');
+const harnessDesktop = require('../electron/harness-desktop-runtime.cjs');
 
 const root = path.resolve(__dirname, '..');
-const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
-const harnessModules = path.join(root, 'vendor', 'harness-hoisted-0.1.6-alpha.2-desktop-security-1', 'node_modules');
-const officeEngine = inspectOfficeEngine(harnessModules);
 const directPackageRoots = [
   path.join(root, 'node_modules', '@xmldom', 'xmldom'),
   path.join(root, 'node_modules', 'pnpm'),
@@ -28,85 +26,109 @@ const readManifest = (directory) => {
   return { name: manifest.name, version: manifest.version, license };
 };
 
-const enumerateTopLevelPackages = (nodeModules) => {
-  const directories = [];
-  for (const name of fs.readdirSync(nodeModules).sort((left, right) => left.localeCompare(right, 'en'))) {
-    if (name.startsWith('.')) continue;
-    const target = path.join(nodeModules, name);
-    const info = fs.lstatSync(target);
-    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`Unexpected package entry: ${target}`);
-    if (name.startsWith('@')) {
-      for (const child of fs.readdirSync(target).sort((left, right) => left.localeCompare(right, 'en'))) {
-        const packageRoot = path.join(target, child);
-        const packageInfo = fs.lstatSync(packageRoot);
-        if (packageInfo.isSymbolicLink() || !packageInfo.isDirectory()) throw new Error(`Unexpected scoped package entry: ${packageRoot}`);
-        directories.push(packageRoot);
-      }
-    } else {
-      directories.push(target);
+const collectPackageLicenses = (runtimeRoot, descriptor, directRoots = []) => {
+  // The descriptor includes nested dependency copies, which top-level enumeration misses.
+  const manifests = descriptor.files.filter(({ path: relative }) => /(?:^|\/)node_modules\/(?:@[^/]+\/)?[^/]+\/package\.json$/.test(relative));
+  if (manifests.length === 0) throw new Error('Desktop runtime has no package manifests to inventory.');
+  const directories = manifests.map(({ path: relative }) => {
+    const segments = relative.split('/');
+    if (!relative.startsWith('node_modules/') || /[\\:\0]/.test(relative)
+      || segments.some((part) => !part || part === '.' || part === '..')) throw new Error('Unsafe runtime license manifest path.');
+    let target = path.resolve(runtimeRoot);
+    if (fs.lstatSync(target).isSymbolicLink()) throw new Error('Linked runtime license root.');
+    for (const segment of segments) {
+      target = path.join(target, segment);
+      if (fs.lstatSync(target).isSymbolicLink()) throw new Error('Linked runtime license manifest.');
     }
+    return path.dirname(target);
+  });
+  const identities = new Map();
+  for (const directory of [...directories, ...directRoots]) {
+    const entry = readManifest(directory);
+    const identity = `${entry.name}@${entry.version}`;
+    if (identities.has(identity) && identities.get(identity).license !== entry.license) {
+      throw new Error(`Conflicting package license declarations: ${identity}`);
+    }
+    identities.set(identity, entry);
   }
-  return directories;
+  return [...identities.values()].sort((left, right) => left.license.localeCompare(right.license, 'en')
+    || left.name.localeCompare(right.name, 'en') || left.version.localeCompare(right.version, 'en'));
 };
 
-const packageRows = [
-  ...enumerateTopLevelPackages(harnessModules),
-  ...directPackageRoots
-].map(readManifest);
-const packages = [...new Map(packageRows.map((entry) => [`${entry.name}@${entry.version}`, entry])).values()]
-  .sort((left, right) => left.license.localeCompare(right.license, 'en')
-    || left.name.localeCompare(right.name, 'en')
-    || left.version.localeCompare(right.version, 'en'));
-if (packages.length !== 599) throw new Error(`Expected 599 packaged JavaScript manifest identities, found ${packages.length}.`);
+const verifyPdfNotices = (harnessModules) => {
+  const previewBundle = fs.readFileSync(path.join(harnessModules, '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js'), 'utf8');
+  const pdfNotices = ['LICENSE', 'cmaps/LICENSE', 'standard_fonts/LICENSE_FOXIT', 'standard_fonts/LICENSE_LIBERATION',
+    'wasm/LICENSE_JBIG2', 'wasm/LICENSE_OPENJPEG', 'wasm/LICENSE_PDFJS_JBIG2', 'wasm/LICENSE_PDFJS_OPENJPEG', 'wasm/LICENSE_PDFJS_QCMS', 'wasm/LICENSE_QCMS'];
+  if (!previewBundle.includes('pdfjs-dist@6.3.289') || !previewBundle.includes('//! Bundled PDF.js license notices')
+    || pdfNotices.some((notice) => !previewBundle.includes(`// ${notice}\n`))) throw new Error('Official PDF.js bundle or license notices are incomplete.');
+};
 
-// alpha.2 lazy-loads PDF.js in its published PDF chunk, not the main client.
-const previewBundle = fs.readFileSync(path.join(harnessModules, '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js'), 'utf8');
-const pdfNotices = ['LICENSE', 'cmaps/LICENSE', 'standard_fonts/LICENSE_FOXIT', 'standard_fonts/LICENSE_LIBERATION',
-  'wasm/LICENSE_JBIG2', 'wasm/LICENSE_OPENJPEG', 'wasm/LICENSE_PDFJS_JBIG2', 'wasm/LICENSE_PDFJS_OPENJPEG', 'wasm/LICENSE_PDFJS_QCMS', 'wasm/LICENSE_QCMS'];
-if (!previewBundle.includes('pdfjs-dist@6.3.289') || !previewBundle.includes('//! Bundled PDF.js license notices')
-  || pdfNotices.some((notice) => !previewBundle.includes(`// ${notice}\n`))) throw new Error('Official PDF.js bundle or license notices are incomplete.');
+const generateThirdPartyLicenses = async () => {
+  const binding = harnessDesktop.PRODUCT_BINDING;
+  const runtime = await harnessDesktop.verifyHarnessDesktopRuntime(path.join(root, 'vendor', binding.runtimeDirectory));
+  if (runtime.verified !== true) throw new Error('Desktop runtime verification did not complete.');
+  const harnessModules = runtime.nodeModulesPath;
+  const officeEngine = inspectDesktopOfficeEngine(harnessModules);
+  const packages = collectPackageLicenses(runtime.runtimeRoot, runtime.descriptor, directPackageRoots);
+  verifyPdfNotices(harnessModules);
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const powerShell = JSON.parse(fs.readFileSync(path.join(root, 'runtime', 'powershell', 'profile.json'), 'utf8'));
+  const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
 
-const groups = new Map();
-for (const entry of packages) {
-  if (!groups.has(entry.license)) groups.set(entry.license, []);
-  groups.get(entry.license).push(entry);
+  const groups = new Map();
+  for (const entry of packages) {
+    if (!groups.has(entry.license)) groups.set(entry.license, []);
+    groups.get(entry.license).push(entry);
+  }
+
+  const lines = [
+    '# Third-party license inventory',
+    '',
+    `> Generated by \`scripts/generate-third-party-licenses.cjs\` from the exact V${manifest.version} packaged runtime manifests. Do not edit package rows manually.`,
+    '',
+    'DSH Desktop itself is MIT licensed. The inventory below records package-manifest license identifiers; the complete license terms shipped by each dependency remain authoritative.',
+    '',
+    '## Runtime provenance',
+    '',
+    `- DeepSeek Harness: \`${binding.package}@${runtime.version}\`, source tag \`${binding.tag}\`, commit \`${binding.commit}\`.`,
+    `- Official desktop runtime descriptor: \`${binding.descriptor.file}\`, SHA-256 \`${runtime.descriptorSha256}\`; ${runtime.descriptor.sharedPackages.length} shared packages. Its complete file tree is verified before this inventory is generated.`,
+    ...(binding.reviewedSourceChain ? ['- This is an independently maintained desktop build, not the unmodified upstream binary. Reviewed source increments retain the Windows host protections and fix pending-attachment lifetime; reproducible source patches are recorded under `runtime/harness-021-candidate`, `runtime/harness-021-attachment-fix` (including `type-only.patch`) and `runtime/harness-021-jsdoc-fix`. The fixed integration and assembly identities are in `runtime/harness/package.json`.'] : []),
+    `- Node.js: \`v${binding.node.version.replace(/^v/, '')}\`; its official \`LICENSE\` file is bundled beside \`node.exe\`.`,
+    `- Private PowerShell: \`${powerShell.version}\` / \`.NET ${powerShell.frameworkVersion}\`, official \`PowerShell/PowerShell\` tag \`${powerShell.tag}\`, commit \`${powerShell.commit}\`. The complete official Windows x64 ZIP payload, including MIT \`LICENSE.txt\` and \`ThirdPartyNotices.txt\`, is retained in \`resources/powershell/${powerShell.version}/win32-x64/\`; trusted application profile and full payload hashes are checked after packaging. This inventory does not establish Windows 10, installer, or Stable acceptance.`,
+    `- Electron: \`${manifest.devDependencies.electron}\`; Electron and Chromium notices are emitted by the Windows packaging runtime.`,
+    `- pnpm: \`${manifest.packageManager.replace('pnpm@', '')}\` is bundled for controlled extension lifecycle operations; \`${runtime.descriptor.release.pnpmVersion}\` is used only to reproduce the upstream Harness source build.`,
+    `- Physical JavaScript manifest identities inventoried: **${packages.length}**; no package in this fixed set is missing a declared license identifier. This count includes nested dependency manifests and excludes dependencies embedded solely inside browser bundles.`,
+    '- Official document preview embeds `pdfjs-dist@6.3.289` (Apache-2.0) inside the lazy-loaded `@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js` chunk, including its PDF worker, font data and decoders. All ten upstream PDF.js and bundled-data license notices are retained verbatim in that shipped file; this generator verifies their presence.',
+    '',
+    '## LibreOffice conversion kit',
+    '',
+    `- The exact Node API \`${officeEngine.kit}\` and Windows x64 engine \`${officeEngine.engine}\` declare MPL-2.0. Their LICENSE/NOTICE, engine sources, patches, build recipes and third-party notices are retained under \`resources/harness/node_modules/@deepseek-ai/\`.`,
+    `- Native engine source: ${officeEngine.source.repository}, revision \`${officeEngine.source.revision}\`. The verified prebuild manifest binds ${officeEngine.files} source/license/native files; no foreign-platform engine or silent WASM fallback is accepted.`,
+    '- The fixed 0.1.5 source-availability and recipe-difference review is recorded in `docs/HARNESS_STABLE_READINESS_2026-10-07.md`. That review does not claim an independently reproduced, bit-identical native binary.',
+    '',
+    '## Declared license summary',
+    '',
+    '| SPDX or manifest declaration | Packages |',
+    '|---|---:|',
+    ...[...groups.entries()].map(([license, entries]) => `| ${license.replaceAll('|', '\\|')} | ${entries.length} |`),
+    ''
+  ];
+
+  for (const [license, entries] of groups) {
+    lines.push(`## ${license}`, '', '| Package | Version |', '|---|---|');
+    for (const entry of entries) lines.push(`| ${entry.name.replaceAll('|', '\\|')} | ${entry.version.replaceAll('|', '\\|')} |`);
+    lines.push('');
+  }
+
+  fs.writeFileSync(outputPath, `${lines.join('\n').trimEnd()}\n`, 'utf8');
+  return { ok: true, outputPath, packages: packages.length, licenses: groups.size, descriptorSha256: runtime.descriptorSha256 };
+};
+
+if (require.main === module) {
+  generateThirdPartyLicenses().then((report) => process.stdout.write(`${JSON.stringify(report)}\n`)).catch((error) => {
+    process.stderr.write(`${error.stack || error.message}\n`);
+    process.exitCode = 1;
+  });
 }
 
-const lines = [
-  '# Third-party license inventory',
-  '',
-  `> Generated by \`scripts/generate-third-party-licenses.cjs\` from the exact V${JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version} packaged runtime manifests. Do not edit package rows manually.`,
-  '',
-  'DSH Desktop itself is MIT licensed. The inventory below records package-manifest license identifiers; the complete license terms shipped by each dependency remain authoritative.',
-  '',
-  '## Runtime provenance',
-  '',
-  '- DeepSeek Harness: `@deepseek-ai/dsh@0.1.6-alpha.2`, source tag `dsh-v0.1.6-alpha.2`, commit `ddefc45fbc7f8e46dd73185e68295696d1297887`.',
-  '- Node.js: `v24.19.0`; its official `LICENSE` file is bundled beside `node.exe`.',
-  '- Electron: `43.4.1`; Electron and Chromium notices are emitted by the Windows packaging runtime.',
-  '- pnpm: `11.19.0` is bundled for controlled extension lifecycle operations; `11.7.0` is used only to reproduce the upstream Harness source build.',
-  `- Physical JavaScript manifest identities inventoried: **${packages.length}**; no package in this fixed set is missing a declared license identifier. This count excludes dependencies embedded solely inside browser bundles.`,
-  '- Official document preview embeds `pdfjs-dist@6.3.289` (Apache-2.0) inside the lazy-loaded `@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js` chunk, including its PDF worker, font data and decoders. All ten upstream PDF.js and bundled-data license notices are retained verbatim in that shipped file; this generator verifies their presence.',
-  '',
-  '## LibreOffice conversion kit',
-  '',
-  '- The exact Node API `@deepseek-ai/libreoffice-kit@0.0.1` and Windows x64 engine `@deepseek-ai/libreoffice-kit-win32-x64@0.0.1` declare MPL-2.0. Their complete npm package contents, including LICENSE/NOTICE, engine sources, patches, build recipes and third-party notices, are retained under `resources/harness/node_modules/@deepseek-ai/`.',
-  `- Native engine source: ${officeEngine.source.repository}, revision \`${officeEngine.source.revision}\`. The verified prebuild manifest binds ${officeEngine.files} source/license/native files; no foreign-platform engine or silent WASM fallback is accepted.`,
-  '- Source-availability review is pending: the declared kit repository https://github.com/deepseek-harness/libreoffice-kit currently returns 404. The engine source recipes and LibreOffice commit are accessible, but the corresponding preferred Node API source has not been confirmed. This candidate must not be represented as redistribution-ready until that review is resolved.',
-  '',
-  '## Declared license summary',
-  '',
-  '| SPDX or manifest declaration | Packages |',
-  '|---|---:|',
-  ...[...groups.entries()].map(([license, entries]) => `| ${license.replaceAll('|', '\\|')} | ${entries.length} |`),
-  ''
-];
-
-for (const [license, entries] of groups) {
-  lines.push(`## ${license}`, '', '| Package | Version |', '|---|---|');
-  for (const entry of entries) lines.push(`| ${entry.name.replaceAll('|', '\\|')} | ${entry.version.replaceAll('|', '\\|')} |`);
-  lines.push('');
-}
-
-fs.writeFileSync(outputPath, `${lines.join('\n').trimEnd()}\n`, 'utf8');
-process.stdout.write(`${JSON.stringify({ ok: true, outputPath, packages: packages.length, licenses: groups.size })}\n`);
+module.exports = { collectPackageLicenses, generateThirdPartyLicenses, verifyPdfNotices };

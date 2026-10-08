@@ -42,7 +42,17 @@
 
 2026-09-18 04:27:49 UTC，获得维护者授权后，已向官方 Q&A 提交 [Discussion #7026](https://github.com/deepseek-ai/deepseek-harness/discussions/7026)，询问对应 0.0.1 包的可获取源码、准确版本及下游分发说明。官方仓库 `has_issues=false`，README 指定反馈走 Discussions，因此没有创建 Issue 或到无关仓库发帖。提交后回读正文、仓库与 Q&A 分类一致；当时尚无回复或采纳答案。提问不等于官方已确认分发条件，原门禁保留。
 
-下一步核实官方答复中的源码可获取性，继续剩余多会话/插件生命周期与真实模型交互门禁，再做包、安装、资料/凭据保留和公开下载验收。已有效的固定构建、下载、621 项全量测试和侧栏预览不从头重做。既有 Portable 失败不能因新内核发布而作废。
+### 2026-09-22：收到社区核查回复，源码门禁未解除
+
+2026-09-22 00:02:52 UTC 核对官方全部 18 个发布/标签及 22 个 npm 版本，按完整语义版本比较，仍没有高于 `0.1.6-alpha.2` 的 Harness 发布。固定标签及提交未变。
+
+[PerryLink 的回复](https://github.com/deepseek-ai/deepseek-harness/discussions/7026#discussioncomment-18538241) 发表于 2026-09-21 10:53:40 UTC。GitHub 返回 `authorAssociation=NONE`，问答尚无采纳答案；这不证明作者的实际任职，但不足以把回复当成项目维护者的正式确认。本轮没有标记答案或追加发帖。
+
+本轮独立核实 npm 元数据和当前固定的本地包：`@deepseek-ai/libreoffice-kit@0.0.1` 无 `gitHead`，声明仓库及 `packages/entry` 路径未变，仓库 REST 查询仍返回 404；Node API 包 19 个文件，无 `sources/` 目录或 source map；Windows 引擎的 `sources/core-source.json` 仍固定 LibreOffice 提交 `bce0998afefdbc355585ca324285661a2170ba77`。原生引擎材料与 Node API 首选源码是不同核验对象，不能互相替代。
+
+npm kit 的 `latest=0.0.1`、`next=0.0.2-rc8` 已另行核实；它不是 Harness 新发布，也未证明能提供 `0.0.1` 的准确对应源码。社区对新组件源码覆盖的描述尚未做档案级验证，不据此修改锁文件、替换运行库或判断法律合规。保留源码可获取性与原有公开交付门禁，等待可验证的对应源码及维护者说明。证据：`artifacts/upstream-checks/2026-09-22-source-reply/check.json`。
+
+下一步核实维护者答复或新公开档案中的源码对应关系，继续剩余多会话/插件生命周期与真实模型交互门禁，再做包、安装、资料/凭据保留和公开下载验收。已有效的固定构建、下载、621 项全量测试和侧栏预览不从头重做。既有 Portable 失败不能因新内核发布或社区回复而作废。
 
 ## 可核对来源
 

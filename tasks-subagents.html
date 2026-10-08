@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-lulu-surface="tasks">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSH 任务与子代理</title>
+  <title>lulu · 任务与子代理</title>
   <link rel="stylesheet" href="assets/tasks-subagents.css">
+  <link rel="stylesheet" href="assets/lulu-tokens.css">
+  <link rel="stylesheet" href="assets/lulu-surfaces.css">
   <script defer src="assets/tasks-subagents.js"></script>
   <script defer src="assets/background-tasks.js"></script>
 </head>
@@ -30,7 +32,7 @@
     </section>
     <section aria-labelledby="subagents-title">
       <div class="section-heading">
-        <div><h2 id="subagents-title">子代理</h2><p>普通会话分支不会出现在这里；工作目录按当前 DSH 工作树核对，共享目录只提示、不自动迁移。</p></div>
+        <div><h2 id="subagents-title">子代理</h2><p>普通会话分支不会出现在这里；工作目录按当前 lulu 工作树核对，共享目录只提示、不自动迁移。</p></div>
       </div>
       <div id="subagent-list" class="subagent-list" aria-live="polite" aria-busy="true"><p class="empty-state">正在读取子代理目录…</p></div>
     </section>

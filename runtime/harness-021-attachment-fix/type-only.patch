@@ -1,0 +1,157 @@
+diff --git a/packages/client/ui-conversation/tests/attachment-navigation.client.spec.ts b/packages/client/ui-conversation/tests/attachment-navigation.client.spec.ts
+index e51aaec..cd87c07 100644
+--- a/packages/client/ui-conversation/tests/attachment-navigation.client.spec.ts
++++ b/packages/client/ui-conversation/tests/attachment-navigation.client.spec.ts
+@@ -10,6 +10,7 @@ import { SlotTestRuntime, makeTranslate } from '@deepseek-ai/dsh-client-test-run
+ import { InputHub } from '../src/client/input/hub.ts'
+ import { ConversationController } from '../src/client/service.ts'
+ import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
++import type { SubmitOutcome } from '../src/client/contract/input.ts'
+ import { zh } from '../src/client/locales.ts'
+ 
+ async function bench() {
+@@ -17,7 +18,7 @@ async function bench() {
+   await runtime.sessions.add({ id: 'a', summary: { cwd: 'C:/fixture/work-a' } })
+   await runtime.sessions.add({ id: 'same', summary: { cwd: 'C:/fixture/work-a' } })
+   await runtime.sessions.add({ id: 'other', summary: { cwd: 'C:/fixture/work-b' } })
+-  const view = runtime.sessions.retain('a')
++  const view = runtime.sessions.retain('a' as SessionId)
+   await view.ready
+   const hub = new InputHub(runtime.ctx, makeTranslate(zh, {}))
+   const fiber = runtime.ctx.plugin(ConversationController, { input: hub, blocks: new ComposerBlockRegistry(), maxConcurrentFileUploads: 2 })
+@@ -31,7 +32,7 @@ async function bench() {
+     receiptId: `receipt-${name}`, file: { attachmentId: `file-${name}`, name, bytes: 1 },
+   } })
+   const attach = (names = ['picture.png', 'notes.txt']) => {
+-    const attachments = controller.createDrafts('a', names.map(name => new File([Uint8Array.of(7)], name, { type: name.endsWith('.png') ? 'image/png' : 'text/plain' })))
++    const attachments = controller.createDrafts('a' as SessionId, names.map(name => new File([Uint8Array.of(7)], name, { type: name.endsWith('.png') ? 'image/png' : 'text/plain' })))
+     shell.addAttachments(attachments.map(item => item.id))
+     return attachments
+   }
+@@ -49,11 +50,11 @@ describe('reviewed official attachment navigation lifetime', () => {
+       b.view.release()
+       await b.runtime.flush()
+       for (const target of ['same', 'other']) {
+-        const other = b.runtime.sessions.retain(target)
++        const other = b.runtime.sessions.retain(target as SessionId)
+         await other.ready
+         expect(b.hub.shellFor(other.binding).snapshot.attachmentIds).toEqual([])
+         other.release()
+-        const back = b.runtime.sessions.retain('a')
++        const back = b.runtime.sessions.retain('a' as SessionId)
+         await back.ready
+         expect(b.hub.shellFor(back.binding) === b.shell).toBe(true)
+         expect(b.shell.snapshot.attachmentIds).toEqual(ids)
+@@ -71,7 +72,7 @@ describe('reviewed official attachment navigation lifetime', () => {
+     try {
+       let signal: AbortSignal | undefined
+       b.runtime.fileUpload.upload = (_id, _file, _name, uploadSignal) => {
+-        signal = uploadSignal
++        signal = uploadSignal as AbortSignal | undefined
+         return new Promise(resolve => { complete = resolve })
+       }
+       const [attachment] = b.attach(['notes.txt'])
+@@ -81,12 +82,12 @@ describe('reviewed official attachment navigation lifetime', () => {
+       expect(signal?.aborted).toBe(false)
+       expect(b.runtime.sessions.binding('a')).toBeDefined()
+       complete?.({ ok: true, value: { receiptId: 'ready', file: { attachmentId: 'ready-file', name: 'notes.txt', bytes: 1 } } })
+-      await vi.waitFor(() => { expect(b.controller.fileUploads.getSnapshot()[attachment.id]?.status).toBe('ready') })
+-      b.shell.removeAttachment(attachment.id)
+-      b.controller.releaseDraftAttachment(attachment.id)
++      await vi.waitFor(() => { expect(b.controller.fileUploads.getSnapshot()[attachment!.id]?.status).toBe('ready') })
++      b.shell.removeAttachment(attachment!.id)
++      b.controller.releaseDraftAttachment(attachment!.id)
+       await b.runtime.flush()
+       expect(b.runtime.sessions.binding('a')).toBeUndefined()
+-      expect(b.controller.resolveDraftAttachments([attachment.id])).toEqual([])
++      expect(b.controller.resolveDraftAttachments([attachment!.id])).toEqual([])
+     } finally { complete?.({ ok: false, error: { message: 'fixture cleanup' } }); await b.cleanup() }
+   })
+ 
+@@ -106,11 +107,11 @@ describe('reviewed official attachment navigation lifetime', () => {
+ 
+   it.each([
+     ['success', ''], ['error', ''], ['success', 'text with attachment'], ['error', 'text with attachment'],
+-  ])('retains a send until its %s settlement with draft %s', async (outcome, text) => {
++  ] as const)('retains a send until its %s settlement with draft %s', async (outcome, text) => {
+     const b = await bench()
+     try {
+       const [attachment] = b.attach(['picture.png'])
+-      let settle!: (value: { kind: string }) => void
++      let settle!: (value: SubmitOutcome) => void
+       const send = vi.spyOn(b.controller, 'sendSession').mockImplementation(() => new Promise(resolve => { settle = resolve }))
+       await b.runtime.flush()
+       b.shell.setDraft(text)
+@@ -119,16 +120,16 @@ describe('reviewed official attachment navigation lifetime', () => {
+       b.view.release()
+       await b.runtime.flush()
+       expect(b.runtime.sessions.binding('a')).toBeDefined()
+-      if (outcome === 'success') b.controller.releaseDraftAttachment(attachment.id)
++      if (outcome === 'success') b.controller.releaseDraftAttachment(attachment!.id)
+       settle({ kind: outcome })
+       await b.runtime.flush()
+       if (outcome === 'success') {
+         expect(b.runtime.sessions.binding('a')).toBeUndefined()
+       } else {
+         expect(b.runtime.sessions.binding('a')).toBeDefined()
+-        expect(b.shell.snapshot.attachmentIds).toEqual([attachment.id])
++        expect(b.shell.snapshot.attachmentIds).toEqual([attachment!.id])
+         expect(b.shell.snapshot.draft).toBe(text)
+-        expect(b.controller.resolveDraftAttachments([attachment.id])).toHaveLength(1)
++        expect(b.controller.resolveDraftAttachments([attachment!.id])).toHaveLength(1)
+       }
+     } finally { await b.cleanup() }
+   })
+@@ -141,7 +142,7 @@ describe('reviewed official attachment navigation lifetime', () => {
+       b.view.release()
+       await b.runtime.dispose()
+       expect(b.runtime.sessions.binding('a')).toBeUndefined()
+-      expect(b.runtime.sessions.retainInfo('a').getSnapshot().referenceCount).toBe(0)
++      expect(b.runtime.sessions.retainInfo('a' as SessionId).getSnapshot().referenceCount).toBe(0)
+       expect(b.controller.resolveDraftAttachments(attachments.map(item => item.id))).toEqual([])
+       expect(b.revoked).toHaveBeenCalledTimes(1)
+       expect(b.shell.dispose()).toEqual([])
+@@ -155,12 +156,12 @@ describe('reviewed official attachment navigation lifetime', () => {
+       const ids = attachments.map(item => item.id)
+       await b.runtime.flush()
+       b.view.release()
+-      const target = b.runtime.sessions.retain('other')
++      const target = b.runtime.sessions.retain('other' as SessionId)
+       await target.ready
+       const next = b.hub.shellFor(target.binding)
+       await b.runtime.flush()
+       next.addAttachments(ids)
+-      b.controller.rebindDraftFiles('other', ids)
++      b.controller.rebindDraftFiles('other' as SessionId, ids)
+       for (const id of ids) b.shell.removeAttachment(id)
+       await b.runtime.flush()
+       expect(b.runtime.sessions.binding('a')).toBeUndefined()
+@@ -240,7 +241,7 @@ realIt('late old-scope cleanup and send failure cannot release a same-id replace
+   const oldBinding = original.binding
+   const oldShell = hub.shellFor(oldBinding)
+   const [oldAttachment] = controller.createDrafts(id, [new File([Uint8Array.of(1)], 'old.png', { type: 'image/png' })])
+-  oldShell.addAttachments([oldAttachment.id])
++  oldShell.addAttachments([oldAttachment!.id])
+   const pending = Promise.withResolvers<{ kind: 'error' }>()
+   vi.spyOn(controller, 'sendSession').mockReturnValueOnce(pending.promise)
+   oldShell.submit()
+@@ -254,15 +255,15 @@ realIt('late old-scope cleanup and send failure cannot release a same-id replace
+   const newBinding = replacement.binding
+   const next = hub.shellFor(newBinding)
+   const [newAttachment] = controller.createDrafts(id, [new File([Uint8Array.of(2)], 'new.png', { type: 'image/png' })])
+-  next.addAttachments([newAttachment.id])
++  next.addAttachments([newAttachment!.id])
+   replacement.release()
+   pending.resolve({ kind: 'error' })
+   resumed.resolve()
+   await disposing
+   expect(sessions.binding(id) === newBinding).toBe(true)
+-  expect(next.snapshot.attachmentIds).toEqual([newAttachment.id])
+-  expect(controller.resolveDraftAttachments([oldAttachment.id])).toEqual([])
+-  expect(controller.resolveDraftAttachments([newAttachment.id])).toEqual([newAttachment])
++  expect(next.snapshot.attachmentIds).toEqual([newAttachment!.id])
++  expect(controller.resolveDraftAttachments([oldAttachment!.id])).toEqual([])
++  expect(controller.resolveDraftAttachments([newAttachment!.id])).toEqual([newAttachment])
+   expect(sessions.retainInfo(id).getSnapshot().retainedBy.conversationDraft).toBe(1)
+   expect(revoked.mock.calls).toEqual([['blob:old']])
+ })

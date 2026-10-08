@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
+const { createHash } = require('node:crypto');
+const { HARNESS_RUNTIME_DIRECTORY, HARNESS_VERSION, readHarnessDesktopRuntime } = require('../electron/harness-desktop-runtime.cjs');
 const { buildHarnessEnvironment } = require('../electron/harness-supervisor.cjs');
 const {
   ProxySettingsError,
@@ -55,17 +57,23 @@ const probeHomeProxyEnvironment = (context, proxyUrl, upstreamModules = []) => {
       [[name, process.env[name]], [name.toLowerCase(), process.env[name.toLowerCase()]]]));
     if (process.argv[2]) {
       const { createLaunchEnvironmentSnapshot } = await import(process.argv[2]);
-      const { resolveProxyPolicy, proxyForUrl } = await import(process.argv[3]);
+      const { installProxyFromEnvironment, proxyRouteFor, proxyEnvironmentForChild } = await import(process.argv[3]);
       const snapshot = createLaunchEnvironmentSnapshot([
         { source: 'process', values: inherited },
         { source: 'user-env', path: process.argv[1], values: home }
       ]);
-      const result = resolveProxyPolicy(snapshot);
-      console.log(JSON.stringify({ values, ...result,
-        httpsProxy: proxyForUrl(result.policy, new URL('https://api.deepseek.com')) ?? null,
-        loopbackProxy: proxyForUrl(result.policy, new URL('http://127.0.0.1:8765')) ?? null,
-        sources: Object.fromEntries(Object.keys(home).map(name => [name, snapshot.get(name).source]))
-      }));
+      const diagnostics = [];
+      const dispose = await installProxyFromEnvironment(snapshot, message => diagnostics.push(message));
+      try {
+        const https = proxyRouteFor(new URL('https://api.deepseek.com'));
+        const loopbacks = ['http://127.0.0.1:8765', 'http://localhost:8765', 'http://[::1]:8765'];
+        console.log(JSON.stringify({ values, diagnostics,
+          httpsProxy: https.proxied ? https.proxy : null,
+          loopbackProxied: loopbacks.map(url => proxyRouteFor(new URL(url)).proxied),
+          childEnvironment: proxyEnvironmentForChild(),
+          sources: Object.fromEntries(Object.keys(home).map(name => [name, snapshot.get(name).source]))
+        }));
+      } finally { await dispose(); }
     } else console.log(JSON.stringify({ values }));
   `, envFile, ...upstreamModules], { env: environment, encoding: 'utf8', windowsHide: true, timeout: 15000 });
   assert.ifError(child.error);
@@ -115,20 +123,37 @@ test('software direct and custom settings survive child spawn and home .env back
   }
 });
 
-test('official Harness launch snapshot keeps software settings above mixed-case home proxies', (context) => {
-  const sourceRoot = path.join(root, 'vendor', 'harness-source-0.1.6-alpha.2', 'packages', 'util');
-  const modules = [path.join(sourceRoot, 'launch-environment', 'src', 'index.ts'), path.join(sourceRoot, 'http-proxy', 'src', 'policy.ts')];
-  if (modules.some((file) => !fs.existsSync(file))) {
-    context.skip('The pinned upstream source checkout is only present in dependency-upgrade verification.');
+test('packaged official proxy installation keeps software settings above mixed-case home proxies', (context) => {
+  const runtimeRoot = path.join(root, 'vendor', HARNESS_RUNTIME_DIRECTORY);
+  if (!fs.existsSync(runtimeRoot)) {
+    context.skip('Run pnpm runtime:deploy for the current product pin; no legacy runtime or source fallback is accepted.');
     return;
   }
+  const runtime = readHarnessDesktopRuntime(runtimeRoot);
+  const modulePaths = ['@deepseek-ai/dsh-launch-environment', '@deepseek-ai/dsh-http-proxy'];
+  const modules = modulePaths.map(name => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(runtime.nodeModulesPath, name, 'package.json')));
+    assert.equal(manifest.name, name);
+    assert.equal(manifest.version, HARNESS_VERSION);
+    const relative = `node_modules/${name}/lib/index.js`;
+    const file = path.join(runtimeRoot, relative);
+    const expected = runtime.descriptor.files.find(entry => entry.path === relative);
+    assert.ok(expected);
+    assert.equal(createHash('sha256').update(fs.readFileSync(file)).digest('hex'), expected.sha256);
+    return pathToFileURL(file).href;
+  });
   for (const proxyUrl of ['', 'http://127.0.0.1:7890']) {
-    const result = probeHomeProxyEnvironment(context, proxyUrl, modules.map((file) => pathToFileURL(file).href));
+    const result = probeHomeProxyEnvironment(context, proxyUrl, modules);
     assert.deepEqual(result.values, explicitProxyValues(proxyUrl));
     assert.deepEqual(result.diagnostics, []);
-    assert.equal(result.policy.source, proxyUrl ? 'env' : 'none');
     assert.equal(result.httpsProxy, proxyUrl || null);
-    assert.equal(result.loopbackProxy, null);
+    assert.deepEqual(result.loopbackProxied, [false, false, false]);
+    if (proxyUrl) {
+      assert.equal(result.childEnvironment.HTTP_PROXY, proxyUrl);
+      assert.equal(result.childEnvironment.HTTPS_PROXY, proxyUrl);
+      assert.equal(result.childEnvironment.NODE_USE_ENV_PROXY, '1');
+      assert.match(result.childEnvironment.NO_PROXY, /127\.0\.0\.1/);
+    } else assert.deepEqual(result.childEnvironment, {});
     assert.ok(Object.values(result.sources).every((source) => source === 'process'));
   }
 });

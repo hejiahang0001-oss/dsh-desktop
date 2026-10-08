@@ -1,5 +1,154 @@
 # Validation evidence
 
+> 2026-10-09 当前：原资料第二次正常退出后选区比较accepted=true，独立重算一致；28历史/7草稿/Key密文/代理保留、设置等字节import-rename、无新增V4。临停dsh_agent已只撤16字节并CLI enabled=true，其他配置字节保留。UI与磁盘证据分开、已接受主机风险不作消除声明。PR/CI和公开回下载尚待完成；[最终本地闭环证据](LULU_RELEASE_READINESS_2026-10-09.md)。
+
+> 2026-10-09：本机1.1.14/Harness0.2.1-alpha.1已覆盖，EXE/ASAR/完整运行库与安装前后选区保全通过。narrow-NOsHi8功能/fullACL/聚合均true，4交互断言、同次clean explicit-exit及root/Job/guardian归零；前两observer失败保留，真实DOM记录确认异步就绪竞态，产品/冻结包未变。live-ui-t9a56w原资料启动只读检查通过，当前空草稿不代表所有旧草稿UI逐一恢复；退出后选区/迁移比较及集成配置恢复仍待验。观察器7/7、保全工具独审9/9；不重复未变输入911项全测。未公开或Stable-ready。[安装态证据](LULU_INSTALLED_ACCEPTANCE_2026-10-09.md)。
+
+> 本轮知识回写已实证完成：`wiki-data-boundary-20261008/tx-eHI6o4/verification.json`，主控影子/独立保全/实际回读全过，11文件/4来源，旧245来源及其他项目/交付字段/历史保留。QMD未配置跳过；14:19Z候选进程及本轮测试命令为0。知识同步不等于安装或Stable验收；当前因旧安装MCP进程占用等待用户完整重启Codex，集成临停待安装后恢复。
+
+> 2026-10-08最新补证：supplement-tqCGqX归档12UI/root0/Job0/guardian0/clean explicit-exit，加post-exit-proof-k1Yzwa真实离线proof通过：原69条/header不变，仅接受唯一官方end-seed，专项5/5；原聚合false保留。正式live-boundary-6GsZTE完整稳定检查103资料+5祖先，资料直接DACL无发现、祖先9条未决，所以原总false不改；另5份保护状态与旧备份相同。审计器混合路径/.bak覆盖缺陷经空fixture红绿及10/10修正，前两失败保留。用户分别接受缓存及既有祖先风险；不等同有效访问/全profile安全证明。dsh_agent单行临停、其他配置逐字节保留及CLI false已验，14:07:20Z仍9Node，未覆盖安装。见[归档证据](LULU_ARCHIVE_CLOSURE_2026-10-08.md)、[资料边界及限制](LULU_DATA_BOUNDARY_2026-10-08.md)。
+
+> 2026-10-08 有效时间观察：fliHfm驻留180013.0373ms，readyBeforeLaunch/finishAfterCleanup/fullResidence均true、maxgap1035ms、readFailures=0；两文件首次可读ACL非私有，最终全树失败。Vgaaec虽自报temporalEvidenceComplete=true，因186199ms空白不采信，原件保留。观察器专项10/10及无应用真实合成qI4GAx（2179ms/gap895ms、首读早于STOP）与产品权限失败分开；Job清理非正常退出。既有两夹具profile138/136项均未见规则违规，不等于真实Key安全证明。无新全测/构建，详见 [摘要和原报告SHA](LULU_STABLE_CONTINUATION_2026-10-08.md)。
+
+> 2026-10-08 Procmon增量：单次空凭据probe驻留180011.092ms，原全树ACL仍失败。离线全量保留事件24,715条、越界0；两份26B缓存创建者为候选GPU进程，Intel图形驱动和DACS虚拟化参与创建调用栈。未采驻留最后约8秒，不排除后续改ACL、不唯一归因。原程序/用户数据未动，采集与测试进程已结束；诊断Job回收非正常退出。详见 [跟踪证据](LULU_CACHE_TRACE_2026-10-08.md)。
+
+> 2026-10-08 缓存对照：准备器7/7专项通过；真实空凭据实例驻留180002.558ms、2个新缓存、目录身份/输入未变，但最终ACL失败。只读枚举176项，将宽权限收窄为2文件/8条显式FullControl。owned Job诊断清理已完成，不算原生退出；未安装发布。已授权Procmon仅准备，采集disabled、过滤未验，不冒充创建者已证。详见 [分层结论](LULU_CACHE_ACL_2026-10-08.md)。
+
+> 2026-10-08 归档增量：第三轮 UI 提前失败；第四轮 12 项 UI / 17 次安全点击通过，但人工原生退出超时、退出后冷读未验、最终 ACL 未返回通过，聚合 false。诊断合同 15/15 与语法通过不替代真实验收。两轮原输入/历史未改、0 新模型请求、进程已清理。详见 [分轮证据](LULU_ARCHIVE_OPERATOR_2026-10-08.md)。
+
+> 2026-10-08 增量：原 PS5 备份长路径枚举失败，保留完整失败目录和 INCOMPLETE；真实长路径 Set-Acl/Get-Acl 修正专项 24/24，独立恢复工具 13/13 合成通过，真实补证结果另见 [安装前检查点](LULU_BACKUP_CHECKPOINT_2026-10-08.md)。归档两次补测均聚合 false；第二次 12 项 UI 通过、180 秒原生退出等待超时，退出后冷读未运行，最后 ACL 未取得通过结论。旧源码/最终包输入不变，不重跑 911 项或模型，不安装发布。
+
+> 2026-10-08：`test-T1UpRM` 完整 911/911、零失败/跳过；`dist-ahKtZw` 双包构建及 `payload-nzv4FX` 全负载一致通过，未入包观察器变更不伪称改了包。11 项最终包 UI smoke、`modal/observed-05CLU9` 与生命周期各留独立证据；原 workflow/Portable/safe-exit/代理失败保留，不能用局部成功覆盖总失败。准确最新结果见 [当前验收记录](LULU_STABLE_ACCEPTANCE_2026-10-07.md)。本机未覆盖、公开与 Stable 未变，EXE/Setup/Portable 未签名；只承诺 Windows 11 x64，不推广到 Windows 10 或其他机器。
+
+> 2026-10-07 原图视觉终测：`artifacts/lulu-visual-20261007/test-4vbpiu/result.json` 796/796、零失败/跳过、319.2秒、输入不变；九帧ICO与本地9情境/27项字段状态通过。真实 Harness 品牌专项4/4，但紧凑截图发现发送控件遮挡，完整窄窗交互仍未通过。详见 [证据与失败保留](LULU_VISUAL_FOLLOWUP_2026-10-07.md)。未打包、覆盖或发布。
+
+> 本轮源码终测：`artifacts/lulu-tray-20261007/test-bsHy1j/result.json` 791/791、零失败/跳过、298.7 秒、输入摘要不变；根生产 5 包审计零告警。原生托盘交互专项与全量源码分别通过，不代表最终安装包或用户机器已经覆盖。
+
+> 2026-10-07 托盘关闭专项：`artifacts/lulu-tray-20261007/native-64iq6g/report.json` 实际 Electron 原生窗口/托盘菜单程序化验证 18 项通过，exit 0、输入不变、测试资源已清理。未冒充人工点击/完整 Harness 安全退出/安装态；源素材下载与提帧有独立证据。完整范围见 [托盘与素材记录](LULU_TRAY_AND_MASCOT_2026-10-07.md)。
+
+> 2026-10-07 正式新核验收：受控 vendor 已部署，正式 Supervisor 无替身的认证/取消/重启 3 项通过；PluginHealthCatalog 新布局修复后最终源码 **782/782、0 fail/skip、342.4 秒、输入不变**，`pack-My8nLr` 新核完整性与实际 EXE 基础/Harness smoke（529/529 closure、191 inventory/0 failed）通过，Windows 身份 lulu/1.1.14。18 项完整布局及独立终端报告属于之前的 `pack-wXLnz5`，不冒充最终包全项重验。两个真实 UI 分支仍失败：附件跨会话丢失已复现；Office helper 依赖已删除的字体选择器并未可靠关闭新引导，诊断不等于整体验收。Wiki 11 文件/32 来源真实写入、影子预演和独立回读通过，其他项目、历史及交付状态保留，QMD 未配置。所有失败与后续结果分别保留；未安装或公开发布，详情见 [本轮精确报告](HARNESS_FORMAL_BINDING_2026-10-07.md)。
+
+> 2026-10-07 晚间运行库验收：官方 pack 六阶段、34/34 锁语义矩阵、冻结安装和 667 项零告警审计通过；无链接新树 14,173 文件/387,504,989 字节、Office 733 摘要通过。`native-7DS2eI` 五组实际组件通过（Office 2/1/3 页中文/数值及受限 PTY），`run-EjGTcp` 实际认证/空会话跨重启通过；进程停止及独立时点残留核对分别记录。修正过严的认证测试后，最终 `source-tests-zUHqQ7` **713 项/711 pass/0 fail/2 原有 skip**，278.7 秒、输入不变；首轮失败和重试证据均保留。Obsidian 事务 `wiki/tx-5GcsOe` 的 11 文件/23 来源真实写入、摘要和独立回读通过，历史/其他项目/交付状态不变，QMD 未配置。证据基目录 `artifacts/runtime-assembly-20261007/`，详细边界见 [运行库证据](HARNESS_DESKTOP_RUNTIME_2026-10-07.md)。未验证正式接线、完整 UI/安装，不声明 Stable-ready。
+
+> 2026-10-07 私有 PS7 知识同步：事务 `artifacts/powershell-host-20261007/wiki/tx-9asE6r` 的 11 文件/15 来源写入与独立回读均通过；`final-verification.json` 确認原内容、其他项目及交付状态保留。未配置 QMD，跳过刷新。此同步结果不代替完整桌面、安装包及安装态验收。
+
+> 2026-10-07 私有 PS7 候选已整合：官方 7.6.6 的 658 文件来源与签名通过，15 个窄源码文件、实际 PIPE/PTY 各 7 项和 40 文件干净重放已验；整合后根测试 706 项中 704 通过、2 原有跳过、零失败。修正 pnpm 隐式安装问题后已从缓存恢复并核对 Office/HCS/sharp/MCP 字节。新输入官方完整构建及原失败的两条真实 Loader 用例已通过；下一步为官方闭包及完整宿主/安装验收。正式内核与 Stable 未变。详见 [本轮证据](HARNESS_PRIVATE_POWERSHELL_2026-10-07.md)，下方旧段落保留其历史时点。
+
+> 2026-10-07 终测：同一冻结源码 `pnpm test` **685 项 / 683 pass / 0 fail / 2 原有 skip**、exit 0、输入未变。修复后的 021 完整 `build:official` 及六项官方编译后门禁均 exit 0，355 客户端产物；662 项生产依赖审计零已知漏洞，HCS/sharp/MCP 实际消费者通过。此前基线失败仍保留；新结果不代替尚未通过的完整 shell、宿主/包/安装态验证。私有官方 PS7 运行时方案待用户决定，未安装发布。见 [完整证据](HARNESS_STABLE_READINESS_2026-10-07.md)。
+
+> 2026-10-07 完整适配阶段：Office 官方 111/111、native 14 项与 provider 6 项及主线程独立复验通过；真实 HCS 28+5、sharp 17 项通过。根全量基线为 **662 / 659 pass / 1 fail / 2 skip**，失败的原 PTY 单项原条件复跑通过，不能合并成一次全量绿。Nahimic 仅服务助手提升权限的配对完成并恢复；沙箱 shell 仍未完整验收。正式内核、安装及 Stable 不变。证据、各原始失败、实际作用范围统一见 [本轮验收记录](HARNESS_STABLE_READINESS_2026-10-07.md)。
+
+> 2026-10-07 Office归档只读核查：整包SHA-256/SHA-512匹配，735条目中清单733文件SHA-256全通过；90份来源与固定公开树81相同/4实质差异/5无同路径，Core提交可达且gitlink一致。实际exit0及差异字节独立回读完成；verified仅表示检查完成，不表示来源全部一致或功能通过。没有包代码执行、补装或发行。见 [新证据和边界](HARNESS_OFFICE_SOURCE_2026-10-07.md)。
+
+> 2026-10-06 20:41 增量：Nahimic Stop/Start=0，已恢复 Running/Auto/PID22624；RunAs 下原生 PID2384 返回 sentinel/exit0，无超时，但 stderr 两处 CannotCreateTypeConstrainedLanguage。只算命令标记往返，不算完整 shell/编码兼容通过，停服务因果仍未配对证实。原始 shellPassed=true 及早先拒绝/崩溃证据保留；未复跑完整 e2e，未换核交付。见 [本次证据](HARNESS_021_NAHIMIC_CHECK_2026-10-06.md)。
+
+> 2026-10-06 晚间：固定 0.2.1-alpha.1 / 5badb150…，新锁 frozen install 与 build:official 真退出0、输入摘要不变，355 客户端产物；安装退出0不代表 Office 原生包齐全（已查到缺失）。source-map-js 修复包独立比较 20 个预期结果一致，准备器14/14，生产审计662项/1high/exit1。关键迁移与编译产物的实际数量、失败/跳过及 Wiki 回读结果以 [本轮证据](HARNESS_021_BUILD_2026-10-06.md) 为准；没有换核、打包、覆盖或发布。
+
+晚间结果：6个独立叶子exit0；migration-g636N9为59文件1930项/1906pass/14fail/10skip、exit1，14fail均5000ms超时；migration-recheck-LacK8H为失败4文件414项/413pass/1原有skip、exit0，原14case逐名匹配全部通过，未改源码/断言/超时。built-JNXUqL为7文件8项/6pass/2fail/0skip、exit1，两条真实shell路径均三次返回0xC0000005。不是全链一次全绿，也不是全部新核验收。冻结 result.json 记录15次执行；5份正式输入摘要未变、4份候选摘要与profile相符。Office整包通过摘要仅表示获取成功，不代表native已安装。
+
+后续隔离诊断6次均真实close无超时：直接两种PowerShell与受限cmd成功，受限PowerShell失败；精确PID34284的事件首指NahimicOSD.dll、后clr.dll，不等于唯一根因。用户允许临时停服务对照后，主线程StopService返回2/权限不足，script exit1；probeRun=false，服务前后Running/Auto/PID5532不变。证据在本轮shell-diagnosis目录；等待管理员执行，未降沙箱或改服务启动项。
+
+2026-10-06 Wiki 收口：主线程以固定 Node 独立重跑 `artifacts/harness-021-wiki-20261006/verify-wiki.cjs` 退出 0；7 项目页、4 跟踪文件、9 个新增链接、8 份来源快照及 11 文件备份/当前摘要通过，旧来源/历史/其他项目保留。见同目录 `main-verification.json`；未信任晋升，QMD 未配置，未做 Obsidian 应用内视觉验收。另 9 个候选/正式输入摘要均未变化，见 `artifacts/harness-021-reachability-20261006/main-verification.json`。
+
+> 2026-10-06：固定 0.2.1-alpha.1 真实 event-exporter 源码、33 个精确依赖快照，回环专项两轮各 4/4，exit0/零失败或跳过；默认导出缓存调用为 0，同实例显式缓存对照为 2/1/1，取消/清理正常。五个关键发布包内容与 registry 相符。不是完整产品路径或新核安装/构建验收，安全门禁仍保留。主线程复跑证据 `artifacts/harness-021-reachability-20261006/probe/run-2026-10-06T00-09-00-926Z-5c4deddf/`，详见 [限定核验](HARNESS_021_CACHE_REACHABILITY_2026-10-06.md)。
+
+2026-10-05 Wiki 验证：现有 7 项目页、4 跟踪文件的 frontmatter、新关联链接、来源快照摘要、历史及其他项目保留均通过；主线程独立运行 `artifacts/harness-021-wiki-20261005/verify-wiki.cjs` 退出 0，结果见同目录 `main-verification.json`。QMD 未配置，不作人工信任晋升；未做 Obsidian 应用内视觉检查。
+
+> 2026-10-05：仅新依赖隔离复核，未重跑旧全量桌面或打包。4.2.0 小包回归 11 项/7 通过/4 失败；4.3.0 为 12 项/9 通过/3 失败，均 exit1；主线程固定 Node 独立复跑 4.3.0 结果一致。两包 registry SHA512 相符，Vary 红转绿，三项关注行为仍红；最小 1 依赖 audit exit0/零告警不足以证明修复。维护者 CVE 异议与 DSH 可达未证分开记录。候选输入、正式绑定、安装和 Stable 未改。测试夹具和初次最小 workspace 识别失败均留证，见 [详细范围](HARNESS_021_SECURITY_RECHECK_2026-10-05.md)。
+
+2026-10-04 Wiki收口：`wiki-update`合并既有DSH/lulu项目7页与4个跟踪文件；`artifacts/harness-021-wiki-20261004/validation.json`回读ok，10个新增关联链接可解析、历史/其他项目/旧来源保留，主线程独立复核11文件摘要一致。QMD未配置跳过，未进行Obsidian应用内视觉或人工信任等级晋升。
+
+> 2026-10-04：新目标0.2.1-alpha.1精确标签/提交与npm元数据已核对；原锁663依赖65告警，经16条精确覆盖后662依赖仍剩1high，audit退出1。冻结锁仅lockfile-only退出0，不是依赖安装/构建成功。失败克隆和不可用4.2.1修复版本证据保留。新UI、模型、包、安装和公开下载均未验收；正式内核及用户数据不变。见 [本轮静态与执行证据](HARNESS_UPSTREAM_v0.2.1-alpha.1.md)。
+
+2026-10-04最终源码验证：项目固定Node直接执行 `--test --test-concurrency=4 test/*.test.cjs`，662项、660通过、2原有跳过、0失败/取消，120057.3211ms，`artifacts/harness-021-fixed-node-tests.log`。它验证当前alpha.2绑定的桌面源码和新输入准备器，不是0.2.1完整内核测试。pnpm脚本首轮选中Codex Node，核对后仅停止本轮测试树；该中断日志保留为失败、不计通过。准备器专项14/14、最终真实精确检出重放和反向检查成功；两项审查问题已修复（硬链接拒绝、最终锁替换失败的受限回退/并发资料保护）。固定输入安全状态仍blocked，禁止晋升。最终入口SHA256 `df974721b93e0ea8cab9cceee6f8dfc4b2390632b5fe44b6f544f9660c10e43b`，测试SHA256 `268a778c02b898f0ef9de24abafd7f5a9b15d7b58755da3833a45085e1cc86fe`。
+
+> 2026-10-03：lulu 源码视觉候选全量 648 项中 646 通过、2 原有跳过、零失败；真实 Harness 品牌像素、Dock/PTY 23 项隔离断言及 Office/Wiki/网络窗口检查完成，无模型请求。独立审查所发现品牌包装层问题已修复并复核。中途失败保留在 [本轮验证记录](LULU_VISUAL_REBRAND_2026-10-03.md)。不是打包、安装或公开发布验收。
+
+> 2026-10-02：候选输入准备在全新精确检出成功；聚焦7项、固定Node全量640通过/2原有跳过，真实Electron工作台合成IPC重试通过。未换核、安装发布，详见ITERATION_2026-10-02.md。pnpm误选运行时的中断日志不算通过。
+
+> 2026-09-30完整新核候选：安全锁662项零告警、迁移382通过、完整构建通过、控制器等907通过/1原有Windows跳过、38编译校验模块通过；隔离负载327包及真实宿主认证/受限会话/分页/分叉验证推进。Windows safeStorage只验空白隔离资料，未覆盖安装或发布。一次凭据保存失败尚未复现，保留证据。详见HARNESS_FULL_ADAPTATION_2026-09-30.md。
+
+> 2026-09-30跨进程增量：压缩/未压缩、正常关闭/flush后直接退出4项恢复测试通过，写锁可重新取得；探针改为等待官方插件就绪。未验断电/复杂迁移，未换核安装发布。证据见HISTORY_020_2026-09-30.md、restart-ready.tap。
+
+> 2026-09-30增量：真实SessionStore/Query冷读回放缓存接入，分页组合1项通过；追加23事件与旧21事件范围隔离正确，不激活会话。完整Remote/UI和复杂迁移仍待验收，未换核安装发布。证据：HISTORY_020_2026-09-30.md、history-query-final.tap。
+
+> 2026-09-30：官方历史分页组件1项通过，7条Unicode消息/21事件往前翻页无重复遗漏，越界/取消与资源释放通过。Query观察传输仍为夹具，完整UI和复杂迁移未验收；未换核安装发布。见 [分页证据](HISTORY_020_2026-09-30.md)。
+
+> 2026-09-29 存储层隔离验证：0.2.0-rc.2真实JSONL的none/zstd重开与分段读取、权限/取消，以及最小V3→V4保留旧文件迁移共3项通过；111项审计零发现、冻结锁安装通过。不是完整SessionController/UI分页或真实聊天迁移。未换核、安装或发布，下一步消息/工具/子代理迁移及控制器分页。 见 [存储证据](STORAGE_020_2026-09-29.md)。
+
+> 2026-09-29 新核隔离验证：0.2.0-rc.2实际框架/defineTool终端重载3轮、实际shell-env会话绑定和卸载3轮通过，54项依赖审计零发现、冻结锁安装通过。生产内核未替换，未重复旧全量测试或安装发布。下一步实际SessionController/V4与分页。见 [验收边界](SERVICES_020_2026-09-29.md)。
+
+> 2026-09-29 真实重载更正：上一轮dispose事件模拟不足；固定Cordis实际需effect清理。已修正两处注册，真实Cordis+defineTool+fork IPC三轮重载通过（3读/3取消），全量636通过/2原有跳过、零失败。完整产品UI与0.2.0迁移仍未验收，不换核、不安装发布。见 [真实证据](TERMINAL_EFFECT_2026-09-29.md)。
+
+> 2026-09-29 后续实现：兼容终端读取改为插件实例级生命周期，卸载/断连清理监听和等待请求，发送异常释放名额。回归先失败后通过，相关10/10；全量638项、636通过、2原有跳过、零失败，根生产5包审计零发现。未換核、安装或发布；下一步真实插件重载及0.2.0迁移。见 [实现与验收边界](TERMINAL_LIFECYCLE_2026-09-29.md)。
+
+## 2026-09-27 Wiki checkpoint verification
+
+Existing Obsidian DSH project merged: 7 pages plus index/hot/log/manifest; no new pages. `artifacts/upstream-checks/2026-09-27/wiki-verification.json` confirms 9 frontmatters, 168 linked references, preserved historical bodies and unrelated projects/sources, append-only log, exact source hash, and current source still matching the passing test snapshot. QMD unset; native Obsidian visual review not performed. The broader workspace authorization gate remains open.
+
+> 2026-09-27：官方仍为 0.1.7-rc.2，继续同一 V1.1.14。shell-env 已按执行所属会话生成独立工作目录快照，专项 2/2；全量 634 项、632 通过、2 跳过、零失败，前后源码摘要一致。根生产审计 5 包零发现。仅环境绑定窄修，显式路径授权、真实 Office/Wiki 与完整交付门禁仍开放；未换核、打包、覆盖安装或发布，安装 V1.1.13 与 Stable V1.1.12 不变。见 [本轮证据及下一步](HARNESS_SHELL_BINDING_2026-09-27.md)。
+
+## 2026-09-26 official file API retirement (independent host retained)
+
+- Wiki merge verified 2026-09-26T13:21:23.873Z: 7 existing DSH pages, index/hot/log/manifest, zero new pages; 9 frontmatters, 161 internal links and 414 retained historical body lines checked. Unrelated projects and old sources preserved; append-only log. Source hash `c5e89bdd87b504086739e80c8bea937e4983d2f52fdb151322440fbad47ba1fe`; evidence `artifacts/official-desktop-dedup-2026-09-26/verification.json`. QMD unset, native Obsidian visual check and human trust-ledger refresh not performed.
+- Independent official-client check: 288,245,480 bytes, whole SHA-512 matches official feed, local SHA-256 `0cf065dc2fc56456448620230581a9072477f0b2562bbc4e1709cdaedd3ceb86`, Authenticode `Valid` with Hangzhou DeepSeek publisher. Download/cleanup records are separate; 292,439,784 temporary payload bytes removed after verification, 116 range metadata files and complete installer retained. Installer never executed or installed.
+
+- Scope/decision: [official capability reuse](OFFICIAL_DESKTOP_REUSE_2026-09-26.md). Retired three unused file-byte IPC routes and preload methods; kept search, official preview navigation and security guards. Seven source/test files +98/-302; eight original source backups retained. Previous session-control/user changes untouched.
+- Main-agent frozen `pnpm test`: **633 tests / 631 pass / 0 fail / 2 skipped / 0 cancelled**, 106728.7608 ms, exit 0, finished 2026-09-26T13:16:01.735Z. All tracked electron/assets/runtime/test/scripts and manifest/lock hashes unchanged before/after. Evidence: `artifacts/official-desktop-dedup-2026-09-26/{source-test.log,test-result.json}`. Both prior fixed-source-checkout skips remain explicit, not waived.
+- Focused implementation checks 48/48; includes actual preload VM API exposure, alpha.2 retained main binding/ambiguity/switch races, descriptor restrictions and temporary Junction rejection. These are source/fixture checks, not a new real Electron UI or installed-state acceptance.
+- Fresh root production audit: 5 dependencies, zero known findings (`root-audit.json`); no dependency/pin/vendor change, not a new full Harness runtime audit. Main-agent diff review found no new Blocking issue in this bounded deletion; existing workspace-binding, unload, source and Portable gates remain open.
+- Official client download is separate from DSH delivery. Its final transfer/integrity/signature state is documented in the linked record. No execution/installation, real credentials/model call, DSH package, overwrite, public release or Stable promotion.
+
+## 2026-09-26 session bridge repair and real local proxy transport
+
+- Existing Obsidian project synchronized via wiki-update and verified 2026-09-26T13:03:00Z: 7 project pages updated / zero created, index/hot/log/manifest included; 11 backups, 9 frontmatters, 154 links and 376 retained historical lines checked. Other projects and old source entries preserved, log append-only. Source SHA-256 `6bc69b396674a06db9e0e41d528844f055b92a33e59c0cf26fd63661db858202`; `verification.json` also checks frozen final source hashes, both transport runs and separate audits. QMD unset; native Obsidian visual check and human trust ledger not refreshed.
+- [Scope and source identity](HARNESS_RC2_BRIDGE_PREFLIGHT_2026-09-26.md): no new official release beyond exact rc.2; current fixed runtime remains 0.1.6-alpha.2, root pins/vendor unchanged. No package/install/publication or real credentials/model use.
+- `artifacts/upstream-checks/2026-09-26/bridge-red.tap` reproduces the real baseline mismatch (4 pass / 17 fail); `bridge-green.tap` passes 21/21. Real vendored alpha.2 controller with isolated in-memory services also confirms the contract. rc.2 bridge coverage is source-matched fixtures, NOT full service composition. Missing cold alpha.2 jobs state fails closed.
+- `network-probe/run-84iTAF/probe.tap`: 6/6, 5043.8176 ms; main-agent independently reran to `run-MgO8hv/probe.tap`: 6/6, 4945.2063 ms, zero fail/skip/cancel. Native fetch and exact official rc.2 proxy/API-key adapter/BlockAssembler carry real loopback HTTP/HTTPS CONNECT and SSE. TLS trust/hostname rejection, errors, truncation and mid-stream cancellation tested. No global trust-store or production dependency change.
+- Synthetic provider only; network probe does not include software IPC/DPAPI (Sep25 IPC result remains separate), real DeepSeek, corporate/PAC/authenticated proxy or external direct routing. Split server writes do not guarantee client chunk boundaries; cancellation connection close includes finalization/disposal. Original first passing run and independent repeat both retained; temporary fixture private keys removed.
+- Fresh isolated audits: new network 5 dependencies, reused provider 58, root production 5; each reports zero known findings. None is a full new source-build/runtime audit. First full source run has 631 tests / 629 pass / 2 skips, child exit 0 but changed pre/post source hashes: rejected as final evidence, retained in `source-test.log`, `test-result.json`, `initial-source-validation-rejection.json`. Frozen final `pnpm test`: **631 tests / 629 pass / 0 fail / 2 skips / 0 cancelled, 99271.0838 ms, exit 0**, matching pre/post source hashes, completed 2026-09-26T13:00:04Z (`source-test-final.log`, `test-final-result.json`). Both skips still require the cleaned old fixed source checkout: launch proxy precedence and official Queue/Steer/Stop ownership. No new checkout was mislabelled as the old source; no gate was weakened.
+- Review still requires changes: **Blocking** stale DSH_CWD across workspace switch; **Important** module-level terminal IPC listener/pending lifecycle. Trigger, impact, fix and verification paths in `bridge-review.md`. These and existing Office source, Portable and delivery gates remain open; do not release based on focused passes.
+
+## 2026-09-25 Harness 0.1.7-rc.2 isolated configuration/provider preflight
+
+- Wiki verified at 2026-09-25T00:28:09.188Z: existing vault, 7 project pages updated / zero created, index/hot/log/manifest included; 11 backup hashes, 9 frontmatters, 147 internal links and 346 retained historical body lines checked. Unrelated projects, old sources and append-only log preserved. Main source SHA-256 `247f874455d593627fa5a77774aa1de1ec74bb40510b5a4cf099ab6b8f1527ec`; evidence in the daily verification.json. QMD unset, native Obsidian visual check and human trust ledger not refreshed.
+- [Exact target and review](HARNESS_UPSTREAM_v0.1.7-rc.2.md): clean published commit `477b4f420553e8a52c2fbccc464d7561b239c443`. Production manifests, lock and vendor remain fixed at 0.1.6-alpha.2.
+- `artifacts/upstream-checks/2026-09-25-rc2/probe-test.tap`: **9/9, no skips/cancellations/failures, 1181.6253 ms**. Real published Settings/ConfigEditor/Profile migration, retained rejections/rename failures, optimistic concurrency, restart and redacted field edits. Actual desktop IPC bridge/Vault with rc.2 CredentialProvider/API-key plugin passes eight authentication subchecks.
+- Synthetic credentials, temporary home, AES test crypto and mocked HTTP 401 only. Verifies software Key precedence, rotation/clear/no ambient fallback and Messages framing; NOT Windows DPAPI, successful model/SSE, real proxy forwarding, user migration or packaged interaction.
+- Frozen isolated pnpm 11.7.0 install; 58-dependency audit has zero known findings. Probe lock SHA-256 `e65f682f7e9bd2511120c5e185c4827419c7b7feb2d89420a140e097056ffe44`. No npm/yarn lock or root lock changes; no lifecycle scripts. Initial warning-observer failure and vulnerable probe YAML selection retained and corrected with fresh evidence.
+- Office kit 0.1.1 archive integrity verified, 39 files without corresponding source/maps, declared repository 404; native 730 files/190865379 unpacked bytes are metadata-only. Source release gate unresolved, Q&A unchanged. No new native rendering, full runtime audit/build, installer, overwrite, public release or Stable promotion.
+- Bounded review: no production-code fix in this checkpoint; peer declarations and remaining plugin/full runtime contracts still Important, exact Office source still Blocking for publication. Previous source/session evidence kept at its original versions, not relabelled rc.2.
+
+## 2026-09-24 Harness 0.1.7-rc.1 isolated Session preflight
+
+- Wiki verification at 2026-09-24T00:25:20.926Z: existing vault, 7 project pages updated / none created; index/hot/log/manifest included, 11 pre-write backups checked. `verification.json` confirms 9 valid frontmatters, 141 internal links, 315 historical body lines preserved, unrelated project/source metadata retained and append-only log. Source hash `5eb77be96eb5a5e6c70448167c289f5d0ee3e63650cdf3005866425fa9cfec8e`. QMD unset; Obsidian application visual inspection and human trust-ledger refresh not performed.
+- Bounded review: no product code change or release approval in this checkpoint. **Important**: three desktop bridges have no declared dsh peers; missing mismatch cannot serve as a compatibility gate. Verify real contracts before adding exact declarations. **Blocking for public release**: Office Node API preferred source remains unlocated; provide and verify the exact source before public assets. Existing full-runtime, Portable, install/data-retention gates remain open. Probe fixture failures were diagnosed, not hidden by lowering expectations.
+- Exact clean checkout: `dsh-v0.1.7-rc.1` / `46a7f68b0922371ce7144b668b90e377d8e799f4`; [comparison and boundaries](HARNESS_UPSTREAM_v0.1.7-rc.1.md). Evidence: `artifacts/upstream-checks/2026-09-24-rc1/`.
+- Independent pnpm 11.7.0 frozen probe install, 27 packages, no lifecycle scripts. Initial parent-workspace discovery is recorded; desktop lockfile unchanged. Final `probe-test.tap`: **9 tests, 9 passed, zero failures/cancelled/skips**, 335.506 ms; `probe-audit.json`: 27 production packages, zero known findings. This is not the source-build runtime audit.
+- Actual released rc.1 Session/format APIs verify V3→V4, explicit child facts, producer/tool-role conversion, interrupted-turn sequence remapping, strict corruption rejection, format-codec reopen and two generations of inherited boundaries. The source plugin guard also confirms undeclared peers bypass version comparison; it does not prove the three desktop plugins run. No disk persistence/locks, controller pagination, complete Agent composition or real-model claim.
+- Initial 8/9 assertion failure was a fixture mapping error, corrected against exact-tag `sources.ts:40`; evidence retained in `initial-probe-failure.json`. No production fix claimed. Existing Sep23 621-pass/2-skip source result remains historical and was not rerun without a production change.
+- Target Office kit 0.1.0 archive integrity verified; 39 entries lack src/sources/maps, repository 404 and gitHead absent. Windows native engine metadata only; no new native payload/Office rendering evidence. Source availability remains a public-release gate. No model call, user-data migration, installer, install, push, release or Stable change.
+
+## 2026-09-23 Harness 0.1.7-alpha.2 preflight and settings-backup preparation
+
+- Wiki synchronization verified at 2026-09-23T01:05:19.587Z: existing vault `D:/OBS/昆仑ERP`, 7 DSH pages updated / none created, index/hot/log/manifest included. Eleven pre-write backups matched; `verification.json` confirms 9 valid frontmatters, 136 internal links, 289 historical body lines retained, unrelated project/source records unchanged and append-only log. Source SHA-256 `f65c1a0f44934a8a67b346516773aa23877ea58a99f238e8c7cfb2ab32f80283`. QMD unset; native Obsidian visual inspection and human trust-ledger refresh not performed. This is a knowledge/preparation checkpoint, not completed adaptation or delivery.
+
+- New published target: `dsh-v0.1.7-alpha.2` / `00102833dfaee1da9f48a3a8eae9d34005a75218`; clean exact checkout verified. The active fixed runtime remains `0.1.6-alpha.2`. Source comparison and unchanged delivery gates: [preflight](HARNESS_UPSTREAM_v0.1.7-alpha.2.md).
+- Evidence root: `artifacts/upstream-checks/2026-09-23-alpha7/`. Baseline `pnpm test`: 621 tests, 619 passed, zero failed/cancelled, two skipped, 289580.2575 ms. Final `pnpm test`: **623 tests, 621 passed, zero failed/cancelled, two skipped**, 212622.4411 ms (`baseline-test.log`, `final-test.log`). Both skips require the previously cleaned old upstream source checkout: launch proxy precedence and official Queue/Steer/Stop source-ownership checks. They are not counted as passes; the new checkout is not substituted for the old fixed version.
+- `backup-red.log` reproduces the missing imported-settings backup. Its file-symlink fixture separately hit Windows EPERM; use a real Windows Junction test for directory-link refusal, retain the original failure, and do not claim file-symlink coverage. `backup-green.log`: **7/7**, zero skips. Synthetic settings are preserved byte-for-byte, originals unchanged, manifest tampering rejected, credential/unrelated/temp files and Junction paths excluded. No real profile migration or secret access.
+- Root production audit (`baseline-audit.json`): zero known findings for 5 direct/closure root production packages as reported; not a new Harness runtime audit. `pnpm test` uses the existing node.cmd resolving to Codex Node v24.19.0, same version as the project Node; the wrapper was not changed.
+- Code review of the bounded backup patch found no unresolved Blocking issues: only three fixed locations added; path, link, size, hash and credential exclusions unchanged. Entire upgrade is not approved by this local review.
+- Office source gate remains: new tag still pins kit 0.0.1, declared repo returns 404; separately downloaded 0.0.1-2 matches npm SHA-512 but its 33 files include no preferred-source directory or maps. No component replacement, legal conclusion or release approval is inferred.
+- Not done: new safety lock/runtime build, V4/Settings actual migration, new Messages requests, real plugin/UI/model checks, package/install/publication. Old installed version, draft and Stable retained; no model calls. Wiki synchronization is separately verified; no signature/second-machine/aging claim.
+
+## 2026-09-22 upstream inquiry follow-up (documentation only)
+
+- Official Releases/tags (18 each) and npm (22 versions) still resolve to Harness `0.1.6-alpha.2`, tag `dsh-v0.1.6-alpha.2`, commit `ddefc45fbc7f8e46dd73185e68295696d1297887`; full-semver comparison found no newer version at 00:02:52 UTC.
+- [Discussion comment 18538241](https://github.com/deepseek-ai/deepseek-harness/discussions/7026#discussioncomment-18538241) was posted by `PerryLink` at 2026-09-21T10:53:40Z. GitHub reports `authorAssociation=NONE`, one top-level comment and no accepted answer. Treat it as community evidence, not a verified maintainer statement; no answer marking or follow-up post was performed.
+- Independent checks confirm the declared kit repository still returns HTTP 404; npm `libreoffice-kit@0.0.1` has no `gitHead`; its fixed local Node API package contains 19 files, no `sources/` directory and no source maps. Native `core-source.json` records LibreOffice `bce0998afefdbc355585ca324285661a2170ba77`. This does not establish preferred Node API source availability or a legal compliance conclusion.
+- kit `next=0.0.2-rc8` and `latest=0.0.1` are separate component metadata, not a new Harness tag. New kit source coverage and equivalence to `0.0.1` were not archive-verified, and no dependency was replaced.
+- Evidence: `artifacts/upstream-checks/2026-09-22-source-reply/check.json`. This run only updates inquiry evidence, project documentation and the configured Wiki; no full source tests, build, model call, install or publication was repeated. Prior acceptance results remain dated evidence, not new test claims. All existing release gates remain in effect.
+
 ## V1.1.14 alpha.2 implementation (2026-09-18, not installed or published)
 
 The maintainer accepted the additional Office native-engine footprint. Product source bindings now target V1.1.14 / alpha.2; installed V1.1.13 / alpha.1, private draft 389338033 and Stable V1.1.12 are unchanged. Evidence is under `artifacts/v1.1.14-alpha2-preflight/`. The preflight below remains a historical snapshot, not the current implementation state.

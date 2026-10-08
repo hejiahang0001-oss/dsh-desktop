@@ -31,7 +31,7 @@ const write = async (filePath, content) => {
   await fs.writeFile(filePath, content);
 };
 
-const createFixture = async (context, { generatedResources = false } = {}) => {
+const createFixture = async (context, { generatedResources = false, productName = 'DSH Desktop' } = {}) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-package-evidence-'));
   context.after(() => fs.rm(root, { recursive: true, force: true }));
   const app = path.join(root, 'app');
@@ -47,6 +47,9 @@ const createFixture = async (context, { generatedResources = false } = {}) => {
     dependencies: {},
     devDependencies: { 'electron-builder': '26.11.1' },
     build: {
+      appId: 'com.dsh.desktop',
+      productName,
+      win: { executableName: 'DSH Desktop' },
       files: ['electron/**/*', 'assets/session-continuity.js', 'package.json'],
       extraResources: [
         { from: 'electron/harness-process-host.cjs', to: 'harness-host/harness-process-host.cjs' },
@@ -300,4 +303,52 @@ test('package evidence rejects a mismatched executable identity', async (context
     inspectExecutableIdentity: async () => ({ ...(await acceptedIdentity()), ok: false })
   });
   assert.equal(evidence.accepted, false);
+});
+
+test('package evidence binds lulu display branding to the reviewed manifest without renaming DSH identity', async (context) => {
+  const fixture = await createFixture(context, { productName: 'lulu' });
+  const evidence = await inspectFixture(fixture, {
+    inspectExecutableIdentity: async () => ({ ...(await acceptedIdentity()), productName: 'lulu', fileDescription: 'lulu' })
+  });
+  assert.equal(evidence.accepted, true);
+  assert.equal(evidence.package.name, 'dsh-desktop');
+  assert.equal(evidence.executable.name, 'DSH Desktop.exe');
+  assert.equal(evidence.executable.identity.internalName, 'DSH Desktop');
+  assert.equal(evidence.executable.identity.companyName, 'DSH Desktop');
+});
+
+test('package evidence rejects a stale DSH display name when the reviewed manifest specifies lulu', async (context) => {
+  const fixture = await createFixture(context, { productName: 'lulu' });
+  assert.equal((await inspectFixture(fixture)).accepted, false);
+});
+
+for (const [name, mutate] of [
+  ['missing productName', manifest => { delete manifest.build.productName; }],
+  ['empty productName', manifest => { manifest.build.productName = ''; }],
+  ['whitespace productName', manifest => { manifest.build.productName = '   '; }],
+  ['changed appId', manifest => { manifest.build.appId = 'com.other.desktop'; }],
+  ['changed executableName', manifest => { manifest.build.win.executableName = 'lulu'; }],
+  ['changed internal package name', manifest => { manifest.name = 'lulu'; }]
+]) test(`package evidence rejects ${name} instead of allowing a branding identity bypass`, async (context) => {
+  const fixture = await createFixture(context);
+  const manifest = JSON.parse(await fs.readFile(path.join(fixture.root, 'package.json'), 'utf8'));
+  mutate(manifest);
+  await write(path.join(fixture.root, 'package.json'), JSON.stringify(manifest));
+  await write(path.join(fixture.app, 'package.json'), JSON.stringify(manifest));
+  await createPackage(fixture.app, fixture.asarPath);
+  assert.equal((await inspectFixture(fixture)).accepted, false);
+});
+
+test('package evidence rejects a changed internal executable name even with an accepted identity flag', async (context) => {
+  const fixture = await createFixture(context);
+  assert.equal((await inspectFixture(fixture, {
+    inspectExecutableIdentity: async () => ({ ...(await acceptedIdentity()), internalName: 'lulu' })
+  })).accepted, false);
+});
+
+test('package evidence rejects a differently named PE instead of verifying its DSH-named neighbor', async (context) => {
+  const fixture = await createFixture(context);
+  const executablePath = path.join(fixture.packagedRoot, 'lulu.exe');
+  await fs.copyFile(path.join(fixture.packagedRoot, 'DSH Desktop.exe'), executablePath);
+  assert.equal((await inspectFixture(fixture, { executablePath })).accepted, false);
 });

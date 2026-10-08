@@ -32,3 +32,26 @@ test('native dock uses a compact semantic toolbar at narrow widths', () => {
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(source, /button\.dataset\.opened/);
 });
+
+test('native dock smoke checks the exact current open-only terminal surface', () => {
+  const smoke = read('electron/native-dock-ui-smoke.cjs');
+  assert.match(smoke, /Object\.keys\(desktopAPI\.terminal\)\.sort\(\)/);
+  assert.match(smoke, /\["openOfficial","openWindow"\]/);
+  const preload = read('electron/preload.cjs');
+  const terminal = preload.slice(preload.indexOf('terminal: Object.freeze({'), preload.indexOf('sideChat: Object.freeze({'));
+  assert.match(terminal, /openWindow:/);
+  assert.match(terminal, /openOfficial:/);
+  assert.doesNotMatch(terminal, /(?:write|read|resize|start|stop):/);
+});
+
+test('official fullscreen preview spans the usable frame without trapping its dock layers', () => {
+  const css = read('assets/workbench-native-layout.css');
+  const rule = css.match(/\[data-sidebar-right-panel="fullscreen"\]\s*\{([^}]+)\}/)?.[1];
+  assert.ok(rule);
+  assert.match(rule, /position:\s*absolute\s*!important/);
+  assert.match(rule, /left:\s*auto\s*!important/);
+  assert.match(rule, /right:\s*0\s*!important/);
+  assert.match(rule, /bottom:\s*0\s*!important/);
+  assert.match(rule, /width:\s*calc\(100vw - var\(--dsh-sidebar-left-inset\) - var\(--dsh-sidebar-right-inset\)\)/);
+  assert.doesNotMatch(rule, /z-index|transform|isolation/);
+});

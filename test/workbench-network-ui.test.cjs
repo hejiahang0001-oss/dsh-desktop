@@ -38,7 +38,7 @@ test('network settings are packaged and preserve compact and accessibility modes
   assert.match(main, /network-state\.json/);
   assert.match(main, /ipcMain\.handle\('network:test',[\s\S]*desktopIpcAllowed/);
   assert.match(main, /ipcMain\.handle\('network:save',[\s\S]*desktopIpcAllowed/);
-  assert.match(main, /关于 DSH Desktop V\$\{app\.getVersion\(\)\}/);
+  assert.match(main, /关于 lulu V\$\{app\.getVersion\(\)\}/);
   assert.match(read('harness-status.html'), /data-open-network/);
   assert.match(read('assets/harness-status.js'), /__DSH_NETWORK__/);
   assert.match(main, /setPermissionCheckHandler/);

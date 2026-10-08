@@ -1,19 +1,21 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-lulu-surface="wiki">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSH Wiki 中心</title>
+  <title>lulu · Wiki 中心</title>
   <link rel="stylesheet" href="assets/wiki-center.css">
+  <link rel="stylesheet" href="assets/lulu-tokens.css">
+  <link rel="stylesheet" href="assets/lulu-surfaces.css">
   <script defer src="assets/wiki-center.js"></script>
 </head>
 <body>
   <header class="toolbar">
     <div>
-      <span id="app-version" class="eyebrow" aria-label="当前产品版本">DSH Desktop</span>
       <h1>Wiki 中心</h1>
-      <p>把会话结论、当前项目增量和你选择的 DSH 历史沉淀为可查询、可追溯的本地 Markdown 知识。</p>
+      <span id="app-version" class="lulu-version" aria-label="当前产品版本">lulu</span>
+      <p>把会话结论、当前项目增量和你选择的 lulu / DSH 历史沉淀为可查询、可追溯的本地 Markdown 知识。</p>
     </div>
     <button id="close" class="ghost" type="button">关闭</button>
   </header>
@@ -91,12 +93,12 @@
 
     <section class="panel" aria-labelledby="history-title">
       <div class="section-heading">
-        <div><span class="section-label">当前工作区</span><h2 id="history-title">DSH 历史批量导入</h2></div>
+        <div><span class="section-label">当前工作区</span><h2 id="history-title">lulu / DSH 历史批量导入</h2></div>
         <span id="history-status" class="status waiting">待选择</span>
       </div>
       <p class="detail">只列出当前工作区的普通会话。运行中的会话不可选；工具调用、思考、系统指令、图片和固定凭据模式不会交给 Agent。</p>
       <div class="actions">
-        <button id="load-history-sessions" class="secondary" type="button" disabled>加载 DSH 会话</button>
+        <button id="load-history-sessions" class="secondary" type="button" disabled>加载 lulu / DSH 会话</button>
         <button id="prepare-history" class="secondary" type="button" disabled>检查所选历史</button>
         <button id="invoke-history" type="button" disabled>让 Agent 整理</button>
       </div>

@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
-const { inspectOfficeEngine, verifyEngineFiles } = require('../scripts/harness-office-engine.cjs');
+const { inspectOfficeEngine, inspectDesktopOfficeEngine, verifyEngineFiles } = require('../scripts/harness-office-engine.cjs');
 
 const fixture = (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-office-engine-'));
@@ -44,6 +44,25 @@ test('Office packaging rejects an unreviewed prebuild manifest', (context) => {
   }));
   fs.writeFileSync(path.join(engine, 'prebuilds.json'), '{}');
   assert.throws(() => inspectOfficeEngine(root), /prebuild manifest digest/i);
+});
+
+test('desktop Office policy is pinned separately and rejects legacy or forged payloads', (context) => {
+  const root = fixture(context);
+  assert.throws(() => inspectDesktopOfficeEngine(root), /Office kit identity/i);
+  const kitFile = path.join(root, '@deepseek-ai/libreoffice-kit/package.json');
+  const kit = JSON.parse(fs.readFileSync(kitFile));
+  kit.version = '0.1.5';
+  kit.optionalDependencies['@deepseek-ai/libreoffice-kit-win32-x64'] = '0.1.5';
+  fs.writeFileSync(kitFile, JSON.stringify(kit));
+  assert.throws(() => inspectOfficeEngine(root), /Office kit identity/i);
+  assert.throws(() => inspectDesktopOfficeEngine(root), /native engine.*missing/i);
+  const engine = path.join(root, '@deepseek-ai/libreoffice-kit-win32-x64');
+  fs.mkdirSync(engine);
+  fs.writeFileSync(path.join(engine, 'package.json'), JSON.stringify({
+    name: '@deepseek-ai/libreoffice-kit-win32-x64', version: '0.1.5', license: 'MPL-2.0'
+  }));
+  fs.writeFileSync(path.join(engine, 'prebuilds.json'), '{}');
+  assert.throws(() => inspectDesktopOfficeEngine(root, { prebuildsSha256: createHash('sha256').update('{}').digest('hex') }), /prebuild manifest digest/i);
 });
 
 test('Office engine file verification binds bytes and refuses traversal or linked assets', (context) => {

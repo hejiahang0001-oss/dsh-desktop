@@ -1,7 +1,19 @@
 (() => {
   const api = window.dockAPI, tabs = document.getElementById('dock-tabs'), status = document.getElementById('dock-status');
   const labels = { terminal: '兼容终端', office: 'Office', tasks: '任务', extensions: '扩展', wiki: 'Wiki', worktrees: '工作树' };
-  const act = async (action, value) => { try { status.textContent = ''; await api.act(action, value); } catch (error) { status.textContent = error.message || '操作失败，请重试'; } };
+  let pending = false;
+  const showStatus = (message = '') => {
+    status.textContent = message;
+    status.title = message;
+  };
+  const act = async (action, value) => {
+    if (pending) return;
+    pending = true;
+    document.querySelector('nav').setAttribute('aria-busy', 'true');
+    try { showStatus(); render(await api.act(action, value)); }
+    catch (error) { showStatus(error.message || '操作失败，请重试；当前内容已保留。'); }
+    finally { pending = false; document.querySelector('nav').setAttribute('aria-busy', 'false'); }
+  };
   for (const [id, label] of Object.entries(labels)) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.dataset.tool = id; button.setAttribute('role', 'tab');
     button.addEventListener('click', () => void act('select', id)); tabs.append(button);
@@ -18,7 +30,7 @@
     buttons[target].focus(); buttons[target].click();
   });
   const render = (state) => {
-    status.textContent = state.error || '';
+    showStatus(state.error || '');
     document.getElementById('dock-size').value = String(state.height <= 280 ? 240 : state.height < 430 ? 360 : 500);
     for (const button of tabs.children) { const selected = state.open && state.active === button.dataset.tool; button.dataset.opened = String(state.opened.includes(button.dataset.tool)); button.setAttribute('aria-selected', String(selected)); button.tabIndex = state.active === button.dataset.tool ? 0 : -1; }
     document.getElementById('dock-collapse').disabled = !state.open;

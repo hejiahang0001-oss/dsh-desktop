@@ -28,7 +28,15 @@ async function sdkFixture(t) {
     agents: { get: (key) => agents.get(key), create: async (options) => { createOptions = options; await options.setup({}); const session = { id: options.sessionId, header: { id: options.sessionId, ...options.meta }, inheritedEventCount: options.inheritedEventCount, events: [...structuredClone(options.seed), { type: 'session/end-seed', seq: options.seed.length, data: { inherited: true } }] }; entries.set(session.id, session); return { agent: { session } }; } },
     agentPresets: { composedPreset: () => 'standard', composeFrom() {}, mount: async () => {} }, agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'model' }) },
     sessionQuery: { observeSession: async (key) => { const value = entries.get(key); if (!value) throw new Error('missing'); return value; } },
-    sessionController: { control: async function* () { yield { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } }; }, inspect: async (key) => ({ meta: entries.get(key).header, inheritedEventCount: entries.get(key).inheritedEventCount, events: entries.get(key).events }) },
+    sessionController: { control: async function* () {
+      // Actual pinned alpha.2 contract: inbox projections and per-session jobs.
+      yield { type: 'baseline', value: {
+        jobs: Object.fromEntries([...entries.keys()].map((key) => [key, []])),
+        projections: Object.fromEntries([...entries].map(([key, entry]) => [key, {
+          asOfSeq: entry.events.length - 1, values: { inbox: { 'next-turn': [], 'next-step': [] } }
+        }]))
+      } };
+    }, inspect: async (key) => ({ meta: entries.get(key).header, inheritedEventCount: entries.get(key).inheritedEventCount, events: entries.get(key).events }) },
     sessionPersistence: { flush: async () => { flushes++; } }, workspaceRegistry: { create: async () => ({ id: 'workspace', attachSession: async () => {} }) }
   };
   const { sessionControl } = await import(pathToFileURL(path.resolve('runtime/dsh-desktop-tools/session-control.mjs')).href);
@@ -49,6 +57,92 @@ function taskSdk(f, preset = { sandbox: 'workspace-write', approval: 'ask' }) {
   f.ctx.sessionController.prompt = async (request, signal) => { signal.throwIfAborted(); sent++; f.entries.get(request.sessionId).events.push({ type: 'user/message', data: { source: { kind: 'user', rpcId: request.requestId } } }); return { accepted: true }; };
   return () => sent;
 }
+
+async function projectionSdk(t, version) {
+  const f = await sdkFixture(t);
+  const sent = taskSdk(f), jobs = new Map(), inboxes = new Map();
+  const inboxFor = (id) => inboxes.get(id) || { 'next-turn': [], 'next-step': [] };
+  const projectionFor = (id) => ({ asOfSeq: f.entries.get(id).events.length - 1, values: { inbox: inboxFor(id) } });
+  const control = { projections: {} };
+  f.ctx.sessionController.control = async function* () {
+    control.projections = Object.fromEntries([...f.entries.keys()].map((id) => [id, projectionFor(id)]));
+    if (version === 'alpha.2') control.jobs = Object.fromEntries([...f.entries.keys()].map((id) => [id, jobs.get(id) || []]));
+    yield { type: 'baseline', value: control };
+  };
+  const reads = [];
+  const registry = { events: { subscribe() {} }, list(id) { reads.push(id); return jobs.get(id) || []; } };
+  f.ctx.get = (name) => name === 'jobs' ? registry : undefined;
+  return { ...f, sent, jobs, inboxes, control, registry, reads, projectionFor };
+}
+
+for (const version of ['alpha.2', 'rc.2']) {
+  test(`${version} official control shape reports queued, steering and live jobs and blocks handoff`, async (t) => {
+    const f = await projectionSdk(t, version), request = { sessionId: f.id, workspacePath: f.source };
+    f.inboxes.set(f.id, { 'next-turn': [{ id: 'queued' }], 'next-step': [{ id: 'steering' }] });
+    f.jobs.set(f.id, [{ status: 'running' }, { status: 'stopping' }, { status: 'completed' }]);
+    const state = await f.sessionControl(f.ctx, 'inspect', request);
+    assert.deepEqual([state.pending, state.queued, state.steering, state.liveJobs], [2, 1, 1, 2]);
+    assert.deepEqual(await f.sessionControl(f.ctx, 'workspace-status', request), { idle: false, running: 0, pending: 2, jobs: 2 });
+    await assert.rejects(f.sessionControl(f.ctx, 'fork', { ...request, childId: `session-${randomUUID()}`, targetPath: f.target, historyHash: state.historyHash }), /先结束/);
+    assert.equal(f.created(), undefined);
+    if (version === 'rc.2') assert.ok(f.reads.length > 0 && f.reads.every((id) => id === f.id), 'registry reads stay bound to the checked Session');
+  });
+
+  test(`${version} official control shape supports idle task creation, prompt, status and cancellation`, async (t) => {
+    const f = await projectionSdk(t, version), request = { sessionId: `session-${randomUUID()}`, workspacePath: f.target, requestId: randomUUID(), text: 'test' };
+    assert.equal((await f.sessionControl(f.ctx, 'task-create', request)).approval, 'ask');
+    assert.deepEqual(await f.sessionControl(f.ctx, 'task-prompt', request), { accepted: true });
+    assert.equal(f.sent(), 1);
+    assert.equal((await f.sessionControl(f.ctx, 'task-status', request)).admitted, true);
+    assert.deepEqual(await f.sessionControl(f.ctx, 'task-cancel', request), { accepted: true });
+  });
+
+  test(`${version} missing or malformed inbox and job state fail closed`, async (t) => {
+    const invalid = [
+      (f, state) => { delete state.projections[f.id]; },
+      (f, state) => { delete state.projections[f.id].values.inbox; },
+      (f, state) => { state.projections[f.id].values.inbox['next-turn'] = null; },
+      (f, state) => { state.projections[f.id].asOfSeq = NaN; },
+      (f, state) => { if (version === 'alpha.2') delete state.jobs[f.id]; else f.ctx.get = () => undefined; },
+      (f, state) => { if (version === 'alpha.2') state.jobs[f.id] = null; else f.registry.list = () => null; },
+      (f, state) => { if (version === 'alpha.2') state.jobs[f.id] = [{ status: 'future' }]; else f.registry.list = () => [{ status: 'future' }]; }
+    ];
+    for (const corrupt of invalid) {
+      const f = await projectionSdk(t, version), original = f.ctx.sessionController.control;
+      f.ctx.sessionController.control = async function* (...args) { for await (const frame of original(...args)) { corrupt(f, frame.value); yield frame; } };
+      const request = { sessionId: f.id, workspacePath: f.source, childId: `session-${randomUUID()}`, targetPath: f.target };
+      await assert.rejects(f.sessionControl(f.ctx, 'inspect', request), /状态|投影|基线/);
+      await assert.rejects(f.sessionControl(f.ctx, 'workspace-status', request), /状态|投影|基线/);
+      await assert.rejects(f.sessionControl(f.ctx, 'fork', request), /状态|投影|基线/);
+      await assert.rejects(f.sessionControl(f.ctx, 'task-prompt', { ...request, requestId: randomUUID(), text: 'must not run' }), /状态|投影|基线/);
+      await assert.rejects(f.sessionControl(f.ctx, 'task-create', { ...request, sessionId: `session-${randomUUID()}` }), /状态|投影|基线/);
+      assert.equal(f.created(), undefined);
+      assert.equal(f.sent(), 0);
+      assert.equal(f.entries.size, 1);
+    }
+  });
+}
+
+test('rc.2 never treats a foreign job or a legacy registry as safe session state', async (t) => {
+  const f = await projectionSdk(t, 'rc.2'), request = { sessionId: f.id, workspacePath: f.source };
+  f.registry.list = () => [{ status: 'running', owner: `session-${randomUUID()}` }];
+  await assert.rejects(f.sessionControl(f.ctx, 'inspect', request), /状态/);
+  delete f.registry.events;
+  f.registry.list = () => [];
+  await assert.rejects(f.sessionControl(f.ctx, 'inspect', request), /状态/);
+});
+
+test('rc.2 cold session uses a disposable observation for its durable pending inbox', async (t) => {
+  const f = await projectionSdk(t, 'rc.2'); let disposed = 0;
+  f.agents.delete(f.id);
+  f.entries.get(f.id).projections = { asOfSeq: 0, values: { inbox: { 'next-turn': [{ id: 'durable-queued' }], 'next-step': [] } } };
+  f.entries.get(f.id)[Symbol.dispose] = () => { disposed++; };
+  f.ctx.sessionController.control = async function* () { yield { type: 'baseline', value: { projections: {} } }; };
+  const request = { sessionId: f.id, workspacePath: f.source };
+  assert.equal((await f.sessionControl(f.ctx, 'inspect', request)).pending, 1);
+  assert.deepEqual(await f.sessionControl(f.ctx, 'workspace-status', request), { idle: false, running: 0, pending: 1, jobs: 0 });
+  assert.equal(disposed, 2);
+});
 test('background SDK pins workspace-write plus ask and rejects duplicate work and widened permission', async (t) => {
   const f = await sdkFixture(t), sent = taskSdk(f), request = { sessionId: `session-${randomUUID()}`, workspacePath: f.target, requestId: randomUUID(), text: 'test' };
   const created = await f.sessionControl(f.ctx, 'task-create', request); assert.equal(created.approval, 'ask');

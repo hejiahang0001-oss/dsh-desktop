@@ -79,6 +79,59 @@ test('support backups include task plans and bounded archives but never task wor
   assert.equal(await fs.stat(path.join(created.backupRoot, 'task-archives', 'unrelated.txt')).then(() => true, () => false), false);
 });
 
+test('support backup preserves Harness profile settings and the one-time legacy import for recovery', async (t) => {
+  const f = await fixture(); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+  const settings = {
+    'harness/settings.yaml.imported': 'llm-deepseek:\n  apiKeyEnv: DEEPSEEK_API_KEY\n',
+    'harness/cordis.patch.yml': '- id: system-prompt\n  config:\n    personaSuffix: 中文\n',
+    'harness/profiles/web/cordis.patch.yml': '- id: llm-deepseek\n  config:\n    reasoningEffort: high\n'
+  };
+  for (const [name, content] of Object.entries(settings)) await fs.writeFile(path.join(f.dataRoot, name), content);
+  await fs.writeFile(path.join(f.dataRoot, 'harness/settings.yaml.imported.tmp'), 'unfinished import');
+  await fs.writeFile(path.join(f.dataRoot, 'harness/profiles/web/unrelated.yml'), 'not configuration');
+  await fs.writeFile(path.join(f.dataRoot, 'harness/profiles/web/.credentials.dpapi.json'), 'encrypted fixture');
+  const created = await createSupportBackup({ dataRoot: f.dataRoot, destinationRoot: f.destinationRoot, appVersion: '1.1.14' });
+  const manifest = JSON.parse(await fs.readFile(path.join(created.backupRoot, MANIFEST_NAME), 'utf8'));
+  for (const [name, content] of Object.entries(settings)) {
+    assert.ok(manifest.files.some((file) => file.path === name), `Missing recovery setting: ${name}`);
+    assert.equal(await fs.readFile(path.join(created.backupRoot, name), 'utf8'), content);
+    assert.equal(await fs.readFile(path.join(f.dataRoot, name), 'utf8'), content);
+  }
+  assert.ok(!manifest.files.some((file) => /credentials|unrelated|\.tmp$/.test(file.path)));
+  assert.equal(created.includesCredentialFiles, false);
+  assert.equal(created.contentRedacted, false);
+  assert.equal((await validateSupportBackup(created.backupRoot)).fileCount, manifest.files.length);
+  await fs.writeFile(path.join(created.backupRoot, 'harness/profiles/web/cordis.patch.yml'), 'changed');
+  await assert.rejects(validateSupportBackup(created.backupRoot), /缺失或校验失败/);
+});
+
+test('support backup does not follow Harness settings directory links after a profile migration', async (t) => {
+  const f = await fixture(); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+  const outside = path.join(f.root, 'outside'); await fs.mkdir(outside);
+  await fs.writeFile(path.join(outside, 'cordis.patch.yml'), 'not user settings');
+  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+  await fs.symlink(outside, path.join(f.dataRoot, 'harness/profiles/linked'), linkType);
+  await fs.symlink(outside, path.join(f.dataRoot, 'harness/settings.yaml.imported'), linkType);
+  const snapshot = await collectSupportBackupFiles(f.dataRoot);
+  assert.ok(!snapshot.files.some((file) => file.path.endsWith('cordis.patch.yml') || file.path.endsWith('.imported')));
+});
+test('support backup preserves shared automation tasks and recovery permission without generated overlay or unrelated storage', async t => {
+  const f = await fixture(); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(f.dataRoot, 'harness/storages'), { recursive: true });
+  const files = {
+    'harness/storages/schedule.json': '{"unit":{"name":"schedule","version":1},"tables":{"tasks":{"fixture":{"prompt":"private fixture only"}}}}',
+    'harness/desktop-automation-web-migration.json': '{"version":1,"decision":"hold","reason":"legacy-profile-activation-ambiguous"}'
+  };
+  for (const [name, bytes] of Object.entries(files)) await fs.writeFile(path.join(f.dataRoot, name), bytes);
+  await fs.writeFile(path.join(f.dataRoot, 'harness/desktop-automation-web.patch.yml'), 'rebuild, do not back up');
+  await fs.writeFile(path.join(f.dataRoot, 'harness/storages/unrelated.json'), 'not in scope');
+  const created = await createSupportBackup({ dataRoot: f.dataRoot, destinationRoot: f.destinationRoot, appVersion: '1.1.14' });
+  for (const [name, bytes] of Object.entries(files)) assert.equal(await fs.readFile(path.join(created.backupRoot, name), 'utf8'), bytes);
+  const manifest = JSON.parse(await fs.readFile(path.join(created.backupRoot, MANIFEST_NAME), 'utf8'));
+  assert.equal(manifest.files.some(file => /desktop-automation-web\.patch|unrelated|credentials|\/LOG$/.test(file.path)), false);
+  assert.equal((await validateSupportBackup(created.backupRoot)).valid, true);
+});
+
 test('support backup validation rejects tampering and unsafe destinations', async (context) => {
   const setup = await fixture();
   context.after(() => fs.rm(setup.root, { recursive: true, force: true }));
@@ -162,7 +215,7 @@ test('support actions use native selection, guarded IPC, fixed command entries, 
   assert.match(main, /会话正文按原样保存/);
   assert.match(main, /let supportBackupOperationPromise = null/);
   assert.match(main, /await refreshAgentDiagnostics\(\{ rebuildMenu: false \}\)/);
-  assert.match(main, /未能启动 DSH 数据备份/);
+  assert.match(main, /未能启动 lulu 数据备份/);
   assert.match(commands, /id: 'support\.diagnostics'/);
   assert.match(commands, /id: 'support\.backup'/);
   assert.match(commands, /id: 'support\.validate-backup'/);

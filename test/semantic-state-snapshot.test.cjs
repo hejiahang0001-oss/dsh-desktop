@@ -26,6 +26,9 @@ test('semantic user-data snapshot ignores transient logs and credential files', 
   write('harness/profiles/web/node_modules/plugin/secret.txt', 'must-not-be-hashed');
   write('worktrees/ownership.json', '{"version":1,"worktrees":[]}');
   write('background-tasks.json', '{"version":1,"tasks":[],"runs":[]}');
+  write('harness/storages/schedule.json', '{"unit":{"name":"schedule","version":1},"tables":{"tasks":{}}}');
+  write('harness/desktop-automation-web-migration.json', '{"version":1,"decision":"hold"}');
+  write('harness/desktop-automation-web.patch.yml', 'generated overlay is not semantic user state');
   write('task-archives/1234567890123-12345678-1234-1234-1234-123456789abc.json', '{"runs":[]}');
   write('worktrees/repository/worktree-20260825-000000-a1b2c3/pending.txt', 'working copy must not enter backup');
 
@@ -38,6 +41,9 @@ test('semantic user-data snapshot ignores transient logs and credential files', 
   assert.equal(before.files.some((file) => /node_modules/i.test(file.path)), false);
   assert.equal(before.files.some((file) => file.path === 'worktrees/ownership.json'), true);
   assert.equal(before.files.some((file) => file.path === 'background-tasks.json'), true);
+  assert.equal(before.files.some(file => file.path === 'harness/storages/schedule.json'), true);
+  assert.equal(before.files.some(file => file.path === 'harness/desktop-automation-web-migration.json'), true);
+  assert.equal(before.files.some(file => file.path === 'harness/desktop-automation-web.patch.yml'), false);
   assert.equal(before.files.some((file) => file.path.startsWith('task-archives/')), true);
   assert.equal(before.files.some((file) => /pending\.txt$/i.test(file.path)), false);
   assert.equal(before.files.some((file) => file.path === 'wiki-settings.json'), true);

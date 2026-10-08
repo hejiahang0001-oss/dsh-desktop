@@ -109,7 +109,7 @@
       const badges = [];
       if (item.current) badges.push(['当前', 'current']);
       if (item.main) badges.push(['主工作树', '']);
-      badges.push([item.managed ? 'DSH 管理' : '外部只读', '']);
+      badges.push([item.managed ? 'lulu 管理' : '外部只读', '']);
       badges.push(item.status?.available === false
         ? ['状态不可用', 'dirty']
         : [item.status?.clean ? '干净' : `${item.status?.changed || 0} 项修改`, item.status?.clean ? 'clean' : 'dirty']);

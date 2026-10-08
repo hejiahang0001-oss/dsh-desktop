@@ -1,0 +1,111 @@
+/* Cosmetic mapping for the pinned Harness theme. No layout, input or agent control overrides. */
+html body:not([data-ds-dark-theme]) {
+  --dsw-alias-bg-base: #fffdf8;
+  --dsw-alias-bg-layer-1: #ffffff;
+  --dsw-alias-bg-layer-2: #f7f3eb;
+  --dsw-alias-bg-layer-3: #eee7dc;
+  --dsw-alias-label-primary: #302a23;
+  --dsw-alias-label-secondary: #655b4d;
+  --dsw-alias-label-tertiary: #766a59;
+  --dsw-alias-label-dimmed: #766a59;
+  --dsw-alias-brand-primary: #985010;
+  --dsw-alias-brand-text: #985010;
+  --dsw-alias-link: #985010;
+  --dsw-alias-button-primary-fill: #985010;
+  --dsw-alias-button-primary-hover: #7b3d09;
+  --dsw-alias-label-primary-foreground: #ffffff;
+  --dsw-alias-interactive-bg-hover: #eee7dc;
+  --dsw-alias-interactive-bg-active: #f1dfc5;
+  --dsw-alias-border-l1: #e7dfd2;
+  --dsw-alias-border-l2: #d8cebe;
+  --dsw-alias-border-l3: #c4b7a2;
+  --dsw-alias-border-l4: #897b67;
+  --dsw-specific-bubble: #f0e8dc;
+  --dsw-specific-bubble-highlight: #f5dfbd;
+  --dsw-specific-input-major: #ffffff;
+  --dsw-specific-sidebar-fill: #f7f3eb;
+  --dsw-specific-sidebar-nav-item-active: #ecdfca;
+  --dsw-specific-sidebar-nav-item-active-accent: #985010;
+  --dsw-specific-sidebar-nav-item-hover: #eee7dc;
+}
+
+html body[data-ds-dark-theme] {
+  --dsw-alias-bg-base: #201e1a;
+  --dsw-alias-bg-layer-1: #27241f;
+  --dsw-alias-bg-layer-2: #302c25;
+  --dsw-alias-bg-layer-3: #3a342b;
+  --dsw-alias-label-primary: #f4ede1;
+  --dsw-alias-label-secondary: #c7baaa;
+  --dsw-alias-label-tertiary: #b5a792;
+  --dsw-alias-label-dimmed: #b5a792;
+  --dsw-alias-brand-primary: #ffc078;
+  --dsw-alias-brand-text: #ffc078;
+  --dsw-alias-link: #ffc078;
+  --dsw-alias-button-primary-fill: #ffc078;
+  --dsw-alias-button-primary-hover: #ffd29e;
+  --dsw-alias-label-primary-foreground: #30200d;
+  --dsw-alias-interactive-bg-hover: #3a342b;
+  --dsw-alias-interactive-bg-active: #4b3824;
+  --dsw-alias-border-l1: #39332b;
+  --dsw-alias-border-l2: #4b4338;
+  --dsw-alias-border-l3: #716250;
+  --dsw-alias-border-l4: #a38f73;
+  --dsw-specific-bubble: #302c25;
+  --dsw-specific-bubble-highlight: #4b3824;
+  --dsw-specific-input-major: #27241f;
+  --dsw-specific-sidebar-fill: #27241f;
+  --dsw-specific-sidebar-nav-item-active: #4b3824;
+  --dsw-specific-sidebar-nav-item-active-accent: #ffc078;
+  --dsw-specific-sidebar-nav-item-hover: #3a342b;
+}
+
+#dsh-side-chat-banner {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  border-bottom-color: var(--dsw-alias-border-l2);
+}
+
+/* Pinned 0.2.1-alpha.1 decorative marks only. Retain official button geometry and events. */
+:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark):has(> svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"]),
+:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark):has(> div[data-slot] > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"]) {
+  background-image: var(--lulu-brand-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark) > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"],
+:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark) > div[data-slot] > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"] {
+  visibility: hidden;
+}
+
+@media (forced-colors: active) {
+  html body:not([data-ds-dark-theme]), html body[data-ds-dark-theme] {
+    --dsw-alias-bg-base: Canvas;
+    --dsw-alias-bg-layer-1: Canvas;
+    --dsw-alias-bg-layer-2: Canvas;
+    --dsw-alias-bg-layer-3: Canvas;
+    --dsw-alias-label-primary: CanvasText;
+    --dsw-alias-label-secondary: CanvasText;
+    --dsw-alias-label-tertiary: CanvasText;
+    --dsw-alias-label-dimmed: GrayText;
+    --dsw-alias-brand-primary: Highlight;
+    --dsw-alias-brand-text: LinkText;
+    --dsw-alias-link: LinkText;
+    --dsw-alias-button-primary-fill: Highlight;
+    --dsw-alias-button-primary-hover: Highlight;
+    --dsw-alias-label-primary-foreground: HighlightText;
+    --dsw-alias-interactive-bg-hover: Canvas;
+    --dsw-alias-interactive-bg-active: Highlight;
+    --dsw-alias-border-l1: CanvasText;
+    --dsw-alias-border-l2: CanvasText;
+    --dsw-alias-border-l3: CanvasText;
+    --dsw-alias-border-l4: CanvasText;
+    --dsw-specific-bubble: Canvas;
+    --dsw-specific-bubble-highlight: Canvas;
+    --dsw-specific-input-major: Canvas;
+    --dsw-specific-sidebar-fill: Canvas;
+    --dsw-specific-sidebar-nav-item-active: Canvas;
+    --dsw-specific-sidebar-nav-item-active-accent: LinkText;
+    --dsw-specific-sidebar-nav-item-hover: Canvas;
+  }
+}
