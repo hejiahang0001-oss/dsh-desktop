@@ -6,6 +6,10 @@ on:
         description: Full commit SHA of the verified V1.1.13 release
         required: true
         type: string
+      release_id:
+        description: Numeric id of the existing draft release (draft tags are not public yet)
+        required: true
+        type: string
 permissions:
   contents: write
 jobs:
@@ -15,6 +19,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_COMMIT: ${{ inputs.release_commit }}
+      RELEASE_ID: ${{ inputs.release_id }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -24,7 +29,9 @@ jobs:
         shell: pwsh
         run: |
           if ($env:RELEASE_COMMIT -notmatch '^[a-f0-9]{40}$') { throw 'Expected fixed commit SHA' }
-          $release = gh api repos/hejiahang0001-oss/dsh-desktop/releases/tags/v1.1.13 | ConvertFrom-Json
+          if ($env:RELEASE_ID -notmatch '^[1-9][0-9]+$') { throw 'Expected numeric draft id' }
+          $release = gh api "repos/hejiahang0001-oss/dsh-desktop/releases/$env:RELEASE_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or "$($release.id)" -ne $env:RELEASE_ID) { throw 'Draft lookup failed' }
           if (!$release.draft -or !$release.prerelease -or $release.tag_name -ne 'v1.1.13' -or $release.target_commitish -ne $env:RELEASE_COMMIT) { throw 'Unexpected release identity/state' }
           New-Item -ItemType Directory -Path transfer | Out-Null
           gh release download v1.1.13 --repo hejiahang0001-oss/dsh-desktop --pattern dsh-v1.1.13-transfer.zip --dir transfer
@@ -43,7 +50,8 @@ jobs:
       - name: Upload binaries to the existing draft only
         shell: pwsh
         run: |
-          $release = gh api repos/hejiahang0001-oss/dsh-desktop/releases/tags/v1.1.13 | ConvertFrom-Json
+          $release = gh api "repos/hejiahang0001-oss/dsh-desktop/releases/$env:RELEASE_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or "$($release.id)" -ne $env:RELEASE_ID) { throw 'Draft lookup failed' }
           if (!$release.draft -or !$release.prerelease -or $release.tag_name -ne 'v1.1.13' -or $release.target_commitish -ne $env:RELEASE_COMMIT) { throw 'Release changed before upload' }
           gh release upload v1.1.13 --repo hejiahang0001-oss/dsh-desktop transfer/DSH-Desktop-Setup-1.1.13.exe transfer/DSH-Desktop-Portable-1.1.13.exe
           if ($LASTEXITCODE -ne 0) { throw 'Draft binary upload failed' }

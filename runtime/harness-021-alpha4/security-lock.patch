@@ -1,0 +1,114 @@
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index c5de58c..164ff1f 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -5,6 +5,8 @@ settings:
+   excludeLinksFromLockfile: false
+ 
+ overrides:
++  http-cache-semantics: 4.3.0
++  fflate@0.8.2: 0.8.3
+   extract-zip>yauzl: 3.4.0
+   '@deepseek-ai/cosmokit': link:vendor/cosmokit
+   '@deepseek-ai/schemastery': link:vendor/schemastery
+@@ -17,6 +19,7 @@ patchedDependencies:
+   '@yao-pkg/pkg@6.21.0': 75891fc22b277c145cafeab83e41baf4a70f5b8fe6dc0801c6a0b922d7ee88c7
+   app-builder-lib@26.17.0: b70dc2a2a78ffabb80a4f14fafc7c103237f2b0a207e1f296fa1c1387ea29348
+   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
++  http-cache-semantics@4.3.0: c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403
+   node-pty@1.2.0-beta.15: 9d30053266d0f39d3debe894c675867f6782da6bcadbc94a693b3cfb9eff8ed0
+ 
+ importers:
+@@ -159,7 +162,7 @@ importers:
+         specifier: ^4.9.0
+         version: 4.9.0
+       fflate:
+-        specifier: ^0.8.2
++        specifier: 0.8.3
+         version: 0.8.3
+       istanbul-lib-report:
+         specifier: ^3.0.1
+@@ -961,7 +964,7 @@ importers:
+         specifier: ^4.7.0
+         version: 4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.13)(yaml@2.9.0))
+       fflate:
+-        specifier: ^0.8.2
++        specifier: 0.8.3
+         version: 0.8.3
+       http-server:
+         specifier: ^14.1.1
+@@ -12036,7 +12039,7 @@ importers:
+         specifier: link:../../../vendor/schemastery
+         version: link:../../../vendor/schemastery
+       fflate:
+-        specifier: ^0.8.2
++        specifier: 0.8.3
+         version: 0.8.3
+     devDependencies:
+       '@deepseek-ai/cordis':
+@@ -20604,9 +20607,6 @@ packages:
+     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
+     engines: {node: ^12.20 || >= 14.13}
+ 
+-  fflate@0.8.2:
+-    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
+-
+   fflate@0.8.3:
+     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+ 
+@@ -20900,8 +20900,8 @@ packages:
+   html-void-elements@3.0.0:
+     resolution: {integrity: sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg==}
+ 
+-  http-cache-semantics@4.2.0:
+-    resolution: {integrity: sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ==}
++  http-cache-semantics@4.3.0:
++    resolution: {integrity: sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA==}
+ 
+   http-errors@2.0.1:
+     resolution: {integrity: sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ==}
+@@ -24218,7 +24218,7 @@ snapshots:
+ 
+   '@deepseek-ai/libreoffice-kit@0.1.5':
+     dependencies:
+-      fflate: 0.8.2
++      fflate: 0.8.3
+       fontkit: 2.0.4
+       koffi: 3.1.1
+       saxes: 6.0.0
+@@ -27078,7 +27078,7 @@ snapshots:
+     dependencies:
+       '@types/http-cache-semantics': 4.2.0
+       get-stream: 9.0.1
+-      http-cache-semantics: 4.2.0
++      http-cache-semantics: 4.3.0(patch_hash=c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403)
+       keyv: 5.6.0
+       mimic-response: 4.0.0
+       normalize-url: 8.1.1
+@@ -27088,7 +27088,7 @@ snapshots:
+     dependencies:
+       clone-response: 1.0.3
+       get-stream: 5.2.0
+-      http-cache-semantics: 4.2.0
++      http-cache-semantics: 4.3.0(patch_hash=c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403)
+       keyv: 4.5.4
+       lowercase-keys: 2.0.0
+       normalize-url: 6.1.0
+@@ -28159,8 +28159,6 @@ snapshots:
+       node-domexception: 1.0.0
+       web-streams-polyfill: 3.3.3
+ 
+-  fflate@0.8.2: {}
+-
+   fflate@0.8.3: {}
+ 
+   figures@6.1.0:
+@@ -28536,7 +28534,7 @@ snapshots:
+ 
+   html-void-elements@3.0.0: {}
+ 
+-  http-cache-semantics@4.2.0: {}
++  http-cache-semantics@4.3.0(patch_hash=c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403): {}
+ 
+   http-errors@2.0.1:
+     dependencies:

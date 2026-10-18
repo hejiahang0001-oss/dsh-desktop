@@ -1,7 +1,7 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { AtomicJsonFile } = require('./atomic-json-store.cjs');
+const { AtomicJsonFile, atomicJsonDiagnostic } = require('./atomic-json-store.cjs');
 
 const CHANNEL = 'dsh-credential-v1';
 const validEnvelope = (value) => value?.version === 1 && typeof value.ciphertext === 'string' && value.ciphertext.length < 4 * 1024 * 1024;
@@ -103,7 +103,11 @@ const attachCredentialChannel = (child, vault) => {
     if (request?.channel !== CHANNEL || typeof request.requestId !== 'string' || !/^[a-f0-9-]{36}$/i.test(request.requestId)) return;
     let response;
     try { response = { ok: true, value: await vault.handle(request) }; }
-    catch { response = { ok: false, error: '凭据读取或保存失败，原凭据未被空值覆盖。请检查 Windows 账户、文件权限后重试。' }; }
+    catch (error) {
+      const diagnostic = atomicJsonDiagnostic(error);
+      response = { ok: false, error: '凭据读取或保存失败，原凭据未被空值覆盖。请检查 Windows 账户、文件权限后重试。'
+        + (diagnostic ? ` [phase=${diagnostic.phase}, code=${diagnostic.code}]` : ''), ...(diagnostic || {}) };
+    }
     if (child.connected) child.send({ channel: CHANNEL, requestId: request.requestId, ...response }, () => {});
   };
   child.on('message', listener); return () => child.off('message', listener);

@@ -6,6 +6,9 @@ const FIBER_PHASES = new Set(['pending', 'loading', 'active', 'failed', 'unloadi
 
 const immutable = (value) => Object.freeze(value);
 const REMOTE_SEGMENT_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$.-]{0,63}$/;
+const DEFAULT_REMOTE_TIMEOUT_MS = 3000;
+const MAX_REMOTE_TIMEOUT_MS = 8000;
+const INVENTORY_RETRY_DELAY_MS = 250;
 
 const boundedErrorMessage = (value, fallback) => {
   if (typeof value !== 'string') return fallback;
@@ -32,7 +35,8 @@ const safeHarnessOrigin = (value) => {
 
 const callHarnessRemote = async (origin, namespace, method, args = {}, {
   fetchImpl = globalThis.fetch,
-  timeoutMs = 3000
+  timeoutMs = DEFAULT_REMOTE_TIMEOUT_MS,
+  now = () => performance.now()
 } = {}) => {
   if (!safeHarnessOrigin(origin)) throw new Error('Harness Remote 地址不是受信任的随机回环地址。');
   if (!REMOTE_SEGMENT_PATTERN.test(namespace) || !REMOTE_SEGMENT_PATTERN.test(method)) {
@@ -43,28 +47,57 @@ const callHarnessRemote = async (origin, namespace, method, args = {}, {
   }
   if (typeof fetchImpl !== 'function') throw new Error('Harness Remote 传输不可用。');
   const endpoint = `${namespace}/${method}`;
-  const rpcId = randomUUID();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.min(8000, Math.max(250, timeoutMs)));
-  timer.unref?.();
-  let response;
-  try {
-    response = await fetchImpl(new URL(`/api/${endpoint}`, origin).toString(), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'client-request', rpcId, method: endpoint, payload: { args } }),
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timer);
+  // Only the known read-only, empty-argument inventory call may recover from a cold timeout.
+  const retryInventory = endpoint === 'pluginInventory/list' && Reflect.ownKeys(args).length === 0;
+  const requestTimeout = Math.min(MAX_REMOTE_TIMEOUT_MS, Math.max(250, timeoutMs));
+  const deadline = retryInventory ? now() + MAX_REMOTE_TIMEOUT_MS : 0;
+  for (let attempt = 0; ; attempt += 1) {
+    const rpcId = randomUUID();
+    const controller = new AbortController();
+    let timedOut = false, rejectTimeout, retryError;
+    const budgetTimeout = retryInventory ? new Promise((_, reject) => { rejectTimeout = reject; }) : null;
+    const attemptTimeout = attempt === 0 ? requestTimeout : Math.min(requestTimeout, DEFAULT_REMOTE_TIMEOUT_MS);
+    const remaining = retryInventory ? Math.max(0, deadline - now()) : attemptTimeout;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, Math.min(attemptTimeout, remaining));
+    timer.unref?.();
+    const budgetTimer = retryInventory ? setTimeout(() => {
+      controller.abort();
+      rejectTimeout(controller.signal.reason);
+    }, remaining) : null;
+    budgetTimer?.unref?.();
+    try {
+      const request = (async () => {
+        const response = await fetchImpl(new URL(`/api/${endpoint}`, origin).toString(), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: 'client-request', rpcId, method: endpoint, payload: { args: retryInventory ? {} : args } }),
+          signal: controller.signal
+        });
+        // Preserve the existing single-attempt behavior for all other Remote calls.
+        if (!retryInventory) clearTimeout(timer);
+        if (!response?.ok) throw new Error(`Harness Remote 返回 HTTP ${response?.status || 'unknown'}。`);
+        const message = await response.json();
+        if (message?.type !== 'server-response' || message.rpcId !== rpcId || typeof message.result?.ok !== 'boolean') {
+          throw new Error('Harness Remote 返回了不匹配的响应。');
+        }
+        if (!message.result.ok) throw new Error(boundedErrorMessage(message.result.error?.message, 'Harness Remote 拒绝了请求。'));
+        return message.result.value;
+      })();
+      return await (budgetTimeout ? Promise.race([request, budgetTimeout]) : request);
+    } catch (error) {
+      if (!retryInventory || attempt !== 0 || !timedOut || error?.name !== 'AbortError'
+        || error !== controller.signal.reason || deadline - now() <= INVENTORY_RETRY_DELAY_MS) throw error;
+      retryError = error;
+    } finally {
+      clearTimeout(timer);
+      clearTimeout(budgetTimer);
+    }
+    await new Promise((resolve) => setTimeout(resolve, INVENTORY_RETRY_DELAY_MS));
+    if (now() >= deadline) throw retryError;
   }
-  if (!response?.ok) throw new Error(`Harness Remote 返回 HTTP ${response?.status || 'unknown'}。`);
-  const message = await response.json();
-  if (message?.type !== 'server-response' || message.rpcId !== rpcId || typeof message.result?.ok !== 'boolean') {
-    throw new Error('Harness Remote 返回了不匹配的响应。');
-  }
-  if (!message.result.ok) throw new Error(boundedErrorMessage(message.result.error?.message, 'Harness Remote 拒绝了请求。'));
-  return message.result.value;
 };
 
 const safeModuleName = (value) => {
@@ -165,14 +198,14 @@ const buildExtensionCenter = ({
     surface({
       id: 'plugins',
       title: 'Plugins',
-      subtitle: 'Harness 加载层与受控外部扩展',
+      subtitle: 'Harness 官方插件管理与只读状态',
       status: liveStatus(pluginSummary, liveAvailable),
       version: inventoryCapability.version || runtimeVersion,
       source: '官方 pluginInventory.list 与本机 Profile 清单',
       scope: `${profileCount} 个 Profile；${externalCount} 个已声明外部依赖`,
-      permission: '固定运行时只读；已审核外部扩展需原生确认后变更',
+      permission: '本页只读检查；安装、启停、更新与兼容性请在官方插件页管理',
       ...pluginSummary,
-      manageable: true,
+      manageable: false,
       message: liveAvailable
         ? `官方运行清单确认 ${pluginSummary.active}/${pluginSummary.total} 个加载项处于活动状态。`
         : 'Harness 实时清单尚不可用；下方仍可核对固定闭包和本机 Profile。'

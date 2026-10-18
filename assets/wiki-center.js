@@ -160,7 +160,7 @@
     const configured = vault.configured === true;
     const version = trustedVersion(state);
     const harnessVersion = trustedHarnessVersion(state);
-    nodes.appVersion.textContent = `${version ? `DSH Desktop V${version}` : 'DSH Desktop'}${harnessVersion ? ` · Harness V${harnessVersion}` : ''}`;
+    nodes.appVersion.textContent = `${version ? `lulu V${version}` : 'lulu'}${harnessVersion ? ` · Harness V${harnessVersion}` : ''}`;
     nodes.onboarding.hidden = configured;
     nodes.overview.hidden = !configured;
     if (!configured) return;

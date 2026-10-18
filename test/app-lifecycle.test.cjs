@@ -14,7 +14,7 @@ const {
 
 const identity = () => buildVersionIdentity({
   product: '1.1.7',
-  harness: '0.1.6-alpha.1',
+  harness: '0.1.6-alpha.2',
   electron: '43.4.1',
   node: '24.14.0'
 });
@@ -133,8 +133,8 @@ test('lifecycle gate blocks a deferred mutation after shutdown begins and can re
 
 test('version identity and repeated-launch focus stay product-specific', () => {
   assert.equal(versionIdentityLines(identity()), [
-    '产品版本：DSH Desktop V1.1.7',
-    'Harness 内核：DeepSeek Harness 0.1.6-alpha.1',
+    '产品版本：lulu V1.1.7',
+    'Harness 内核：DeepSeek Harness 0.1.6-alpha.2',
     '桌面运行时：Electron 43.4.1',
     'Electron 内置 Node：24.14.0'
   ].join('\n'));

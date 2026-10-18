@@ -26,9 +26,13 @@ test('extension center is local-only, official-inventory-backed, metadata-only, 
   assert.match(main, /ipcMain\.handle\('extensions:open-window'/);
   assert.match(main, /--plugin-health-smoke-file=/);
   assert.match(main, /runPluginHealthSmoke/);
-  assert.match(main, /rendered\.toggleButtons === 1/);
-  assert.match(main, /rendered\.catalogRows === 1/);
-  assert.match(main, /rendered\.installButtons === 1/);
+  assert.match(main, /rendered\.toggleButtons === 0/);
+  assert.match(main, /rendered\.catalogRows === 0/);
+  assert.match(main, /rendered\.installButtons === 0/);
+  assert.match(main, /rendered\.officialButtons === 1/);
+  assert.match(main, /rendered\.historicalSections === 1/);
+  assert.match(main, /rendered\.historicalButtons === 0/);
+  assert.match(main, /JSON\.stringify\(\['getState', 'openOfficial', 'refresh', 'reveal', 'rollbackHistory'\]\)/);
   assert.match(main, /rendered\.surfaceRows === 4/);
   assert.match(main, /Date\.now\(\) \+ 15000/);
   assert.match(main, /plugin-health-smoke-timeout/);
@@ -40,13 +44,12 @@ test('extension center is local-only, official-inventory-backed, metadata-only, 
     '@deepseek-ai/dsh-session-log-export'
   ]) assert.ok(main.includes(packageName), packageName);
   assert.match(main, /!rendered\.text\.includes\('hidden-plugin-config-marker'\)/);
-  assert.match(main, /rendered\.text\.includes\('兼容已验证'\)/);
+  assert.match(main, /!rendered\.text\.includes\('兼容已验证'\)/);
   assert.match(preload, /plugin-health:get-state/);
   assert.match(preload, /plugin-health:refresh/);
   assert.match(preload, /plugin-health:reveal/);
-  assert.match(preload, /plugin-health:toggle/);
-  assert.match(preload, /plugin-health:install/);
-  assert.match(preload, /plugin-health:lifecycle/);
+  assert.match(preload, /plugin-health:open-official/);
+  assert.doesNotMatch(preload, /plugin-health:(toggle|install|lifecycle)/);
   assert.doesNotMatch(preload, /readFile|writeFile|shell|ipcRenderer\.send/);
   assert.match(renderer, /textContent/);
   assert.match(renderer, /renderExtensionCenter\(state\.extensionCenter/);
@@ -54,16 +57,10 @@ test('extension center is local-only, official-inventory-backed, metadata-only, 
   assert.match(renderer, /MCP/);
   assert.match(page, /Skills、Plugins、Hooks、MCP/);
   assert.match(renderer, /pnpm 只管理 Profile 自己声明的外部依赖/);
-  assert.match(renderer, /固定 registry/);
-  assert.match(renderer, /compatibilityText\(item\.compatibility\)/);
-  assert.match(renderer, /makeBadge\(item\.compatibility\.status\)/);
-  assert.match(renderer, /api\.toggle\(profile\.id, item\.name, !item\.enabled\)/);
-  assert.match(renderer, /api\.lifecycle\(target\.profileId, item\.id, action\)/);
-  for (const action of ['install', 'upgrade', 'uninstall', 'rollback']) {
-    assert.match(renderer, new RegExp(`addLifecycleButton\\('${action}'`));
-  }
-  assert.match(renderer, /安装脚本已禁止/);
-  assert.match(renderer, /软件随附 pnpm/);
+  assert.match(renderer, /api\.openOfficial\(\)/);
+  assert.doesNotMatch(renderer, /compatibilityText|api\.(toggle|install|lifecycle)\(/);
+  assert.match(page, /本地只读检查/);
+  assert.match(page, /不重复裁决兼容性/);
   assert.doesNotMatch(renderer, /document\.createElement\(['"]input['"]\)/);
   assert.doesNotMatch(renderer, /innerHTML|eval\(/);
   assert.doesNotMatch(catalog, /cordis\.patch\.yml.*readFile|\.credentials/);

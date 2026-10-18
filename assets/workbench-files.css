@@ -18,7 +18,8 @@ html[data-dsh-files-open="true"][data-dsh-review-open="true"] #root {
 #dsh-workbench-files {
   position: fixed;
   inset: 0 auto 0 0;
-  z-index: 2147483000;
+  /* Above the workspace, below official modal/menu portals (1000+). */
+  z-index: 100;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: var(--dsh-files-width);

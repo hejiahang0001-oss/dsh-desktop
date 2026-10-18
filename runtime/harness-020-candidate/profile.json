@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0-rc.2",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+  "tag": "dsh-v0.2.0-rc.2",
+  "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+  "packageManager": "pnpm@11.7.0",
+  "patchSha256": "3da22e265d82d30ba2cbd15d89b53b81c769245101a60c12617161fcab5523fe",
+  "upstreamLockSha256": "80fe05eae33582ae26839afd05f1965f9b0e4be11034ddf9797af6085d5ba9b1",
+  "upstreamWorkspaceSha256": "8486cab8bfbba2b0f740eac3d5109132b18a3bd53d3b07aebf441e4f1462eb4e",
+  "lockSha256": "a9987755c972ccab17c40b3060e76bbc94fb550ce0058c6cd9fb89561df26b67",
+  "workspaceSha256": "3a62d083c8de76a46a8dd364a3bbb445c1d0cba5fa802c6e4b967c4b1d8b0893"
+}

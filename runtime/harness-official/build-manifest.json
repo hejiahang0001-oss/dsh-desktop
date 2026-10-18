@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+    "tag": "dsh-v0.2.1-alpha.1",
+    "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc"
+  },
+  "build": {
+    "node": "24.19.0",
+    "esbuild": "0.28.1",
+    "semver": "7.8.5",
+    "command": "vendor/runtime/win32-x64/node.exe runtime/harness-official/build.cjs"
+  },
+  "sourceHashes": {
+    "runtime-tree.ts": "aaef471a94c1bb295c7aecd080f2bf9f4fa037a8fc3f2d76c63db9b367c80778",
+    "core-package-set.ts": "578403a76103a378a6abff4257cf45ee65b9e31d0b87b83a475d12da33f85667",
+    "release.ts": "ab4c40200893effa8e3ea0840c43630ba10403242f90ecccba49ae9a11c82140",
+    "host-protocol.ts": "3ac3b9c5416144de212ed2e1fae3ae17a12dedd9389df99f07283012df5d77b9"
+  },
+  "licenses": {
+    "LICENSE.deepseek.txt": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+    "LICENSE.semver.txt": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
+    "LICENSE.esbuild.txt": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681"
+  },
+  "inputs": [
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/classes/comparator.js",
+      "sha256": "054202956430d63d5ff4599fae09760ce465b489e4f0b5ef5ce7cc7ac21157ac"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/classes/range.js",
+      "sha256": "a6544485aa8575aa9854c67e2caa67726815de18a482d0ceb8a1003244de3bc1"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/classes/semver.js",
+      "sha256": "813b2c185512d30c9b931c2fed8140889d9d7490ceeeedc370da30337dc8ca57"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/clean.js",
+      "sha256": "4eadb0892844cf3ae295121a86163a66c73f89acd1b7f0b114ec115b4539512f"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/cmp.js",
+      "sha256": "a63d74e87b73788e78e9ce0a4892b5333d6b809c0de88b31e4ed76cbf17f94b3"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/coerce.js",
+      "sha256": "28a251c5ab210ddf9e97551b9f37a53329fcce91f0c3943dcbc02de1a1de915a"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/compare-build.js",
+      "sha256": "5ab651d5b40af289bd85c645a92b6d8cfe1a986dc413c797cfcc8d623d7c844c"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/compare-loose.js",
+      "sha256": "07b6a3a1db0a5210ceb784c1708bd4679f3a94fc73a9c9eb349349e7070a6f78"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/compare.js",
+      "sha256": "d404b5aa48aaddc8a654c5da8fb7d4443404b7948589b21ac4b045d1cee4e34c"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/diff.js",
+      "sha256": "7a11fd39b987cdf06c65e928cb1aca49bec583feb86fb5c8fe47a6fd61d7de31"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/eq.js",
+      "sha256": "b6e30a7168e52723216fc163d300e2bbabf92ec0251f9ac5438bb6ccf57c8936"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/gt.js",
+      "sha256": "135523704aa48cd98834dd170ee9f74f0e68043b379f32d021db11e6304c5c93"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/gte.js",
+      "sha256": "991c5bbe48ecb210a562646872f05862ad9fc0d42186d85aa60bdc6fa323eb9d"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/inc.js",
+      "sha256": "952069fc8690b7d3af0fe9d55f7c54fe2ac067b48c5e74f6a54f9ce19a334493"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/lt.js",
+      "sha256": "1c897a9bc849320e2e9dc0f6c09555c01ee3ddf30734515d717b88ad7740ea25"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/lte.js",
+      "sha256": "3a8d0b1d00423f60cc7cb810b36ab77b61330831ad237dbe73eb5cecfa412800"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/major.js",
+      "sha256": "5c678480d882f511200fed2c16ec3847dfedb08a1d70328dc2f031d35d825276"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/minor.js",
+      "sha256": "1b051794f1713adec2a236517196691687c35f82e0b596ff3316a78b3cc10ae6"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/neq.js",
+      "sha256": "a662883751918822c162183b46b9e20d09489132f82686c92ab78bee67f3a127"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/parse.js",
+      "sha256": "29a69e15b6d02fe381d573f861881a89590e9d0f0f0ca740c5f85eaf0234c4ad"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/patch.js",
+      "sha256": "f02d3c1b059fe3d96ce124886f7eef321d381a95638fd3c4a8d5ccd8e76ffadd"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/prerelease.js",
+      "sha256": "baedbf503d5610ad041bfb56071efa48feb331ca278295c399537d35d3ffb593"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/rcompare.js",
+      "sha256": "84fa5e88adf08d15c993cac8cdec6d1a65045b7e95a9c55184230a7f807f4dc0"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/rsort.js",
+      "sha256": "6ec659ce3b6c2b173c719286caab04409adba046c0917874ec3b5e36ddfbc7e3"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/satisfies.js",
+      "sha256": "8cf5e122b757251671ed6c9d9680904b71cd375845853f05312e608cf2cc2946"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/sort.js",
+      "sha256": "c2fe2d3ed0be8a4e9de8f02abdfd5d9c0d3bcc510d88e87af84185592882c4b8"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/truncate.js",
+      "sha256": "e145833a250311927c92f424f56498c52f1b7bb1271ce6afbf006db87773ff43"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/functions/valid.js",
+      "sha256": "0de7ea736cb7807179d46dfac09c830a9338e02b6a07db12d7040cde2def6025"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/index.js",
+      "sha256": "4b3e57d3d40e29e0706002eba113d09f35aea593578376bbeec83b777b9912ab"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/internal/constants.js",
+      "sha256": "38a112baf27ceca0260082ff26ac2fd7a9861cab1af12dd65e720277f68e6ce9"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/internal/debug.js",
+      "sha256": "8a9f420572260f3cf944463b5090d62a60f0730589dc23a7ec4ca25e2ee41bb3"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/internal/identifiers.js",
+      "sha256": "b4916b09dc7869ae0eb05e71c855c942a3a7365f7e6e89185d59a9e45a2451d7"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/internal/lrucache.js",
+      "sha256": "14d087c87da87b6f5c36fc4cdd7d2d14077874b14a68e20fce5b6138fa2ca34f"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/internal/parse-options.js",
+      "sha256": "fdf51d0de8d5442c35a997ef58cd530d239ce206f961d14c5121354451b01d01"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/internal/re.js",
+      "sha256": "5833262888e2b5d843a69193f83c05e374818dbe55379b497819b5bf58e48cd8"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/gtr.js",
+      "sha256": "8fadad28e36d28e93d498ac7ac20badba2a407312845eabc18e82e90a0732b19"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/intersects.js",
+      "sha256": "fe87ac5d3020010ad3ec00636dadbf0c669ff07d0f57e0a8165a8264f79a676f"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/ltr.js",
+      "sha256": "e5186fcc03018acf9be6d968755d4c49727aeb0d981d179eb568ae5fbe983038"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/max-satisfying.js",
+      "sha256": "e1a2c0d6144cc772cd20bbc8ecb9e8a3a4074e9172a3d8e794838b591cdeb416"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/min-satisfying.js",
+      "sha256": "2681abf54098aa670f12826b76a6ec77a2441186ae4243afde3be8ae4908f7ca"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/min-version.js",
+      "sha256": "fefba0a88c2bf74d5cede504b5ae50a8dc3edfd69cf0174a491e2cf3e442614b"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/outside.js",
+      "sha256": "3a2b0b23593d2f49419c06af2af75450cab103b0c25d665d48fe5bca495a21ca"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/simplify.js",
+      "sha256": "7b78581c13322bc68ece2088685386b2a9b51c15b94d0a2063bdf2546bd41934"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/subset.js",
+      "sha256": "ceb9eb6ed5bfc6c7ac7af7f47e5c3535444a4e66a0e2b58cdad4bd02a35d454d"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/to-comparators.js",
+      "sha256": "6c5e966210cff270fa2850668aaf8460fac7759f8d99f282521ef7a78f4564e9"
+    },
+    {
+      "file": "../../artifacts/harness-021-final-replay/node_modules/.pnpm/semver@7.8.5/node_modules/semver/ranges/valid.js",
+      "sha256": "5ef6f995af801868925940cf8df5735d565ebabb090b068695cae65218bcd3ac"
+    },
+    {
+      "file": "sources/core-package-set.ts",
+      "sha256": "578403a76103a378a6abff4257cf45ee65b9e31d0b87b83a475d12da33f85667"
+    },
+    {
+      "file": "sources/host-protocol.ts",
+      "sha256": "3ac3b9c5416144de212ed2e1fae3ae17a12dedd9389df99f07283012df5d77b9"
+    },
+    {
+      "file": "sources/release.ts",
+      "sha256": "ab4c40200893effa8e3ea0840c43630ba10403242f90ecccba49ae9a11c82140"
+    },
+    {
+      "file": "sources/runtime-tree.ts",
+      "sha256": "aaef471a94c1bb295c7aecd080f2bf9f4fa037a8fc3f2d76c63db9b367c80778"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "runtime-tree.cjs.map",
+      "sha256": "9552f07931e02b47877fea4f39f94b180c93c2d27c5ee326982677b54e81079e"
+    },
+    {
+      "file": "runtime-tree.cjs",
+      "sha256": "1d862fa7d4027163f8761b8e63ff0678daba1c6bda3e1a8af35da6118db23b42"
+    }
+  ]
+}

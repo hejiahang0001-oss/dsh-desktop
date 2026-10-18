@@ -32,6 +32,7 @@ let exit = null;
 let buildEvidence = null;
 let buildEvidenceAfter = null;
 let jobEvidence = null;
+let exitObservations = null;
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -148,10 +149,37 @@ public static class DshJobLauncher {
   [DllImport("kernel32.dll", SetLastError=true)] public static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
   [DllImport("kernel32.dll", SetLastError=true)] public static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
   [DllImport("kernel32.dll", SetLastError=true)] public static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool QueryInformationJobObject(IntPtr job, int kind, IntPtr buffer, uint size, IntPtr returned);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool member);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder image, ref uint size);
+  public static object[] Members(IntPtr job) {
+    int size=8+4096*IntPtr.Size; IntPtr buffer=Marshal.AllocHGlobal(size);
+    try {
+      if (!QueryInformationJobObject(job,3,buffer,(uint)size,IntPtr.Zero)) ThrowLast("Job member query");
+      int count=Marshal.ReadInt32(buffer,4); if(count<0 || count>4096) throw new Exception("Job member bound");
+      var rows=new System.Collections.Generic.List<object>();
+      for(int i=0;i<count;i++) {
+        uint pid=checked((uint)Marshal.ReadIntPtr(buffer,8+i*IntPtr.Size).ToInt64());
+        IntPtr handle=OpenProcess(0x1000,false,pid);
+        if(handle==IntPtr.Zero) { rows.Add(new {pid, error=Marshal.GetLastWin32Error()}); continue; }
+        try {
+          bool member; long created,exit,kernel,user; uint length=32768; var image=new StringBuilder((int)length);
+          if(!IsProcessInJob(handle,job,out member) || !member) { rows.Add(new {pid, error="membership-changed"}); continue; }
+          if(!GetProcessTimes(handle,out created,out exit,out kernel,out user) || !QueryFullProcessImageName(handle,0,image,ref length)) { rows.Add(new {pid, error=Marshal.GetLastWin32Error()}); continue; }
+          rows.Add(new {pid, creationFileTime=created.ToString(), name=System.IO.Path.GetFileName(image.ToString())});
+        } finally { CloseHandle(handle); }
+      }
+      return rows.ToArray();
+    } finally { Marshal.FreeHGlobal(buffer); }
+  }
   public static void ThrowLast(string operation) { throw new Win32Exception(Marshal.GetLastWin32Error(), operation); }
 }
 '@
-function Send-Frame($frame) { [Console]::Out.WriteLine(($frame | ConvertTo-Json -Compress)); [Console]::Out.Flush() }
+function Send-Frame($frame) { [Console]::Out.WriteLine(($frame | ConvertTo-Json -Compress -Depth 5)); [Console]::Out.Flush() }
+function Send-Members($phase) {
+  try { Send-Frame @{type='job-members'; phase=$phase; observedAt=[DateTime]::UtcNow.ToString('o'); members=@([DshJobLauncher]::Members($job))} }
+  catch { Send-Frame @{type='job-members-error'; phase=$phase; observedAt=[DateTime]::UtcNow.ToString('o'); error=$_.Exception.GetType().Name} }
+}
 function Decode-Value($name) { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Environment]::GetEnvironmentVariable($name))) }
 $exe = Decode-Value 'DSH_JOB_EXE_B64'; $command = Decode-Value 'DSH_JOB_COMMAND_B64'; $cwd = Decode-Value 'DSH_JOB_CWD_B64'
 [uint32]$driverPid = [uint32]([Environment]::GetEnvironmentVariable('DSH_JOB_DRIVER_PID'))
@@ -181,7 +209,7 @@ try {
   $processResumed = $true
   [void][DshJobLauncher]::CloseHandle($threadHandle); $threadHandle = [IntPtr]::Zero
   Send-Frame ([ordered]@{ type='ready'; pid=[int]$processInfo.dwProcessId; creationFileTime=$created.ToString() })
-  $rootReported = $false; $lastActiveProcesses = [uint32]::MaxValue
+  $rootReported = $false; $lastActiveProcesses = [uint32]::MaxValue; $nextMembers = [DateTime]::MaxValue
   while ($true) {
     if ([DshJobLauncher]::WaitForSingleObject($driverHandle, 0) -eq 0) { Send-Frame ([ordered]@{ type='driver-exit' }); break }
     $accounting = New-Object DshJobLauncher+JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
@@ -193,8 +221,10 @@ try {
     if ((-not $rootReported) -and ([DshJobLauncher]::WaitForSingleObject($processHandle, 0) -eq 0)) {
       [uint32]$rootCode = 0; if (-not [DshJobLauncher]::GetExitCodeProcess($processHandle, [ref]$rootCode)) { [DshJobLauncher]::ThrowLast('GetExitCodeProcess') }
       Send-Frame ([ordered]@{ type='root-exit'; code=[uint32]$rootCode; activeProcesses=[uint32]$accounting.ActiveProcesses }); $rootReported = $true
+      Send-Members 'root-exit'; $nextMembers = [DateTime]::UtcNow.AddSeconds(1)
     }
-    if ($accounting.ActiveProcesses -eq 0) { Send-Frame ([ordered]@{ type='empty'; activeProcesses=0; totalProcesses=[uint32]$accounting.TotalProcesses }); break }
+    if (($accounting.ActiveProcesses -eq 0) -and $rootReported) { Send-Frame ([ordered]@{ type='empty'; activeProcesses=0; totalProcesses=[uint32]$accounting.TotalProcesses }); break }
+    if ($rootReported -and [DateTime]::UtcNow -ge $nextMembers) { Send-Members 'post-root-exit'; $nextMembers = [DateTime]::UtcNow.AddSeconds(1) }
     Start-Sleep -Milliseconds 100
   }
 } catch {
@@ -253,6 +283,9 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
     let resolve;
     let reject;
     const promise = new Promise((onResolve, onReject) => { resolve = onResolve; reject = onReject; });
+    // Launch can fail before callers receive the root/empty wait methods.
+    // Observe rejection now, while preserving the original rejecting promise.
+    promise.catch(() => {});
     return { promise, resolve, reject, settled: false };
   };
   const readyFrame = deferred();
@@ -312,16 +345,30 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
       failPending(new Error(`Packaged Job guardian exited ${code ?? signal}: ${stderr}`));
     }
   });
+  const terminateGuardian = async () => {
+    closing = true;
+    if (guardian.exitCode === null && guardian.signalCode === null) {
+      // Only this launch's guardian is owned here. Its Job handle closes on
+      // termination; closing stdin alone cannot stop the guardian's loop.
+      try { guardian.kill(); } catch (error) {
+        if (guardian.exitCode === null && guardian.signalCode === null) throw error;
+      }
+    }
+    return waitBounded(guardianExit.promise, 10_000, 'Packaged Job guardian did not close in time.');
+  };
   let readyState;
   try {
     readyState = await waitBounded(readyFrame.promise, timeoutMs, 'Packaged Job guardian did not launch the app in time.');
+    if (!Number.isSafeInteger(readyState.pid) || readyState.pid <= 0 || !/^\d+$/.test(readyState.creationFileTime)) {
+      throw new Error('Packaged Job guardian returned an invalid app identity.');
+    }
   } catch (error) {
-    try { guardian.stdin.end(); } catch { /* The guardian may already have exited. */ }
-    await waitBounded(guardianExit.promise, 10_000, 'Failed packaged Job guardian did not close.').catch(() => undefined);
+    try {
+      await terminateGuardian();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Packaged Job launch failed and guardian cleanup did not complete.', { cause: error });
+    }
     throw error;
-  }
-  if (!Number.isSafeInteger(readyState.pid) || readyState.pid <= 0 || !/^\d+$/.test(readyState.creationFileTime)) {
-    throw new Error('Packaged Job guardian returned an invalid app identity.');
   }
   return {
     guardian,
@@ -337,8 +384,7 @@ const launchWindowsJob = async ({ executablePath, args = [], cwd, timeoutMs = 15
         const gracefulExit = await waitBounded(guardianExit.promise, 2_000, 'Packaged Job guardian is still closing.').catch(() => null);
         if (gracefulExit) return gracefulExit;
       }
-      try { guardian.kill(); } catch { /* Terminating the guardian closes the Job Object handle. */ }
-      return waitBounded(guardianExit.promise, 10_000, 'Packaged Job guardian did not close in time.');
+      return terminateGuardian();
     }
   };
 };
@@ -362,6 +408,16 @@ const waitForProcessIdentitiesGone = async (identities, timeoutMs) => {
     if (Date.now() >= deadline) return alive;
     await delay(250);
   } while (true);
+};
+
+// Keep independent evidence even when one observation rejects before the other
+// settles. A captured descendant union is not a post-exit living-process list.
+const collectExitObservations = async (identitiesGone, emptyJob) => {
+  const results = await Promise.allSettled([identitiesGone, emptyJob]);
+  const summarize = (result) => result.status === 'fulfilled'
+    ? { status: 'fulfilled', value: result.value }
+    : { status: 'rejected', error: String(result.reason?.message || result.reason) };
+  return { identities: summarize(results[0]), job: summarize(results[1]) };
 };
 
 const canConnect = (port, timeoutMs = 1000) => new Promise((resolve) => {
@@ -736,10 +792,15 @@ const run = async () => {
     await snapshotMonitor.stop();
     snapshotMonitor = null;
 
-    const [aliveAfterExit, emptyJob] = await Promise.all([
+    exitObservations = await collectExitObservations(
       waitForProcessIdentitiesGone(allOwnedIdentities, 15_000),
       jobLaunch.waitForEmpty(15_000)
-    ]);
+    );
+    if (exitObservations.identities.status !== 'fulfilled' || exitObservations.job.status !== 'fulfilled') {
+      throw new Error(Object.values(exitObservations).filter(result => result.status === 'rejected').map(result => result.error).join('; '));
+    }
+    const aliveAfterExit = exitObservations.identities.value;
+    const emptyJob = exitObservations.job.value;
     jobEvidence.empty = emptyJob;
     const guardianExit = await jobLaunch.close();
     jobEvidence.guardianExit = guardianExit;
@@ -803,6 +864,7 @@ const run = async () => {
       buildEvidence,
       buildEvidenceAfter,
       jobEvidence,
+      exitObservations,
       ready: readyState,
       processTree,
       processSnapshots,
@@ -882,6 +944,7 @@ if (require.main === module) void run().catch(async (error) => {
     buildEvidence,
     buildEvidenceAfter,
     jobEvidence,
+    exitObservations,
     ready: readyState,
     processTree,
     processSnapshots,
@@ -899,6 +962,7 @@ if (require.main === module) void run().catch(async (error) => {
 module.exports = {
   assertNoReparsePath,
   createExclusiveRunDirectory,
+  collectExitObservations,
   descendantsOf,
   existingPathComponents,
   findProcessIdentity,

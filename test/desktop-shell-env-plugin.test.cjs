@@ -45,5 +45,41 @@ test('desktop shell environment plugin forwards only fixed non-secret runtime fa
 
   plugin.apply(ctx, environment);
   assert.equal(contributor.name, 'dsh-desktop-runtime');
-  assert.deepEqual(contributor.resolve({}), values);
+  assert.deepEqual(contributor.resolve({ agent: { session: { header: { id: 'session-a', cwd: 'C:\\Project' } } } }), values);
+});
+
+test('desktop shell workspace follows each execution without mutating earlier snapshots or ambient paths', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { execFileSync } = require('node:child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-shell-binding-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const a = path.join(root, 'A'), b = path.join(root, 'B');
+  fs.mkdirSync(a); fs.mkdirSync(b);
+  const plugin = await import(pathToFileURL(path.resolve('runtime/dsh-desktop-shell-env/index.mjs')).href);
+  let contributor;
+  const environment = Object.fromEntries(['DSH_CWD', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DOCX_TOOL',
+    'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL',
+    'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE'].map(key => [key, a]));
+  plugin.apply({ shellEnv: { register(value) { contributor = value; } } }, environment);
+  const execution = (id, cwd) => ({ agent: { session: { id, header: { id, cwd } } } });
+  const first = contributor.resolve(execution('a', a));
+  const second = contributor.resolve(execution('b', b));
+  assert.equal(second.DSH_CWD, b);
+  assert.equal(first.DSH_CWD, a);
+  assert.notEqual(first, second);
+  assert.equal(Object.isFrozen(second), true);
+  assert.equal(contributor.resolve(execution('a', a)).DSH_CWD, a);
+  assert.equal(second.DSH_DESKTOP_XLSX_TOOL, a);
+  assert.equal(environment.DSH_CWD, a);
+  for (const [snapshot, name] of [[second, 'B.txt'], [first, 'A.txt']]) {
+    execFileSync(process.execPath, ['-e', 'require("node:fs").writeFileSync(require("node:path").join(process.env.DSH_CWD,process.argv[1]),"marker")', name],
+      { env: { ...process.env, ...snapshot }, windowsHide: true });
+  }
+  assert.deepEqual(fs.readdirSync(a), ['A.txt']);
+  assert.deepEqual(fs.readdirSync(b), ['B.txt']);
+  for (const invalid of [undefined, {}, { agent: {} }, execution('', b), execution('b', 'relative'),
+    execution('b', ''), execution('b', b + '\u0000'), { agent: { session: { id: 'a', header: { id: 'b', cwd: b } } } }]) {
+    assert.throws(() => contributor.resolve(invalid), /agent-bound workspace/);
+  }
 });

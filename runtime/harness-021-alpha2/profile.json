@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "version": "0.2.1-alpha.2",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+  "tag": "dsh-v0.2.1-alpha.2",
+  "commit": "d743267388641bc76f17c45ce8b4c231aed1d32c",
+  "packageManager": "pnpm@11.28.5",
+  "promotionAllowed": false,
+  "lockSha256": "94f8c46168ca3056bc693c19956c85e33bdcc15a12a0249e5428458ded009f47",
+  "workspaceSha256": "07e4dfd35c6671a1c870e09837f6b3412c88e546ed98091aefb4b3fa62aed624",
+  "postimageSha256": "8c51a032880ee3b41a32ac33a8d165f97da676671c4d8795a4f9d0d4f932e880",
+  "patchChain": [
+    { "path": "runtime/harness-021-alpha2/security.patch", "sha256": "b7d38e82451ef2d31272e6b474050f5a4ae0c1df2905e77400d2cd5b9ca16dde" },
+    { "path": "runtime/harness-021-alpha2/security-lock.patch", "sha256": "a12bdbac222a53533de2e8e57ca946bfa96d5717caac141c8f88f7f96983920e" },
+    { "path": "runtime/harness-021-alpha2/private-powershell-alpha2.patch", "sha256": "ea8be19dd85ff0a637f1debee4381330022daa1fe0e1ef0597e5dc32de09902f" },
+    { "path": "runtime/harness-021-alpha2/attachment-lifecycle-alpha2.patch", "sha256": "729db1179cc614ad5f388db4b9582bc326c0175456f6baacc054323e315a8a51" },
+    { "path": "runtime/harness-021-alpha2/attachment-types-alpha2.patch", "sha256": "6fcd92dcdd9618baed95c2c040c317f33022ba5d66c97790dca91c803d5a9c2a" },
+    { "path": "runtime/harness-021-alpha2/private-powershell-jsdoc-alpha2.patch", "sha256": "3bcb3d670d08755afbe25202d53cfc9f2226a26db79da8714424ede17105a437" }
+  ]
+}

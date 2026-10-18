@@ -1,12 +1,15 @@
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, randomUUID } = require('node:crypto');
+const { finishOfficialOnboarding, previewExpression } = require('./official-office-preview-contract.cjs');
+const { readSmokeHistory, userStoppedPrompt, officialActionExpression } = require('./session-workflow-contract.cjs');
 
-async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, version, target, origin, api, crossWorkspace = false }) {
+async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, version, target, origin, api, fetchImpl, crossWorkspace = false }) {
   const wc = window.webContents;
   const evaluate = (code) => wc.executeJavaScript(code, true);
   const checks = {};
   const inspect = () => supervisor.credentialHost.sessionControl.request('inspect', { workspacePath, sessionId: selected.sessionId });
+  const history = () => readSmokeHistory(api, origin, selected.sessionId);
   const wait = async (check, name, timeout = 180000) => {
     await fsp.writeFile(`${target}.phase.json`, JSON.stringify({ name, at: new Date().toISOString() }));
     const deadline = Date.now() + timeout;
@@ -22,12 +25,16 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   };
   const type = (text) => evaluate(`window.__DSH_COMPOSER_TEXT__.append(window.__DSH_COMPOSER_TEXT__.current(), ${JSON.stringify(text)})`);
   const pressEnter = (accelerated = false) => evaluate(`(()=>{const input=window.__DSH_COMPOSER_TEXT__.current();input.focus();input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true,ctrlKey:${accelerated}}));return true})()`);
-  const officialButtonAvailable = (labels) => evaluate(`Array.from(document.querySelectorAll('button')).some(b=>${JSON.stringify(labels)}.includes(b.getAttribute('aria-label')||b.textContent.trim())&&!b.disabled)`);
-  const clickOfficialButton = (labels) => evaluate(`(()=>{const labels=${JSON.stringify(labels)};const b=Array.from(document.querySelectorAll('button')).find(b=>labels.includes(b.getAttribute('aria-label')||b.textContent.trim())&&!b.disabled);if(!b)throw new Error('Official Harness action unavailable');b.click();return true})()`);
+  const officialButtonAvailable = (labels) => evaluate(officialActionExpression(labels));
+  const clickOfficialButton = async (labels) => {
+    if (!await evaluate(officialActionExpression(labels, true))) throw new Error('Visible unoccluded official Harness action unavailable');
+  };
   const stopLabels = ['Stop generating', '停止生成'];
   const steerQueueLabels = ['Steer queued message', '插话发送'];
   const start = async () => {
+    const requestId = randomUUID();
     const receipt = await api(origin, 'session.prompt', {
+      requestId,
       sessionId: selected.sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: '这是官方交互验收。请连续输出200行“等待交互测试”，每行标序号。直接开始，不分析，不使用工具。下一条消息到达时立即以新指令为准。' }]
@@ -35,8 +42,14 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
     if (!receipt.accepted) throw new Error('Initial prompt rejected');
     await wait(async () => (await inspect()).running, 'running');
     await wait(() => officialButtonAvailable(stopLabels), 'official stop available');
+    return requestId;
   };
 
+  const onboarding = await finishOfficialOnboarding({ evaluate });
+  if (process.argv.includes('--smoke-approval')) return require('./session-approval-smoke.cjs').runApprovalSmoke({
+    window, supervisor, selected, workspacePath, version, target, origin, api, evaluate, wait, inspect, history, onboarding,
+    allowOneFixtureApprovalExplicitlyAuthorized: process.argv.includes('--smoke-allow-one-fixture-approval-authorized')
+  });
   const marker = `DSH_FLOW_${randomBytes(8).toString('hex')}`;
   const queueResult = path.join(workspacePath, 'queue-result.txt');
   const steerResult = path.join(workspacePath, 'steer-result.txt');
@@ -51,15 +64,20 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   checks.officialUpArrowInvoked = true;
   await wait(async () => {
     const state = await inspect();
-    return !state.running && !state.pending && (await fsp.readFile(queueResult, 'utf8').catch(() => '')).trim() === marker;
+    return !state.running && !state.pending && !state.turnOpen && state.lastTurnReason === 'completed'
+      && (await fsp.readFile(queueResult, 'utf8').catch(() => '')).trim() === marker;
   }, 'official queued steer completed');
   checks.officialQueuedSteerReplied = true;
   await wait(() => evaluate('Array.from(document.querySelectorAll("[data-presented-file]")).some(el=>el.textContent.includes("queue-result.txt"))'), 'official present card', 15000);
   await evaluate('Array.from(document.querySelectorAll("[data-presented-file]")).find(el=>el.textContent.includes("queue-result.txt")).querySelector("button").click()');
-  await wait(() => evaluate(`document.querySelector('[data-textpreview-state=text]')?.textContent.includes(${JSON.stringify(marker)})`), 'official present preview', 15000);
+  await wait(async () => {
+    const owner = await evaluate(previewExpression('queue-result.txt', 1, 'inspect', '[data-textpreview-plain]'));
+    return owner.ready && owner.selectorVisible && owner.selectorText.trim() === marker;
+  }, 'official present preview', 15000);
   checks.officialPresentDeliveredAndPreviewed = true;
   await fsp.writeFile(`${target}.official-present.png`, (await wc.capturePage()).toPNG());
-  await evaluate('Array.from(document.querySelectorAll("[data-dockkit-tab]")).find(tab=>tab.querySelector("[data-dockkit-tab-title]")?.textContent.trim()==="queue-result.txt").querySelector("[data-dockkit-tab-close]").click()');
+  const delivered = await evaluate(previewExpression('queue-result.txt'));
+  await evaluate(`Array.from(document.querySelectorAll('[data-dockkit-tab]')).find(tab=>tab.getAttribute('data-dockkit-tab')===${JSON.stringify(delivered.tabId)}).querySelector('[data-dockkit-tab-close]').click()`);
   await evaluate('document.querySelector("[data-sidebar-right-toggle]")?.click()');
 
   await start();
@@ -68,16 +86,19 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
   checks.officialCtrlEnterInvoked = true;
   await wait(async () => {
     const state = await inspect();
-    return !state.running && !state.pending && (await fsp.readFile(steerResult, 'utf8').catch(() => '')).trim() === marker;
+    return !state.running && !state.pending && !state.turnOpen && state.lastTurnReason === 'completed'
+      && (await fsp.readFile(steerResult, 'utf8').catch(() => '')).trim() === marker;
   }, 'official ctrl-enter steer completed');
   checks.officialCtrlEnterSteerReplied = true;
   checks.sentTextCleared = !(await evaluate('window.__DSH_COMPOSER_TEXT__.read()')).trim();
 
-  await start();
+  const stopRequestId = await start();
   await clickOfficialButton(stopLabels);
   await wait(async () => !(await inspect()).running, 'official stop completed', 60000);
   const stopped = await inspect();
-  checks.officialStopSettled = !stopped.running && stopped.pending === 0;
+  checks.officialStopSettled = !stopped.running && stopped.pending === 0 && !stopped.turnOpen;
+  checks.officialStopUserAborted = userStoppedPrompt(await history(), stopRequestId);
+  if (!checks.officialStopUserAborted) throw new Error('Stop did not durably abort its exact prompt with the user cause; natural completion is not cancellation.');
 
   // Official header/sidebar controls intentionally do not exist on a blank session.
   const sidebar = await require('./official-sidebar-smoke.cjs').runOfficialSidebarSmoke({
@@ -85,15 +106,25 @@ async function runWorkflowSmoke({ window, supervisor, selected, workspacePath, v
     waitFor: (code) => wait(() => evaluate(code), `sidebar: ${code}`, 15000)
   });
   checks.officialSidebar = sidebar.ok;
+  // The completed real workflow supplies a non-blank fixture without another
+  // model call. Archive acceptance reloads the renderer, including its bridges.
+  const remainingDraft = await evaluate('window.__DSH_COMPOSER_TEXT__.read()');
+  const archive = await require('./official-archive-smoke.cjs').runOfficialArchiveSmoke({
+    window, selected, origin, fetchImpl, evaluate, target: `${target}.archive`, version,
+    waitFor: (code) => wait(() => evaluate(code), `archive: ${code}`, 15000)
+  });
+  checks.officialArchiveRecovery = archive.ok;
   await fsp.writeFile(`${target}.workflow.png`, (await wc.capturePage()).toPNG());
   return {
     ok: Object.values(checks).every(Boolean),
     version,
     realModel: true,
+    onboarding,
     crossWorkspace,
     sidebar,
+    archive,
     checks,
-    remainingDraft: await evaluate('window.__DSH_COMPOSER_TEXT__.read()'),
+    remainingDraft,
     evidence: 'Real DeepSeek calls exercised the unmodified official Harness queue, queued-message up-arrow, Ctrl+Enter steer and Stop controls; marker files prove the steered messages executed.'
   };
 }

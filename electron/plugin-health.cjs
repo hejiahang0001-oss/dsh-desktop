@@ -3,6 +3,7 @@ const { createRequire } = require('node:module');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { inspectThirdPartyCompatibility } = require('./plugin-compatibility.cjs');
+const desktopRuntime = require('./harness-desktop-runtime.cjs');
 
 const MAX_MANIFEST_BYTES = 1_048_576;
 const MAX_PROFILES = 16;
@@ -76,6 +77,7 @@ const inspectResolvedPackage = async ({ candidate, installRoot, profileModules, 
   if (source === 'outside') return immutable({ status: 'blocked', source, version: '', declaresBundle: false });
   try {
     const manifest = await readJsonObject(path.join(realDir, 'package.json'));
+    const bundlePatch = manifest.dsh?.bundle?.patch;
     const compatibility = source === 'profile'
       ? await inspectThirdPartyCompatibility({ packageDir: realDir, profileDir, runtimeModulesDir: installRoot, dependencySpec })
       : null;
@@ -83,7 +85,11 @@ const inspectResolvedPackage = async ({ candidate, installRoot, profileModules, 
       status: 'ready',
       source,
       version: typeof manifest.version === 'string' ? manifest.version : '',
-      declaresBundle: typeof manifest.dsh?.bundle?.patch === 'string',
+      // Upstream bundlePatchFiles accepts one path or an ordered path list.
+      // This is declaration metadata only; third-party compatibility still
+      // owns patch-file validation before anything can become toggleable.
+      declaresBundle: typeof bundlePatch === 'string'
+        || (Array.isArray(bundlePatch) && bundlePatch.every(file => typeof file === 'string')),
       ...(compatibility ? { compatibility: immutable(compatibility) } : {})
     });
   } catch {
@@ -102,7 +108,7 @@ const uniquePackageNames = (values) => {
   return result;
 };
 
-const runtimeClosure = async (dshPackageDir, installRoot) => {
+const runtimeClosure = async (dshPackageDir, installRoot, { materialized = false } = {}) => {
   const anchor = path.join(dshPackageDir, 'package.json');
   const rootManifest = await readJsonObject(anchor);
   const packages = new Map([[rootManifest.name || '@deepseek-ai/dsh', dshPackageDir]]);
@@ -129,7 +135,9 @@ const runtimeClosure = async (dshPackageDir, installRoot) => {
         unresolved.add(name);
         continue;
       }
-      packages.set(name, realDir);
+      // Preserve the lookup path so the materialized check cannot hide a
+      // junction by inspecting only its canonical target.
+      packages.set(name, materialized ? candidate : realDir);
       unresolved.delete(name);
       queue.push({ anchor: path.join(realDir, 'package.json'), manifest });
     }
@@ -195,6 +203,62 @@ const inspectFallback = async ({ fallbackRoot, expected }) => {
     misdirected,
     issues: immutable(issues),
     limited: expected.size >= MAX_PACKAGES
+  });
+};
+
+const plainPackageDirectory = async (installRoot, directory) => {
+  if (!isInsideOrEqual(installRoot, directory)) return false;
+  let current = installRoot;
+  for (const part of ['', ...path.relative(installRoot, directory).split(path.sep).filter(Boolean)]) {
+    current = path.join(current, part);
+    const info = await lstatOrNull(current);
+    if (!info?.isDirectory() || info.isSymbolicLink()) return false;
+  }
+  return true;
+};
+
+// Official 0.2.x profiles use an in-memory resolver, not filesystem fallback
+// projections. This audits the required CLI package closure's manifest identity
+// against the trusted descriptor, not all payload files or live plugin health.
+const inspectMaterializedRuntime = async ({ runtime, expected }) => {
+  const manifests = new Map(runtime.descriptor.files.map(entry => [entry.path, entry]));
+  let healthy = 0;
+  let missing = 0;
+  let misdirected = 0;
+  const issues = [];
+  for (const [name, directory] of expected) {
+    let status = 'missing';
+    if (directory) {
+      const file = path.join(directory, 'package.json');
+      const info = await lstatOrNull(file);
+      if (info) {
+        status = 'misdirected';
+        const relative = path.relative(runtime.runtimeRoot, file).split(path.sep).join('/');
+        const bound = manifests.get(relative);
+        if (bound && info.isFile() && !info.isSymbolicLink() && info.nlink === 1
+          && info.size <= MAX_MANIFEST_BYTES && info.size === bound.bytes
+          && await plainPackageDirectory(runtime.nodeModulesPath, directory)) {
+          try {
+            const bytes = await fsp.readFile(file);
+            if (bytes.length === bound.bytes && createHash('sha256').update(bytes).digest('hex') === bound.sha256) {
+              status = 'healthy';
+            }
+          } catch { /* An unreadable manifest is not healthy. */ }
+        }
+      }
+    }
+    if (status === 'healthy') healthy += 1;
+    else {
+      if (status === 'missing') missing += 1;
+      else misdirected += 1;
+      if (issues.length < 12) issues.push(immutable({ name, status }));
+    }
+  }
+  return immutable({
+    layout: 'official-desktop-runtime',
+    status: missing === 0 && misdirected === 0 ? 'healthy' : 'degraded',
+    expected: expected.size, healthy, missing, misdirected,
+    issues: immutable(issues), limited: expected.size >= MAX_PACKAGES
   });
 };
 
@@ -305,9 +369,30 @@ class PluginHealthCatalog {
     this.profilePaths = new Map();
     let dshManifest;
     let closure;
+    let officialRuntime;
+    let runtime;
     try {
+      const runtimeRoot = path.dirname(this.installRoot);
+      let runtimeManifest;
+      try { runtimeManifest = await readJsonObject(path.join(runtimeRoot, 'package.json')); } catch { /* Legacy roots need no wrapper manifest. */ }
+      // Presence selects the new contract; the product directory also requires
+      // it when the descriptor is missing, as does a relocated official wrapper.
+      // Never downgrade an invalid descriptor to the legacy projection check.
+      // Descriptorless legacy fixtures still work.
+      if (runtimeManifest?.name === '@deepseek-ai/dsh-desktop-runtime'
+        || samePath(runtimeRoot, path.join(path.dirname(runtimeRoot), desktopRuntime.HARNESS_RUNTIME_DIRECTORY))
+        || await lstatOrNull(path.join(runtimeRoot, desktopRuntime.PRODUCT_BINDING.descriptor.file))) {
+        officialRuntime = desktopRuntime.readHarnessDesktopRuntime(runtimeRoot);
+        if (!samePath(officialRuntime.nodeModulesPath, this.installRoot)
+          || !samePath(path.resolve(path.dirname(officialRuntime.dshBinPath), '..'), this.dshPackageDir)) {
+          throw new Error('runtime-layout-mismatch');
+        }
+      }
       dshManifest = await readJsonObject(path.join(this.dshPackageDir, 'package.json'));
-      closure = await runtimeClosure(this.dshPackageDir, this.installRoot);
+      closure = await runtimeClosure(this.dshPackageDir, this.installRoot, { materialized: Boolean(officialRuntime) });
+      runtime = officialRuntime
+        ? await inspectMaterializedRuntime({ runtime: officialRuntime, expected: closure })
+        : await inspectFallback({ fallbackRoot: this.fallbackRoot, expected: closure });
     } catch {
       return immutable({
         available: false,
@@ -317,7 +402,6 @@ class PluginHealthCatalog {
         message: '无法读取当前固定 Harness 运行时。'
       });
     }
-    const runtime = await inspectFallback({ fallbackRoot: this.fallbackRoot, expected: closure });
     let entries = [];
     try {
       entries = (await fsp.readdir(this.profilesRoot, { withFileTypes: true }))

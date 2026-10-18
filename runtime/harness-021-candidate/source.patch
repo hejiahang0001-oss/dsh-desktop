@@ -1,0 +1,1504 @@
+diff --git a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
+index bebfb96..f05490d 100644
+--- a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
++++ b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
+@@ -20,8 +20,8 @@ export function electronFixture(initial?: BrowserTabState) {
+     }),
+   } satisfies DesktopBrowserBridge
+   const workspace = vi.fn(async (_signal: AbortSignal) => 'cwd:/workspace')
+-  const persist = vi.fn()
+-  const openRequested = vi.fn()
++  const persist = vi.fn<Parameters<typeof createElectronPage>[0]['persist']>()
++  const openRequested = vi.fn<Parameters<typeof createElectronPage>[0]['openRequested']>()
+   const page = createElectronPage({ initial, persist, openRequested }, bridge, workspace)
+   const presentation = page.presentation
+   if (!(presentation instanceof ElectronWebviewPresentation)) throw new Error('expected the Electron presentation')
+@@ -32,8 +32,8 @@ export function electronFixture(initial?: BrowserTabState) {
+     const state = { url: 'about:blank', title: '', loading: true, back: false, forward: false }
+     const methods = {
+       loadURL: vi.fn(async (_url: string) => {}), getURL: vi.fn(() => state.url), getTitle: vi.fn(() => state.title),
+-      canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn(),
+-      goBack: vi.fn(), goForward: vi.fn(), reload: vi.fn(), isLoading: () => state.loading,
++      canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn<() => void>(),
++      goBack: vi.fn<() => void>(), goForward: vi.fn<() => void>(), reload: vi.fn<() => void>(), isLoading: () => state.loading,
+     }
+     Object.assign(element, methods)
+     const emit = (type: string, fields: object = {}): void => { element.dispatchEvent(Object.assign(new Event(type), fields)) }
+diff --git a/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts b/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
+index 6e8b2fa..a3b9d2d 100644
+--- a/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
++++ b/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
+@@ -8,7 +8,7 @@ import { Recording } from '../src/client/audio.ts'
+  * @returns the recording, device controls, and resource observations.
+  */
+ export function captureFixture(options: { empty?: boolean; recorderError?: boolean; constructError?: boolean } = {}) {
+-  const trackStop = vi.fn(), close = vi.fn(async () => {}), disposed = vi.fn()
++  const trackStop = vi.fn<() => void>(), close = vi.fn(async () => {}), disposed = vi.fn<() => void>()
+   const decoding = vi.fn(async (_data: ArrayBuffer) => ({ duration: 2 }))
+   const rendering = vi.fn(async () => ({ getChannelData: () => new Float32Array([0.5, -0.5]) }))
+   let failRecorder: () => void
+diff --git a/packages/sandbox/sandbox-local/README.i18n.yaml b/packages/sandbox/sandbox-local/README.i18n.yaml
+index 990324c..c03fd70 100644
+--- a/packages/sandbox/sandbox-local/README.i18n.yaml
++++ b/packages/sandbox/sandbox-local/README.i18n.yaml
+@@ -54,8 +54,8 @@
+   en: e290ccc9b3c92c08
+   zh: 469589ac12cdadab
+ /deepseek-ai-dsh-sandbox-local/known-limitations-and-deferred-work:
+-  en: b2a6a72e340bc620
+-  zh: 9d9b2894850a131d
++  en: efa37f6608e9daba
++  zh: 9ed01f18a238b7ad
+ /deepseek-ai-dsh-sandbox-local/known-limitations-and-deferred-work/dev-note:
+   en: cc273320f6a1beaf
+   zh: 5c57a312ddc50651
+diff --git a/packages/sandbox/sandbox-local/README.md b/packages/sandbox/sandbox-local/README.md
+index 537d22f..a6797af 100644
+--- a/packages/sandbox/sandbox-local/README.md
++++ b/packages/sandbox/sandbox-local/README.md
+@@ -134,6 +134,8 @@ These limits define when the provider is a poor fit or needs special operational
+ - **Runner selection is cached for the provider lifetime** — installing, removing, or repairing a runner requires reloading the plugin before selection changes.
+ - **`runnerCommand` is an operator assertion** — a configured custom runner skips functional probes and is assumed to implement the bwrap-compatible profile honestly; if it is itself a Bash script, its interpreter startup runs before that script applies confinement.
+ 
++The lulu downstream candidate adds private PowerShell flags only after selecting the real Windows ACL runner and matching the trusted host path and exact command or PTY argv. Custom runners, other platforms and unrelated executables retain the upstream behavior. Request environment entries cannot select this route; it does not change confinement mode or grants.
++
+ <a id="dev-note"></a>
+ ### Dev Note
+ 
+diff --git a/packages/sandbox/sandbox-local/README.zh.md b/packages/sandbox/sandbox-local/README.zh.md
+index 2553a7a..53c4638 100644
+--- a/packages/sandbox/sandbox-local/README.zh.md
++++ b/packages/sandbox/sandbox-local/README.zh.md
+@@ -134,6 +134,8 @@ Windows 档为每个工作区保留一个确定性写入 SID 和常驻 ACE，同
+ - **runner 选择在提供方生命周期内缓存**——安装、移除或修复 runner 后，必须重载插件才能改变选择。
+ - **`runnerCommand` 是操作方断言**——配置的自定义 runner 会跳过功能探测，并假定它诚实实现与 bwrap 兼容的 profile；如果它本身是 Bash 脚本，其解释器启动发生在该脚本施加约束之前。
+ 
++lulu 下游候选仅在选中真实的 Windows ACL runner，并匹配可信宿主路径及精确的命令或 PTY argv 后，添加私有 PowerShell 参数。自定义 runner、其他平台和无关的可执行文件保留上游行为。请求环境条目不能选择此路径；该路径不改变隔离模式或授权。
++
+ <a id="dev-note"></a>
+ ### 开发备注
+ 
+diff --git a/packages/sandbox/sandbox-local/src/index.ts b/packages/sandbox/sandbox-local/src/index.ts
+index 4502874..0ea66c9 100644
+--- a/packages/sandbox/sandbox-local/src/index.ts
++++ b/packages/sandbox/sandbox-local/src/index.ts
+@@ -40,6 +40,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
+ import { AclWriteGrant, assertTempRootOutsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
+ import { assertNever } from '@deepseek-ai/dsh-util-values'
+ import { bwrapProfileArgs, landlockProfileArgs, seatbeltProfileArgs } from './profiles.ts'
++import { privatePowerShellRunnerArgs } from './private-powershell.ts'
+ 
+ /** Plugin config. All optional — `static Config` supplies the defaults. */
+ export interface Config {
+@@ -335,8 +336,11 @@ export class LocalSandboxProvider extends SandboxProvider {
+     }
+     const selected = this.selectRunner(policy.mode)
+     const runnerArgv = this.runnerArgv(selected.runner, policy)
++    // Host bootstrap owns process.env; shell-request/child env is not consulted.
++    // The native runner independently revalidates the exact executable bytes.
++    const privateShellArgs = selected.runner === 'windows-acl' ? privatePowerShellRunnerArgs(argv) : []
+     return Promise.resolve<ConfinedArgv>({
+-      argv: [...runnerArgv, '--', ...argv],
++      argv: [...runnerArgv, ...privateShellArgs, '--', ...argv],
+       enforcement: selected.enforcement,
+       denialSignatures: DENIAL_SIGNATURES[selected.runner],
+       runnerFailureRules: RUNNER_FAILURE_RULES[selected.runner],
+diff --git a/packages/sandbox/sandbox-windows-acl/README.i18n.yaml b/packages/sandbox/sandbox-windows-acl/README.i18n.yaml
+index 94a3e37..01bf322 100644
+--- a/packages/sandbox/sandbox-windows-acl/README.i18n.yaml
++++ b/packages/sandbox/sandbox-windows-acl/README.i18n.yaml
+@@ -57,8 +57,8 @@
+   en: 817eb1b7de13872e
+   zh: 06fe175e41e7459b
+ /deepseek-ai-dsh-sandbox-windows-acl/known-limitations-and-deferred-work:
+-  en: 046831a864786b2a
+-  zh: 4a261fbab3396ea4
++  en: 5c9aa9d96224b49f
++  zh: 5e726d5dc150bb4f
+ /deepseek-ai-dsh-sandbox-windows-acl/known-limitations-and-deferred-work/dev-note:
+   en: cc273320f6a1beaf
+   zh: 5c57a312ddc50651
+diff --git a/packages/sandbox/sandbox-windows-acl/README.md b/packages/sandbox/sandbox-windows-acl/README.md
+index 732ca20..fdc1444 100644
+--- a/packages/sandbox/sandbox-windows-acl/README.md
++++ b/packages/sandbox/sandbox-windows-acl/README.md
+@@ -191,6 +191,8 @@ These limits define when the backend is a poor fit or needs special operational
+ - **The bundled diagnosis skill needs an unconfined caller** — both the classification and the repairs read or write security descriptors a confined child cannot reach, so the session must escalate that one call; with no approval channel the escalation fails closed and the path stays undiagnosed.
+ - **PowerShell language mode differs by confined mode** — under `read-only`, PowerShell cannot create its AppLocker probe files in temp and conservatively starts in ConstrainedLanguage (`Add-Type`, non-core .NET static calls, COM, and reflection fail); the shipped `workspace-write` path lets the probe complete, so pwsh stays in FullLanguage unless host-wide WDAC/AppLocker policy says otherwise, while a direct `AclSandbox` with `tempDir: null` has no such guarantee. This split is PowerShell startup behavior, not part of the ACL write boundary.
+ 
++The lulu downstream candidate supports two explicit, mutually exclusive flags for the pinned private PowerShell: `--lulu-private-powershell` for noninteractive pipes and `--lulu-private-powershell-pty` for a dedicated inherited PTY. The pipe route owns a hidden UTF-8 console without replacing stdio or fd 7. The PTY route validates console ownership before code-page changes, returns ownership after the Job settles, and prevents the runner's Ctrl+C protection from being inherited by the child. Other routes and the documented language-mode split are unchanged.
++
+ <a id="dev-note"></a>
+ ### Dev Note
+ 
+diff --git a/packages/sandbox/sandbox-windows-acl/README.zh.md b/packages/sandbox/sandbox-windows-acl/README.zh.md
+index ad9de70..1807287 100644
+--- a/packages/sandbox/sandbox-windows-acl/README.zh.md
++++ b/packages/sandbox/sandbox-windows-acl/README.zh.md
+@@ -193,6 +193,8 @@ Windows 上多一个目录条目：技能描述随目录进入上下文，正文
+ - **随包发布的诊断技能需要不受限的调用者。** 无论分类还是修复，都要读写受限子进程够不到的安全描述符，因此会话必须为那一次调用升权；没有审批通道时升权 fail-closed，该路径保持未诊断。
+ - **PowerShell 语言模式因受限模式而异。** 在 `read-only` 下，PowerShell 无法在临时目录中创建 AppLocker 探针文件，因此会保守地以 ConstrainedLanguage 启动（`Add-Type`、非核心 .NET 静态调用、COM 与反射失败）；交付的 `workspace-write` 路径可让探针完成，因此除非主机范围的 WDAC/AppLocker 策略另有规定，否则 pwsh 保持 FullLanguage，而直接使用 `AclSandbox` 并配置 `tempDir: null` 时则没有这一保证。这一区别属于 PowerShell 启动行为，不是 ACL 写入边界的一部分。
+ 
++lulu 下游候选为固定的私有 PowerShell 提供两个显式、互斥的参数：非交互管道使用 `--lulu-private-powershell`，独占的继承 PTY 使用 `--lulu-private-powershell-pty`。管道路径拥有隐藏的 UTF-8 控制台，不替换 stdio 或 fd 7。PTY 路径在修改代码页前校验控制台归属，等 Job 停稳后恢复，并防止子进程继承 runner 的 Ctrl+C 保护。其他路径及已记录的语言模式区别保持不变。
++
+ <a id="dev-note"></a>
+ ### 开发备注
+ 
+diff --git a/packages/sandbox/sandbox-windows-acl/src/index.ts b/packages/sandbox/sandbox-windows-acl/src/index.ts
+index 5de5d47..997fd1b 100644
+--- a/packages/sandbox/sandbox-windows-acl/src/index.ts
++++ b/packages/sandbox/sandbox-windows-acl/src/index.ts
+@@ -46,6 +46,7 @@
+ import { existsSync, statSync } from 'node:fs'
+ import { resolve } from 'node:path'
+ import { Win32Error } from '@deepseek-ai/dsh-win32-process'
++import type { RestrictedProcessSpawnOptions } from '@deepseek-ai/dsh-win32-process'
+ 
+ import { grantWrite, revokeWrite } from './acl.ts'
+ import { allocPtrSlot, decodePtr, isNullPtr, throwLastError, win32 } from './ffi.ts'
+@@ -118,6 +119,9 @@ export interface AclSandboxSpawnOptions {
+   stdio?: 'pipe' | 'inherit'
+   /** Control pipe forwarded to the same payload descriptor in inherited-stdio mode. */
+   controlFileDescriptor?: 7
++  /** Explicit runner-only hardening for the pinned private noninteractive shell. */
++  extensionPointPolicy?: RestrictedProcessSpawnOptions['extensionPointPolicy']
++  privatePowerShellPath?: string
+ }
+ 
+ /** A settled confined child: captured stdio and the exit code. */
+@@ -362,6 +366,9 @@ export class AclSandbox {
+     if (options.controlFileDescriptor !== undefined && options.stdio !== 'inherit') {
+       throw new Error('control pipe requires inherited stdio')
+     }
++    if (options.extensionPointPolicy !== undefined && options.stdio !== 'inherit') {
++      throw new Error('Private PowerShell creation policy requires inherited Job-owned stdio')
++    }
+     const args = options.args ?? []
+     const cwd = options.cwd ?? process.cwd()
+ 
+@@ -369,6 +376,8 @@ export class AclSandbox {
+       const native = spawnSandboxedInherited(api, token, {
+         command: options.command, args, cwd,
+         ...options.controlFileDescriptor === undefined ? {} : { controlFileDescriptor: options.controlFileDescriptor },
++        ...options.extensionPointPolicy === undefined ? {} : { extensionPointPolicy: options.extensionPointPolicy },
++        ...options.privatePowerShellPath === undefined ? {} : { privatePowerShellPath: options.privatePowerShellPath },
+       })
+       let exitCodePromise: Promise<number> | undefined
+       return {
+diff --git a/packages/sandbox/sandbox-windows-acl/src/runner.ts b/packages/sandbox/sandbox-windows-acl/src/runner.ts
+index 8c67378..daa16e7 100644
+--- a/packages/sandbox/sandbox-windows-acl/src/runner.ts
++++ b/packages/sandbox/sandbox-windows-acl/src/runner.ts
+@@ -45,12 +45,15 @@
+  */
+ 
+ import { SUBPROCESS_CONTROL_ENV, SUBPROCESS_CONTROL_FD } from '@deepseek-ai/dsh-subprocess/control'
++import { assertRestrictedPowerShellPolicy, assertPrivatePowerShellPtyPolicy, POWERSHELL_EXTENSION_POINT_POLICY, POWERSHELL_PTY_EXTENSION_POINT_POLICY } from '@deepseek-ai/dsh-win32-process'
+ import { closeSync, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+ import { join } from 'node:path'
+ 
+ import { win32 } from './ffi.ts'
+ import { AclSandbox, assertTempRootOutsideWorkspace } from './index.ts'
+ import { tempWriteSid, workspaceWriteSid } from './workspace-sid.ts'
++import { acquirePrivateUtf8Console, privateConsoleBindings } from './private-console.ts'
++import { acquireInheritedPtyUtf8Console, ptyConsoleBindings } from './pty-console.ts'
+ 
+ const RUNNER_SIGNATURE = 'windows-acl-run'
+ const RUNNER_FAILURE_EXIT = 127
+@@ -71,6 +74,8 @@ interface ParsedArgs {
+   tempWriteSid: string | undefined
+   command: string
+   args: string[]
++  privatePowerShellPath: string | undefined
++  privatePowerShellPtyPath: string | undefined
+ }
+ 
+ function parseArgs(raw: string[]): ParsedArgs {
+@@ -79,6 +84,8 @@ function parseArgs(raw: string[]): ParsedArgs {
+   let mode: string | undefined
+   let writeSid: string | undefined
+   let parsedTempWriteSid: string | undefined
++  let privatePowerShellPath: string | undefined
++  let privatePowerShellPtyPath: string | undefined
+   let index = 0
+   for (; index < raw.length; index++) {
+     const token = raw[index]
+@@ -95,6 +102,14 @@ function parseArgs(raw: string[]): ParsedArgs {
+       case '--mode': mode = value; break
+       case '--write-sid': writeSid = value; break
+       case '--temp-write-sid': parsedTempWriteSid = value; break
++      case '--lulu-private-powershell':
++        if (privatePowerShellPath !== undefined) fail('duplicate --lulu-private-powershell')
++        privatePowerShellPath = value
++        break
++      case '--lulu-private-powershell-pty':
++        if (privatePowerShellPtyPath !== undefined) fail('duplicate --lulu-private-powershell-pty')
++        privatePowerShellPtyPath = value
++        break
+       default: fail(`unknown argument: ${token}`)
+     }
+   }
+@@ -104,7 +119,8 @@ function parseArgs(raw: string[]): ParsedArgs {
+   const argv = raw.slice(index)
+   const command = argv[0]
+   if (command === undefined) fail('missing command after --')
+-  return { workspace, temp, mode, writeSid, tempWriteSid: parsedTempWriteSid, command, args: argv.slice(1) }
++  if (privatePowerShellPath !== undefined && privatePowerShellPtyPath !== undefined) fail('private PowerShell pipe and PTY modes are mutually exclusive')
++  return { workspace, temp, mode, writeSid, tempWriteSid: parsedTempWriteSid, command, args: argv.slice(1), privatePowerShellPath, privatePowerShellPtyPath }
+ }
+ 
+ function requireDirectory(label: string, path: string): void {
+@@ -132,17 +148,36 @@ async function main(): Promise<number> {
+   }
+ 
+   const api = await win32()
+-  // Ignore this process's own CTRL+C: the confined child (same console) keeps
+-  // handling its own; the runner must survive to revoke grants and mirror the
+-  // child's exit code.
+-  if (api.setConsoleCtrlHandler(null, 1) === 0) {
+-    fail(`SetConsoleCtrlHandler failed (Win32 ${api.getLastError()})`)
+-  }
+-
++  // The runner must survive CTRL+C to revoke grants and mirror the child exit.
++  // The legacy NULL handler is inheritable, so the verified interactive PTY
++  // branch instead protects this process with a non-inherited Node handler.
+   let ownedTempDir: string | undefined
+   let sandbox: AclSandbox | undefined
+   let initialized = false
++  let ownedConsole: { dispose(): void } | undefined
++  let privatePtySigintHandler: (() => void) | undefined
+   try {
++    if (parsed.privatePowerShellPath !== undefined) {
++      assertRestrictedPowerShellPolicy(parsed.command, parsed.args, parsed.privatePowerShellPath)
++      ownedConsole = acquirePrivateUtf8Console(privateConsoleBindings(), process.pid,
++        process.env[SUBPROCESS_CONTROL_ENV] === 'pipe' ? SUBPROCESS_CONTROL_FD : undefined)
++    }
++    if (parsed.privatePowerShellPtyPath !== undefined) {
++      assertPrivatePowerShellPtyPolicy(parsed.command, parsed.args, parsed.privatePowerShellPtyPath)
++      ownedConsole = acquireInheritedPtyUtf8Console(ptyConsoleBindings(), process.pid)
++    }
++    // FreeConsole/AllocConsole reset handlers: install AFTER console setup.
++    // NULL + TRUE makes children inherit ignoring CTRL+C. Only the validated
++    // private PTY route clears that attribute, after installing a runner-only
++    // handler; its child can then interrupt a command without killing cleanup.
++    // Ordinary and non-interactive commands retain their original behavior.
++    if (parsed.privatePowerShellPtyPath !== undefined) {
++      privatePtySigintHandler = () => {}
++      process.on('SIGINT', privatePtySigintHandler)
++    }
++    if (api.setConsoleCtrlHandler(null, privatePtySigintHandler === undefined ? 1 : 0) === 0) {
++      fail(`SetConsoleCtrlHandler failed (Win32 ${api.getLastError()})`)
++    }
+     let privateTempDir: string | null = null
+     let writeSid: string | undefined
+     let privateTempSid: string | undefined
+@@ -184,6 +219,14 @@ async function main(): Promise<number> {
+       args: parsed.args,
+       stdio: 'inherit',
+       ...process.env[SUBPROCESS_CONTROL_ENV] === 'pipe' ? { controlFileDescriptor: SUBPROCESS_CONTROL_FD } : {},
++      ...parsed.privatePowerShellPath === undefined ? {} : {
++        extensionPointPolicy: POWERSHELL_EXTENSION_POINT_POLICY,
++        privatePowerShellPath: parsed.privatePowerShellPath,
++      },
++      ...parsed.privatePowerShellPtyPath === undefined ? {} : {
++        extensionPointPolicy: POWERSHELL_PTY_EXTENSION_POINT_POLICY,
++        privatePowerShellPath: parsed.privatePowerShellPtyPath,
++      },
+     })
+     if (process.env[SUBPROCESS_CONTROL_ENV] === 'pipe') closeSync(SUBPROCESS_CONTROL_FD)
+     const result = await child.wait()
+@@ -204,6 +247,15 @@ async function main(): Promise<number> {
+         process.stderr.write(`${RUNNER_SIGNATURE}: cleanup: ${error instanceof Error ? error.message : String(error)}\n`)
+       }
+     }
++    try {
++      ownedConsole?.dispose()
++    } catch (error) {
++      // Match the runner's existing cleanup contract: report, preserve child exit.
++      process.stderr.write(`${RUNNER_SIGNATURE}: cleanup: ${error instanceof Error ? error.message : String(error)}\n`)
++    }
++    // Keep runner-only protection until the child, grants and console lease
++    // have all settled. Removing it does not change any child signal handler.
++    if (privatePtySigintHandler !== undefined) process.off('SIGINT', privatePtySigintHandler)
+   }
+ }
+ 
+diff --git a/packages/sandbox/sandbox-windows-acl/src/spawn.ts b/packages/sandbox/sandbox-windows-acl/src/spawn.ts
+index be04b8a..28a8593 100644
+--- a/packages/sandbox/sandbox-windows-acl/src/spawn.ts
++++ b/packages/sandbox/sandbox-windows-acl/src/spawn.ts
+@@ -7,6 +7,7 @@ import {
+ } from '@deepseek-ai/dsh-win32-process'
+ import type {
+   NativePtr,
++  RestrictedProcessSpawnOptions,
+   SpawnedJobProcess,
+   SpawnedPipedProcess,
+ } from '@deepseek-ai/dsh-win32-process'
+@@ -44,7 +45,7 @@ export function spawnSandboxed(
+ export function spawnSandboxedInherited(
+   api: Win32Bindings,
+   token: NativePtr,
+-  options: { command: string; args: readonly string[]; cwd: string; controlFileDescriptor?: 7 },
++  options: Omit<RestrictedProcessSpawnOptions, 'token'>,
+ ): SpawnedInherited {
+   return spawnInheritedJobProcess(api, { ...options, token })
+ }
+diff --git a/packages/shell/pwsh-local/README.i18n.yaml b/packages/shell/pwsh-local/README.i18n.yaml
+index d1cc1e6..f5cedd9 100644
+--- a/packages/shell/pwsh-local/README.i18n.yaml
++++ b/packages/shell/pwsh-local/README.i18n.yaml
+@@ -57,8 +57,8 @@
+   en: 40294c1c31b74824
+   zh: 788a4799b1d65a8b
+ /deepseek-ai-dsh-pwsh-local/known-limitations-and-deferred-work:
+-  en: dbe004f26cb332f2
+-  zh: 83dc82454ee6a92d
++  en: 79d4da59efceeaa3
++  zh: 443e6d092a00f8d6
+ /deepseek-ai-dsh-pwsh-local/known-limitations-and-deferred-work/dev-note:
+   en: e67f633dc6fe7773
+   zh: 3bb0c20c93f16f98
+diff --git a/packages/shell/pwsh-local/README.md b/packages/shell/pwsh-local/README.md
+index 55bda0c..f1e4162 100644
+--- a/packages/shell/pwsh-local/README.md
++++ b/packages/shell/pwsh-local/README.md
+@@ -150,6 +150,8 @@ These limits define when this executor is a poor fit. They are current package c
+ - **The encoding preamble precedes the command** — PowerShell requires `param(...)`, `#requires`, and `using` statements at the very top of a script, so a command whose first statement is one of those cannot run under the UTF-8 output preamble; wrap a `param(...)` script in `& { … }`, and run `using`/`#requires` scripts from a file instead.
+ - **Non-ASCII stdin under Windows PowerShell 5.1 may be mis-decoded** — the preamble pins output encoding only; `[Console]::InputEncoding` stays at the host default because setting it under redirected stdin throws; pwsh 7 defaults to UTF-8 and is unaffected.
+ 
++The lulu downstream candidate resolves a host-managed private PowerShell 7.6.6 before system defaults, after validating its fixed executable identity. An explicit user `pwshPath` still wins. This local executor keeps the original UTF-8 preamble, including when it uses the private runtime; the managed path does not add confinement.
++
+ <a id="dev-note"></a>
+ ### Dev Note
+ 
+diff --git a/packages/shell/pwsh-local/README.zh.md b/packages/shell/pwsh-local/README.zh.md
+index 83e7f91..d2857c4 100644
+--- a/packages/shell/pwsh-local/README.zh.md
++++ b/packages/shell/pwsh-local/README.zh.md
+@@ -150,6 +150,8 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
+ - **编码 preamble 位于命令之前**——PowerShell 要求 `param(...)`、`#requires` 与 `using` 语句位于脚本最顶部，因此以其中一种开头的命令无法在 UTF-8 输出 preamble 下运行；`param(...)` 脚本请包进 `& { … }`，`using`/`#requires` 脚本请改从文件运行。
+ - **Windows PowerShell 5.1 下的非 ASCII stdin 可能被错误解码**——preamble 只固定输出编码；`[Console]::InputEncoding` 保持主机默认，因为在重定向 stdin 下设置它会抛出异常；pwsh 7 默认 UTF-8，不受影响。
+ 
++lulu 下游候选在校验固定的可执行文件身份后，优先于系统默认值选择宿主管理的私有 PowerShell 7.6.6。用户显式设置的 `pwshPath` 仍具有最高优先级。本地执行器保留原有 UTF-8 preamble，使用私有运行时时也不例外；受管路径不增加隔离。
++
+ <a id="dev-note"></a>
+ ### 开发备注
+ 
+diff --git a/packages/shell/pwsh-local/src/index.ts b/packages/shell/pwsh-local/src/index.ts
+index 06b7c32..c15ebb8 100644
+--- a/packages/shell/pwsh-local/src/index.ts
++++ b/packages/shell/pwsh-local/src/index.ts
+@@ -23,7 +23,7 @@ import type { CollectedOutput, ShellExecRequest, ShellExecSpec, ShellExecution,
+ import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+ import { clampTimeout, deadline, MAX_TIMER_DELAY_MS, timeoutOf } from '@deepseek-ai/dsh-timeout'
+ /* jscpd:ignore-end */
+-import { resolvePwshPath } from './resolve.ts'
++import { encodingPreambleForPwsh, ENCODING_PREAMBLE, resolvePwshPath } from './resolve.ts'
+ 
+ /* jscpd:ignore-start -- deliberate call-for-call mirror of dsh-bash-local (Agent Note: pwsh-tool-and-executor). */
+ /**
+@@ -37,17 +37,6 @@ export const ENV_OVERRIDES = {
+   GIT_PAGER: 'cat',
+ } as const
+ 
+-/**
+- * UTF-8 output pinning prepended to every command. The subprocess collector
+- * decodes output bytes as UTF-8, but Windows PowerShell 5.1 (the last-resort
+- * executable fallback) writes the console/OEM code page by default, which
+- * garbles non-ASCII output; pwsh 7 defaults to UTF-8 and is unaffected. The
+- * statements ride on line 1 after `; ` separators so PowerShell error line
+- * numbers stay accurate.
+- */
+-export const ENCODING_PREAMBLE =
+-  '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); '
+-
+ /** Default SIGTERM→SIGKILL grace period (the `graceMs` config). */
+ const DEFAULT_GRACE_MS = 3_000
+ 
+@@ -79,7 +68,7 @@ export interface Config {
+ 
+ // Resolution lives in its own dependency-free module so the repository's
+ // coverage-gate probe shares the exact definition the suites use.
+-export { candidatePwshPaths, resolvePwshPath } from './resolve.ts'
++export { candidatePwshPaths, encodingPreambleForPwsh, ENCODING_PREAMBLE, privatePwshRunnerSelected, resolvePwshPath } from './resolve.ts'
+ 
+ /** Project a settled collect-mode reader into the final CollectedOutput shape. */
+ function finalOutput(reader: SubprocessOutputReader): CollectedOutput {
+@@ -191,7 +180,12 @@ export class PwshLocalExecutor extends ShellExecutor {
+    * `@deepseek-ai/dsh-pwsh-sandbox`).
+    */
+   protected argv(spec: ShellExecSpec): string[] {
+-    return [this.pwshPath, '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `${ENCODING_PREAMBLE}${spec.command}`]
++    const executable = this.pwshPath
++    // Recheck a managed executable even when preserving its original prefix.
++    encodingPreambleForPwsh(executable)
++    // Local/FullAccess behavior stays official. The enforcing subclass may
++    // adapt the command only after the provider returned its native option.
++    return [executable, '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `${ENCODING_PREAMBLE}${spec.command}`]
+   }
+ 
+   /** Map one resolved spec plus its argv onto a fully-specified subprocess spawn. */
+diff --git a/packages/shell/pwsh-local/src/resolve.ts b/packages/shell/pwsh-local/src/resolve.ts
+index 191abba..08a135d 100644
+--- a/packages/shell/pwsh-local/src/resolve.ts
++++ b/packages/shell/pwsh-local/src/resolve.ts
+@@ -8,8 +8,106 @@
+  * @module @deepseek-ai/dsh-pwsh-local/resolve
+  */
+ 
+-import { lstatSync } from 'node:fs'
+-import { join } from 'node:path'
++import { createHash } from 'node:crypto'
++import { closeSync, fstatSync, lstatSync, openSync, readSync, realpathSync } from 'node:fs'
++import { basename, isAbsolute, join, parse, resolve, sep } from 'node:path'
++
++/** Original encoding pin for executables not owned by the verified desktop runtime. */
++export const ENCODING_PREAMBLE =
++  '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); '
++
++// Official PowerShell 7.6.6 win-x64 pwsh.exe, independently verified against
++// the acquired release and the desktop's trusted runtime/powershell/profile.json.
++// The host validates its complete DLL/config payload before setting this path.
++const PRIVATE_PWSH_SHA256 = 'bfb46af89433268872ddb43d1ca7a3f433452ee91ed356a9786940f90118e285'
++const PRIVATE_PWSH_ENV = 'DSH_DESKTOP_PWSH'
++const MAX_PRIVATE_EXE_BYTES = 16 * 1024 * 1024
++
++function privatePwshError(): Error {
++  return new Error('private PowerShell runtime is missing or failed integrity verification')
++}
++
++/** Verify the host-owned executable again at the selection/use boundary, never execute it. */
++function checkedPrivatePwshPath(declared: string): string {
++  let fd: number | undefined
++  try {
++    if (!/^[a-z]:[\\/]/i.test(declared) || !isAbsolute(declared)
++      || /[\u0000-\u001f\u007f]/.test(declared) || declared.slice(2).includes(':')
++      || declared.split(/[\\/]/).some(part => part === '.' || part === '..')
++      || basename(declared).toLowerCase() !== 'pwsh.exe') throw privatePwshError()
++    const file = resolve(declared)
++    let current = parse(file).root
++    const parts = file.slice(current.length).split(sep).filter(Boolean)
++    for (const [index, part] of parts.entries()) {
++      current = join(current, part)
++      const stat = lstatSync(current)
++      if (stat.isSymbolicLink() || (index < parts.length - 1 && !stat.isDirectory())) throw privatePwshError()
++    }
++    const before = lstatSync(file)
++    if (!before.isFile() || before.nlink !== 1 || before.size <= 0 || before.size > MAX_PRIVATE_EXE_BYTES
++      || realpathSync(file).toLowerCase() !== file.toLowerCase()) throw privatePwshError()
++    fd = openSync(file, 'r')
++    const opened = fstatSync(fd)
++    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino
++      || opened.size !== before.size || opened.mtimeMs !== before.mtimeMs || opened.ctimeMs !== before.ctimeMs) throw privatePwshError()
++    // One extra byte detects concurrent growth without an unbounded read.
++    const buffer = Buffer.alloc(before.size + 1)
++    let length = 0
++    while (length < buffer.length) {
++      const count = readSync(fd, buffer, length, buffer.length - length, length)
++      if (count === 0) break
++      length += count
++    }
++    const bytes = buffer.subarray(0, length)
++    const after = lstatSync(file), read = fstatSync(fd)
++    if (!after.isFile() || after.isSymbolicLink() || after.nlink !== 1
++      || after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size
++      || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs
++      || !read.isFile() || read.nlink !== 1 || read.dev !== before.dev || read.ino !== before.ino
++      || read.size !== before.size || read.mtimeMs !== before.mtimeMs || read.ctimeMs !== before.ctimeMs
++      || bytes.length !== before.size || createHash('sha256').update(bytes).digest('hex') !== PRIVATE_PWSH_SHA256) throw privatePwshError()
++    return file
++  } catch {
++    throw privatePwshError()
++  } finally {
++    if (fd !== undefined) closeSync(fd)
++  }
++}
++
++/**
++ * Omit the legacy .NET-constructor prefix only for the selected, verified
++ * private PS7 executable. Explicit other executables retain official behavior.
++ * The launching desktop strips ambient/override values before supplying this
++ * managed path; the CLI's .env loader already refuses all DSH_ bootstrap names.
++ */
++export function encodingPreambleForPwsh(
++  executable: string,
++  env: NodeJS.ProcessEnv = process.env,
++  platform: NodeJS.Platform = process.platform,
++): string {
++  const declared = env[PRIVATE_PWSH_ENV]
++  if (platform !== 'win32' || declared === undefined || !isAbsolute(executable)
++    || resolve(executable).toLowerCase() !== resolve(declared).toLowerCase()) return ENCODING_PREAMBLE
++  checkedPrivatePwshPath(declared)
++  return ''
++}
++
++/** Recognize only the provider's explicit native option and unchanged payload tail. */
++export function privatePwshRunnerSelected(
++  original: readonly string[],
++  confined: readonly string[],
++  kind: 'command' | 'pty',
++): boolean {
++  const expected = kind === 'command' ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'] : ['-NoLogo', '-NoProfile']
++  const flag = kind === 'command' ? '--lulu-private-powershell' : '--lulu-private-powershell-pty'
++  const separator = confined.length - original.length - 1
++  if (original.length !== (kind === 'command' ? 6 : 3) || !original[0]
++    || !expected.every((value, index) => original[index + 1] === value)
++    || separator < 4 || confined[separator] !== '--' || confined[separator - 2] !== flag
++    || confined[separator - 1] !== original[0]
++    || !original.every((value, index) => confined[separator + 1 + index] === value)) return false
++  return encodingPreambleForPwsh(original[0]) === ''
++}
+ 
+ /**
+  * Well-known Windows PowerShell install locations plus PATH entries, newest
+@@ -71,6 +169,8 @@ export function resolvePwshPath(
+ ): string {
+   if (configured !== undefined && configured.length > 0) return configured
+   if (platform === 'win32') {
++    const privatePath = env[PRIVATE_PWSH_ENV]
++    if (privatePath !== undefined) return checkedPrivatePwshPath(privatePath)
+     for (const candidate of candidatePwshPaths(env)) {
+       if (candidateExists(candidate)) return candidate
+     }
+diff --git a/packages/shell/pwsh-sandbox/README.i18n.yaml b/packages/shell/pwsh-sandbox/README.i18n.yaml
+index 8463f39..e3a54cf 100644
+--- a/packages/shell/pwsh-sandbox/README.i18n.yaml
++++ b/packages/shell/pwsh-sandbox/README.i18n.yaml
+@@ -66,8 +66,8 @@
+   en: 796af37d6f6add68
+   zh: 7975ff2a21c1b4f3
+ /deepseek-ai-dsh-pwsh-sandbox/known-limitations-and-deferred-work:
+-  en: 9afb663f40e5b8fd
+-  zh: 76ceb6bfb2a5148e
++  en: 692d6648f0b20cfe
++  zh: 30f9aede55af2a61
+ /deepseek-ai-dsh-pwsh-sandbox/known-limitations-and-deferred-work/dev-note:
+   en: e67f633dc6fe7773
+   zh: 3bb0c20c93f16f98
+diff --git a/packages/shell/pwsh-sandbox/README.md b/packages/shell/pwsh-sandbox/README.md
+index e1859ae..d7b94a1 100644
+--- a/packages/shell/pwsh-sandbox/README.md
++++ b/packages/shell/pwsh-sandbox/README.md
+@@ -141,6 +141,8 @@ These limits define when this executor is only a partial boundary on Windows. Th
+ - **Windows workspace-write temp authority is private** — per live session/workspace pair; agentless calls receive a fresh private directory per invocation; the ambient temp root is never granted, and the runner rewrites `TMP`/`TEMP` to the private directory before spawning.
+ - **Windows read-only grants no explicit writable root but remains partial** — NTFS hard links alias one file object across paths, reads stay unconfined, and a tree another AppContainer tool has ACL'd with a package SID is unreadable to the Low-integrity child. NUL stays writable in both modes because the device DACL grants Everyone write and carries no higher label; PowerShell's `> $null` redirection still works without opening it.
+ 
++The lulu downstream candidate omits the .NET encoding preamble only after the provider returns the verified private noninteractive runner flag with an unchanged payload argv tail. The dedicated native runner owns UTF-8 configuration on that route. FullAccess and custom providers keep the upstream preamble; timeout, cancellation, control fd 7 and confinement semantics remain unchanged.
++
+ <a id="dev-note"></a>
+ ### Dev Note
+ 
+diff --git a/packages/shell/pwsh-sandbox/README.zh.md b/packages/shell/pwsh-sandbox/README.zh.md
+index ded45a5..d431aaa 100644
+--- a/packages/shell/pwsh-sandbox/README.zh.md
++++ b/packages/shell/pwsh-sandbox/README.zh.md
+@@ -141,6 +141,8 @@ kind: "package-reference"
+ - **Windows workspace-write 的临时权限按每个活跃的会话/工作区对私有**——无 agent（智能体）的调用每次都获得一个新的私有目录；环境临时根目录绝不会被授权，runner 会在 spawn 前将 `TMP`/`TEMP` 重写为该私有目录。
+ - **Windows read-only 不授予任何显式可写根目录，但仍为部分强制执行**——NTFS 硬链接会把同一文件对象别名为多个路径、读取仍不受限，且被其他 AppContainer 工具以包 SID 标记过的目录树对 Low 完整性子进程不可读。NUL 在两种模式下仍可写，因为设备 DACL 向 Everyone 授予写权限且不带更高的标签；PowerShell 的 `> $null` 重定向仍然工作，且不会打开 NUL。
+ 
++lulu 下游候选仅在提供方返回已验证的私有非交互 runner 参数，且命令载荷的 argv 尾部保持不变后，省略 .NET 编码 preamble。该路径由专用原生 runner 配置 UTF-8。FullAccess 和自定义提供方保留上游 preamble；超时、取消、control fd 7 及隔离语义保持不变。
++
+ <a id="dev-note"></a>
+ ### 开发备注
+ 
+diff --git a/packages/shell/pwsh-sandbox/src/index.ts b/packages/shell/pwsh-sandbox/src/index.ts
+index c1cbb76..9ad1edc 100644
+--- a/packages/shell/pwsh-sandbox/src/index.ts
++++ b/packages/shell/pwsh-sandbox/src/index.ts
+@@ -25,7 +25,7 @@ import type {
+   SandboxPolicy,
+ } from '@deepseek-ai/dsh-sandbox'
+ import type {} from '@deepseek-ai/dsh-sandbox-policy'
+-import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
++import { ENCODING_PREAMBLE, privatePwshRunnerSelected, PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
+ import type { Config as LocalConfig } from '@deepseek-ai/dsh-pwsh-local'
+ import { classifyDenial, classifyRunnerFailure, isRunnerSpawnFailure, matchesSignature } from './helpers.ts'
+ 
+@@ -191,8 +191,13 @@ export class SandboxPwshExecutor extends PwshLocalExecutor {
+    * @param signal - cancellation of confinement preparation.
+    * @returns the provider's exact argv and settlement-classification facts.
+    */
+-  private confine(spec: ShellExecSpec, policy: SandboxPolicy, signal?: AbortSignal): Promise<ConfinedArgv> {
+-    return this.ctx.sandbox.confine(this.argv(spec), policy, signal)
++  private async confine(spec: ShellExecSpec, policy: SandboxPolicy, signal?: AbortSignal): Promise<ConfinedArgv> {
++    const original = this.argv(spec)
++    const confined = await this.ctx.sandbox.confine(original, policy, signal)
++    const command = original[5]
++    if (command === undefined || !command.startsWith(ENCODING_PREAMBLE)
++      || !privatePwshRunnerSelected(original, confined.argv, 'command')) return confined
++    return { ...confined, argv: [...confined.argv.slice(0, -1), command.slice(ENCODING_PREAMBLE.length)] }
+   }
+ }
+ /* jscpd:ignore-end */
+diff --git a/packages/subprocess/win32-process/README.i18n.yaml b/packages/subprocess/win32-process/README.i18n.yaml
+index 6cfa81b..9eba6ef 100644
+--- a/packages/subprocess/win32-process/README.i18n.yaml
++++ b/packages/subprocess/win32-process/README.i18n.yaml
+@@ -36,8 +36,8 @@
+   en: c5961328f1ae01cf
+   zh: 890142bc50091faf
+ /deepseek-ai-dsh-win32-process/known-limitations-and-deferred-work:
+-  en: e97c61be17a1db4f
+-  zh: 11dbf9721db63877
++  en: e3ab06663dd65e09
++  zh: aaabd01cd9797d5f
+ /deepseek-ai-dsh-win32-process/known-limitations-and-deferred-work/dev-note:
+   en: e67f633dc6fe7773
+   zh: e88aeb617ffb74ea
+diff --git a/packages/subprocess/win32-process/README.md b/packages/subprocess/win32-process/README.md
+index af7cc79..2beabba 100644
+--- a/packages/subprocess/win32-process/README.md
++++ b/packages/subprocess/win32-process/README.md
+@@ -78,6 +78,8 @@ The package contributes no stable request prefix, so it does not invalidate mode
+ - **Header evidence is architecture-specific** — the committed ABI probe and layout constants cover the repository's current 64-bit Windows targets. A new pointer width or incompatible Windows ABI requires updating the probe before support is claimed.
+ 
+ 
++The lulu downstream candidate adds an explicit private PowerShell 7.6.6 creation policy. It validates the pinned executable and argv, disables extension points with STARTUPINFOEX, and preserves the restricted token, inherited stdio/control descriptor and suspended-before-Job ordering. Ordinary processes are unchanged; failure never retries without the policy. Desktop integration and distribution remain separate acceptance gates.
++
+ <a id="dev-note"></a>
+ ### Dev Note
+ 
+diff --git a/packages/subprocess/win32-process/README.zh.md b/packages/subprocess/win32-process/README.zh.md
+index 7c5685b..abd0954 100644
+--- a/packages/subprocess/win32-process/README.zh.md
++++ b/packages/subprocess/win32-process/README.zh.md
+@@ -78,6 +78,8 @@ Koffi 的 `STARTUPINFOW` 与 `PROCESS_INFORMATION` 定义还会在模块加载
+ - **header 证据限定架构** — 已提交的 ABI probe 与布局常量覆盖仓库当前 64 位 Windows 目标。支持新的指针宽度或不兼容 Windows ABI 前，必须先更新 probe。
+ 
+ 
++lulu 下游候选增加了显式的私有 PowerShell 7.6.6 创建策略。策略校验固定的可执行文件与 argv，通过 STARTUPINFOEX 禁用 extension points，并保留受限令牌、继承的 stdio/control descriptor 及先挂起、后分配 Job 的顺序。普通进程不变；失败时不会绕过该策略重试。桌面集成与分发仍须单独验收。
++
+ <a id="dev-note"></a>
+ ### 开发备注
+ 
+diff --git a/packages/subprocess/win32-process/src/ffi.ts b/packages/subprocess/win32-process/src/ffi.ts
+index b785016..59be395 100644
+--- a/packages/subprocess/win32-process/src/ffi.ts
++++ b/packages/subprocess/win32-process/src/ffi.ts
+@@ -56,6 +56,13 @@ export interface ProcessInfoOutput {
+ 
+ /** Generic Win32 calls consumed by restricted-token sandbox process operations. */
+ export interface Win32ProcessBindings {
++  /** Optional creation-only hardening; unused by ordinary/native-tool paths. */
++  extensionPoints?: {
++    initialize(list: NativePtr | null, count: number, flags: number, size: NativePtr): number
++    update(list: NativePtr, flags: number, attribute: number, value: NativePtr, size: number, previous: null, returned: null): number
++    delete(list: NativePtr): void
++    setLastError(code: number): void
++  }
+   closeHandle(handle: NativePtr): number
+   getLastError(): number
+   getFileType(handle: NativePtr): number
+@@ -276,6 +283,12 @@ function bindings(): CurrentTokenProcessBindings {
+   const { kernel32, advapi32, bind } = bindingContext()
+   const node = koffi.load(null)
+   cached = {
++    extensionPoints: {
++      initialize: bind(kernel32, 'InitializeProcThreadAttributeList', 'int', [PVOID, 'uint32', 'uint32', PVOID]),
++      update: bind(kernel32, 'UpdateProcThreadAttribute', 'int', [PVOID, 'uint32', 'uintptr_t', PVOID, 'size_t', PVOID, PVOID]),
++      delete: bind(kernel32, 'DeleteProcThreadAttributeList', 'void', [PVOID]),
++      setLastError: bind(kernel32, 'SetLastError', 'void', ['uint32']),
++    },
+     closeHandle: bind(kernel32, 'CloseHandle', 'int', [PVOID]),
+     getLastError: bind(kernel32, 'GetLastError', 'uint32', []),
+     getFileType: bind(kernel32, 'GetFileType', 'uint32', [PVOID]),
+diff --git a/packages/subprocess/win32-process/src/index.ts b/packages/subprocess/win32-process/src/index.ts
+index 5fc6de8..a7a571f 100644
+--- a/packages/subprocess/win32-process/src/index.ts
++++ b/packages/subprocess/win32-process/src/index.ts
+@@ -2,6 +2,7 @@
+ 
+ export { ERROR_INSUFFICIENT_BUFFER } from './abi.ts'
+ export * from './errors.ts'
++export { POWERSHELL_EXTENSION_POINT_POLICY, POWERSHELL_PTY_EXTENSION_POINT_POLICY, assertRestrictedPowerShellPolicy, assertPrivatePowerShellPtyPolicy } from './extension-points.ts'
+ export {
+   allocPtrSlot,
+   allocUint32,
+@@ -33,6 +34,7 @@ export {
+ export type {
+   CurrentTokenStdioFileDescriptors,
+   CurrentTokenProcessSpawnOptions,
++  RestrictedProcessSpawnOptions,
+   SpawnedJobProcess,
+   SpawnedPipedProcess,
+ } from './process.ts'
+diff --git a/packages/subprocess/win32-process/src/process.ts b/packages/subprocess/win32-process/src/process.ts
+index 34ced07..ce3cf8f 100644
+--- a/packages/subprocess/win32-process/src/process.ts
++++ b/packages/subprocess/win32-process/src/process.ts
+@@ -17,6 +17,7 @@ import {
+ } from './ffi.ts'
+ import type { CurrentTokenProcessBindings, NativePtr, Win32ProcessBindings } from './ffi.ts'
+ import { requireKoffi } from './koffi.ts'
++import { assertRestrictedPowerShellPolicy, assertPrivatePowerShellPtyPolicy, createWithExtensionPointsDisabled, EXTENDED_STARTUPINFO_PRESENT, POWERSHELL_EXTENSION_POINT_POLICY, POWERSHELL_PTY_EXTENSION_POINT_POLICY } from './extension-points.ts'
+ 
+ /**
+  * Quote one argument according to CommandLineToArgvW parsing.
+@@ -103,6 +104,10 @@ export interface RestrictedProcessSpawnOptions extends ProcessSpawnOptions {
+   token: NativePtr
+   /** Optional control pipe inherited at the same descriptor in the payload. */
+   controlFileDescriptor?: 7
++  /** Opt in only from the verified noninteractive Windows PowerShell caller. */
++  extensionPointPolicy?: typeof POWERSHELL_EXTENSION_POINT_POLICY | typeof POWERSHELL_PTY_EXTENSION_POINT_POLICY
++  /** Explicit desktop-verified private path, never read from the child environment. */
++  privatePowerShellPath?: string
+ }
+ 
+ /** Piped child resources whose process and read handles remain caller-owned. */
+@@ -210,6 +215,7 @@ export function spawnPipedProcess(
+   api: Win32ProcessBindings,
+   options: RestrictedProcessSpawnOptions,
+ ): SpawnedPipedProcess {
++  if (options.extensionPointPolicy !== undefined) throw new Error('Creation mitigation requires the suspended Job-owned route')
+   const owned = new Set<NativePtr>()
+   let startupInfo: NativePtr | undefined
+   let processInfo: NativePtr | undefined
+@@ -418,6 +424,7 @@ function spawnJobProcess(
+   resolveStdio: () => ProcessStandardHandles,
+   createName: 'CreateProcessAsUserW' | 'CreateProcessW',
+   create: (startupInfo: NativePtr, processInfo: NativePtr) => number,
++  beforeResume?: () => void,
+ ): SpawnedJobProcess {
+   const job = createKillOnCloseJob(api)
+   const enabled: NativePtr[] = []
+@@ -508,6 +515,16 @@ function spawnJobProcess(
+     api.closeHandle(job)
+     throwWin32(api, 'AssignProcessToJobObject', win32Code, `pid ${info.dwProcessId}`)
+   }
++  try {
++    beforeResume?.()
++  } catch (error) {
++    // Ownership is established, but no user instruction has executed yet.
++    api.terminateJobObject(job, 1)
++    closeBestEffort(api, info.hThread)
++    closeBestEffort(api, info.hProcess)
++    api.closeHandle(job)
++    throw error
++  }
+   if (api.resumeThread(info.hThread) === 0xFFFFFFFF) {
+     const win32Code = api.getLastError()
+     closeBestEffort(api, info.hThread)
+@@ -533,6 +550,37 @@ export function spawnInheritedJobProcess(
+   api: Win32ProcessBindings,
+   options: RestrictedProcessSpawnOptions,
+ ): SpawnedJobProcess {
++  if (options.extensionPointPolicy !== undefined) {
++    if (options.extensionPointPolicy === POWERSHELL_EXTENSION_POINT_POLICY) {
++      assertRestrictedPowerShellPolicy(options.command, options.args, options.privatePowerShellPath)
++    } else if (options.extensionPointPolicy === POWERSHELL_PTY_EXTENSION_POINT_POLICY) {
++      assertPrivatePowerShellPtyPolicy(options.command, options.args, options.privatePowerShellPath)
++    } else {
++      throw new Error('Unknown creation mitigation policy')
++    }
++    if (isNullPtr(options.token)) throw new Error('Creation mitigation requires a restricted token')
++    let cleanupErrors: unknown[] = []
++    const commandLine = buildCommandLine(options.command, options.args)
++    let child: SpawnedJobProcess
++    try {
++      child = spawnJobProcess(api, options, () => inheritedStandardHandles(api, options.controlFileDescriptor), 'CreateProcessAsUserW', (startupInfo, processInfo) => {
++        const result = createWithExtensionPointsDisabled(api, startupInfo, extended => createRestrictedProcess(
++          api, options, commandLine, abi.CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT, extended, processInfo,
++        ))
++        cleanupErrors = result.cleanupErrors
++        return result.value
++      }, () => {
++        if (cleanupErrors.length) {
++          throw new AggregateError(cleanupErrors.splice(0), 'Creation mitigation cleanup failed before child resume')
++        }
++      })
++    } catch (error) {
++      // The original lifecycle has already closed its handles/Job on failure.
++      if (cleanupErrors.length) throw new AggregateError([error, ...cleanupErrors], 'Creation failed with mitigation cleanup errors', { cause: error })
++      throw error
++    }
++    return child
++  }
+   const commandLine = buildCommandLine(options.command, options.args)
+   return spawnJobProcess(api, options, () => inheritedStandardHandles(api, options.controlFileDescriptor), 'CreateProcessAsUserW', (startupInfo, processInfo) =>
+     createRestrictedProcess(
+diff --git a/packages/terminal/terminal-bash/README.i18n.yaml b/packages/terminal/terminal-bash/README.i18n.yaml
+index 6291dce..4122fae 100644
+--- a/packages/terminal/terminal-bash/README.i18n.yaml
++++ b/packages/terminal/terminal-bash/README.i18n.yaml
+@@ -84,8 +84,8 @@
+   en: 5e4dc482b93e2b06
+   zh: 5b56af99bcfd74ed
+ /deepseek-ai-dsh-terminal-bash/known-limitations-and-deferred-work:
+-  en: 2dc221de0d3a76a7
+-  zh: 822cef044e765459
++  en: 25c627b30ad8c079
++  zh: b1eb7175613167d0
+ /deepseek-ai-dsh-terminal-bash/known-limitations-and-deferred-work/dev-note:
+   en: e67f633dc6fe7773
+   zh: 3bb0c20c93f16f98
+diff --git a/packages/terminal/terminal-bash/README.md b/packages/terminal/terminal-bash/README.md
+index 4a6c87f..594e894 100644
+--- a/packages/terminal/terminal-bash/README.md
++++ b/packages/terminal/terminal-bash/README.md
+@@ -166,7 +166,7 @@ These limits define where the backend is a poor fit or needs special operational
+ 
+ - **Line-oriented output only** — a headless xterm maintains control-sequence state only for terminal-protocol replies. Returned output remains normalized to lines, and full-screen alternate-buffer interaction is unsupported.
+ - **Readiness is heuristic without an exact tier** — exact stdin-wait detection depends on the mounted subprocess provider; providers that cannot prove it (macOS, Windows) settle on prompt-marker and silence/timeout readiness.
+-- **pwsh bootstrap in a constrained sandbox** — the prompt function and UTF-8 pin write through `[Console]::`, which the Windows ACL sandbox's read-only mode may deny. When that prevents marker readiness, startup rejects at `timeoutMs` instead of publishing an incomplete shell.
++- **pwsh bootstrap in a constrained sandbox** — the upstream prompt function and UTF-8 pin write through `[Console]::`, which the Windows ACL sandbox's read-only mode may deny. The lulu downstream candidate uses an equivalent returned OSC prompt string only for the verified private PowerShell PTY runner; that runner owns UTF-8 setup. Other routes retain the original bootstrap. When marker readiness fails, startup rejects at `timeoutMs` instead of publishing an incomplete shell.
+ - **Cleanup guarantees belong to the provider** — process-tree teardown is the `SubprocessTerminalHandle` contract, not this backend's.
+ - **Sessions do not survive process exit** — a harness restart destroys every session.
+ 
+diff --git a/packages/terminal/terminal-bash/README.zh.md b/packages/terminal/terminal-bash/README.zh.md
+index d53d691..9fa74e3 100644
+--- a/packages/terminal/terminal-bash/README.zh.md
++++ b/packages/terminal/terminal-bash/README.zh.md
+@@ -166,7 +166,7 @@ Scrollback 和尚未读取的发送输出保留独立拥有的字符串，并增
+ 
+ - **仅逐行输出**——headless xterm 只为终端协议响应维护控制序列状态。返回输出仍按行规范化；不支持全屏备用缓冲区交互。
+ - **没有精确档时，就绪是启发式的**——精确 stdin 等待检测取决于已挂载的子进程提供方；无法证明该状态的提供方（macOS、Windows）按提示符标记与静默／超时就绪结算。
+-- **受限沙箱中的 pwsh 引导**——提示符函数与 UTF-8 编码固定操作通过 `[Console]::` 写入，Windows ACL 沙箱的只读模式可能拒绝。若因此无法获得标记就绪状态，启动会在 `timeoutMs` 到期时拒绝，而不会发布不完整的 shell。
++- **受限沙箱中的 pwsh 引导**——上游提示符函数与 UTF-8 编码固定操作通过 `[Console]::` 写入，Windows ACL 沙箱的只读模式可能拒绝。lulu 下游候选仅对已验证的私有 PowerShell PTY runner 返回等价的 OSC 提示符字符串，由该 runner 负责 UTF-8 配置。其他路径保留原有引导。若无法获得标记就绪状态，启动会在 `timeoutMs` 到期时拒绝，而不会发布不完整的 shell。
+ - **清理保证属于提供方**——进程树清理是 `SubprocessTerminalHandle` 的约定，而不是此后端的。
+ - **会话不随进程退出存活**——harness 重启会销毁所有会话。
+ 
+diff --git a/packages/terminal/terminal-bash/src/index.ts b/packages/terminal/terminal-bash/src/index.ts
+index fb22f39..395186e 100644
+--- a/packages/terminal/terminal-bash/src/index.ts
++++ b/packages/terminal/terminal-bash/src/index.ts
+@@ -13,7 +13,7 @@ import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@dee
+ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
+ import type {} from '@deepseek-ai/dsh-sandbox-policy'
+ import type {} from '@deepseek-ai/dsh-session-projection'
+-import { ENCODING_PREAMBLE } from '@deepseek-ai/dsh-pwsh-local'
++import { ENCODING_PREAMBLE, privatePwshRunnerSelected } from '@deepseek-ai/dsh-pwsh-local'
+ import { type Config, type ResolvedConfig, resolveConfig, type ShellDialect, validateConfig } from './config.ts'
+ import { LocalPtySession } from './session.ts'
+ import { CONTROLLED_PROMPT } from './sanitize.ts'
+@@ -97,6 +97,10 @@ function childEnvironment(spec: TerminalBackendSpawnSpec, dialect: ShellDialect)
+ export const PWSH_PROMPT_SETUP =
+   "function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); '" + CONTROLLED_PROMPT + "' }"
+ 
++/** Same OSC marker and printable tail, without forbidden CLM method invocation. */
++export const PWSH_CONSTRAINED_PROMPT_SETUP =
++  "function prompt { ([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7 + '" + CONTROLLED_PROMPT + "') }"
++
+ async function spawnArgv(ctx: Context, config: ResolvedConfig, policy: SandboxExecutionPolicy, signal?: AbortSignal): Promise<string[]> {
+   const argv = [config.shellPath, ...config.shellArgs]
+   if (policy.mode === 'danger-full-access') return argv
+@@ -115,6 +119,8 @@ async function startupSession(
+   session: LocalPtySession,
+   dialect: ShellDialect,
+   timeoutMs: number,
++  encodingPreamble: string,
++  promptSetup: string,
+   signal?: AbortSignal,
+ ): Promise<void> {
+   let startupOperation: TerminalSendOperation | undefined
+@@ -132,7 +138,7 @@ async function startupSession(
+     for (;;) {
+       const first = viewport.length === 0
+       startupOperation = session.startSend({
+-        text: first ? ENCODING_PREAMBLE + PWSH_PROMPT_SETUP : '',
++        text: first ? encodingPreamble + promptSetup : '',
+         submit: first,
+         ...signal !== undefined ? { signal } : {},
+       })
+@@ -204,6 +210,10 @@ export class BashTerminalBackend implements TerminalBackend {
+     const policy = this.ctx.sandboxPolicy.resolve({ session: spec.owner.session })
+     const argv = await spawnArgv(this.ctx, this.config, policy, spec.signal)
+     spec.signal?.throwIfAborted()
++    const privatePwsh = this.config.shellDialect === 'pwsh' && policy.mode !== 'danger-full-access'
++      && privatePwshRunnerSelected([this.config.shellPath, ...this.config.shellArgs], argv, 'pty')
++    const encodingPreamble = privatePwsh ? '' : ENCODING_PREAMBLE
++    const promptSetup = privatePwsh ? PWSH_CONSTRAINED_PROMPT_SETUP : PWSH_PROMPT_SETUP
+     if (argv[0] === undefined) throw new Error('terminal-bash: sandbox returned empty argv')
+     const terminal = await this.spawnTerminal({
+       argv,
+@@ -222,7 +232,7 @@ export class BashTerminalBackend implements TerminalBackend {
+       return rejectAfterStartupCleanup(error, () => terminal.terminate())
+     }
+     try {
+-      await startupSession(session, this.config.shellDialect, this.config.timeoutMs, spec.signal)
++      await startupSession(session, this.config.shellDialect, this.config.timeoutMs, encodingPreamble, promptSetup, spec.signal)
+       return session
+     } catch (error) {
+       return rejectAfterStartupCleanup(error, () => session.close('PTY startup failed'))
+diff --git a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+index 6b362b1..015aa5c 100644
+--- a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
++++ b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+@@ -15,7 +15,7 @@
+  */
+ import { existsSync, readFileSync, realpathSync } from 'node:fs'
+ import { createRequire } from 'node:module'
+-import { dirname, join } from 'node:path'
++import { basename, dirname, join } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+ import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+@@ -132,6 +132,12 @@ function readManifest(path: string): PackageManifest {
+ 
+ /** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+ function locateManifest(anchors: readonly string[], name: string): string | undefined {
++  // Workspace bundles may refer to themselves without a node_modules self-link.
++  for (const anchor of anchors) {
++    if (basename(anchor) === 'package.json' && readManifest(anchor).name === name) {
++      return realpathSync(anchor)
++    }
++  }
+   const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
+   for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+     for (const search of paths) {
+diff --git a/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts b/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
+index d7b018c..528db3f 100644
+--- a/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
++++ b/packages/test-support/client-runtime/tests/assembly-bundle-roster.client.spec.ts
+@@ -74,6 +74,20 @@ describe('bundleRoster on a scratch installation', () => {
+   const scratch = new Scratch()
+   afterAll(() => { rmSync(scratch.root, { recursive: true, force: true }) })
+ 
++  it('resolves a linked bundle self-reference without a node_modules self-link', () => {
++    const linked = new Scratch()
++    onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
++    const bundle = join(linked.root, 'workspace', 'self')
++    mkdirSync(bundle, { recursive: true })
++    writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: '@t/self', dsh: {
++      bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' },
++    } }))
++    writeFileSync(join(bundle, 'cordis.patch.yml'), "- insert:\n    - id: self\n      name: '@t/self'\n")
++    mkdirSync(join(linked.root, 'app', 'node_modules', '@t'), { recursive: true })
++    symlinkSync(bundle, join(linked.root, 'app', 'node_modules', '@t', 'self'), 'junction')
++    expect(linked.roster(['@t/self'])).toEqual(['@t/self'])
++  })
++
+   it('resolves a linked bundle dependency before an unrelated ancestor package', () => {
+     const linked = new Scratch()
+     onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
+diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
+index a3b8cd6..4d8d216 100644
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -15,6 +15,27 @@ packages:
+   - python/sdk-runtime
+ 
+ overrides:
++  '@modelcontextprotocol/client@2.0.0': '2.2.0'
++  '@modelcontextprotocol/sdk@1.29.0': '1.31.0'
++  # DSH isolated candidate: exact fixes for the recorded production audit.
++  'http-cache-semantics': '4.3.0'
++  'js-yaml@4.2.0': '4.3.2'
++  'js-yaml@4.3.1': '4.3.2'
++  'protobufjs@7.6.4': '7.6.5'
++  'fast-uri@3.1.3': '3.1.8'
++  'ip-address@10.2.0': '10.7.1'
++  'hono@4.12.29': '4.13.7'
++  '@hono/node-server@1.19.14': '1.19.15'
++  'qs@6.15.3': '6.16.0'
++  'sharp@0.35.3': '0.35.5'
++  'fflate@0.8.2': '0.8.3'
++  'postcss@8.5.15': '8.5.23'
++  'source-map-js@1.2.1': '1.2.2'
++  'nanoid@3.3.12': '3.3.18'
++  'undici@7.28.0': '7.29.1'
++  'undici@8.10.0': '8.10.2'
++  'vitest@4.1.8': '4.1.11'
++  '@vitest/mocker@4.1.8': '4.1.11'
+   'extract-zip>yauzl': '3.4.0'
+   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
+   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+@@ -98,6 +119,7 @@ minimumReleaseAgeExclude:
+   - '@trycua/cua-driver-win32-x64-msvc@0.28.0'
+   - '@trycua/cua-driver@0.28.0'
+ patchedDependencies:
++  'http-cache-semantics@4.3.0': patches/http-cache-semantics@4.3.0.patch
+   '@earendil-works/pi-ai@0.87.1': patches/@earendil-works__pi-ai@0.87.1.patch
+   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
+   '@fortune-sheet/core@1.0.4': patches/@fortune-sheet__core@1.0.4.patch
+diff --git a/patches/http-cache-semantics@4.3.0.patch b/patches/http-cache-semantics@4.3.0.patch
+new file mode 100644
+--- /dev/null
++++ b/patches/http-cache-semantics@4.3.0.patch
+@@ -0,0 +1,52 @@
++diff --git a/index.js b/index.js
++--- a/index.js
+++++ b/index.js
++@@ -395,6 +395,10 @@
++     evaluateRequest(req) {
++         this._assertRequestHasHeaders(req);
++ 
+++        if (this._requiresSynchronousRevalidation()) {
+++            return this._evaluateRequestMissResult(req);
+++        }
+++
++         // In all circumstances, a cache MUST NOT ignore the must-revalidate directive
++         if (this._rescc['must-revalidate']) {
++             return this._evaluateRequestMissResult(req);
++@@ -703,9 +707,29 @@
++     }
++ 
++     /**
+++     * RFC 9111 sections 4.2.4 and 5.2.2: stale allowances cannot override
+++     * no-cache or mandatory revalidation. Cookie presence is not a prohibition.
+++     * This is a local compatibility patch, not an upstream security release.
+++     * @returns {boolean} Whether an unvalidated response must not be reused.
+++     */
+++    _requiresSynchronousRevalidation() {
+++        if (!this.storable() || this._rescc['no-cache']) {
+++            return true;
+++        }
+++        return this.stale() && !!(
+++            this._rescc['must-revalidate'] ||
+++            (this._isShared && (
+++                this._rescc['proxy-revalidate'] ||
+++                's-maxage' in this._rescc
+++            ))
+++        );
+++    }
+++
+++    /**
++      * @returns {boolean} `true` if `stale-if-error` condition allows use of a stale response.
++      */
++     _useStaleIfError() {
+++        if (this._requiresSynchronousRevalidation()) return false;
++         return this.maxAge() + toNumberOrZero(this._rescc['stale-if-error']) > this.age();
++     }
++ 
++@@ -713,6 +737,7 @@
++      * @returns {boolean} `true` if `stale-while-revalidate` is currently allowed.
++      */
++     useStaleWhileRevalidate() {
+++        if (this._requiresSynchronousRevalidation()) return false;
++         const swr = toNumberOrZero(this._rescc['stale-while-revalidate']);
++         return swr > 0 && this.maxAge() + swr > this.age();
++     }
+diff --git a/packages/subprocess/win32-process/src/extension-points.ts b/packages/subprocess/win32-process/src/extension-points.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/subprocess/win32-process/src/extension-points.ts
+@@ -0,0 +1,174 @@
++/** Explicit, creation-only hardening for the pinned private PowerShell route. */
++import { win32 as path } from 'node:path'
++import { createHash } from 'node:crypto'
++import { closeSync, fstatSync, lstatSync, openSync, readSync, realpathSync } from 'node:fs'
++import type { Stats } from 'node:fs'
++import { requireKoffi } from './koffi.ts'
++import { Win32Error } from './errors.ts'
++import type { NativePtr, Win32ProcessBindings } from './ffi.ts'
++
++export const POWERSHELL_EXTENSION_POINT_POLICY = 'lulu-private-powershell-7.6.6' as const
++export const POWERSHELL_PTY_EXTENSION_POINT_POLICY = 'lulu-private-powershell-7.6.6-pty' as const
++export const EXTENDED_STARTUPINFO_PRESENT = 0x80000
++const PRIVATE_PWSH_SHA256 = 'bfb46af89433268872ddb43d1ca7a3f433452ee91ed356a9786940f90118e285'
++const MAX_EXECUTABLE_BYTES = 16 * 1024 * 1024
++
++function sameFile(left: Stats, right: Stats): boolean {
++  return left.dev === right.dev && left.ino === right.ino && left.size === right.size
++    && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs && left.nlink === right.nlink
++}
++
++/** Bounded descriptor read; detects observed replacement/change, not future immutability. */
++function assertPinnedExecutable(file: string): void {
++  const before = lstatSync(file)
++  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1
++    || !Number.isSafeInteger(before.size) || before.size < 1 || before.size > MAX_EXECUTABLE_BYTES) {
++    throw new Error('Private PowerShell executable identity/size is invalid')
++  }
++  const fd = openSync(file, 'r')
++  try {
++    const opened = fstatSync(fd)
++    if (!opened.isFile() || !sameFile(before, opened)) throw new Error('Private PowerShell changed while opening')
++    const bytes = Buffer.alloc(opened.size + 1)
++    let count = 0
++    while (count < bytes.length) {
++      const got = readSync(fd, bytes, count, bytes.length - count, count)
++      if (got === 0) break
++      count += got
++    }
++    if (count !== opened.size || !sameFile(opened, fstatSync(fd)) || !sameFile(before, lstatSync(file))
++      || createHash('sha256').update(bytes.subarray(0, count)).digest('hex') !== PRIVATE_PWSH_SHA256) {
++      throw new Error('Private PowerShell executable identity changed or differs from the pinned official release')
++    }
++  } finally {
++    closeSync(fd)
++  }
++}
++
++/** Fail closed rather than quietly applying a mitigation to another program. */
++function assertPrivatePowerShellExecutable(command: string, expectedPath: string | undefined): void {
++  if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Extension point mitigation requires Windows x64')
++  // expectedPath is explicit trusted-host input, not a child environment switch.
++  // The desktop verifies the whole payload; re-check the fixed executable here.
++  if (!expectedPath || !/^[A-Za-z]:[\\/]/u.test(expectedPath) || expectedPath.includes('\0')
++    || expectedPath.slice(2).includes(':') || !path.isAbsolute(command)
++    || path.normalize(command).toLowerCase() !== path.normalize(expectedPath).toLowerCase()
++    || !path.normalize(expectedPath).toLowerCase().endsWith('\\powershell\\7.6.6\\win32-x64\\pwsh.exe')) {
++    throw new Error('Creation policy requires the exact host-verified private PowerShell path')
++  }
++  for (let current = path.normalize(expectedPath); ; current = path.dirname(current)) {
++    const item = lstatSync(current)
++    if (item.isSymbolicLink()) throw new Error('Private PowerShell path must not traverse links')
++    if (path.dirname(current) === current) break
++  }
++  if (path.normalize(realpathSync.native(expectedPath)).toLowerCase() !== path.normalize(expectedPath).toLowerCase()) {
++    throw new Error('Private PowerShell executable identity does not match the pinned official release')
++  }
++  assertPinnedExecutable(expectedPath)
++}
++
++/** Strict interactive argv for the separately verified inherited ConPTY route. */
++export function assertPrivatePowerShellPtyPolicy(command: string, args: readonly string[], expectedPath: string | undefined): void {
++  assertPrivatePowerShellExecutable(command, expectedPath)
++  if (args.length !== 2 || args[0]?.toLowerCase() !== '-nologo' || args[1]?.toLowerCase() !== '-noprofile') {
++    throw new Error('Private PowerShell PTY policy requires exactly -NoLogo -NoProfile')
++  }
++}
++
++/** Fail closed rather than quietly applying a mitigation to another program. */
++export function assertRestrictedPowerShellPolicy(command: string, args: readonly string[], expectedPath: string | undefined): void {
++  assertPrivatePowerShellExecutable(command, expectedPath)
++  const seen = new Set<string>()
++  let commandFound = false
++  for (let index = 0; index < args.length; index++) {
++    const flag = args[index]?.toLowerCase()
++    if (flag === '-command' || flag === '-encodedcommand') {
++      commandFound = index === args.length - 2 && (args[index + 1]?.length ?? 0) > 0
++      break
++    }
++    if (flag !== '-nologo' && flag !== '-noprofile' && flag !== '-noninteractive') {
++      throw new Error('Extension point mitigation rejects interactive or unverified PowerShell arguments')
++    }
++    if (seen.has(flag)) throw new Error('Duplicate PowerShell startup flag')
++    seen.add(flag)
++  }
++  if (!commandFound || !seen.has('-noprofile') || !seen.has('-noninteractive')) {
++    throw new Error('Extension point mitigation requires -NoProfile -NonInteractive and one command payload')
++  }
++}
++
++export interface MitigatedCreationResult {
++  value: number
++  /** Report only after the original Job owner has acquired the created child. */
++  cleanupErrors: unknown[]
++}
++
++/**
++ * Add one STARTUPINFOEX attribute without changing token, stdio or Job policy.
++ * Own native storage keeps lpValue alive until DeleteProcThreadAttributeList.
++ * After successful creation this helper MUST NOT throw before Job assignment.
++ */
++export function createWithExtensionPointsDisabled(
++  api: Win32ProcessBindings,
++  startupInfo: NativePtr,
++  create: (extended: NativePtr) => number,
++): MitigatedCreationResult {
++  const binding = api.extensionPoints
++  if (!binding) throw new Error('Creation mitigation bindings are unavailable; no unmitigated fallback')
++  const koffi = requireKoffi()
++  const pointers: NativePtr[] = []
++  const cleanupErrors: unknown[] = []
++  let attributes: NativePtr | undefined
++  let initialized = false
++  let value = 0
++  let errorCode = 0
++  let primaryError: unknown
++  const allocate = (type: string, count: number): NativePtr => {
++    const pointer = koffi.alloc(type, count) as NativePtr
++    pointers.push(pointer)
++    return pointer
++  }
++  const failed = (name: string): never => {
++    errorCode = api.getLastError()
++    throw new Win32Error(name, errorCode)
++  }
++  try {
++    const size = allocate('size_t', 1)
++    const first = binding.initialize(null, 1, 0, size)
++    errorCode = api.getLastError()
++    if (first !== 0 || errorCode !== 122) throw new Win32Error('InitializeProcThreadAttributeList(size)', errorCode)
++    const count = Number(koffi.decode(size, 'size_t'))
++    if (!Number.isSafeInteger(count) || count < 1 || count >= 65536) throw new Error('Invalid attribute-list allocation size')
++    attributes = allocate('uint8', count)
++    if (binding.initialize(attributes, 1, 0, size) === 0) failed('InitializeProcThreadAttributeList')
++    initialized = true
++    const policy = allocate('uint64', 1)
++    koffi.encode(policy, 'uint64', 1n << 32n)
++    if (binding.update(attributes, 0, 0x20007, policy, 8, null, null) === 0) failed('UpdateProcThreadAttribute')
++    const extended = allocate('uint8', 112)
++    const bytes = Buffer.alloc(112)
++    Buffer.from(koffi.decode(startupInfo, 'uint8', 104) as number[]).copy(bytes)
++    if (bytes.readUInt32LE() !== 104) throw new Error('Expected x64 STARTUPINFOW before extending')
++    bytes.writeUInt32LE(112)
++    koffi.encode(extended, 'uint8', bytes, 112)
++    koffi.encode(extended, 104, 'void *', attributes)
++    value = create(extended)
++    errorCode = api.getLastError()
++  } catch (error) {
++    if (value !== 0) cleanupErrors.push(error)
++    else primaryError = error
++  } finally {
++    if (initialized && attributes !== undefined) {
++      try { binding.delete(attributes) } catch (error) { cleanupErrors.push(error) }
++    }
++    for (const pointer of pointers.reverse()) {
++      try { koffi.free(pointer) } catch (error) { cleanupErrors.push(error) }
++    }
++    try { binding.setLastError(errorCode) } catch (error) { cleanupErrors.push(error) }
++  }
++  if (primaryError !== undefined) {
++    if (cleanupErrors.length) throw new AggregateError([primaryError, ...cleanupErrors], 'Creation mitigation failed with cleanup errors', { cause: primaryError })
++    throw primaryError
++  }
++  return { value, cleanupErrors }
++}
+diff --git a/packages/sandbox/sandbox-windows-acl/src/private-console.ts b/packages/sandbox/sandbox-windows-acl/src/private-console.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/sandbox/sandbox-windows-acl/src/private-console.ts
+@@ -0,0 +1,125 @@
++/** A runner-owned console, never setters on a caller's existing console. */
++import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
++import { extendWin32ProcessBindings, Win32Error } from '@deepseek-ai/dsh-win32-process'
++import type { NativePtr, Win32ProcessBindings } from '@deepseek-ai/dsh-win32-process'
++
++type Koffi = typeof import('koffi')['default']
++const requireKoffi = createLazyRequire<Koffi>('koffi', import.meta.url)
++
++export interface PrivateConsoleBindings extends Win32ProcessBindings {
++  freeConsole(): number
++  allocConsole(): number
++  getConsoleProcessList(buffer: Buffer, length: number): number
++  getConsoleWindow(): NativePtr | null
++  getConsoleCP(): number
++  getConsoleOutputCP(): number
++  setConsoleCP(codePage: number): number
++  setConsoleOutputCP(codePage: number): number
++  setStdHandle(id: number, handle: NativePtr): number
++  showWindow(window: NativePtr, command: number): number
++  isWindowVisible(window: NativePtr): number
++}
++
++/** Load these additional APIs only for the explicitly opted-in private shell. */
++export function privateConsoleBindings(): PrivateConsoleBindings {
++  const koffi = requireKoffi()
++  const pointer = koffi.pointer('void')
++  const user32 = koffi.load('user32.dll')
++  return extendWin32ProcessBindings(({ kernel32, bind }) => ({
++    freeConsole: bind(kernel32, 'FreeConsole', 'int', []),
++    allocConsole: bind(kernel32, 'AllocConsole', 'int', []),
++    getConsoleProcessList: bind(kernel32, 'GetConsoleProcessList', 'uint32', [pointer, 'uint32']),
++    getConsoleWindow: bind(kernel32, 'GetConsoleWindow', pointer, []),
++    getConsoleCP: bind(kernel32, 'GetConsoleCP', 'uint32', []),
++    getConsoleOutputCP: bind(kernel32, 'GetConsoleOutputCP', 'uint32', []),
++    setConsoleCP: bind(kernel32, 'SetConsoleCP', 'int', ['uint32']),
++    setConsoleOutputCP: bind(kernel32, 'SetConsoleOutputCP', 'int', ['uint32']),
++    setStdHandle: bind(kernel32, 'SetStdHandle', 'int', ['uint32', pointer]),
++    showWindow: bind(user32, 'ShowWindow', 'int', [pointer, 'int']),
++    isWindowVisible: bind(user32, 'IsWindowVisible', 'int', [pointer]),
++  })) as PrivateConsoleBindings
++}
++
++/**
++ * The caller MUST be the one-shot ACL runner, not the desktop/Harness process.
++ * No PowerShell preamble, shared-console setter, child NEW_CONSOLE, or ACL change.
++ * Pipes and optional control FD 7 stay identical across AllocConsole.
++ */
++export function acquirePrivateUtf8Console(
++  api: PrivateConsoleBindings,
++  ownPid: number,
++  controlFileDescriptor?: 7,
++): { dispose(): void } {
++  if (!Number.isInteger(ownPid) || ownPid !== process.pid) throw new Error('Console owner must be the current runner')
++  const address = (handle: NativePtr | null | undefined): bigint => handle == null ? 0n
++    : typeof handle === 'bigint' ? handle : requireKoffi().address(handle)
++  const valid = (handle: NativePtr | null | undefined): handle is NativePtr => handle != null
++    && address(handle) !== 0n && address(handle) !== -1n && address(handle) !== 0xffffffffffffffffn
++  const handles = [-10, -11, -12].map(id => ({ id, handle: api.getStdHandle(id) }))
++  if (handles.some(({ handle }) => !valid(handle))) throw new Error('Private console requires valid inherited standard handles')
++  // A ConPTY/interactive terminal is not this noninteractive pipe route.
++  if (api.getFileType(handles[1]!.handle) !== 3 || api.getFileType(handles[2]!.handle) !== 3) {
++    throw new Error('Private console requires piped stdout/stderr; interactive console is not supported')
++  }
++  const controlHandle = controlFileDescriptor === undefined ? undefined : api.uvGetOsfhandle(controlFileDescriptor)
++  if (controlFileDescriptor !== undefined && (!valid(controlHandle) || api.getFileType(controlHandle) !== 3)) {
++    throw new Error('Private console requires a valid unchanged control pipe')
++  }
++  const checked = (result: number, name: string): void => {
++    if (result === 0) throw new Win32Error(name, api.getLastError())
++  }
++  const exclusive = (): void => {
++    const pids = Buffer.alloc(256)
++    const count = api.getConsoleProcessList(pids, 64)
++    if (count !== 1 || pids.readUInt32LE() !== ownPid) throw new Error('Refusing to configure a console not owned exclusively by this runner')
++  }
++  const restore = (checkControl = true): void => {
++    for (const { id, handle } of handles) checked(api.setStdHandle(id, handle), 'SetStdHandle')
++    if (handles.some(({ id, handle }) => address(api.getStdHandle(id)) !== address(handle)))
++      throw new Error('Private console changed inherited standard handles')
++    if (checkControl && controlFileDescriptor !== undefined && address(api.uvGetOsfhandle(controlFileDescriptor)) !== address(controlHandle))
++      throw new Error('Private console changed inherited control FD')
++  }
++  let owned = false
++  let detached = false
++  try {
++    // This detaches only the dedicated helper, without altering the old console.
++    const freed = api.freeConsole()
++    if (freed === 0 && api.getLastError() !== 6) throw new Win32Error('FreeConsole', api.getLastError())
++    detached = true
++    if (api.getConsoleWindow() !== null && address(api.getConsoleWindow()) !== 0n) throw new Error('Runner did not detach from its prior console')
++    checked(api.allocConsole(), 'AllocConsole')
++    owned = true
++    exclusive()
++    const window = api.getConsoleWindow()
++    if (!valid(window)) throw new Error('Private console has no owned window')
++    api.showWindow(window, 0)
++    if (api.isWindowVisible(window) !== 0) throw new Error('Private console could not be hidden')
++    restore()
++    exclusive()
++    checked(api.setConsoleCP(65001), 'SetConsoleCP')
++    exclusive()
++    checked(api.setConsoleOutputCP(65001), 'SetConsoleOutputCP')
++    if (api.getConsoleCP() !== 65001 || api.getConsoleOutputCP() !== 65001) throw new Error('Private console UTF-8 readback failed')
++  } catch (error) {
++    const cleanup: unknown[] = []
++    if (owned) {
++      try { checked(api.freeConsole(), 'FreeConsole(cleanup)') } catch (failure) { cleanup.push(failure) }
++      owned = false
++    }
++    if (detached) {
++      try { restore() } catch (failure) { cleanup.push(failure) }
++    }
++    if (cleanup.length) throw new AggregateError([error, ...cleanup], 'Private console failed with cleanup errors', { cause: error })
++    throw error
++  }
++  return {
++    dispose(): void {
++      if (!owned) return
++      checked(api.freeConsole(), 'FreeConsole(dispose)')
++      owned = false
++      // Runner already closed its copy of FD 7 after handing it to the child.
++      restore(false)
++    },
++  }
++}
+diff --git a/packages/sandbox/sandbox-windows-acl/src/pty-console.ts b/packages/sandbox/sandbox-windows-acl/src/pty-console.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/sandbox/sandbox-windows-acl/src/pty-console.ts
+@@ -0,0 +1,85 @@
++/** Identity-checked UTF-8 configuration of a dedicated inherited ConPTY only. */
++import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
++import { extendWin32ProcessBindings, Win32Error } from '@deepseek-ai/dsh-win32-process'
++import type { Win32ProcessBindings, NativePtr } from '@deepseek-ai/dsh-win32-process'
++
++type Koffi = typeof import('koffi')['default']
++const requireKoffi = createLazyRequire<Koffi>('koffi', import.meta.url)
++export interface PtyConsoleBindings extends Win32ProcessBindings {
++  getConsoleMode(handle: NativePtr, mode: Buffer): number
++  getConsoleProcessList(buffer: Buffer, length: number): number
++  getConsoleWindow(): NativePtr | null
++  getConsoleCP(): number
++  getConsoleOutputCP(): number
++  setConsoleCP(codePage: number): number
++  setConsoleOutputCP(codePage: number): number
++}
++/** No detach/allocation, stdio replacement, or hidden-window operations. */
++export function ptyConsoleBindings(): PtyConsoleBindings {
++  const pointer = requireKoffi().pointer('void')
++  return extendWin32ProcessBindings(({ kernel32, bind }) => ({
++    getConsoleMode: bind(kernel32, 'GetConsoleMode', 'int', [pointer, pointer]),
++    getConsoleProcessList: bind(kernel32, 'GetConsoleProcessList', 'uint32', [pointer, 'uint32']),
++    getConsoleWindow: bind(kernel32, 'GetConsoleWindow', pointer, []),
++    getConsoleCP: bind(kernel32, 'GetConsoleCP', 'uint32', []),
++    getConsoleOutputCP: bind(kernel32, 'GetConsoleOutputCP', 'uint32', []),
++    setConsoleCP: bind(kernel32, 'SetConsoleCP', 'int', ['uint32']),
++    setConsoleOutputCP: bind(kernel32, 'SetConsoleOutputCP', 'int', ['uint32']),
++  })) as PtyConsoleBindings
++}
++
++/** Only the explicitly selected one-shot ConPTY runner may call this function. */
++export function acquireInheritedPtyUtf8Console(api: PtyConsoleBindings, ownPid: number): { dispose(): void } {
++  assertInheritedPtyConsole(api, ownPid)
++  const address = (pointer: NativePtr | null): bigint => pointer === null ? 0n
++    : typeof pointer === 'bigint' ? pointer : requireKoffi().address(pointer)
++  const window = address(api.getConsoleWindow())
++  if (window === 0n) throw new Error('Dedicated PTY console identity is unavailable')
++  const input = api.getConsoleCP(), output = api.getConsoleOutputCP()
++  if (!Number.isInteger(input) || input < 1 || !Number.isInteger(output) || output < 1) throw new Error('Dedicated PTY code pages are unavailable')
++  const owned = (): void => {
++    assertInheritedPtyConsole(api, ownPid)
++    if (address(api.getConsoleWindow()) !== window) throw new Error('Dedicated PTY console identity changed')
++  }
++  const checked = (value: number, name: string): void => {
++    if (value === 0) throw new Win32Error(name, api.getLastError())
++  }
++  let changed = false
++  const restore = (): void => {
++    if (!changed) return
++    owned()
++    checked(api.setConsoleCP(input), 'SetConsoleCP(restore PTY)')
++    owned()
++    checked(api.setConsoleOutputCP(output), 'SetConsoleOutputCP(restore PTY)')
++    if (api.getConsoleCP() !== input || api.getConsoleOutputCP() !== output) throw new Error('Dedicated PTY code-page restore readback failed')
++    changed = false
++  }
++  try {
++    owned()
++    changed = true
++    checked(api.setConsoleCP(65001), 'SetConsoleCP(PTY)')
++    owned()
++    checked(api.setConsoleOutputCP(65001), 'SetConsoleOutputCP(PTY)')
++    if (api.getConsoleCP() !== 65001 || api.getConsoleOutputCP() !== 65001) throw new Error('Dedicated PTY UTF-8 readback failed')
++  } catch (error) {
++    try { restore() } catch (cleanup) { throw new AggregateError([error, cleanup], 'Dedicated PTY configuration failed with cleanup error', { cause: error }) }
++    throw error
++  }
++  // Call after the native Job is settled/closed; refuse setters if another
++  // process is still attached or this runner changed console association.
++  return { dispose: restore }
++}
++/** Shape is necessary, not proof of ConPTY origin; trusted host selects this route. */
++export function assertInheritedPtyConsole(api: PtyConsoleBindings, ownPid: number): void {
++  if (ownPid !== process.pid) throw new Error('PTY console owner must be the current runner')
++  for (const id of [-10, -11, -12]) {
++    const handle = api.getStdHandle(id)
++    if (handle == null || handle === 0n || api.getFileType(handle) !== 2 || api.getConsoleMode(handle, Buffer.alloc(4)) === 0) {
++      throw new Error('PTY creation policy requires inherited console stdio')
++    }
++  }
++  const list = Buffer.alloc(256)
++  if (api.getConsoleProcessList(list, 64) !== 1 || list.readUInt32LE() !== ownPid) {
++    throw new Error('PTY creation policy requires a dedicated runner console')
++  }
++}
+diff --git a/packages/sandbox/sandbox-local/src/private-powershell.ts b/packages/sandbox/sandbox-local/src/private-powershell.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/sandbox/sandbox-local/src/private-powershell.ts
+@@ -0,0 +1,30 @@
++/** Narrow host-owned opt-in for the two reviewed private PowerShell routes. */
++import { win32 as path } from 'node:path'
++
++/**
++ * This is dispatch only, not an integrity authority. The desktop verifies the
++ * complete payload before providing DSH_DESKTOP_PWSH; the native runner checks
++ * the fixed executable hash and path again before it creates any process.
++ * Only the exact existing command or PowerShell-PTY argv forms opt in.
++ * The PTY flag is distinct: it MUST NOT detach or create a private console.
++ * Other runners and spec.env/dshEnv are out of scope.
++ */
++export function privatePowerShellRunnerArgs(
++  argv: readonly string[],
++  managedPath = process.env.DSH_DESKTOP_PWSH,
++  platform: NodeJS.Platform = process.platform,
++): string[] {
++  const executable = argv[0]
++  if (platform !== 'win32' || managedPath === undefined || executable === undefined
++    || !/^[a-z]:[\\/]/iu.test(managedPath) || !/^[a-z]:[\\/]/iu.test(executable)
++    || /[\u0000-\u001f\u007f]/u.test(managedPath + executable)
++    || managedPath.slice(2).includes(':') || executable.slice(2).includes(':')
++    || [managedPath, executable].some(file => file.split(/[\\/]/u).some(part => part === '.' || part === '..'))
++    || path.normalize(executable).toLowerCase() !== path.normalize(managedPath).toLowerCase()
++    || !path.normalize(managedPath).toLowerCase().endsWith('\\powershell\\7.6.6\\win32-x64\\pwsh.exe')
++    || argv[1] !== '-NoLogo' || argv[2] !== '-NoProfile') return []
++  if (argv.length === 6 && argv[3] === '-NonInteractive' && argv[4] === '-Command' && argv[5]?.length)
++    return ['--lulu-private-powershell', managedPath]
++  if (argv.length === 3) return ['--lulu-private-powershell-pty', managedPath]
++  return []
++}

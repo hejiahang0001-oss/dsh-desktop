@@ -17,6 +17,8 @@ const {
   resolveControlledPnpmRuntime
 } = require('./controlled-plugin-installer.cjs');
 const { PluginHealthCatalog } = require('./plugin-health.cjs');
+const { openOfficialPlugins, readOnlyPluginState, registerRetiredPluginMutations } = require('./official-plugins.cjs');
+const { createHistoricalPluginRollback } = require('./historical-plugin-rollback.cjs');
 const { buildExtensionCenter, callHarnessRemote, requiredInventoryModulesActive } = require('./extension-center.cjs');
 const { inspectOfficeCenter, isOfficeSkillId } = require('./office-center.cjs');
 const { extractWikiSessionCandidates, selectCaptureCandidate } = require('./wiki-center.cjs');
@@ -32,6 +34,7 @@ const {
   validateSupportBackup
 } = require('./support-backup.cjs');
 const { ProfileBundleManager } = require('./profile-bundle-manager.cjs');
+const { confirmAutomationMigration, automationRecoveryBlocked } = require('./harness-automation-migration.cjs');
 const {
   captureHarnessCheckpointLink,
   forkHarnessCheckpointSession
@@ -107,6 +110,7 @@ const { NativeWorkbenchDock } = require('./native-workbench-dock.cjs');
 const { DockLayoutStore, TOOLS: DOCK_TOOLS } = require('./dock-layout.cjs');
 const { TerminalReadBroker } = require('./terminal-read-broker.cjs');
 const { SessionContinuityStore } = require('./session-continuity-store.cjs');
+const { createCloseToTrayHandler } = require('./close-to-tray.cjs');
 const {
   ApplicationClosingError,
   LifecycleGate,
@@ -207,8 +211,8 @@ const assertApplicationOpen = () => lifecycleGate.assertOpen();
 const applicationClosingResult = (extra = {}) => ({
   ok: false,
   reason: 'app-quitting',
-  message: 'DSH Desktop 正在安全退出。',
-  error: 'DSH Desktop 正在安全退出。',
+  message: 'lulu 正在安全退出。',
+  error: 'lulu 正在安全退出。',
   ...extra
 });
 let loadFailureHandled = false;
@@ -539,6 +543,7 @@ const createSupervisor = (dataRoot = app.getPath('userData'), launchDir = path.j
   });
   instance.on('state', (state) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('harness:state', state);
+    if (instance === supervisor && state.automationMigration) installApplicationMenu();
   });
   return instance;
 };
@@ -701,7 +706,7 @@ const performStartHarnessForWindow = async ({ restart = false, preferredSessionI
     workspaceSyncDiagnostics = await synchronizeHarnessWorkspace({
       origin: harnessOrigin,
       workspacePath: workspace.activePath,
-      fallbackTitle: workspace.isFallback ? 'DSH 临时工作区' : undefined,
+      fallbackTitle: workspace.isFallback ? 'lulu 临时工作区' : undefined,
       selectedSessionId,
       fetchImpl: harnessFetch
     });
@@ -751,6 +756,32 @@ const startHarnessForWindow = (options = {}) => {
   return harnessOperationPromise;
 };
 
+let automationRecoveryPromise = null;
+const recoverLegacyAutomation = () => {
+  if (automationRecoveryPromise) return automationRecoveryPromise;
+  const current = supervisor;
+  if (!current?.getState().automationMigration?.held) return Promise.resolve({ ok: false, canceled: true });
+  automationRecoveryPromise = confirmAutomationMigration({
+    homeDir: current.options.homeDir,
+    showDialog: options => dialog.showMessageBox(mainWindow, options),
+    beforeAllow: async () => {
+      assertApplicationOpen();
+      await refreshAgentDiagnostics({ rebuildMenu: false });
+      assertApplicationOpen();
+      const busyReason = supportBackupBusyReason();
+      if (current !== supervisor || harnessOperationPromise || busyReason || automationRecoveryBlocked(agentDiagnostics)) {
+        throw new Error('请先结束当前运行或启动操作，并处理待确认或排队消息，再恢复旧版自动化。');
+      }
+    },
+    restart: async () => {
+      const result = await startHarnessForWindow({ restart: true });
+      if (!result.ok) throw new Error(`恢复许可已保存，但本次未完成重启：${result.error || '请稍后重试'}`);
+      return result;
+    }
+  }).finally(() => { automationRecoveryPromise = null; installApplicationMenu(); });
+  return automationRecoveryPromise;
+};
+
 const getWorkspaceState = () => workspaceStore?.getState() || {
   activePath: supervisor?.getState().workspacePath || '',
   displayName: '未选择仓库',
@@ -761,7 +792,7 @@ const getWorkspaceState = () => workspaceStore?.getState() || {
 const applyWindowTitle = () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const workspace = getWorkspaceState();
-  mainWindow.setTitle(`DSH Desktop — ${workspace.displayName}`);
+  mainWindow.setTitle(`lulu — ${workspace.displayName}`);
 };
 
 const workspaceSyncLabel = () => {
@@ -1044,6 +1075,7 @@ const runNetworkOperation = (operation) => {
 };
 
 const loadWorkbenchPanelAssets = async () => {
+  const luluCss = await loadLuluThemeCss();
   const documentsCss = await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8');
   const documentsScript = await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.js'), 'utf8');
   const composerTextScript = await fsp.readFile(path.join(rootDir, 'assets', 'composer-text-bridge.js'), 'utf8');
@@ -1061,7 +1093,7 @@ const loadWorkbenchPanelAssets = async () => {
   if (!workbenchNetworkScript) workbenchNetworkScript = await fsp.readFile(workbenchNetworkScriptPath, 'utf8');
   if (!harnessLocalizationScript) harnessLocalizationScript = await fsp.readFile(harnessLocalizationScriptPath, 'utf8');
   return {
-    css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}\n${documentsCss}`,
+    css: `${workbenchPanelCss}\n${workbenchFilesCss}\n${workbenchPreviewCss}\n${workbenchCommandCss}\n${workbenchCheckpointCss}\n${workbenchNetworkCss}\n${documentsCss}\n${luluCss}`,
     documentsScript,
     composerTextScript,
     reviewScript: workbenchPanelScript,
@@ -1072,6 +1104,17 @@ const loadWorkbenchPanelAssets = async () => {
     commandScript: workbenchCommandScript,
     localizationScript: harnessLocalizationScript
   };
+};
+
+// Brand CSS changes appearance only; official controls keep their upstream ownership.
+const loadLuluThemeCss = async () => {
+  const [tokens, theme, mascot] = await Promise.all([
+    fsp.readFile(path.join(rootDir, 'assets', 'lulu-tokens.css'), 'utf8'),
+    fsp.readFile(path.join(rootDir, 'assets', 'lulu-harness-theme.css'), 'utf8'),
+    fsp.readFile(path.join(rootDir, 'assets', 'lulu', 'mascot.png'))
+  ]);
+  // A local fixed asset, not a file URL or a new network permission in the remote renderer.
+  return `${tokens}\n${theme}\n:root { --lulu-brand-image: url("data:image/png;base64,${mascot.toString('base64')}"); }`;
 };
 
 const installWorkbenchPanel = async () => {
@@ -1888,7 +1931,7 @@ const createTerminalWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#171716',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH 安全终端',
+    title: 'lulu 安全终端',
     webPreferences: {
       preload: path.join(__dirname, 'terminal-preload.cjs'),
       contextIsolation: true,
@@ -1967,7 +2010,7 @@ const createContextSourcesWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#171716',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH 上下文来源',
+    title: 'lulu 上下文来源',
     webPreferences: {
       preload: path.join(__dirname, 'context-sources-preload.cjs'),
       contextIsolation: true,
@@ -2025,52 +2068,27 @@ const readHarnessExtensionInventory = async () => {
 };
 
 const getPluginHealthState = async () => {
-  const state = pluginHealthCatalog ? await pluginHealthCatalog.scan() : unavailablePluginHealth();
+  const state = readOnlyPluginState(pluginHealthCatalog ? await pluginHealthCatalog.scan() : unavailablePluginHealth());
   const live = await readHarnessExtensionInventory();
-  const pnpm = controlledPluginInstaller?.getRuntimeStatus() || { status: 'unavailable', version: '', registry: 'registry.npmjs.org' };
-  const catalog = await Promise.all(controlledCatalog().map(async (item) => ({
-    ...item,
-    targets: await Promise.all(item.profiles.map(async (profileName) => {
-      const profile = state.profiles.find((candidate) => candidate.name === profileName);
-      const dependency = profile?.dependencies.find((candidate) => candidate.name === item.name);
-      const profileDir = profile?.id ? await pluginHealthCatalog.resolveProfilePath(profile.id) : null;
-      const lifecycle = profileDir && controlledPluginInstaller
-        ? await controlledPluginInstaller.inspectLifecycle({ profileDir, catalogId: item.id })
-        : { status: 'blocked', canInstall: false, canUpgrade: false, canUninstall: false, canRollback: false };
-      const lifecycleReady = pnpm.status === 'ready'
-        && state.runtime.status === 'healthy'
-        && profile?.status === 'healthy'
-        && profile.workspaceReady
-        && lifecycle.status === 'ready';
-      return {
-        profileId: profile?.id || '',
-        profileName,
-        available: Boolean(profile),
-        installed: Boolean(dependency),
-        installedVersion: dependency?.version || '',
-        enabled: dependency?.enabled === true,
-        lifecycleStatus: lifecycle.status,
-        lifecycleReason: lifecycle.reason || '',
-        canInstall: lifecycleReady && lifecycle.canInstall,
-        canUpgrade: lifecycleReady && lifecycle.canUpgrade,
-        canUninstall: lifecycleReady && lifecycle.canUninstall,
-        canRollback: lifecycleReady && lifecycle.canRollback
-      };
-    }))
-  })));
   return {
     ...state,
+    historicalRollback: await historicalPluginRollback.list(),
     extensionCenter: buildExtensionCenter({
       runtimeVersion: state.runtime?.version || '',
       runtimeCapabilities: state.runtime?.capabilities || {},
       profiles: state.profiles,
       ...live
     }),
-    pnpm,
-    catalog,
     recovery: pluginRecoveryOutcomes.map((item) => ({ ...item }))
   };
 };
+
+const openOfficialPluginsWindow = () => openOfficialPlugins({
+  getWindow: () => mainWindow,
+  getOrigin: () => harnessOrigin,
+  ready: () => !appIsClosing() && harnessUiReady(),
+  collapse: async () => { await nativeDock?.collapse(); }
+});
 
 const createPluginHealthWindow = async () => {
   const created = createToolSurface('extensions', {
@@ -2082,7 +2100,7 @@ const createPluginHealthWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#171716',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH 扩展中心',
+    title: 'lulu 扩展中心',
     webPreferences: {
       preload: path.join(__dirname, 'plugin-health-preload.cjs'),
       contextIsolation: true,
@@ -2140,7 +2158,7 @@ const createOfficeCenterWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#151618',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH Office 交付中心',
+    title: 'lulu Office 交付中心',
     webPreferences: {
       preload: path.join(__dirname, 'office-center-preload.cjs'),
       contextIsolation: true,
@@ -2186,7 +2204,7 @@ const WIKI_SKILLS = Object.freeze([
   Object.freeze({ id: 'wiki-query', name: '知识查询' }),
   Object.freeze({ id: 'wiki-capture', name: '会话结论保存' }),
   Object.freeze({ id: 'wiki-update', name: '项目增量同步' }),
-  Object.freeze({ id: 'wiki-history-ingest', name: 'DSH 历史批量导入' })
+  Object.freeze({ id: 'wiki-history-ingest', name: 'lulu / DSH 历史批量导入' })
 ]);
 
 const inspectWikiSkills = async () => Promise.all(WIKI_SKILLS.map(async (skill) => {
@@ -2412,7 +2430,7 @@ const recoverSelectedWikiVault = async () => {
   if (!canOpenArchive) return { ok: false, message: '已保留 Wiki 写入保护；知识库没有被修改。', state: await getWikiCenterState() };
   const openError = await shell.openPath(recovery.archivePath);
   if (openError) return { ok: false, message: `恢复副本位置打开失败：${openError}`, state: await getWikiCenterState() };
-  return { ok: true, message: `已打开 ${recovery.archive}；DSH Desktop 没有自动覆盖任何知识页面。`, state: await getWikiCenterState() };
+  return { ok: true, message: `已打开 ${recovery.archive}；lulu 没有自动覆盖任何知识页面。`, state: await getWikiCenterState() };
 };
 
 const createWikiCenterWindow = async () => {
@@ -2425,7 +2443,7 @@ const createWikiCenterWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#151618',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH Wiki 中心',
+    title: 'lulu Wiki 中心',
     webPreferences: {
       preload: path.join(__dirname, 'wiki-center-preload.cjs'),
       contextIsolation: true,
@@ -2638,7 +2656,7 @@ const listDshHistorySessions = async () => {
     };
   } catch {
     dshHistorySelectionCatalog.refresh([], '');
-    return { ok: false, message: 'DSH 历史列表读取失败；原始会话没有改变。', items: [] };
+    return { ok: false, message: 'lulu / DSH 历史列表读取失败；原始会话没有改变。', items: [] };
   }
 };
 
@@ -2702,7 +2720,7 @@ const prepareSelectedDshHistory = async (selection) => {
     if (prepared?.sourceToken) await wikiRuntime.clearDshHistorySource(sourcePath, prepared.sourceToken).catch(() => undefined);
     if (dshHistoryExpiryTimer) clearTimeout(dshHistoryExpiryTimer);
     dshHistoryExpiryTimer = undefined;
-    return { ok: false, message: 'DSH 历史准备失败；请重新加载会话后再试，知识库没有被修改。' };
+    return { ok: false, message: 'lulu / DSH 历史准备失败；请重新加载会话后再试，知识库没有被修改。' };
   }
 };
 
@@ -2711,7 +2729,7 @@ const invokePreparedDshHistory = async () => {
   const vaultPath = wikiSettingsStore?.getState()?.vaultPath;
   const workspacePath = getWorkspaceState().activePath;
   const sourcePath = currentWikiHistorySourcePath();
-  if (!wikiRuntime || !vaultPath || !sourcePath) return { ok: false, message: '请先在 Wiki 中心准备 DSH 历史。' };
+  if (!wikiRuntime || !vaultPath || !sourcePath) return { ok: false, message: '请先在 Wiki 中心准备 lulu / DSH 历史。' };
   try {
     const preview = await wikiRuntime.previewDshHistoryIngest(vaultPath, workspacePath, sourcePath);
     if (preview.missingManagedPages?.length) {
@@ -2723,7 +2741,7 @@ const invokePreparedDshHistory = async () => {
       return { ok: false, message: '所选会话已导入，无需重复处理。' };
     }
   } catch {
-    return { ok: false, message: '准备内容已失效，请重新选择 DSH 历史。' };
+    return { ok: false, message: '准备内容已失效，请重新选择 lulu / DSH 历史。' };
   }
   if (wikiCenterWindow && !wikiCenterWindow.isDestroyed()) wikiCenterWindow.close();
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -2848,7 +2866,7 @@ const createWorktreesWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#171716',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH 隔离工作树',
+    title: 'lulu 隔离工作树',
     webPreferences: {
       preload: path.join(__dirname, 'worktrees-preload.cjs'),
       contextIsolation: true,
@@ -2914,7 +2932,7 @@ const publishGitDeliveryState = async (options = {}) => {
 };
 
 const gitDeliveryBusyReason = async () => {
-  if (appIsClosing() || quitOperationPromise) return 'DSH Desktop 正在安全退出。';
+  if (appIsClosing() || quitOperationPromise) return 'lulu 正在安全退出。';
   await refreshAgentDiagnostics({ rebuildMenu: false });
   if (terminalRunner?.isActive()) return '请先停止正在运行的安全终端。';
   if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
@@ -2924,7 +2942,7 @@ const gitDeliveryBusyReason = async () => {
   if (checkpointCreatePromise || checkpointRestorePromise || checkpointForkPromise
     || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status)) return '请等待代码检查点操作完成。';
   if (worktreeOperationPromise) return '请等待 Git 工作树操作完成。';
-  if (supportBackupOperationPromise) return '请等待 DSH 数据备份完成。';
+  if (supportBackupOperationPromise) return '请等待 lulu 数据备份完成。';
   return '';
 };
 
@@ -2987,7 +3005,7 @@ const createGitDeliveryWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#141516',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH Git 交付中心',
+    title: 'lulu Git 交付中心',
     webPreferences: {
       preload: path.join(__dirname, 'git-delivery-preload.cjs'),
       contextIsolation: true,
@@ -3150,7 +3168,7 @@ const createTasksSubagentsWindow = async () => {
     autoHideMenuBar: true,
     backgroundColor: '#171716',
     icon: path.join(rootDir, 'build', 'icon.ico'),
-    title: 'DSH 任务与子代理',
+    title: 'lulu 任务与子代理',
     webPreferences: {
       preload: path.join(__dirname, 'tasks-subagents-preload.cjs'),
       contextIsolation: true,
@@ -3299,6 +3317,15 @@ const createSideChatHarnessWindow = async (context) => {
   created.webContents.on('page-title-updated', (event) => {
     event.preventDefault();
     if (!created.isDestroyed()) created.setTitle(context.sideTitle);
+  });
+  created.webContents.on('did-finish-load', () => {
+    // Side Chat is an independent renderer: inject visual tokens, never main-window controls.
+    void loadLuluThemeCss().then((css) => {
+      if (!created.isDestroyed() && sideChatUrlAllowed(created.webContents.getURL())) {
+        return created.webContents.insertCSS(css, { cssOrigin: 'author' });
+      }
+      return undefined;
+    }).catch(() => { console.warn('lulu Side Chat theme could not be applied.'); });
   });
   created.on('closed', () => {
     if (sideChatWindow === created) sideChatWindow = undefined;
@@ -3480,190 +3507,21 @@ const handoffOperationBusy = () => Boolean(appIsClosing() || quitOperationPromis
   || ['creating', 'restoring', 'forking'].includes(checkpointDiagnostics.status));
 const handoffAvailable = async () => require('./handoff-availability.cjs').handoffWorkflowIdle(await getCurrentWorkflow(), handoffOperationBusy());
 
-const performPluginToggle = async ({ profileId, packageName, enable }) => {
-  if (!profileBundleManager || !pluginHealthCatalog) {
-    return { ok: false, message: '扩展管理尚未初始化。', state: await getPluginHealthState() };
-  }
-  if (pluginMutationBusy()) {
-    return { ok: false, message: '请先结束当前 Agent、待确认操作、终端或检查点任务。', state: await getPluginHealthState() };
-  }
-  const before = await getPluginHealthState();
-  const profile = before.profiles.find((item) => item.id === profileId);
-  const dependency = profile?.dependencies.find((item) => item.name === packageName);
-  const lifecycleBlocked = before.catalog.some((item) => item.targets.some((target) => target.profileId === profileId && target.lifecycleStatus !== 'ready'));
-  if (before.runtime.status !== 'healthy' || profile?.status !== 'healthy' || lifecycleBlocked || !dependency?.toggleable || dependency.enabled === enable) {
-    return { ok: false, message: '扩展状态已变化或健康门禁未通过，请刷新后重试。', state: before };
-  }
-  const action = enable ? '启用' : '关闭';
-  const confirmation = await dialog.showMessageBox(nativeParent(pluginHealthWindow), {
-    type: 'warning',
-    title: `${action} Profile 外部扩展`,
-    message: `确认${action} ${packageName}？`,
-    detail: enable
-      ? `只会把已安装且声明 dsh.bundle 的扩展重新加入 ${profile.name} 的加载顺序，然后重启 Harness。不会运行 pnpm 或安装新包。`
-      : `只会从 ${profile.name} 的加载顺序移除该扩展，然后重启 Harness。包和依赖仍保留在 Profile 中，可随时重新启用。`,
-    buttons: ['取消', `${action}并重启 Harness`],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true
-  });
-  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，Profile 未修改。', state: before };
-  if (pluginMutationBusy()) {
-    return { ok: false, message: '确认期间 Agent、终端或检查点状态已变化，Profile 未修改。', state: await getPluginHealthState() };
-  }
-  const confirmed = await getPluginHealthState();
-  const confirmedProfile = confirmed.profiles.find((item) => item.id === profileId);
-  const confirmedDependency = confirmedProfile?.dependencies.find((item) => item.name === packageName);
-  const confirmedLifecycleBlocked = confirmed.catalog.some((item) => item.targets.some((target) => target.profileId === profileId && target.lifecycleStatus !== 'ready'));
-  if (confirmed.runtime.status !== 'healthy' || confirmedProfile?.status !== 'healthy' || confirmedLifecycleBlocked || !confirmedDependency?.toggleable || confirmedDependency.enabled === enable) {
-    return { ok: false, message: '确认期间扩展状态或健康结果已变化，Profile 未修改。', state: confirmed };
-  }
-  const profileDir = await pluginHealthCatalog.resolveProfilePath(profileId);
-  if (!profileDir) return { ok: false, message: 'Profile 已变化，请刷新后重试。', state: confirmed };
+const historicalPluginRollback = createHistoricalPluginRollback({
+  getInstaller: () => controlledPluginInstaller,
+  getCatalog: controlledCatalog,
+  getHealth: () => pluginHealthCatalog ? pluginHealthCatalog.scan() : unavailablePluginHealth(),
+  resolveProfilePath: id => pluginHealthCatalog?.resolveProfilePath(id),
+  isBusy: () => pluginMutationBusy() || Boolean(worktreeOperationPromise || supportBackupOperationPromise || checkpointRestorePromise || checkpointForkPromise || pluginTogglePromise),
+  getContext: () => ({ workspacePath: workspaceStore.getState().activePath, proxyEnvironment: harnessProxyEnvironment }),
+  restart: () => startHarnessForWindow({ restart: true }),
+  confirm: async ({ item, profileName, pnpm }) => (await dialog.showMessageBox(nativeParent(pluginHealthWindow), {
+    type: 'warning', title: '历史桌面事务回退', message: `确认回退 ${item.displayName} 的历史桌面事务？`,
+    detail: `固定包：${item.name}\nProfile：${profileName}\n将恢复最近一次桌面事务提交前的版本、启用状态和完整 Profile 快照；当前状态会成为新的回退点。\n\n仅使用随附 pnpm ${pnpm.version}、已审核版本和完整性摘要，强制忽略安装脚本；软件 Key 不进入子进程。确认后会重新检查快照，Harness 健康重启并复核版本、状态和兼容性后才提交。官方或手工修改过 Profile 时拒绝覆盖，并保留历史记录。`,
+    buttons: ['取消', '回退并重启 Harness'], defaultId: 0, cancelId: 0, noLink: true
+  })).response === 1
+});
 
-  let transaction;
-  let restartAttempted = false;
-  try {
-    transaction = await profileBundleManager.apply({ profileDir, packageName, enable });
-    if (!transaction.changed) return { ok: true, unchanged: true, message: '扩展已经处于目标状态。', state: await getPluginHealthState() };
-    if (pluginMutationBusy()) throw new Error('写入期间 Agent、终端或检查点状态发生变化。');
-    restartAttempted = true;
-    const restarted = await startHarnessForWindow({ restart: true });
-    if (!restarted.ok) throw new Error(restarted.error || 'Harness 重启失败。');
-    const verifiedState = await getPluginHealthState();
-    const verifiedProfile = verifiedState.profiles.find((item) => item.id === profileId);
-    const verifiedDependency = verifiedProfile?.dependencies.find((item) => item.name === packageName);
-    if (verifiedState.runtime.status !== 'healthy' || verifiedProfile?.status !== 'healthy' || verifiedDependency?.enabled !== enable) {
-      throw new Error('重启后的扩展健康状态与请求不一致。');
-    }
-    await profileBundleManager.commit(transaction.id);
-    pluginRecoveryOutcomes = Object.freeze(pluginRecoveryOutcomes.filter((item) => item.profile !== profile.name));
-    return { ok: true, message: `${packageName} 已${action}，Harness 已完成健康重启。`, state: verifiedState };
-  } catch (error) {
-    let rollbackOk = false;
-    let restartOk = false;
-    if (transaction?.changed) {
-      try {
-        await profileBundleManager.rollback(transaction.id);
-        rollbackOk = true;
-        restartOk = restartAttempted ? Boolean((await startHarnessForWindow({ restart: true })).ok) : true;
-      } catch {
-        // The verified manifest backup and pending journal remain available for startup recovery.
-      }
-    }
-    const suffix = rollbackOk
-      ? (!restartAttempted
-          ? '已自动恢复变更前状态，运行中的 Harness 未加载此次变更。'
-          : (restartOk ? '已自动恢复变更前状态并重新启动 Harness。' : 'Profile 已恢复，但 Harness 未能重新启动。'))
-      : '未确认写入完成；下次启动会按事务日志尝试恢复。';
-    return { ok: false, message: `${error.message || '扩展变更失败。'} ${suffix}`, state: await getPluginHealthState() };
-  }
-};
-
-const performPluginInstall = async ({ profileId, catalogId, action = 'install' }) => {
-  if (!controlledPluginInstaller || !pluginHealthCatalog) {
-    return { ok: false, message: '受控插件生命周期尚未初始化。', state: await getPluginHealthState() };
-  }
-  const actions = Object.freeze({
-    install: Object.freeze({ capability: 'canInstall', title: '安装已验证扩展', verb: '安装', method: 'install' }),
-    upgrade: Object.freeze({ capability: 'canUpgrade', title: '升级已验证扩展', verb: '升级', method: 'upgrade' }),
-    uninstall: Object.freeze({ capability: 'canUninstall', title: '卸载已验证扩展', verb: '卸载', method: 'uninstall' }),
-    rollback: Object.freeze({ capability: 'canRollback', title: '回退到最近可用状态', verb: '回退', method: 'rollbackLastKnownGood' })
-  });
-  const selectedAction = actions[action];
-  if (!selectedAction) return { ok: false, message: '插件生命周期操作不受支持。', state: await getPluginHealthState() };
-  if (pluginMutationBusy()) {
-    return { ok: false, message: '请先结束当前 Agent、待确认操作、终端或检查点任务。', state: await getPluginHealthState() };
-  }
-  const before = await getPluginHealthState();
-  const catalogItem = before.catalog.find((item) => item.id === catalogId);
-  const target = catalogItem?.targets.find((item) => item.profileId === profileId);
-  if (!catalogItem || !target?.[selectedAction.capability]) {
-    return { ok: false, message: '生命周期状态、Profile 或健康门禁已变化，请刷新后重试。', state: before };
-  }
-  const operationDetail = action === 'install'
-    ? `将安装固定版本 ${catalogItem.version}。`
-    : action === 'upgrade'
-      ? `将从已审核版本 ${target.installedVersion} 升级到 ${catalogItem.version}。`
-      : action === 'uninstall'
-        ? `将移除已审核版本 ${target.installedVersion}；提交后仍可用“回退”恢复。`
-        : '将恢复最近一次提交前的插件版本、启用状态和 Profile 清单；当前状态会成为新的可回退点。';
-  const confirmation = await dialog.showMessageBox(nativeParent(pluginHealthWindow), {
-    type: 'warning',
-    title: selectedAction.title,
-    message: `确认${selectedAction.verb} ${catalogItem.displayName}？`,
-    detail: `固定包：${catalogItem.name}\nProfile：${target.profileName}\n${operationDetail}\n\n软件只会使用随附 pnpm ${before.pnpm.version}、已审核版本和完整性摘要，并强制忽略安装脚本。事务会先持久记录；软件 Key 不会进入子进程。完成后将重启 Harness 并重新检查兼容状态。`,
-    buttons: ['取消', `${selectedAction.verb}并重启 Harness`],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true
-  });
-  if (confirmation.response !== 1) return { ok: false, canceled: true, message: '已取消，Profile 未修改。', state: before };
-  if (pluginMutationBusy()) {
-    return { ok: false, message: '确认期间 Agent、终端或检查点状态已变化，Profile 未修改。', state: await getPluginHealthState() };
-  }
-  const confirmed = await getPluginHealthState();
-  const confirmedItem = confirmed.catalog.find((item) => item.id === catalogId);
-  const confirmedTarget = confirmedItem?.targets.find((item) => item.profileId === profileId);
-  if (!confirmedItem || !confirmedTarget?.[selectedAction.capability]) {
-    return { ok: false, message: '确认期间生命周期状态、Profile 或健康门禁已变化，Profile 未修改。', state: confirmed };
-  }
-  const profileDir = await pluginHealthCatalog.resolveProfilePath(profileId);
-  if (!profileDir) return { ok: false, message: 'Profile 已变化，请刷新后重试。', state: confirmed };
-
-  let transaction;
-  let restartAttempted = false;
-  try {
-    transaction = await controlledPluginInstaller[selectedAction.method]({
-      profileDir,
-      catalogId,
-      workspacePath: workspaceStore.getState().activePath,
-      proxyEnvironment: harnessProxyEnvironment
-    });
-    if (pluginMutationBusy()) throw new Error('插件变更期间 Agent、终端或检查点状态发生变化。');
-    restartAttempted = true;
-    const restarted = await startHarnessForWindow({ restart: true });
-    if (!restarted.ok) throw new Error(restarted.error || 'Harness 重启失败。');
-    const verifiedState = await getPluginHealthState();
-    const verifiedProfile = verifiedState.profiles.find((item) => item.id === profileId);
-    const verifiedDependency = verifiedProfile?.dependencies.find((item) => item.name === transaction.plugin.name);
-    const targetVerified = transaction.target.version === null
-      ? !verifiedDependency
-      : verifiedDependency?.version === transaction.target.version
-        && verifiedDependency?.enabled === transaction.target.enabled
-        && verifiedDependency?.compatibility?.status === 'verified';
-    if (verifiedState.runtime.status !== 'healthy' || verifiedProfile?.status !== 'healthy' || !targetVerified) {
-      throw new Error('重启后的插件版本、启用状态或兼容健康结果不一致。');
-    }
-    await controlledPluginInstaller.commit(transaction.id);
-    return {
-      ok: true,
-      message: `${transaction.plugin.name} 已完成${selectedAction.verb}，Harness 已健康重启，并保留最近可用回退点。`,
-      state: await getPluginHealthState()
-    };
-  } catch (error) {
-    let rollbackOk = false;
-    let restartOk = false;
-    const unresolvedRollback = error?.code === 'install-rollback-failed';
-    if (transaction?.changed) {
-      try {
-        await controlledPluginInstaller.rollback(transaction.id);
-        rollbackOk = true;
-        restartOk = restartAttempted ? Boolean((await startHarnessForWindow({ restart: true })).ok) : true;
-      } catch {
-        // The persistent journal remains for guarded startup recovery.
-      }
-    }
-    const suffix = unresolvedRollback
-      ? '未能确认 Profile 已恢复；本次运行已封锁该 Profile，请退出软件并检查 Profile 后再继续。'
-      : transaction?.changed
-      ? (rollbackOk
-          ? (restartOk ? '已恢复变更前 Profile 并重新启动 Harness。' : 'Profile 已恢复，但 Harness 未能重新启动。')
-          : '未能确认 Profile 已恢复；持久日志会在下次启动继续处理。')
-      : '受控生命周期管理器未提交可见变更。';
-    return { ok: false, message: `${error.message || '插件生命周期操作失败。'} ${suffix}`, state: await getPluginHealthState() };
-  }
-};
 
 const unavailableWorktreeState = (message = 'Git 工作树管理尚未初始化。') => Object.freeze({
   available: false,
@@ -3712,7 +3570,7 @@ const performWorktreeCreate = async () => {
     type: 'info',
     title: '新建隔离工作树',
     message: '确认从当前提交创建新的隔离分支和目录？',
-    detail: `基础分支：${before.repository.branch || 'detached HEAD'}\n基础提交：${before.repository.headShort}\n\n软件会生成固定的 dsh/worktree-* 分支，并把目录放在 DSH Desktop 的受控数据目录。未提交和未跟踪文件不会进入新目录；当前提交已跟踪的全部文件会按 Git 正常检出，包括已提交的依赖或误提交的凭据。工作树不是内容脱敏或秘密扫描。软件托管 Key 不复制到目录或 Git 子进程，但新会话仍可通过桌面凭据桥使用。当前工作区不会自动切换。`,
+    detail: `基础分支：${before.repository.branch || 'detached HEAD'}\n基础提交：${before.repository.headShort}\n\n软件会生成固定的 dsh/worktree-* 分支，并把目录放在 lulu 的受控数据目录。未提交和未跟踪文件不会进入新目录；当前提交已跟踪的全部文件会按 Git 正常检出，包括已提交的依赖或误提交的凭据。工作树不是内容脱敏或秘密扫描。软件托管 Key 不复制到目录或 Git 子进程，但新会话仍可通过桌面凭据桥使用。当前工作区不会自动切换。`,
     buttons: ['取消', '创建工作树'],
     defaultId: 0,
     cancelId: 0,
@@ -3812,7 +3670,7 @@ const performWorktreeRemove = async (id) => {
 };
 
 const queueWorktreeOperation = (operation) => {
-  if (appIsClosing()) return Promise.resolve(applicationClosingResult({ state: unavailableWorktreeState('DSH Desktop 正在安全退出。') }));
+  if (appIsClosing()) return Promise.resolve(applicationClosingResult({ state: unavailableWorktreeState('lulu 正在安全退出。') }));
   if (worktreeOperationPromise) return worktreeOperationPromise;
   worktreeOperationPromise = Promise.resolve().then(operation)
     .finally(() => { worktreeOperationPromise = null; });
@@ -3921,7 +3779,7 @@ const enterPlanMode = async () => {
     type: 'question',
     title: '进入 Plan 模式',
     message: '让当前会话先分析并形成计划？',
-    detail: 'DSH Desktop 将通过 Harness 官方 /plan 命令进入 Plan 模式。完成的计划仍由 Harness 官方确认卡审批；Plan 状态不替代访问模式和命令权限。现有输入草稿不会被覆盖。',
+    detail: 'lulu 将通过 Harness 官方 /plan 命令进入 Plan 模式。完成的计划仍由 Harness 官方确认卡审批；Plan 状态不替代访问模式和命令权限。现有输入草稿不会被覆盖。',
     buttons: ['进入 Plan 模式', '取消'],
     defaultId: 0,
     cancelId: 1,
@@ -4030,8 +3888,8 @@ const showLifecycleRecoveryNotice = async () => {
     type: 'warning',
     title: uncertain ? '上次退出状态需要核对' : '已从上次异常退出恢复',
     message: uncertain
-      ? '上次退出记录不完整，DSH Desktop 已从可验证记录重新启动。'
-      : '上次 DSH Desktop 未完成正常退出，现已重新启动并核对本机状态。',
+      ? '上次退出记录不完整，lulu 已从可验证记录重新启动。'
+      : '上次 lulu 未完成正常退出，现已重新启动并核对本机状态。',
     detail: `${previousVersion ? `上次产品版本：V${previousVersion}\n` : ''}不会依据旧进程号或旧端口结束任何进程，也不会自动重发结果不明的后台任务。会话、软件托管 Key 和设置仍使用原来的本机存储；请在“任务”中核对待确认记录。`,
     buttons: ['我知道了'],
     defaultId: 0,
@@ -4067,11 +3925,11 @@ const showFixedNotification = (copy) => {
 const updateApplicationTray = () => {
   if (!appTray || appTray.isDestroyed()) return;
   const skipped = updatePreferenceStore?.getState().skippedVersion || '';
-  appTray.setToolTip(`DSH Desktop · ${trayStatusLabel(agentDiagnostics)}`);
+  appTray.setToolTip(`lulu · ${trayStatusLabel(agentDiagnostics)}`);
   appTray.setContextMenu(Menu.buildFromTemplate([
     { label: trayStatusLabel(agentDiagnostics), enabled: false },
     { type: 'separator' },
-    { label: '打开 DSH Desktop', click: () => { showMainWindow(); } },
+    { label: '打开 lulu', click: () => { showMainWindow(); } },
     { label: `独立后台任务：${backgroundTasks?.snapshot().active || 0} 项运行`, click: () => { showMainWindow(); void openTasksSubagentsWindow().then(() => tasksSubagentsWindow?.webContents.executeJavaScript('document.getElementById("task-tab-background")?.click()')); } },
     {
       label: '定位待确认操作',
@@ -4092,7 +3950,7 @@ const updateApplicationTray = () => {
     { label: skipped ? `已跳过 V${skipped}` : '未跳过产品 Latest', enabled: false },
     { label: '自动下载与安装：关闭（未签名）', enabled: false },
     { type: 'separator' },
-    { label: '退出 DSH Desktop', click: () => { requestApplicationQuit('explicit-exit'); } }
+    { label: '退出 lulu', click: () => { requestApplicationQuit('explicit-exit'); } }
   ]));
 };
 
@@ -4135,7 +3993,7 @@ const checkForUpdatesFromUser = () => {
       await showUpdateDialog({
         type: 'warning',
         title: '更新检查失败',
-        message: '暂时无法读取 DSH Desktop 的 GitHub 发布信息。',
+        message: '暂时无法读取 lulu 的 GitHub 发布信息。',
         detail: `${safeError}\n\n不会自动下载或修改当前安装。`,
         buttons: ['确定'],
         defaultId: 0,
@@ -4425,7 +4283,7 @@ const showPowerShellCompatibility = async () => {
     title: 'PowerShell 兼容性',
     message: affected ? '当前 Windows 受限 PowerShell 运行环境发生崩溃。' : '尚未从当前会话检测到受限 PowerShell 崩溃。',
     detail: affected
-      ? '工具进程以 0xC0000005 退出，DSH Desktop 已将其保留为失败，不会伪装成测试通过。\n\n可以打开 Harness 权限模式，并在明确接受风险后选择 Full Access 重试。Full Access 会绕过命令沙盒，允许命令访问工作区之外的文件；应用不会自动切换。'
+      ? '工具进程以 0xC0000005 退出，lulu 已将其保留为失败，不会伪装成测试通过。\n\n可以打开 Harness 权限模式，并在明确接受风险后选择 Full Access 重试。Full Access 会绕过命令沙盒，允许命令访问工作区之外的文件；应用不会自动切换。'
       : '受限模式会继续保持。若后续出现退出码 3221225477，可从这里打开权限模式检查。',
     buttons: canOpenPermission ? ['打开权限模式', '确定'] : ['确定'],
     defaultId: canOpenPermission ? 1 : 0,
@@ -4483,7 +4341,7 @@ const invokeWikiSkill = async (id) => {
   if (appIsClosing()) return false;
   if (!harnessUiReady() || !['wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest'].includes(id)) return false;
   const methods = { 'wiki-query': 'invokeWikiQuery', 'wiki-capture': 'invokeWikiCapture', 'wiki-update': 'invokeWikiUpdate', 'wiki-history-ingest': 'invokeWikiHistory' };
-  const titles = { 'wiki-query': 'Wiki 知识查询', 'wiki-capture': 'Wiki 会话结论保存', 'wiki-update': 'Wiki 项目增量同步', 'wiki-history-ingest': 'DSH 历史批量导入' };
+  const titles = { 'wiki-query': 'Wiki 知识查询', 'wiki-capture': 'Wiki 会话结论保存', 'wiki-update': 'Wiki 项目增量同步', 'wiki-history-ingest': 'lulu / DSH 历史批量导入' };
   const method = methods[id];
   const invoked = await mainWindow.webContents.executeJavaScript(`Boolean(window.__DSH_COMMAND_PALETTE__?.${method}?.())`, true).catch(() => false);
   if (invoked) return true;
@@ -4631,7 +4489,7 @@ const exportRedactedDiagnostics = async () => {
 };
 
 const supportBackupBusyReason = () => {
-  if (appIsClosing() || quitOperationPromise) return 'DSH Desktop 正在安全退出。';
+  if (appIsClosing() || quitOperationPromise) return 'lulu 正在安全退出。';
   if (backgroundOperationPromise || backgroundTasks?.snapshot().active || backgroundTasks?.pending.size) return '请先结束独立后台运行；备份不会中断其他会话。';
   if (terminalRunner?.isActive()) return '请先停止正在运行的终端命令。';
   if (sideChatWindow && !sideChatWindow.isDestroyed()) return '请先关闭 Side Chat。';
@@ -4648,13 +4506,13 @@ const runSupportBackupFromDialog = async () => {
     return { ok: false, canceled: false, message: busyReason };
   }
   const selection = await dialog.showOpenDialog(mainWindow, {
-    title: '选择 DSH 备份存放位置',
+    title: '选择 lulu 备份存放位置',
     properties: ['openDirectory', 'createDirectory']
   });
   if (selection.canceled || !selection.filePaths[0]) return { ok: false, canceled: true, message: '未创建备份。' };
   const confirmation = await dialog.showMessageBox(mainWindow, {
     type: 'question',
-    title: '创建 DSH 数据备份',
+    title: '创建 lulu 数据备份',
     message: '将短暂停止并重新启动 Harness，然后复制会话、工作区/Wiki 设置、插件状态和界面状态。',
     detail: '软件 Key 文件、代理设置、缓存、日志和运行时依赖不会进入备份；会话正文、草稿、任务内容与运行记录按原样保存，可能包含你曾输入的敏感内容。工作树内代码和附件原件需另行备份。备份完成后会逐文件校验 SHA-256，请妥善保管。',
     buttons: ['取消', '开始备份'],
@@ -4698,7 +4556,7 @@ const runSupportBackupFromDialog = async () => {
   }
   const result = await dialog.showMessageBox(mainWindow, {
     type: restartResult.ok ? 'info' : 'warning',
-    title: 'DSH 数据备份已完成',
+    title: 'lulu 数据备份已完成',
     message: `已校验 ${created.fileCount} 个文件，其中 ${created.counts.sessions} 个会话文件。`,
     detail: restartResult.ok ? '软件 Key 文件和代理设置未进入备份；会话正文按原样保存。Harness 已恢复运行。' : `备份有效，但 Harness 未能自动恢复：${restartResult.error || '未知原因'}`,
     buttons: ['打开备份目录', '确定'],
@@ -4706,18 +4564,18 @@ const runSupportBackupFromDialog = async () => {
     cancelId: 1
   });
   if (result.response === 0) shell.showItemInFolder(path.join(created.backupRoot, SUPPORT_BACKUP_MANIFEST));
-  return { ok: true, canceled: false, fileCount: created.fileCount, sessionCount: created.counts.sessions, restartOk: restartResult.ok, message: 'DSH 数据备份已完成。' };
+  return { ok: true, canceled: false, fileCount: created.fileCount, sessionCount: created.counts.sessions, restartOk: restartResult.ok, message: 'lulu 数据备份已完成。' };
 };
 
 const createSupportBackupFromDialog = () => {
   if (supportBackupOperationPromise) {
-    void dialog.showMessageBox(mainWindow, { type: 'info', title: '备份正在进行', message: '已有一个 DSH 数据备份任务正在进行。', buttons: ['确定'] });
+    void dialog.showMessageBox(mainWindow, { type: 'info', title: '备份正在进行', message: '已有一个 lulu 数据备份任务正在进行。', buttons: ['确定'] });
     return Promise.resolve({ ok: false, canceled: false, message: '已有备份任务正在进行。' });
   }
   supportBackupOperationPromise = Promise.resolve()
     .then(runSupportBackupFromDialog)
     .catch(async (error) => {
-      const options = { type: 'error', title: '备份失败', message: '未能启动 DSH 数据备份。', detail: error?.message || String(error), buttons: ['确定'] };
+      const options = { type: 'error', title: '备份失败', message: '未能启动 lulu 数据备份。', detail: error?.message || String(error), buttons: ['确定'] };
       if (mainWindow && !mainWindow.isDestroyed()) await dialog.showMessageBox(mainWindow, options);
       else await dialog.showMessageBox(options);
       return { ok: false, canceled: false, message: '备份失败。' };
@@ -4727,17 +4585,17 @@ const createSupportBackupFromDialog = () => {
 };
 
 const validateSupportBackupFromDialog = async () => {
-  const selection = await dialog.showOpenDialog(mainWindow, { title: '选择要验证的 DSH 备份目录', properties: ['openDirectory'] });
+  const selection = await dialog.showOpenDialog(mainWindow, { title: '选择要验证的 lulu 备份目录', properties: ['openDirectory'] });
   if (selection.canceled || !selection.filePaths[0]) return { ok: false, canceled: true, message: '未验证备份。' };
   try {
     const verified = await validateSupportBackup(selection.filePaths[0]);
     await dialog.showMessageBox(mainWindow, {
-      type: 'info', title: 'DSH 备份有效', message: `已逐文件验证 ${verified.fileCount} 个文件，其中 ${verified.counts.sessions} 个会话文件。`, detail: `备份版本：V${verified.appVersion || '未知'}\n软件 Key 文件：未包含\n会话正文：按原样保存，未脱敏`, buttons: ['确定']
+      type: 'info', title: 'lulu 备份有效', message: `已逐文件验证 ${verified.fileCount} 个文件，其中 ${verified.counts.sessions} 个会话文件。`, detail: `备份版本：V${verified.appVersion || '未知'}\n软件 Key 文件：未包含\n会话正文：按原样保存，未脱敏`, buttons: ['确定']
     });
-    return { ok: true, canceled: false, fileCount: verified.fileCount, sessionCount: verified.counts.sessions, message: 'DSH 备份验证通过。' };
+    return { ok: true, canceled: false, fileCount: verified.fileCount, sessionCount: verified.counts.sessions, message: 'lulu 备份验证通过。' };
   } catch (error) {
-    await dialog.showMessageBox(mainWindow, { type: 'error', title: 'DSH 备份无效', message: '备份文件缺失、被修改或格式不受支持。', detail: error?.message || String(error), buttons: ['确定'] });
-    return { ok: false, canceled: false, message: 'DSH 备份验证失败。' };
+    await dialog.showMessageBox(mainWindow, { type: 'error', title: 'lulu 备份无效', message: '备份文件缺失、被修改或格式不受支持。', detail: error?.message || String(error), buttons: ['确定'] });
+    return { ok: false, canceled: false, message: 'lulu 备份验证失败。' };
   }
 };
 
@@ -4939,6 +4797,12 @@ function installApplicationMenu() {
       label: 'Agent',
       submenu: [
         { label: agentStatusLabel(), enabled: false },
+        ...(supervisor?.getState().automationMigration?.held ? [
+          { label: '旧档意图不明确：此数据目录的自动任务执行暂时暂停', enabled: false },
+          { label: '旧版自动化恢复…', enabled: !automationRecoveryPromise && !harnessOperationPromise,
+            click: () => { void runVisibleDesktopAction('旧版自动化恢复', recoverLegacyAutomation); } },
+          { type: 'separator' }
+        ] : []),
         { label: planModeLabel(), enabled: false },
         {
           label: '任务与子代理…',
@@ -5035,7 +4899,7 @@ function installApplicationMenu() {
           label: 'Wiki 中心…',
           click: () => { void openWikiCenterWindow(); }
         },
-        { label: 'Wiki：知识查询、会话结论、项目同步与 DSH 历史导入 · Git 可选', enabled: false },
+        { label: 'Wiki：知识查询、会话结论、项目同步与 lulu / DSH 历史导入 · Git 可选', enabled: false },
         {
           label: '查询 Wiki 知识…',
           enabled: harnessReady,
@@ -5052,7 +4916,7 @@ function installApplicationMenu() {
           click: () => { void invokeWikiSkill('wiki-update'); }
         },
         {
-          label: '选择并导入 DSH 历史到 Wiki…',
+          label: '选择并导入 lulu / DSH 历史到 Wiki…',
           enabled: harnessReady,
           click: () => { void openWikiCenterWindow(); }
         },
@@ -5338,11 +5202,11 @@ function installApplicationMenu() {
           click: () => { void exportRedactedDiagnostics(); }
         },
         {
-          label: '备份 DSH 数据…',
+          label: '备份 lulu 数据…',
           click: () => { void createSupportBackupFromDialog(); }
         },
         {
-          label: '验证 DSH 备份…',
+          label: '验证 lulu 备份…',
           click: () => { void validateSupportBackupFromDialog(); }
         },
         { type: 'separator' },
@@ -5360,11 +5224,11 @@ function installApplicationMenu() {
         { label: '自动下载与安装：关闭（未签名）', enabled: false },
         { type: 'separator' },
         {
-          label: `关于 DSH Desktop V${app.getVersion()}…`,
+          label: `关于 lulu V${app.getVersion()}…`,
           click: () => { void dialog.showMessageBox(mainWindow, {
             type: 'info',
-            title: `关于 DSH Desktop V${app.getVersion()}`,
-            message: `DSH Desktop V${app.getVersion()}`,
+            title: `关于 lulu V${app.getVersion()}`,
+            message: `lulu V${app.getVersion()}`,
             detail: `${versionIdentityLines(currentVersionIdentity())}\n\n独立社区项目，不隶属于或代表 DeepSeek。`,
             buttons: ['确定'],
             defaultId: 0,
@@ -5561,9 +5425,6 @@ const runWorkspaceFilesRequest = async (event, operation) => {
     return { available: false, reason: 'unavailable', message: '文件状态已变化，请刷新后重试。' };
   }
 };
-ipcMain.handle('files:list', (event, directoryPath) => (
-  runWorkspaceFilesRequest(event, () => workspaceFiles.listDirectory(directoryPath))
-));
 const runDocumentRequest = async (event, operation) => {
   if (!harnessIpcAllowed(event)) return { ok: false, available: false, message: '文件入口尚未就绪。' };
   try {
@@ -5587,12 +5448,6 @@ const runDocumentMutationRequest = (event, operation) => {
 ipcMain.handle('documents:get-state', (event) => runDocumentRequest(event, () => documentIntakeController.getState()));
 ipcMain.handle('documents:choose', (event, context) => runDocumentMutationRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, choose: true })));
 ipcMain.handle('documents:import', (event, paths, context) => runDocumentMutationRequest(event, () => documentIntakeController.importFiles({ expectedContext: context, paths })));
-ipcMain.handle('files:read', (event, filePath) => (
-  runWorkspaceFilesRequest(event, () => workspaceFiles.readFile(filePath))
-));
-ipcMain.handle('files:preview', (event, filePath) => (
-  runWorkspaceFilesRequest(event, () => workspaceFiles.readPreviewFile(filePath))
-));
 ipcMain.handle('files:search', (event, query) => (
   runWorkspaceFilesRequest(event, () => workspaceFiles.search(query))
 ));
@@ -5700,42 +5555,22 @@ ipcMain.handle('plugin-health:reveal', async (event, id) => {
   shell.showItemInFolder(target);
   return { ok: true };
 });
-ipcMain.handle('plugin-health:toggle', (event, profileId, packageName, enable) => {
-  if (!pluginHealthIpcAllowed(event)) {
-    return { ok: false, message: '扩展变更请求未通过安全校验。' };
-  }
-  if (typeof profileId !== 'string' || typeof packageName !== 'string' || typeof enable !== 'boolean') {
-    return { ok: false, message: '扩展变更参数无效。' };
-  }
-  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一个扩展变更仍在处理中。' };
-  pluginTogglePromise = performPluginToggle({ profileId, packageName, enable })
-    .finally(() => { pluginTogglePromise = null; });
-  return pluginTogglePromise;
-});
-ipcMain.handle('plugin-health:install', (event, profileId, catalogId) => {
-  if (!pluginHealthIpcAllowed(event)) {
-    return { ok: false, message: '插件安装请求未通过安全校验。' };
-  }
-  if (typeof profileId !== 'string' || typeof catalogId !== 'string') {
-    return { ok: false, message: '插件安装参数无效。' };
-  }
-  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一个扩展变更仍在处理中。' };
-  pluginInstallPromise = performPluginInstall({ profileId, catalogId })
+registerRetiredPluginMutations(ipcMain, pluginHealthIpcAllowed);
+ipcMain.handle('plugin-health:rollback-history', (event, profileId, catalogId) => {
+  if (!pluginHealthIpcAllowed(event)) return { ok: false, message: '历史回退请求未通过安全校验。' };
+  if (typeof profileId !== 'string' || !profileId || profileId.length > 128
+    || typeof catalogId !== 'string' || !catalogId || catalogId.length > 128) return { ok: false, message: '历史回退参数无效。' };
+  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'lulu 正在安全退出。' : '另一个扩展变更仍在处理中。' };
+  pluginInstallPromise = historicalPluginRollback.run({ profileId, catalogId })
+    .then(async result => ({ ...result, state: await getPluginHealthState() }))
     .finally(() => { pluginInstallPromise = null; });
   return pluginInstallPromise;
 });
-ipcMain.handle('plugin-health:lifecycle', (event, profileId, catalogId, action) => {
-  if (!pluginHealthIpcAllowed(event)) {
-    return { ok: false, message: '插件生命周期请求未通过安全校验。' };
-  }
-  if (typeof profileId !== 'string' || typeof catalogId !== 'string' || !['install', 'upgrade', 'uninstall', 'rollback'].includes(action)) {
-    return { ok: false, message: '插件生命周期参数无效。' };
-  }
-  if (appIsClosing() || quitOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一个扩展变更仍在处理中。' };
-  pluginInstallPromise = performPluginInstall({ profileId, catalogId, action })
-    .finally(() => { pluginInstallPromise = null; });
-  return pluginInstallPromise;
-});
+ipcMain.handle('plugin-health:open-official', (event) => (
+  pluginHealthIpcAllowed(event)
+    ? openOfficialPluginsWindow()
+    : { ok: false, message: '官方插件页请求未通过安全校验。' }
+));
 ipcMain.handle('office-center:get-state', (event) => (
   officeCenterIpcAllowed(event)
     ? getOfficeCenterState()
@@ -5769,13 +5604,13 @@ ipcMain.handle('wiki-center:invoke-project-sync', (event) => (
   wikiCenterIpcAllowed(event) ? invokeCurrentProjectWikiSync() : { ok: false, message: '项目同步请求未通过安全校验。' }
 ));
 ipcMain.handle('wiki-center:list-history-sessions', (event) => (
-  wikiCenterIpcAllowed(event) ? listDshHistorySessions() : { ok: false, message: 'DSH 历史列表请求未通过安全校验。', items: [] }
+  wikiCenterIpcAllowed(event) ? listDshHistorySessions() : { ok: false, message: 'lulu / DSH 历史列表请求未通过安全校验。', items: [] }
 ));
 ipcMain.handle('wiki-center:prepare-history', (event, selection) => (
-  wikiCenterIpcAllowed(event) ? prepareSelectedDshHistory(selection) : { ok: false, message: 'DSH 历史准备请求未通过安全校验。' }
+  wikiCenterIpcAllowed(event) ? prepareSelectedDshHistory(selection) : { ok: false, message: 'lulu / DSH 历史准备请求未通过安全校验。' }
 ));
 ipcMain.handle('wiki-center:invoke-history', (event) => (
-  wikiCenterIpcAllowed(event) ? invokePreparedDshHistory() : { ok: false, message: 'DSH 历史导入请求未通过安全校验。' }
+  wikiCenterIpcAllowed(event) ? invokePreparedDshHistory() : { ok: false, message: 'lulu / DSH 历史导入请求未通过安全校验。' }
 ));
 ipcMain.handle('wiki-center:get-session-candidates', (event) => (
   wikiCenterIpcAllowed(event) ? loadCurrentWikiCandidates() : { ok: false, message: '会话读取请求未通过安全校验。', items: [] }
@@ -5879,7 +5714,7 @@ ipcMain.handle('tasks-subagents:background-action', (event, request) => {
   const allowed = ['create', 'run', 'pause', 'resume', 'open', 'stop', 'acknowledge', 'archive', 'release'];
   if (!tasksSubagentsIpcAllowed(event) || !request || !allowed.includes(request.operation)
     || !['create', 'archive'].includes(request.operation) && !/^[a-f0-9-]{36}$/i.test(request.id || '')) return { ok: false, message: '后台任务请求未通过安全校验。' };
-  if (appIsClosing() || quitOperationPromise || backgroundOperationPromise || worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'DSH Desktop 正在安全退出。' : '另一项任务或工作区操作尚未结束。' };
+  if (appIsClosing() || quitOperationPromise || backgroundOperationPromise || worktreeOperationPromise || pluginTogglePromise || pluginInstallPromise) return { ok: false, message: appIsClosing() || quitOperationPromise ? 'lulu 正在安全退出。' : '另一项任务或工作区操作尚未结束。' };
   backgroundOperationPromise = (async () => {
     try { const result = await performBackgroundAction(request); return { ok: true, result, state: await getTasksSubagentsState() }; }
     catch (error) { return { ok: false, message: error.message || '任务操作失败；未自动重试。', state: await getTasksSubagentsState() }; }
@@ -6006,28 +5841,21 @@ const createWindow = async () => {
     await showStatusPage();
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
-  let closingDraft = false, draftFlushedForClose = false;
-  mainWindow.on('close', (event) => {
-    if (allowQuit || draftFlushedForClose) return;
-    event.preventDefault();
-    if (appTray && !appTray.isDestroyed() && (isBackgroundSupervisionRequired(agentDiagnostics) || backgroundTasks?.requiresBackground())) {
-      void flushComposerDraft().catch(() => {}); mainWindow.hide();
-      showFixedNotification({ title: 'DSH Desktop 仍在后台运行',
-        body: backgroundTasks?.requiresBackground() ? '独立任务或定时计划仍在托盘运行。退出软件会停止调度。' : agentDiagnostics.status === 'waiting' ? 'Agent 正在等待确认，可从托盘重新打开。' : 'Agent 仍在运行，可从托盘继续监督。',
-        focusAction: agentDiagnostics.status === 'waiting' ? 'focus-pending' : null });
-      return;
-    }
-    if (closingDraft) return;
-    closingDraft = true;
-    void (async () => {
-      try { await flushComposerDraft(); }
-      catch {
-        const answer = await dialog.showMessageBox(mainWindow, { type: 'warning', title: '草稿尚未保存', message: '最后输入的内容未能写入本机。建议取消关闭并复制草稿。', buttons: ['取消关闭', '仍然关闭'], defaultId: 0, cancelId: 0 });
-        if (answer.response !== 1) return;
-      }
-      draftFlushedForClose = true; mainWindow?.close();
-    })().finally(() => { closingDraft = false; });
-  });
+  mainWindow.on('close', createCloseToTrayHandler({
+    getWindow: () => mainWindow,
+    getTray: () => appTray,
+    canClose: () => allowQuit,
+    isQuitting: () => Boolean(appIsClosing() || quitOperationPromise),
+    flushDraft: flushComposerDraft,
+    restoreWindow: restoreAndFocusWindow,
+    requestQuit: requestApplicationQuit,
+    notify: showFixedNotification,
+    onDraftFailure: (window) => dialog.showMessageBox(window, {
+      type: 'warning', title: '草稿尚未保存',
+      message: '最后输入的内容未能写入本机，窗口已重新打开。请先复制草稿再重试。',
+      buttons: ['我知道了'], defaultId: 0, cancelId: 0
+    })
+  }));
   mainWindow.on('closed', () => {
     nativeDock?.destroy(); nativeDock = undefined;
     stopAgentPolling();
@@ -6063,7 +5891,7 @@ const runLifecycleSmoke = async (target) => {
       width: 720,
       height: 480,
       show: false,
-      title: 'DSH Desktop 生命周期验证',
+      title: 'lulu 生命周期验证',
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -6440,13 +6268,16 @@ const runTraySmoke = async (target) => {
     smokeTray = new Tray(trayIconPath);
     const menu = Menu.buildFromTemplate([
       { label: trayStatusLabel({ status: 'waiting' }), enabled: false },
-      { label: '打开 DSH Desktop' },
+      { label: '打开 lulu' },
       { label: '检查产品 Latest 更新…' },
       { label: '自动下载与安装：关闭（未签名）', enabled: false },
-      { label: '退出 DSH Desktop' }
+      { label: '退出 lulu' }
     ]);
-    smokeTray.setToolTip('DSH Desktop · Agent：等待确认');
+    smokeTray.setToolTip('lulu · Agent：等待确认');
     smokeTray.setContextMenu(menu);
+    const closeToTray = await require('./close-to-tray-smoke.cjs').runCloseToTraySmoke({
+      BrowserWindow, Tray, Menu, iconPath: trayIconPath
+    });
     result = {
       ok: fs.existsSync(trayIconPath)
         && started === null
@@ -6454,7 +6285,9 @@ const runTraySmoke = async (target) => {
         && repeatedWaiting === null
         && completed?.type === 'completed'
         && latest?.version === '0.9.0'
-        && menu.items.length === 5,
+        && menu.items.length === 5
+        && closeToTray.ok,
+      closeToTray,
       version: app.getVersion(),
       iconReady: fs.existsSync(trayIconPath),
       notificationSupported: Notification.isSupported(),
@@ -6493,7 +6326,7 @@ const runPdfSmoke = async (target) => {
     embed { width: 100%; height: 100%; min-height: 600px; border: 1px solid #a8a29e; border-radius: 8px; background: white; }
   </style>
 </head>
-<body><main><header>DSH Desktop · Electron PDF 兼容性验证</header><embed id="preview" src="./preview.pdf#page=1&amp;view=FitH" type="application/pdf"></main></body>
+<body><main><header>lulu · Electron PDF 兼容性验证</header><embed id="preview" src="./preview.pdf#page=1&amp;view=FitH" type="application/pdf"></main></body>
 </html>`, 'utf8');
 
   let renderProcessGone = null;
@@ -6638,7 +6471,7 @@ const runHarnessSmoke = async (target) => {
     const workspaceSync = await synchronizeHarnessWorkspace({
       origin: authentication.origin,
       workspacePath: supervisor.getState().workspacePath,
-      fallbackTitle: 'DSH 临时工作区',
+      fallbackTitle: 'lulu 临时工作区',
       fetchImpl: smokeFetch
     });
     const sideChat = await new SideChatController({
@@ -6805,13 +6638,21 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
     await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'document-intake.css'), 'utf8'));
     if (process.argv.includes('--smoke-cross-workspace')) {
       const sidebarPath = path.join(smokeRoot, 'sidebar-workspace'); await fsp.mkdir(sidebarPath, { recursive: true });
-      const other = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath: sidebarPath, fetchImpl: harnessFetch });
+      await authenticatedHarnessApi(harnessOrigin, 'workspace.create', { path: sidebarPath });
       await waitFor('Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).some(row=>row.textContent.includes("sidebar-workspace"))');
-      // Upstream deliberately displays every blank session as “New Session”,
-      // even after rename. Use the workspace's actual New Session button;
-      // the official navigation reuses its already-created blank session.
-      await evaluate('(()=>{const row=Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).find(row=>row.textContent.includes("sidebar-workspace"));Array.from(row.querySelectorAll("button")).at(-1).click()})()');
-      await waitFor(`JSON.parse(localStorage.getItem('dsh.sessions.current')||'{}').sessionId === ${JSON.stringify(other.sessionId)}`);
+      // Explicit New Session creates a fresh ID in alpha.2. Do not pre-create
+      // a blank session that this button no longer reuses.
+      const sidebarPoint = await evaluate('(()=>{const row=Array.from(document.querySelectorAll("[role=treeitem][aria-expanded]")).find(row=>row.textContent.includes("sidebar-workspace"));const r=row.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
+      wc.sendInputEvent({ type: 'mouseMove', ...sidebarPoint });
+      const sidebarNew = 'Array.from(document.querySelectorAll("[role=treeitem][aria-expanded] button")).filter(b=>b.getClientRects().length && ["在“sidebar-workspace”中新建会话","New session in sidebar-workspace"].includes(b.getAttribute("aria-label")))';
+      await waitFor(`${sidebarNew}.length === 1`);
+      await evaluate(`${sidebarNew}[0].click()`);
+      await waitFor(`(()=>{const id=JSON.parse(localStorage.getItem('dsh.sessions.current')||'{}').sessionId;return typeof id==='string' && id.startsWith('session-') && id!==${JSON.stringify(selected.sessionId)}})()`);
+      const selectedId = await readHarnessSessionSelection(wc);
+      const other = await synchronizeHarnessWorkspace({ origin: harnessOrigin, workspacePath: sidebarPath, selectedSessionId: selectedId, fetchImpl: harnessFetch });
+      // Synchronization only reuses IDs with matching workspace membership and
+      // cwd. Reject any fallback creation rather than accepting an unrelated ID.
+      if (other.sessionId !== selectedId || other.sessionCreated) throw new Error('New sidebar session did not belong to its workspace');
       if (getWorkspaceState().activePath !== workspacePath) throw new Error('Cross-workspace test must retain the original native launch workspace');
       selected = other;
       const context = await documentIntakeController.getContext();
@@ -6825,6 +6666,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       return;
     }
     if (dock || handoff) {
+      stage = 'dock-runtime-initialize';
       if (handoff || process.argv.includes('--smoke-background')) await require('./session-handoff-smoke.cjs').prepareHandoffFixture(workspacePath);
       workspaceSyncDiagnostics = selected;
       workbenchStore = new WorkbenchStore({ filePath: path.join(smokeRoot, 'workbench-state.json') }); await workbenchStore.init();
@@ -6839,9 +6681,12 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       worktreeManager = new GitWorktreeManager({ managedRoot: path.join(smokeRoot, 'worktrees') });
       if (handoff || process.argv.includes('--smoke-background')) { checkpointManager = new GitCheckpointManager(); checkpointDiagnostics = await checkpointManager.activate(workspacePath); }
       wikiRuntime = require(harnessRuntimePaths.wikiToolPath); wikiSettingsStore = new wikiRuntime.WikiSettingsStore({ filePath: path.join(smokeRoot, 'wiki-settings.json') }); await wikiSettingsStore.init();
+      stage = 'dock-create';
       await ensureNativeDock();
       await wc.insertCSS(await fsp.readFile(path.join(rootDir, 'assets', 'workbench-native-layout.css'), 'utf8'));
+      stage = 'dock-install-panel';
       if (!await installWorkbenchPanel()) throw new Error('完整工作台未安装。');
+      stage = 'credential-host-ready';
       await supervisor.credentialHost.verifyReady(harnessOrigin, harnessFetch);
       if (dock && process.argv.includes('--smoke-background')) {
         await initializeBackgroundTasks();
@@ -6859,6 +6704,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
         return;
       }
       if (dock && process.argv.includes('--smoke-official-terminal')) {
+        stage = 'official-terminal-smoke';
         result = await require('./official-terminal-smoke.cjs').runOfficialTerminalSmoke({ window: mainWindow, selected, workspacePath,
           nodePath: harnessRuntimePaths.nodePath,
           origin: harnessOrigin, fetchImpl: harnessFetch, evaluate, waitFor, open: openOfficialTerminalWindow,
@@ -6879,7 +6725,7 @@ const runDocumentIntakeSmoke = async (target, { review = false, dock = false, co
       }
       if (dock && process.argv.includes('--smoke-workflow')) {
         if (!process.argv.includes('--smoke-real-model')) throw new Error('Workflow acceptance requires the real model flag.');
-        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath: selected.workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi,
+        result = await require('./session-workflow-smoke.cjs').runWorkflowSmoke({ window: mainWindow, supervisor, selected, workspacePath: selected.workspacePath, version: app.getVersion(), target: resolvedTarget, origin: harnessOrigin, api: authenticatedHarnessApi, fetchImpl: harnessFetch,
           crossWorkspace: process.argv.includes('--smoke-cross-workspace') });
         if (!result.ok) process.exitCode = 1;
         return;
@@ -7173,10 +7019,10 @@ const runPluginHealthSmoke = async (target) => {
     const renderedInTime = await pluginHealthWindow.webContents.executeJavaScript(`new Promise((resolve) => {
       const deadline = Date.now() + 15000;
       const check = () => {
-        const profileReady = document.querySelectorAll('.profile-card').length === 1;
-        const toggleReady = document.querySelectorAll('.toggle-button').length === 1;
+        const profileReady = document.querySelectorAll('#profiles > .profile-card').length === 1;
+        const officialReady = Boolean(document.getElementById('open-official'));
         const surfacesReady = document.querySelectorAll('.surface-card').length === 4;
-        if (profileReady && toggleReady && surfacesReady) return resolve(true);
+        if (profileReady && officialReady && surfacesReady) return resolve(true);
         if (Date.now() >= deadline) return resolve(false);
         setTimeout(check, 50);
       };
@@ -7189,25 +7035,35 @@ const runPluginHealthSmoke = async (target) => {
       catalogRows: document.querySelectorAll('.catalog-card').length,
       installButtons: document.querySelectorAll('.install-button').length,
       surfaceRows: document.querySelectorAll('.surface-card').length,
-      profileRows: document.querySelectorAll('.profile-card').length,
+      profileRows: document.querySelectorAll('#profiles > .profile-card').length,
       toggleButtons: document.querySelectorAll('.toggle-button').length,
+      officialButtons: document.querySelectorAll('#open-official').length,
+      historicalSections: document.querySelectorAll('#history-rollbacks').length,
+      historicalButtons: document.querySelectorAll('.history-rollback-button').length,
       text: document.body.innerText
     })`, true);
+    // DOM readiness can precede the updated Chromium compositor frame.
+    await pluginHealthWindow.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const screenshot = await pluginHealthWindow.webContents.capturePage();
     const screenshotPath = `${resolvedTarget}.png`;
     const screenshotSize = screenshot.getSize();
     result = {
-      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'install', 'lifecycle', 'refresh', 'reveal', 'toggle'])
+      ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['getState', 'openOfficial', 'refresh', 'reveal', 'rollbackHistory'])
         && rendered.title === '扩展中心'
         && rendered.surfaceRows === 4
-        && rendered.catalogRows === 1
-        && rendered.installButtons === 1
+        && rendered.catalogRows === 0
+        && rendered.installButtons === 0
         && rendered.profileRows === 1
-        && rendered.toggleButtons === 1
+        && rendered.toggleButtons === 0
+        && rendered.officialButtons === 1
+        && rendered.historicalSections === 1
+        && rendered.historicalButtons === 0
+        && rendered.text.includes('历史桌面事务回退')
+        && rendered.text.includes('没有可安全回退的历史桌面事务')
         && rendered.text.includes('@deepseek-ai/dsh-base')
         && rendered.text.includes('community-bundle')
-        && rendered.text.includes('兼容已验证')
-        && rendered.text.includes('固定 registry · Web · Patch 正常 · Peer 0/0')
+        && !rendered.text.includes('兼容已验证')
+        && rendered.text.includes('版本兼容性及启停状态请以官方插件页为准')
         && rendered.text.includes('Skills')
         && rendered.text.includes('Plugins')
         && rendered.text.includes('Hooks')
@@ -7225,8 +7081,10 @@ const runPluginHealthSmoke = async (target) => {
       installButtons: rendered.installButtons,
       surfaceRows: rendered.surfaceRows,
       profileRows: rendered.profileRows,
+      historicalSections: rendered.historicalSections,
+      historicalButtons: rendered.historicalButtons,
       toggleButtons: rendered.toggleButtons,
-      compatibilityVerified: rendered.text.includes('兼容已验证'),
+      officialManagement: rendered.officialButtons === 1 && !rendered.text.includes('兼容已验证'),
       configHidden: !rendered.text.includes('hidden-plugin-config-marker') && !rendered.text.includes('hidden-patch-prose-marker'),
       screenshot: { path: screenshotPath, width: screenshotSize.width, height: screenshotSize.height }
     };
@@ -7395,7 +7253,7 @@ const runWikiCenterSmoke = async (target) => {
     await fsp.writeFile(path.join(smokeVault, 'concepts', 'wiki-basic.md'), [
       '---',
       'title: "无 Git Wiki 基础能力"',
-      'summary: "DSH Desktop 可在没有 Git 的普通目录初始化并查询 Wiki。"',
+      'summary: "lulu 可在没有 Git 的普通目录初始化并查询 Wiki。"',
       'sources:',
       '  - "dsh-smoke:v0.6.5"',
       'lifecycle: verified',
@@ -7487,7 +7345,7 @@ const runWikiCenterSmoke = async (target) => {
     result = {
       ok: JSON.stringify(rendered.apiKeys) === JSON.stringify(['chooseVault', 'getSessionCandidates', 'getState', 'initializeVault', 'invokeHistory', 'invokeProjectSync', 'listHistorySessions', 'prepareHistory', 'previewCapture', 'previewProjectSync', 'query', 'recover', 'saveCapture'])
         && rendered.title === 'Wiki 中心'
-        && rendered.versionText === `DSH Desktop V${app.getVersion()} · Harness V${harnessRuntimePaths.version || HARNESS_VERSION}`
+        && rendered.versionText === `lulu V${app.getVersion()} · Harness V${harnessRuntimePaths.version || HARNESS_VERSION}`
         && rendered.onboardingHidden
         && !rendered.overviewHidden
         && rendered.structureText === '结构完整'
@@ -7597,7 +7455,7 @@ const runWorktreesSmoke = async (target) => {
       apiKeys: Object.keys(window.worktreesAPI || {}).sort(),
       title: document.querySelector('h1')?.textContent || '',
       cards: document.querySelectorAll('.worktree-card').length,
-      managedBadges: [...document.querySelectorAll('.badge')].filter((node) => node.textContent === 'DSH 管理').length,
+      managedBadges: [...document.querySelectorAll('.badge')].filter((node) => node.textContent === 'lulu 管理').length,
       removeButtons: [...document.querySelectorAll('.worktree-actions button')].filter((node) => node.textContent === '安全回收').length,
       switchButtons: [...document.querySelectorAll('.worktree-actions button')].filter((node) => node.textContent === '切换').length,
       text: document.body.innerText
@@ -8285,9 +8143,10 @@ app.on('before-quit', (event) => {
     const hasBackgroundWork = Boolean(backgroundTasks?.requiresBackground() || backgroundOperationPromise);
     const hasForegroundAgentWork = isBackgroundSupervisionRequired(agentDiagnostics);
     if (!fatalShutdownError && (hasBackgroundWork || hasForegroundAgentWork)) {
+      showMainWindow();
       const answer = await dialog.showMessageBox(nativeParent(mainWindow), {
         type: 'warning',
-        title: '退出 DSH Desktop',
+        title: '退出 lulu',
         message: hasBackgroundWork
           ? '完全退出会停止后台执行和定时检查。'
           : agentDiagnostics.status === 'waiting'
@@ -8323,7 +8182,7 @@ app.on('before-quit', (event) => {
       ['Wiki 写入', wikiMutationOperationPromise],
       ['工作区切换', workspaceActivationPromise],
       ['插件启停', pluginTogglePromise],
-      ['插件安装', pluginInstallPromise],
+      ['历史插件事务回退', pluginInstallPromise],
       ['工作树操作', worktreeOperationPromise],
       ['子代理操作', tasksSubagentsOperationPromise],
       ['Side Chat 操作', sideChatOperationPromise],
@@ -8382,7 +8241,7 @@ app.on('before-quit', (event) => {
         await dialog.showMessageBox(mainWindow, {
           type: 'error',
           title: '未能安全退出',
-          message: 'DSH Desktop 没有退出，避免留下未完成的任务或子进程。',
+          message: 'lulu 没有退出，避免留下未完成的任务或子进程。',
           detail: `${error?.message || '请核对后台任务状态后重试。'}\n\n如果刚才输入了内容，请先复制草稿再重试。`,
           buttons: ['确定'],
           defaultId: 0,

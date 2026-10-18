@@ -441,15 +441,22 @@ const inspectPackagedBuild = async ({
     inspectExecutableIdentity(packagedRoot)
   ]);
   const version = typeof sourceManifest.version === 'string' ? sourceManifest.version : '';
+  const productName = sourceManifest.build?.productName;
   const pe = inspectPeHeader(executableBytes);
   const accepted = /^\d+\.\d+\.\d+$/.test(version)
     && sourceManifest.name === 'dsh-desktop'
+    && sourceManifest.build?.appId === 'com.dsh.desktop'
+    && sourceManifest.build?.win?.executableName === 'DSH Desktop'
+    && path.basename(executable) === 'DSH Desktop.exe'
+    && typeof productName === 'string' && productName.trim().length > 0 && productName === productName.trim()
     && packagedManifest.name === sourceManifest.name
     && packagedManifest.version === version
     && pe.valid
     && executableIdentity?.ok === true
     && executableIdentity.expectedVersion === version
-    && executableIdentity.productName === 'DSH Desktop'
+    && executableIdentity.productName === productName
+    && executableIdentity.fileDescription === productName
+    && executableIdentity.internalName === 'DSH Desktop'
     && appTree.matches
     && resources.generated.matches
     && resources.layout.matches

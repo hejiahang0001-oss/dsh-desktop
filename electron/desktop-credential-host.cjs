@@ -5,16 +5,17 @@ const { CredentialVault, attachCredentialChannel } = require('./credential-vault
 const { callHarnessRemote, sanitizePluginInventory } = require('./extension-center.cjs');
 const { attachTerminalReadChannel } = require('./terminal-read-broker.cjs');
 const { SessionControlClient } = require('./session-control-client.cjs');
+const { resolveHarnessHostModules } = require('./harness-host-modules.cjs');
 
 const createDesktopCredentialHost = async ({ homeDir, runtime, rootDir, resourcesPath, isPackaged, crypto, provisionPlugin, terminalReadBroker }) => {
-  const providerModule = path.resolve(path.dirname(runtime.dshBinPath), '../../dsh-credentials/lib/index.js');
-  const localModule = path.resolve(path.dirname(runtime.dshBinPath), '../../dsh-credentials-local/lib/index.js');
+  const { providerModule, localModule, toolsModule = null } = resolveHarnessHostModules({
+    dshBinPath: runtime.dshBinPath, tools: Boolean(terminalReadBroker), credentials: true
+  });
   const parser = await import(pathToFileURL(localModule).href);
   const vault = new CredentialVault({ homeDir, crypto, parseLegacy: (text) => parser.parseCredentialsDocument(parser.renderFlatLayoutMigration(text) ?? text, 'software-managed-credentials') });
   await vault.init({ deferMigration: true });
   const sourceDir = isPackaged ? path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-credentials') : path.join(rootDir, 'runtime', 'dsh-desktop-credentials');
   await provisionPlugin({ homeDir, sourceDir, expectedName: 'dsh-desktop-credentials' });
-  const toolsModule = terminalReadBroker ? path.resolve(path.dirname(runtime.dshBinPath), '../../dsh-tools/lib/index.js') : null;
   if (toolsModule) await provisionPlugin({ homeDir, sourceDir: isPackaged ? path.join(resourcesPath, 'harness-plugins', 'dsh-desktop-tools') : path.join(rootDir, 'runtime', 'dsh-desktop-tools'), expectedName: 'dsh-desktop-tools' });
   const patchPath = path.join(homeDir, 'desktop-secure.patch.yml');
   try { if ((await fsp.lstat(patchPath)).isSymbolicLink()) throw new Error('凭据组件配置不能是文件链接。'); } catch (error) { if (error.code !== 'ENOENT') throw error; }

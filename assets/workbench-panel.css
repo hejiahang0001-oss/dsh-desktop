@@ -23,7 +23,8 @@ html[data-dsh-review-open="true"] #root {
 #dsh-workbench-review {
   position: fixed;
   inset: 0 0 0 auto;
-  z-index: 2147483000;
+  /* Above the workspace, below official modal/menu portals (1000+). */
+  z-index: 100;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: var(--dsh-review-width);

@@ -20,6 +20,31 @@
     stopped: '已停止'
   }[state.status] || '不可用');
 
+  const readTerminalTheme = () => {
+    const styles = getComputedStyle(document.documentElement);
+    // Resolve system colors too: xterm receives concrete CSS colors in forced-color mode.
+    const probe = document.createElement('span');
+    probe.hidden = true;
+    document.body.append(probe);
+    const color = (token) => {
+      probe.style.color = styles.getPropertyValue(token).trim();
+      return getComputedStyle(probe).color;
+    };
+    const theme = {
+      background: color('--lulu-bg'), foreground: color('--lulu-text'),
+      cursor: color('--lulu-accent'), cursorAccent: color('--lulu-bg'),
+      selectionBackground: color('--lulu-accent-soft')
+    };
+    const systemColors = window.matchMedia('(forced-colors: active)').matches;
+    for (const name of ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']) {
+      const brightName = `bright${name[0].toUpperCase()}${name.slice(1)}`;
+      theme[name] = color(systemColors ? '--lulu-text' : `--lulu-terminal-${name}`);
+      theme[brightName] = color(systemColors ? '--lulu-text' : `--lulu-terminal-bright-${name}`);
+    }
+    probe.remove();
+    return theme;
+  };
+
   const terminal = new window.Terminal({
     allowTransparency: false,
     convertEol: false,
@@ -33,17 +58,14 @@
     screenReaderMode: true,
     scrollback: 5000,
     smoothScrollDuration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 80,
-    theme: {
-      background: '#171716', foreground: '#f2f2ef', cursor: '#75b8ff', cursorAccent: '#171716',
-      selectionBackground: '#315f8a', black: '#171716', red: '#ff9a90', green: '#79d9ae',
-      yellow: '#edc16c', blue: '#75b8ff', magenta: '#d6a8ff', cyan: '#74d6d0', white: '#f2f2ef',
-      brightBlack: '#77736e', brightRed: '#ffb5ad', brightGreen: '#9ae7c3', brightYellow: '#f3d68e',
-      brightBlue: '#9acbff', brightMagenta: '#e4c6ff', brightCyan: '#9ce4df', brightWhite: '#ffffff'
-    }
+    theme: readTerminalTheme()
   });
   const fitAddon = new window.FitAddon.FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(viewport);
+  for (const query of ['(prefers-color-scheme: dark)', '(forced-colors: active)']) {
+    window.matchMedia(query).addEventListener('change', () => { terminal.options.theme = readTerminalTheme(); });
+  }
   terminal.textarea?.setAttribute('aria-label', 'PowerShell 终端输入');
   terminal.textarea?.setAttribute('aria-describedby', 'terminal-state terminal-security');
 
@@ -131,7 +153,7 @@
   });
   new ResizeObserver(fit).observe(viewport);
 
-  terminal.writeln('\u001b[38;2;170;167;161mDSH 安全终端尚未启动。点击“启动”后进入当前工作区。\u001b[0m');
+  terminal.writeln('lulu 安全终端尚未启动。点击“启动”后进入当前工作区。');
   api.getState().then((snapshot) => {
     if (snapshot?.output) {
       terminal.reset();

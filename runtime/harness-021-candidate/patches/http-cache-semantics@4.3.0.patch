@@ -1,0 +1,52 @@
+diff --git a/index.js b/index.js
+--- a/index.js
++++ b/index.js
+@@ -395,6 +395,10 @@
+     evaluateRequest(req) {
+         this._assertRequestHasHeaders(req);
+ 
++        if (this._requiresSynchronousRevalidation()) {
++            return this._evaluateRequestMissResult(req);
++        }
++
+         // In all circumstances, a cache MUST NOT ignore the must-revalidate directive
+         if (this._rescc['must-revalidate']) {
+             return this._evaluateRequestMissResult(req);
+@@ -703,9 +707,29 @@
+     }
+ 
+     /**
++     * RFC 9111 sections 4.2.4 and 5.2.2: stale allowances cannot override
++     * no-cache or mandatory revalidation. Cookie presence is not a prohibition.
++     * This is a local compatibility patch, not an upstream security release.
++     * @returns {boolean} Whether an unvalidated response must not be reused.
++     */
++    _requiresSynchronousRevalidation() {
++        if (!this.storable() || this._rescc['no-cache']) {
++            return true;
++        }
++        return this.stale() && !!(
++            this._rescc['must-revalidate'] ||
++            (this._isShared && (
++                this._rescc['proxy-revalidate'] ||
++                's-maxage' in this._rescc
++            ))
++        );
++    }
++
++    /**
+      * @returns {boolean} `true` if `stale-if-error` condition allows use of a stale response.
+      */
+     _useStaleIfError() {
++        if (this._requiresSynchronousRevalidation()) return false;
+         return this.maxAge() + toNumberOrZero(this._rescc['stale-if-error']) > this.age();
+     }
+ 
+@@ -713,6 +737,7 @@
+      * @returns {boolean} `true` if `stale-while-revalidate` is currently allowed.
+      */
+     useStaleWhileRevalidate() {
++        if (this._requiresSynchronousRevalidation()) return false;
+         const swr = toNumberOrZero(this._rescc['stale-while-revalidate']);
+         return swr > 0 && this.maxAge() + swr > this.age();
+     }

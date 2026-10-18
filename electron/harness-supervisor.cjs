@@ -3,12 +3,14 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { HARNESS_VERSION, HARNESS_RUNTIME_DIRECTORY } = require('./harness-desktop-runtime.cjs');
+const { verifyHarnessLaunchRuntime } = require('./harness-launch-runtime.cjs');
+const { prepareAutomationMigration } = require('./harness-automation-migration.cjs');
 
 const READY_PATTERN = /dsh web:\s*(http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]{24,256}|http:\/\/127\.0\.0\.1:\d+)/i;
 const SOFTWARE_MANAGED_CREDENTIALS = new Set(['DEEPSEEK_API_KEY']);
 const SOFTWARE_MANAGED_NETWORK = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
-const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DSH_BIN', 'DSH_DESKTOP_PATCH']);
-const HARNESS_VERSION = '0.1.6-alpha.1';
+const SOFTWARE_MANAGED_RUNTIME = new Set(['DSH_BUNDLED_SKILL_DIR', 'DSH_DESKTOP_DOCX_TOOL', 'DSH_DESKTOP_XLSX_TOOL', 'DSH_DESKTOP_PPTX_TOOL', 'DSH_DESKTOP_WIKI_TOOL', 'DSH_DESKTOP_WIKI_CONFIG', 'DSH_DESKTOP_WIKI_HISTORY_SOURCE', 'DSH_DESKTOP_NODE', 'DSH_DESKTOP_DSH_BIN', 'DSH_DESKTOP_PATCH', 'DSH_DESKTOP_PWSH']);
 
 const stripAnsi = (value) => String(value || '').replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, '');
 const redactHarnessLog = (value) => stripAnsi(value).replace(
@@ -56,17 +58,22 @@ const provisionDesktopShellEnvPlugin = async ({ homeDir, sourceDir, expectedName
     throw error;
   }
 
-  const targetDir = path.join(homeDir, 'profiles', 'node_modules', expectedName);
-  try {
-    const stat = await fsp.lstat(targetDir);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      const error = new Error('DSH Desktop 的固定工具环境桥接目录不安全。');
-      error.code = 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE';
-      throw error;
+  // alpha.2 ignores the old shared profiles/node_modules projection. Its
+  // resolver continues native lookup from DSH_HOME after the official table.
+  // Keep host-owned packages outside the profile's pnpm-managed directory.
+  const targetDir = path.join(homeDir, 'node_modules', expectedName);
+  for (const directory of [homeDir, path.join(homeDir, 'node_modules'), targetDir]) {
+    try {
+      const stat = await fsp.lstat(directory);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        const error = new Error('DSH Desktop 的固定工具环境桥接目录不安全。');
+        error.code = 'HARNESS_SHELL_ENV_PLUGIN_TARGET_UNSAFE';
+        throw error;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      await fsp.mkdir(directory, { recursive: true });
     }
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-    await fsp.mkdir(targetDir, { recursive: true });
   }
 
   const files = [
@@ -139,7 +146,7 @@ const resolveHarnessRuntimePaths = ({ rootDir, resourcesPath, isPackaged, env = 
 
   const dshRelative = path.join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   const packagedNodeModules = path.join(resourcesPath, 'harness', 'node_modules');
-  const hoistedNodeModules = path.join(rootDir, 'vendor', `harness-hoisted-${HARNESS_VERSION}-desktop-security-1`, 'node_modules');
+  const hoistedNodeModules = path.join(rootDir, 'vendor', HARNESS_RUNTIME_DIRECTORY, 'node_modules');
   const vendorNodeModules = path.join(rootDir, 'vendor', `harness-${HARNESS_VERSION}`, 'node_modules');
   const dshBinPath = firstExistingFile(isPackaged
     ? [path.join(resourcesPath, 'harness', dshRelative)]
@@ -419,6 +426,7 @@ class HarnessSupervisor extends EventEmitter {
     this.generation = 0;
     this.activeGeneration = 0;
     this.stopRequestedGeneration = 0;
+    this.runtimeVerification = null;
     this.state = Object.freeze({ status: 'idle', url: null, pid: null, error: null });
   }
 
@@ -516,7 +524,7 @@ class HarnessSupervisor extends EventEmitter {
   start() {
     if (this.state.status === 'running') return Promise.resolve(this.state.url);
     if (this.readyPromise && this.state.status === 'starting') return this.readyPromise;
-    if (this.child) {
+    if (this.child || this.runtimeVerification || this.state.status === 'stopping') {
       return Promise.reject(createLifecycleError(
         '已有 Harness 进程尚未结束，请先停止或重启后再试。',
         'HARNESS_PROCESS_STILL_ACTIVE'
@@ -544,6 +552,16 @@ class HarnessSupervisor extends EventEmitter {
     await fsp.mkdir(path.dirname(this.options.logFile), { recursive: true });
     if (!this._isLaunchAllowed(generation)) return;
     const runtime = resolveHarnessRuntimePaths(this.options);
+    // The injectable verifier is only a main-process test seam, like spawnImpl.
+    // Production always validates the fixed official descriptor, Node and PS7.
+    const controller = new AbortController();
+    const check = { generation, controller };
+    this.runtimeVerification = check;
+    check.promise = Promise.resolve().then(() => (this.options.verifyRuntime || verifyHarnessLaunchRuntime)(this.options, runtime, controller.signal));
+    let verifiedRuntime;
+    try { verifiedRuntime = await check.promise; }
+    finally { if (this.runtimeVerification === check) this.runtimeVerification = null; }
+    if (!this._isLaunchAllowed(generation)) return;
     const { nodePath, dshBinPath, patchPath, bundledSkillDir, docxToolPath, xlsxToolPath, pptxToolPath, wikiToolPath, shellEnvPluginDir } = runtime;
     const processHostPath = resolveHarnessProcessHostPath(this.options);
     await provisionDesktopShellEnvPlugin({ homeDir: this.options.homeDir, sourceDir: shellEnvPluginDir });
@@ -551,6 +569,10 @@ class HarnessSupervisor extends EventEmitter {
     const credentialHost = await this.options.createCredentialHost?.({ homeDir: this.options.homeDir, runtime, provisionPlugin: provisionDesktopShellEnvPlugin });
     if (!this._isLaunchAllowed(generation)) return;
     this.credentialHost = credentialHost;
+
+    const automation = await prepareAutomationMigration({ homeDir: this.options.homeDir, basePatchPath: credentialHost?.patchPath || patchPath });
+    if (!this._isLaunchAllowed(generation)) return;
+    this._setState({ automationMigration: { held: automation.state.decision === 'hold', reason: automation.state.reason } });
 
     let child;
     try {
@@ -571,12 +593,13 @@ class HarnessSupervisor extends EventEmitter {
         this.options.wikiHistorySourcePath || path.join(path.dirname(this.options.homeDir), 'wiki-history-source.json')
       );
       environment.DSH_DESKTOP_NODE = nodePath;
+      environment.DSH_DESKTOP_PWSH = verifiedRuntime.powerShellExecutable;
       delete environment.DSH_DESKTOP_CREDENTIAL_MODULE;
       if (credentialHost?.providerModule) environment.DSH_DESKTOP_CREDENTIAL_MODULE = credentialHost.providerModule;
       delete environment.DSH_DESKTOP_TOOL_MODULE;
       if (credentialHost?.toolsModule) environment.DSH_DESKTOP_TOOL_MODULE = credentialHost.toolsModule;
       const spawnImpl = this.options.spawnImpl || spawn;
-      child = spawnImpl(nodePath, [processHostPath, dshBinPath, 'web', '--patch', credentialHost?.patchPath || patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
+      child = spawnImpl(nodePath, [processHostPath, dshBinPath, 'web', '--patch', automation.patchPath, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: this.options.launchDir,
         env: environment,
         windowsHide: true,
@@ -632,6 +655,12 @@ class HarnessSupervisor extends EventEmitter {
       ));
     }
     this.stopRequestedGeneration = generation;
+    const check = this.runtimeVerification;
+    if (check?.generation === generation) {
+      this._setState({ status: 'stopping', url: null, error: null });
+      check.controller.abort();
+      await check.promise.catch(() => undefined);
+    }
     if (!child) {
       this._setState({ status: 'stopped', url: null, pid: null, error: null });
       return;

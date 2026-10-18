@@ -1,6 +1,82 @@
-# DSH Desktop
+# lulu（原 DSH Desktop）
 
-> V1.1.13 (`DSH-Desktop-Setup-1.1.13.exe`) is **installed and verified locally; public assets are pending**, adapting fixed Harness `0.1.6-alpha.1`. The official terminal is the primary entry; the consent-based compatibility terminal remains explicitly labelled. Extra canonical session-log upload is disabled in the desktop overlay. See the [release notes](docs/RELEASE_NOTES_v1.1.13.md). The Stable download below remains V1.1.12 until explicitly promoted.
+> **2026-10-19 本机已更新：** lulu **1.1.17 / Harness 0.2.1-rc.2** 已覆盖安装；16,041 个安装负载、资料权限、首启前保全和真实界面检查通过。正常退出后 29 个原会话文件、7 条草稿及 Key/代理保留；唯一新增会话格式文件已独立核对，集成已恢复。公开 Pre-release 仍 1.1.14，Stable 仍 1.1.12，正在完成源码 CI 和公开交付。[本轮安装与发布记录](docs/LULU_1.1.17_INSTALL_RELEASE_2026-10-19.md)。下方日期段落均保留其历史时点。
+
+> 2026-10-18 安装交接：qihsES真实Portable冷启动/541项运行库与终端八项通过；严格退出的唯一搜狗残留按用户接受风险单列，不称全绿。Codex dsh_agent已仅单行临停并私有备份，等待完整重启释放旧运行库后覆盖；本机1.1.16、公开1.1.14、Stable1.1.12尚未改变。[当前交接与证据](docs/LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。以下保留原时点。
+
+> 2026-10-18 冷启动修复：用户已接受搜狗退出残留风险；只读插件清单的有界重试已通过1148/1148源码测试。失败候选fA7r83/output已按授权清理，含修复双包dist-qihsES已构建且16041文件内容一致性检查通过，正在定向复验真实Portable；尚未覆盖/发布，本机1.1.16、公开1.1.14、Stable1.1.12不变。[当前证据与下一步](docs/LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。以下保留历史时点。
+
+> 2026-10-18 Stable续验：用户已授权完成后晋升Stable。1.1.17最终包设置/7布局与终端8项通过；严格退出仍有未闭合残留，待风险范围答复。本机1.1.16、公开Pre-release1.1.14、Stable1.1.12未变，尚未覆盖或发布。[最新证据及下一步](docs/LULU_RC2_STABLE_CONTINUATION_2026-10-18.md)。
+
+> 2026-10-18 08:08：官方复核没有新于0.2.1-rc.2的发布；现有1.1.17替代候选dist-fA7r83已补完整双包内容检查，Setup/Portable与展开程序各16041文件逐项一致。此次只做静态检查，未重打包、启动或安装，不能视作完整运行/交付通过。本机1.1.16、公开Pre-release1.1.14、Stable1.1.12不变。[证据与剩余范围](docs/LULU_RC2_PACKAGE_STATIC_2026-10-18.md)。
+
+> 2026-10-18 04:12：按用户决定取消输入法对照，失败候选MoXZ8p/output已永久清理且保留日志。替代候选 `dist-fA7r83` 已生成Setup/Portable，构建及包内版本/三处修复代码一致性检查通过；复用输入未变的1140源码证据，未启动额外GUI/模型/权限验证。SGTool历史退出残留仍未解决，未覆盖本机/公开/改Stable。[本轮范围与包摘要](docs/LULU_RC2_DELIVERY_SCOPE_2026-10-18.md)。
+
+> 2026-10-18 03:32 续作：1.1.17 / rc.2 的官方模型设置接线、菜单归属和终端验收契约已修正，最终源码1140/1140通过，开发态相关功能已验证；隔离退出Job仍残留SGTool，完整交付未通过。早期候选MoXZ8p不能安装/分发，修正后替代包尚未生成。用户已接受限定的隔离ACL风险；系统/输入法未改，本机1.1.16及公开通道不变。详见 [本轮续作](docs/LULU_RC2_CONTINUATION_2026-10-18.md)。下方为历史检查点。
+
+> 2026-10-18 V1.1.17 / Harness 0.2.1-rc.2 已接入正式源码和新 vendor 运行库，原生 Office、受限终端、认证 Host 与会话恢复均已实测；新生产依赖603项审计零已知漏洞。最终源码1072/1072全测和候选双包16041文件一致性通过；真实权限拒绝/单次允许行为通过，但退出Job未归零、隔离搜狗/LocalLow出现新增宽权限风险，待用户范围决定；首次使用弹窗测试契约也待修。未覆盖安装或发布。**本机仍1.1.16/alpha.2，公开Pre-release1.1.14、Stable1.1.12不变。** 官方新增 Search/Fetch 默认关闭。完整来源、失败与分层证据见 [rc.2 记录](docs/HARNESS_UPSTREAM_v0.2.1-rc.2.md)。下方保留历史时点。
+
+> **2026-10-17 当前目标：** 官方新发布 `0.2.1-alpha.5`，下一交付仍拟为 1.1.17，不再为旧 alpha.4 重复装配。新候选六层补丁/40 后像、冻结安装及 9 gate 完整构建已通过；37 文件源码专项为 1016 通过、1 项官方 Windows 条件跳过，严格门禁未记全绿。35 项安全消费者通过。生产运行库、真实 Windows 交互、最终双包及覆盖仍待验，**没有新安装包或发布**。本机及正式绑定仍 **1.1.16 / alpha.2**，公开 Pre-release **1.1.14**、Stable **1.1.12** 不变。见 [当前能力对比与分层证据](docs/HARNESS_UPSTREAM_v0.2.1-alpha.5.md)。下方段落保留原时点。
+
+> **2026-10-16 更新检查：** 官方已发布 `0.2.1-alpha.4`（含 alpha.3 增量），正在隔离适配，下一交付拟为 1.1.17。源码已退役桌面重复的插件安装/启停/更新入口，改为打开官方插件页，并保留只读健康和旧事务恢复；这批改动尚未打包、安装或公开。正式内核绑定及本机安装记录仍为 **1.1.16 / alpha.2**，公开 Pre-release **1.1.14**、Stable **1.1.12** 不变。旧隔离退出/历史/ACL 缺口不由官方更新追认为通过。见 [本轮能力对比与验证](docs/HARNESS_UPSTREAM_v0.2.1-alpha.4.md)。
+
+> 2026-10-11 19:05最新：本机lulu1.1.16/alpha.2已安装。原资料同次托盘正常退出及29历史/7草稿/加密Key/代理保留通过；唯一3+1官方空恢复标记由独立窄证明闭合，原比较失败保留。dsh_agent仅撤销本次临停行并保留其他设置，CLI启用及新Node限握手通过。隔离补测已验证即时清空/官方Stop归零，但等待退出超时被Job清理，退出后历史和该轮ACL仍未通过；无后台测试遗留，不重发全模型或打包。尚未完整交付，公开1.1.14/Stable1.1.12不变。 [证据及剩余验收](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。以下按原时点保留历史。
+
+1.1.17 的 `DSH-Desktop-Setup-1.1.17.exe` / `DSH-Desktop-Portable-1.1.17.exe` 当前包位于 `artifacts/stable-readiness-20261007/dist-qihsES/output/`；已包含设置导航、终端验收及插件清单冷启动修正，构建与完整双包内容、适用运行检查、覆盖安装及原资料保全已完成；已接受的严格退出残留风险仍保留，最终源码 CI 与公开交付尚未完成。失败候选 `dist-MoXZ8p/output`、`dist-fA7r83/output` 已按逐次授权删除，日志保留；更早 `dist-wktxIa` 仅为历史证据。上一版 1.1.16 的本地包保留于 `artifacts/stable-readiness-20261007/dist-JNNUUW/output/`，不是当前本机安装版本，亦未公开下载。
+
+> **2026-10-11 重启后最新状态：** 本机已覆盖为lulu1.1.16/官方0.2.1-alpha.2，独立版本身份、完整安装负载、资料权限及严格首启前保全已验；新完整源码976/976通过。原资料只读UI确认原工作区/17会话目录/加密Key/当前草稿附件正常，等待用户同次托盘退出及after核验。安装态窄测在首次输入阶段失败（提交计数缺失，不能证明零提交或零模型），正定位输入框操作，未宣称插话/Stop通过。dsh_agent暂时停用，恢复集成和CI/公开验收仍待完成。**公开Pre-release仍1.1.14，Stable仍1.1.12**。以下17:39之前的等待重启/未安装表述为历史时点。[准确进度](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> **2026-10-11 当前进度：** 1.1.16/官方0.2.1-alpha.2的最终候选JNNUUW已完成双包负载、品牌、Portable、生命周期/安全退出、真实模型权限/交接、代理及布局分项验收；归档原失败由严格的独立历史补证闭合，原报告保留。完整源码976项中975通过、唯一README断言修正后专项6/6，未伪称再次全量绿。已获授权并临停Codex的dsh_agent，等待用户完整重启以释放旧版占用，随后备份覆盖/资料保全/安装态及源码CI/公开验收。**尚未安装或公开1.1.16**：本机1.1.15、公开Pre-release1.1.14、Stable1.1.12不变。[证据、复用边界与继续位置](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。以下日期段落保留历史。
+
+> **2026-10-10 本地包清理：** 按用户要求仅保留1.1.15及以后安装包，旧包和7份旧展开目录已删除；C盘恢复至约13.60GB可用，不转存D盘。安装/公开/Stable版本不变，最新品牌修正仍未进入新包。下方“等待归档”已由此次清理决定取代，见[清理记录](docs/INSTALLER_CLEANUP_2026-10-10.md)。
+
+> **2026-10-10 当前源码 1.1.16 / Harness 0.2.1-alpha.2：** 用户确认携带现有新噜噜形象。新核已正式部署；975/975 全测及双包负载/身份检查通过后，实际视觉复核又发现上游 CSS 类名变化造成鲸鱼残留。已修复精确品牌接线，8项专项和开发态浅/深/窄三情境通过，**这项最新修正尚未重新全测和打包**。现有 `dist-YPbNuf` 仅为保留证据的未发布候选，不是推荐安装包。下一步等待两套旧候选归档、一次限定权限测试及安装前临停集成/重启的选择。本机仍1.1.15，公开Pre-release仍1.1.14，Stable仍1.1.12。见 [1.1.16记录](docs/RELEASE_NOTES_v1.1.16.md)。
+
+> **2026-10-09 本机已更新 1.1.15：** 按用户图片/视频将噜噜更新为黑色短发、眼镜和比耶造型，界面及九档图标共用新透明素材。912/912、新包运行、资料保全、安装版三情境通过；内核/功能/数据身份不变。1.1.15 未公开，Stable仍1.1.12。详见 [1.1.15 记录](docs/RELEASE_NOTES_v1.1.15.md)。下方1.1.14仍是已公开版本。
+
+本地文件为 `DSH-Desktop-Setup-1.1.15.exe` 与 `DSH-Desktop-Portable-1.1.15.exe`，位于 `artifacts/stable-readiness-20261007/dist-otcyNy/output/`；本机已覆盖安装，但尚无 1.1.15 公开下载。
+
+> **2026-10-09 交付完成：lulu 1.1.14 / Harness 0.2.1-alpha.1 已覆盖本机并公开 Pre-release。** 本地 912/912、发行提交 CI、四份文件匿名下载与完整 SHA-256 均通过，原会话/草稿/Key/代理保全，Obsidian 已同步。本次确认的 Windows 11 x64 范围内已达到 Stable 就绪条件，但**未晋升，Stable 仍为 1.1.12**。安装包未签名，既有主机风险和其他未验证范围继续披露。详见[公开交付证据](docs/LULU_PUBLIC_DELIVERY_2026-10-09.md)。以下旧日期段落仅为历史。
+
+日常迭代下载：[1.1.14 发布页](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.14) · [安装版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.14/DSH-Desktop-Setup-1.1.14.exe) · [便携版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.14/DSH-Desktop-Portable-1.1.14.exe)。Stable 通道不随日常迭代自动变化。
+
+> 2026-10-09 当前：本机已安装 **lulu 1.1.14 / Harness 0.2.1-alpha.1**；真实资料托盘退出后28份历史、7条草稿、Key及代理保留检查通过，临停集成已精确恢复。正在完成源码PR/CI及四资产公开Pre-release；尚未公开，Stable仍为1.1.12。详见[交付收尾记录](docs/LULU_RELEASE_READINESS_2026-10-09.md)。下方状态均保留其历史时点。
+
+> 2026-10-09 本机已覆盖为 **lulu V1.1.14 / Harness 0.2.1-alpha.1**，使用原安装目录与资料。安装前后108项选区权限/身份不变；安装态插话清空、官方Stop、托盘正常退出及历史落盘补证通过，原资料只读启动检查通过。仍待原资料正常退出后的保留比较、临停集成恢复及公开发行，**未公开、尚非Stable-ready，Stable仍为V1.1.12**。详见[本机安装验收](docs/LULU_INSTALLED_ACCEPTANCE_2026-10-09.md)；下方日期段落是历史状态。
+
+> 2026-10-08 当前候选：lulu V1.1.14 已部署固定 Harness 0.2.1-alpha.1，完整源码 911/911，Setup/Portable 构建与负载、便携版启动/终端/自行清理通过；最终包 Office/附件/布局、安全退出、真实模型审批和工作区交接、受控代理已有分项实测。归档恢复、备份覆盖及公开下载仍待验，**尚未 Stable-ready，未发布**。本机仍 V1.1.13，Codex 集成占用旧版运行时，未强制结束。用户确认本次仅承诺 **Windows 11 x64**；详见 [当前验收与交付状态](docs/LULU_STABLE_ACCEPTANCE_2026-10-07.md)。下方旧日期段落保留历史，不代表当前门禁。
+
+> 2026-10-07 原图视觉切片：用户已直接上传原图，透明全身噜噜接入界面与等比例 Windows 图标，蓝底图仅作参考。同步修复新内核品牌标记接线、分离浮窗图标继承和本地表单状态样式；不改业务、凭据、关闭托盘策略或数据身份。源码验证与截图以 [本轮证据](docs/LULU_VISUAL_FOLLOWUP_2026-10-07.md) 为准。**未覆盖本机安装、未打包发布**；下方“素材继续核对”为此前时点。
+
+> 当前 V1.1.14 源码增量：主窗口 × 改为隐藏到右下角托盘，托盘“退出 lulu”继续走安全退出；原生控件专项已验，尚未安装。原版噜噜高清素材与图标继续核对，不用近似角色替代。见 [交互与素材记录](docs/LULU_TRAY_AND_MASCOT_2026-10-07.md)。
+
+> 2026-10-07 正式源码候选：V1.1.14 已接入固定 **Harness 0.2.1-alpha.1**，已生成并实际运行 Windows 候选包；完整验收仍未通过，跨会话待发送附件丢失必须修复，Office UI 验收需适配新版契约。**这不是已覆盖安装或公开发布**：本机安装记录 V1.1.13、Stable V1.1.12 不变。最新分层证据见 [正式新核接线](docs/HARNESS_FORMAL_BINDING_2026-10-07.md)，下方旧段落保留原日期状态。
+
+> 2026-10-07 晚间：同一 V1.1.14 已生成官方 0.2.1-alpha.1 的独立运行库（289 个本地组件、14,173 文件）；冻结安装、667 项审计、五组实际原生组件及隔离宿主认证/重启会话恢复通过。正式接线、完整界面和安装态仍待验收；测试失败与修复分别记录在 [桌面运行库装配](docs/HARNESS_DESKTOP_RUNTIME_2026-10-07.md)。**正式固定内核、本机安装和 Stable 未变；不是新版安装包已交付。**
+
+> 2026-10-07 私有 PS7 候选已整合：官方 7.6.6 的 658 文件来源与签名通过，15 个窄源码文件、实际 PIPE/PTY 各 7 项和 40 文件干净重放已验；整合后根测试 706 项中 704 通过、2 原有跳过、零失败。修正 pnpm 隐式安装问题后已从缓存恢复并核对 Office/HCS/sharp/MCP 字节。新输入官方完整构建及原失败的两条真实 Loader 用例已通过；下一步为官方闭包及完整宿主/安装验收。正式内核与 Stable 未变。详见 [本轮证据](docs/HARNESS_PRIVATE_POWERSHELL_2026-10-07.md)，下方旧段落保留其历史时点。
+
+> 2026-10-07：继续 V1.1.14 / 0.2.1-alpha.1 隔离候选。Office 来源差异审查、原生负载和真实预览/导出通过；候选安全依赖分组修复及真实消费者通过，662 项审计零已知漏洞。Windows 沙箱 shell 仍待完整验收及私有 PS7 运行时范围决定。**没有换正式内核、覆盖安装或发布，Stable 不变。** 当前事实见 [Stable 就绪记录](docs/HARNESS_STABLE_READINESS_2026-10-07.md)；下方旧日期段落不代表当前全部门禁。
+
+> 2026-10-06 晚间：用户允许继续隔离构建/兼容验证，不包含换核或发行。0.2.1-alpha.1 完整源码构建已通过；新增 source-map-js 1.2.2 单项安全修复，新审计 662 项仍有 1 high。发现 Windows Office 原生可选包下载失败但 pnpm 退出 0，Office 尚不可验收。正式 alpha.2、安装与 Stable 不动。最新阶段结果见 [隔离构建记录](docs/HARNESS_021_BUILD_2026-10-06.md)。下方早间记录保留历史时点。
+
+> 2026-10-06：官方仍为 0.2.1-alpha.1。真实官方事件导出模块与显式缓存对照两轮各 4/4 通过，已检查的默认导出路径不调用缓存；不是完整产品安全验收，未豁免未撤回公告。候选与正式内核不改，未打包、安装或发布。下一步为限定风险裁决，见 [本轮范围与证据](docs/HARNESS_021_CACHE_REACHABILITY_2026-10-06.md)。
+
+> 2026-10-05：仍为未发布 V1.1.14，当前适配目标 Harness 0.2.1-alpha.1；正式绑定仍为 0.1.6-alpha.2。新依赖 4.3.0 未能证明解决残余安全门禁，Office 精确来源仍待核实；未换核、打包、覆盖安装或公开发布。见 [本轮复核](docs/HARNESS_021_SECURITY_RECHECK_2026-10-05.md)。下方日期段落保留历史状态。
+
+> 2026-10-03：按用户确认完成本地 lulu 视觉候选，采用指定的水豚噜噜形象；现有数据身份、功能和内核不变。仍为未发布 V1.1.14，未打包或覆盖安装；第三方角色公开分发授权尚未核实。验收进度与来源见 [视觉改造记录](docs/LULU_VISUAL_REBRAND_2026-10-03.md)。下方 DSH 名称及日期段落保留历史事实。
+
+> 2026-10-02：V1.1.14仍为未发布候选，目标Harness 0.2.0-rc.2。已验证候选输入准备和工作台重试反馈；正式绑定仍为0.1.6-alpha.2，尚未换核、覆盖安装或发布。详见[本轮边界与证据](docs/ITERATION_2026-10-02.md)。下方日期段落为历史状态。
+
+> 2026-09-27：官方仍为 0.1.7-rc.2，继续同一 V1.1.14。shell-env 已按执行所属会话生成独立工作目录快照，专项 2/2；全量 634 项、632 通过、2 跳过、零失败，前后源码摘要一致。根生产审计 5 包零发现。仅环境绑定窄修，显式路径授权、真实 Office/Wiki 与完整交付门禁仍开放；未换核、打包、覆盖安装或发布，安装 V1.1.13 与 Stable V1.1.12 不变。见 [本轮证据及下一步](docs/HARNESS_SHELL_BINDING_2026-09-27.md)。
+
+> 2026-09-26 reuse decision: keep this independent desktop host and use official capabilities wherever equivalent. Retired unused desktop file listing/text/media byte APIs; the existing official file preview bridge and guarded search remain. Official Office generation/checking is the next integration target, retaining distinct safety, backup and receipt semantics. This is still unpublished V1.1.14 source, not a new installed build. See the [reuse checklist](docs/OFFICIAL_DESKTOP_REUSE_2026-09-26.md).
+
+> 2026-09-26: V1.1.14 remains unpublished, targeting **0.1.7-rc.2** without adopting it yet. The desktop session-state bridge now consumes official inbox/jobs contracts (21 focused checks); six real local proxy/SSE checks passed twice. A stale workspace binding and tool-unload cleanup remain open, alongside full runtime and delivery gates. Fixed **0.1.6-alpha.2**, installed V1.1.13 and Stable V1.1.12 are unchanged. See the [bounded checkpoint](docs/HARNESS_RC2_BRIDGE_PREFLIGHT_2026-09-26.md).
+
+> 2026-09-25: V1.1.14 remains unpublished. Target **0.1.7-rc.2** passed nine isolated configuration/credential tests and a 58-dependency probe audit. Real profile migration and desktop IPC were exercised with synthetic credentials and mocked transport; full runtime/model/proxy/plugin and delivery gates remain open. The product still pins **0.1.6-alpha.2**; no installer, overwrite or release. See the [rc.2 assessment](docs/HARNESS_UPSTREAM_v0.1.7-rc.2.md). Earlier evidence applies only to its stated runtime.
+
+> V1.1.13 (`DSH-Desktop-Setup-1.1.13.exe`) is **installed and verified locally; publication is paused at a private draft because Portable checks failed**, adapting fixed Harness `0.1.6-alpha.1`. The official terminal is the primary entry; the consent-based compatibility terminal remains explicitly labelled. Extra canonical session-log upload is disabled in the desktop overlay. See the [release notes](docs/RELEASE_NOTES_v1.1.13.md). The Stable download below remains V1.1.12 until explicitly promoted.
 
 > [V1.1.12 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.12) is installed, verified and promoted by the maintainer on 2026-09-12. The four original release assets are unchanged. Old installer assets have been removed; source tags, release notes and verification history are retained.
 
@@ -31,6 +107,10 @@
 > DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. V1.1.12 Stable pins `dsh-v0.1.5-rc.2` at `fb2c4b9e698e30edb738bca4cf0618587db7d203` with the documented `desktop-security-1` dependency fixes. The desktop Stable label does not change Harness's developer-preview status.
 
 ## Why DSH Desktop
+
+2026-09-23: the same unpublished V1.1.14 candidate is preparing for released Harness `0.1.7-alpha.2`; the active runtime is still `0.1.6-alpha.2`. Settings-migration backup coverage is fixed (621 passed / 2 skipped in the final source suite). V4, Messages-only, new-runtime and delivery gates remain unverified; no new installer or release. See the [new preflight](docs/HARNESS_UPSTREAM_v0.1.7-alpha.2.md). Existing evidence below is not acceptance of the new target.
+
+V1.1.14 is an unpublished source candidate for Harness `0.1.6-alpha.2`. Its 621 source tests and real source-mode Office sidebar preview pass, but package/install and Office-kit source-availability gates remain open. `DSH-Desktop-Setup-1.1.14.exe` is the planned filename, not a currently available download. See the [candidate notes](docs/RELEASE_NOTES_v1.1.14.md). The installed daily build remains V1.1.13; Stable downloads remain V1.1.12.
 
 V1.1.12 (`DSH-Desktop-Setup-1.1.12.exe`) is the current Stable and is installed and verified locally. It adapts Harness `0.1.5-rc.2`, official Markdown/code/image/HTML/PDF previews and `present` deliverables. Duplicate ordinary desktop previews are removed; bounded search, Git Review, legacy references, Wiki and Office validation/receipts remain. Eight exact runtime security fixes are documented without changing upstream application sources. See the [release notes](docs/RELEASE_NOTES_v1.1.12.md) and [validation evidence](docs/VALIDATION.md).
 

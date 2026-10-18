@@ -4,7 +4,7 @@ export const name = 'dsh-desktop-shell-env';
 export const inject = ['shellEnv'];
 
 const VARIABLES = Object.freeze({
-  DSH_CWD: 'Absolute active DSH Desktop workspace path.',
+  DSH_CWD: 'Absolute workspace path of the session owning this shell execution.',
   DSH_DESKTOP_NODE: 'Absolute path to the DSH Desktop bundled Node.js runtime.',
   DSH_DESKTOP_DOCX_TOOL: 'Absolute path to the fixed DSH Desktop Word tool.',
   DSH_DESKTOP_XLSX_TOOL: 'Absolute path to the fixed DSH Desktop Excel tool.',
@@ -31,8 +31,19 @@ export function apply(ctx, environment = process.env) {
   ctx.shellEnv.register({
     name: 'dsh-desktop-runtime',
     variables: Object.freeze(Object.fromEntries(Object.entries(VARIABLES).map(([key, description]) => [key, Object.freeze({ description })]))),
-    resolve() {
-      return frozen;
+    resolve(execution) {
+      const session = execution?.agent?.session;
+      const header = session?.header;
+      const cwd = header?.cwd;
+      if (typeof header?.id !== 'string' || !header.id.trim()
+        || (session.id !== undefined && session.id !== header.id)
+        || typeof cwd !== 'string' || !path.isAbsolute(cwd)
+        || /[\u0000-\u001f\u007f]/.test(cwd)
+        || (process.platform === 'win32' && path.parse(cwd).root === '\\')) {
+        throw new Error('dsh-desktop-shell-env: an agent-bound workspace is required');
+      }
+      // Keep application paths fixed, but never reuse another session's cwd.
+      return Object.freeze({ ...frozen, DSH_CWD: path.resolve(cwd) });
     }
   });
 }

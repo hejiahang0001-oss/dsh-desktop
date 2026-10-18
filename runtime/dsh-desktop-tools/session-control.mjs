@@ -49,15 +49,57 @@ async function canonicalDirectory(value) {
 }
 async function baseline(ctx) {
   const abort = new AbortController(), iterator = ctx.sessionController.control(abort.signal)[Symbol.asyncIterator]();
-  try { const first = await iterator.next(); if (first.value?.type !== 'baseline') throw new Error('任务状态基线不可用。'); return first.value.value; }
+  try {
+    const first = await iterator.next(), state = first.value?.value;
+    if (first.value?.type !== 'baseline' || !isRecord(state) || !isRecord(state.projections)
+      || (Object.hasOwn(state, 'jobs') && !isRecord(state.jobs)) || Object.hasOwn(state, 'queues')) throw new Error('任务状态基线不可用。');
+    return state;
+  }
   finally { abort.abort(); await iterator.return?.(); }
+}
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+function controlActivity(ctx, control, sessionId, projection) {
+  const inbox = projection?.values?.inbox;
+  if (!isRecord(projection) || !Number.isSafeInteger(projection.asOfSeq) || projection.asOfSeq < -1
+    || !isRecord(projection.values) || !isRecord(inbox)
+    || !Array.isArray(inbox['next-turn']) || !Array.isArray(inbox['next-step'])) throw new Error('会话队列投影状态缺失或无效，未判定为空闲。');
+  let jobs;
+  if (Object.hasOwn(control, 'jobs')) {
+    // Pinned alpha.2 exposes jobs on the baseline, but already uses inbox projections.
+    jobs = control.jobs[sessionId];
+  } else {
+    // rc.2 moved jobs to the public session-id-fenced registry. Its event API
+    // distinguishes it from alpha.2's Agent-fenced list; never guess that owner.
+    const registry = ctx.get?.('jobs');
+    if (typeof registry?.list !== 'function' || typeof registry.events?.subscribe !== 'function') throw new Error('后台任务状态服务不可用，未判定为空闲。');
+    jobs = registry.list(sessionId);
+  }
+  if (!Array.isArray(jobs) || jobs.some((job) => !isRecord(job)
+    || !['running', 'stopping', 'completed', 'killed', 'failed'].includes(job.status)
+    || (job.owner !== undefined && job.owner !== sessionId))) throw new Error('后台任务状态缺失或无效，未判定为空闲。');
+  return { pending: inbox['next-turn'].length + inbox['next-step'].length,
+    queued: inbox['next-turn'].length, steering: inbox['next-step'].length,
+    liveJobs: jobs.filter((job) => ['running', 'stopping'].includes(job.status)).length };
 }
 async function workspaceActivity(ctx, directory, exceptId = '') {
   const catalog = await ctx.sessionController.list({}), state = await baseline(ctx);
   const ids = catalog.items.filter((row) => row.sessionId !== exceptId && row.cwd && pathKey(row.cwd) === pathKey(directory));
   const running = ids.filter((row) => row.running).length;
-  const pending = ids.reduce((sum, row) => sum + (state.queues[row.sessionId]?.length || 0), 0);
-  const jobs = ids.reduce((sum, row) => sum + (state.jobs[row.sessionId] || []).filter((j) => ['running', 'stopping'].includes(j.status)).length, 0);
+  let pending = 0, jobs = 0;
+  for (const row of ids) {
+    let observation;
+    try {
+      let projection = state.projections[row.sessionId];
+      if (projection === undefined) {
+        observation = await ctx.sessionQuery.observeSession(row.sessionId, { projectionMode: 'all' });
+        if (observation.header.id !== row.sessionId || !observation.header.cwd
+          || pathKey(observation.header.cwd) !== pathKey(directory)) throw new Error('会话投影状态不属于指定工作区。');
+        projection = observation.projections;
+      }
+      const activity = controlActivity(ctx, state, row.sessionId, projection);
+      pending += activity.pending; jobs += activity.liveJobs;
+    } finally { observation?.[Symbol.dispose](); }
+  }
   return { idle: !running && !pending && !jobs, running, pending, jobs };
 }
 function summary(ctx, observation, control, withHistory = true) {
@@ -69,12 +111,10 @@ function summary(ctx, observation, control, withHistory = true) {
     if (event.type === 'turn/start') turnOpen = true;
     if (event.type === 'turn/end') { turnOpen = false; pendingApprovals.clear(); lastTurnReason = event.data.reason?.kind || null; }
   }
-  const queue = control.queues[header.id] || [], jobs = control.jobs[header.id] || [];
+  const activity = controlActivity(ctx, control, header.id, observation.projections === undefined ? control.projections[header.id] : observation.projections);
   return { sessionId: header.id, workspacePath: header.cwd, cursor: observation.cursor,
     ...(withHistory ? { historyHash: digest(events) } : {}), eventCount: events.length, agentPreset: header.agentPreset || null,
-    running: agent?.status === 'running', pending: queue.length, queued: queue.filter((item) => item.placement === 'queued').length,
-    steering: queue.filter((item) => item.placement === 'steering').length, approvals: pendingApprovals.size,
-    liveJobs: jobs.filter((job) => ['running', 'stopping'].includes(job.status)).length, turnOpen, lastTurnReason };
+    running: agent?.status === 'running', ...activity, approvals: pendingApprovals.size, turnOpen, lastTurnReason };
 }
 export async function sessionControl(ctx, operation, request) {
   if (!['inspect', 'status', 'history-page', 'workspace-status', 'fork', 'task-create', 'task-prompt', 'task-status', 'task-cancel'].includes(operation) || !validId(request?.sessionId)) throw new Error('不支持此任务控制操作。');

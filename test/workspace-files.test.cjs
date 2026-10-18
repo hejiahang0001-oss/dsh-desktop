@@ -31,75 +31,28 @@ test('workspace paths are relative, normalized, and cannot traverse', () => {
   assert.throws(() => normalizeRelativePath('src//app.js'), WorkspaceFilesError);
 });
 
-test('workspace directory listing is lazy, sorted, and omits generated roots', async (context) => {
-  const root = createWorkspace(context);
-  const files = new WorkspaceFiles();
-  await files.activate(root);
-  const listing = await files.listDirectory('');
-
-  assert.deepEqual(listing.entries.map((entry) => entry.name), ['src', 'README.md']);
-  assert.equal(listing.entries[0].kind, 'directory');
-  assert.equal(listing.truncated, false);
-  assert.deepEqual((await files.listDirectory('src')).entries.map((entry) => entry.path), ['src/app.js']);
-});
-
-test('workspace file reader returns bounded UTF text and blocks secrets and binary data', async (context) => {
+test('workspace preview descriptors disclose no bytes and reject secrets and non-files', async (context) => {
   const root = createWorkspace(context);
   fs.writeFileSync(path.join(root, '.env'), 'DEEPSEEK_API_KEY=secret\n', 'utf8');
   fs.mkdirSync(path.join(root, 'secrets'));
   fs.writeFileSync(path.join(root, 'secrets', 'token.txt'), 'nested-secret\n', 'utf8');
   fs.mkdirSync(path.join(root, 'CrEdEnTiAlS'));
   fs.writeFileSync(path.join(root, 'CrEdEnTiAlS', 'api.txt'), 'mixed-case-secret\n', 'utf8');
-  fs.writeFileSync(path.join(root, 'image.bin'), Buffer.from([0, 1, 2, 3]));
-  fs.writeFileSync(path.join(root, 'large.txt'), 'x'.repeat(40));
   const files = new WorkspaceFiles();
   await files.activate(root);
 
-  const text = await files.readFile('src/app.js');
-  assert.equal(text.available, true);
-  assert.equal(text.language, 'JavaScript');
-  assert.match(text.content, /ready = true/);
-  assert.equal((await files.readFile('.env')).reason, 'restricted');
-  assert.equal((await files.readFile('secrets/token.txt')).reason, 'restricted');
-  assert.equal((await files.readFile('CrEdEnTiAlS/api.txt')).reason, 'restricted');
-  assert.equal((await files.listDirectory('secrets')).reason, 'restricted');
-  assert.equal((await files.readFile('image.bin')).reason, 'binary');
-  assert.equal((await files.readFile('large.txt', { maxBytes: 20 })).reason, 'too-large');
+  assert.deepEqual(await files.describeFile('src/app.js'), { path: 'src/app.js' });
+  for (const file of ['.env', 'secrets/token.txt', 'CrEdEnTiAlS/api.txt']) {
+    await assert.rejects(files.describeFile(file), { code: 'restricted' });
+  }
+  await assert.rejects(files.describeFile('src'), { code: 'not-file' });
+  await assert.rejects(files.describeFile('../outside.txt'), { code: 'path-traversal' });
+  await assert.rejects(files.describeFile(path.join(root, 'README.md')), { code: 'path-absolute' });
   assert.equal(isRestrictedWorkspaceFile('nested/private.pem'), true);
   assert.equal(isRestrictedWorkspaceFile('secrets/token.txt'), true);
 });
 
-test('workspace media preview validates supported image and PDF content within separate size limits', async (context) => {
-  const root = createWorkspace(context);
-  const png = Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    Buffer.from('preview')
-  ]);
-  fs.writeFileSync(path.join(root, 'preview.png'), png);
-  fs.writeFileSync(path.join(root, 'manual.pdf'), '%PDF-1.4\n%%EOF\n');
-  fs.writeFileSync(path.join(root, 'mislabeled.png'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]));
-  fs.writeFileSync(path.join(root, 'broken.jpg'), 'not-a-jpeg');
-  fs.writeFileSync(path.join(root, 'archive.zip'), 'unsupported');
-  const files = new WorkspaceFiles();
-  await files.activate(root);
-
-  const image = await files.readPreviewFile('preview.png');
-  assert.equal(image.available, true);
-  assert.equal(image.kind, 'image');
-  assert.equal(image.mimeType, 'image/png');
-  assert.equal(Buffer.from(image.base64, 'base64').equals(png), true);
-  const pdf = await files.readPreviewFile('manual.pdf');
-  assert.equal(pdf.available, true);
-  assert.equal(pdf.kind, 'pdf');
-  const mislabeled = await files.readPreviewFile('mislabeled.png');
-  assert.equal(mislabeled.available, true);
-  assert.equal(mislabeled.mimeType, 'image/jpeg');
-  assert.equal(mislabeled.extensionMismatch, true);
-  assert.equal((await files.readPreviewFile('broken.jpg')).reason, 'invalid-media');
-  assert.equal((await files.readPreviewFile('archive.zip')).reason, 'unsupported');
-});
-
-test('workspace file reader never follows a directory link outside the workspace', async (context) => {
+test('workspace preview descriptors never follow a directory link outside the workspace', async (context) => {
   const root = createWorkspace(context);
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-workspace-outside-'));
   context.after(() => fs.rmSync(outside, { recursive: true, force: true }));
@@ -108,10 +61,7 @@ test('workspace file reader never follows a directory link outside the workspace
   const files = new WorkspaceFiles();
   await files.activate(root);
 
-  const listing = await files.listDirectory('');
-  assert.equal(listing.entries.find((entry) => entry.name === 'outside-link').kind, 'link');
-  await assert.rejects(() => files.listDirectory('outside-link'), WorkspaceFilesError);
-  assert.equal((await files.readFile('outside-link/note.txt')).reason, 'link');
+  await assert.rejects(files.describeFile('outside-link/note.txt'), { code: 'link' });
 });
 
 test('workspace filename search is bounded and skips generated and linked directories', async (context) => {

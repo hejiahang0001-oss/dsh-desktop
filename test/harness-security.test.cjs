@@ -5,10 +5,11 @@ const path = require('node:path');
 const { digest, policy, renderWorkspace, verifySecurity } = require('../scripts/apply-harness-security.cjs');
 const { matchingAdvisories } = require('../scripts/audit-harness-runtime.cjs');
 
-test('security lock is fixed, reviewed, and confined to nine exact-version selectors', () => {
+test('security lock is fixed, reviewed, and confined to ten exact-version selectors', () => {
   const bytes = fs.readFileSync(path.join(__dirname, '../runtime/harness-security/pnpm-lock.yaml'));
   assert.equal(digest(bytes), policy.lockSha256);
-  assert.equal(Object.keys(policy.overrides).length, 9);
+  assert.equal(Object.keys(policy.overrides).length, 10);
+  assert.equal(policy.overrides['fflate@0.8.2'], '0.8.3');
   for (const [selector, fixed] of Object.entries(policy.overrides)) {
     assert.match(selector, /@\d+\.\d+\.\d+$/);
     assert.match(fixed, /^\d+\.\d+\.\d+$/);

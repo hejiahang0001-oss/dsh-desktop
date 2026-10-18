@@ -1,7 +1,8 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$ExecutablePath,
-  [string]$ExpectedProductName = 'DSH Desktop',
+  [string]$ExpectedProductName = 'lulu',
+  [string]$ExpectedExecutableName = 'DSH Desktop',
   [string]$ExpectedVersion = ''
 )
 
@@ -31,11 +32,11 @@ function Get-NormalizedVersion([string]$Value) {
 $expectedNormalizedVersion = Get-NormalizedVersion $ExpectedVersion
 $fileNormalizedVersion = Get-NormalizedVersion $actualFileVersion
 $productNormalizedVersion = Get-NormalizedVersion $actualProductVersion
-$expectedOriginalFilename = "$ExpectedProductName.exe"
+$expectedOriginalFilename = "$ExpectedExecutableName.exe"
 $originalFilenameAllowed = [string]::IsNullOrEmpty($info.OriginalFilename) -or $info.OriginalFilename -eq $expectedOriginalFilename
 $valid = $info.ProductName -eq $ExpectedProductName `
   -and $info.FileDescription -eq $ExpectedProductName `
-  -and $info.InternalName -eq $ExpectedProductName `
+  -and $info.InternalName -eq $ExpectedExecutableName `
   -and $null -ne $expectedNormalizedVersion `
   -and $fileNormalizedVersion -eq $expectedNormalizedVersion `
   -and $productNormalizedVersion -eq $expectedNormalizedVersion `
@@ -47,6 +48,7 @@ $result = [ordered]@{
   ok = $valid
   path = $resolvedExecutable
   expectedProductName = $ExpectedProductName
+  expectedExecutableName = $ExpectedExecutableName
   expectedVersion = $ExpectedVersion
   productName = $info.ProductName
   fileDescription = $info.FileDescription

@@ -13,7 +13,9 @@ test('tray supervision uses fixed native surfaces and is packaged', () => {
   assert.match(main, /new AgentTransitionTracker/);
   assert.match(main, /--tray-smoke-file=/);
   assert.match(main, /isBackgroundSupervisionRequired\(agentDiagnostics\)/);
-  assert.match(main, /Agent 正在等待确认，可从托盘重新打开/);
+  assert.match(main, /mainWindow\.on\('close', createCloseToTrayHandler/);
+  assert.match(main, /isQuitting: \(\) => Boolean\(appIsClosing\(\) \|\| quitOperationPromise\)/);
+  assert.match(main, /label: '退出 lulu', click: \(\) => \{ requestApplicationQuit\('explicit-exit'\)/);
   assert.ok(manifest.build.files.includes('build/icon.ico'));
 });
 

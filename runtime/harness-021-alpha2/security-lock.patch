@@ -1,0 +1,170 @@
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index dfaa1653..769bb547 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -5,6 +5,8 @@ settings:
+   excludeLinksFromLockfile: false
+ 
+ overrides:
++  http-cache-semantics: 4.3.0
++  fflate@0.8.2: 0.8.3
+   extract-zip>yauzl: 3.4.0
+   '@deepseek-ai/cosmokit': link:vendor/cosmokit
+   '@deepseek-ai/schemastery': link:vendor/schemastery
+@@ -16,6 +18,7 @@ patchedDependencies:
+   '@fortune-sheet/react@1.0.4': 2932e52e79afcd4ced08cfa123b5eded786c85043da32f622f3e80af6fc96c37
+   '@yao-pkg/pkg@6.21.0': 75891fc22b277c145cafeab83e41baf4a70f5b8fe6dc0801c6a0b922d7ee88c7
+   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
++  http-cache-semantics@4.3.0: c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403
+   node-pty@1.2.0-beta.15: 9d30053266d0f39d3debe894c675867f6782da6bcadbc94a693b3cfb9eff8ed0
+ 
+ importers:
+@@ -115,12 +118,12 @@ importers:
+       '@types/node':
+         specifier: ^22.20.1
+         version: 22.20.1
+-      '@types/semver':
+-        specifier: ^7.8.0
+-        version: 7.8.0
+       '@types/papaparse':
+         specifier: ^5.5.2
+         version: 5.5.2
++      '@types/semver':
++        specifier: ^7.8.0
++        version: 7.8.0
+       '@types/spdx-expression-parse':
+         specifier: ^4.0.0
+         version: 4.0.0
+@@ -146,7 +149,7 @@ importers:
+         specifier: ^4.9.0
+         version: 4.9.0
+       fflate:
+-        specifier: ^0.8.2
++        specifier: 0.8.3
+         version: 0.8.3
+       istanbul-lib-report:
+         specifier: ^3.0.1
+@@ -917,7 +920,7 @@ importers:
+         specifier: ^4.7.0
+         version: 4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.13)(yaml@2.9.0))
+       fflate:
+-        specifier: ^0.8.2
++        specifier: 0.8.3
+         version: 0.8.3
+       http-server:
+         specifier: ^14.1.1
+@@ -11691,7 +11694,7 @@ importers:
+         specifier: link:../../../vendor/schemastery
+         version: link:../../../vendor/schemastery
+       fflate:
+-        specifier: ^0.8.2
++        specifier: 0.8.3
+         version: 0.8.3
+     devDependencies:
+       '@deepseek-ai/cordis':
+@@ -15641,10 +15644,6 @@ importers:
+ 
+ packages:
+ 
+-  papaparse@5.5.3:
+-    resolution: {integrity: sha512-5QvjGxYVjxO59MGU2lHVYpRWBBtKHnlIAcSe1uNFCkkptUh63NFRj0FJQm7nR67puEruUci/ZkjmEFrjCAyP4A==}
+-
+-
+   '@agentclientprotocol/sdk@1.4.0':
+     resolution: {integrity: sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==}
+     peerDependencies:
+@@ -20223,9 +20222,6 @@ packages:
+     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
+     engines: {node: ^12.20 || >= 14.13}
+ 
+-  fflate@0.8.2:
+-    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
+-
+   fflate@0.8.3:
+     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+ 
+@@ -20515,8 +20511,8 @@ packages:
+   html-void-elements@3.0.0:
+     resolution: {integrity: sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg==}
+ 
+-  http-cache-semantics@4.2.0:
+-    resolution: {integrity: sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ==}
++  http-cache-semantics@4.3.0:
++    resolution: {integrity: sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA==}
+ 
+   http-errors@2.0.1:
+     resolution: {integrity: sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ==}
+@@ -21701,6 +21697,9 @@ packages:
+   pako@1.0.11:
+     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
+ 
++  papaparse@5.5.3:
++    resolution: {integrity: sha512-5QvjGxYVjxO59MGU2lHVYpRWBBtKHnlIAcSe1uNFCkkptUh63NFRj0FJQm7nR67puEruUci/ZkjmEFrjCAyP4A==}
++
+   papaparse@5.7.0:
+     resolution: {integrity: sha512-qBGxg/7Q3Kl9Wfhrz2Z74UnvnHTXLNG6jmKJFeBvP2+y4lV7So+7SR62+Zd47JvdrCkX+nDcnr0ObPzek/+6RA==}
+ 
+@@ -23227,9 +23226,6 @@ packages:
+ 
+ snapshots:
+ 
+-  papaparse@5.5.3: {}
+-
+-
+   '@agentclientprotocol/sdk@1.4.0(zod@4.4.3)':
+     dependencies:
+       zod: 4.4.3
+@@ -23825,7 +23821,7 @@ snapshots:
+ 
+   '@deepseek-ai/libreoffice-kit@0.1.5':
+     dependencies:
+-      fflate: 0.8.2
++      fflate: 0.8.3
+       fontkit: 2.0.4
+       koffi: 3.1.1
+       saxes: 6.0.0
+@@ -26683,7 +26679,7 @@ snapshots:
+     dependencies:
+       '@types/http-cache-semantics': 4.2.0
+       get-stream: 9.0.1
+-      http-cache-semantics: 4.2.0
++      http-cache-semantics: 4.3.0(patch_hash=c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403)
+       keyv: 5.6.0
+       mimic-response: 4.0.0
+       normalize-url: 8.1.1
+@@ -26693,7 +26689,7 @@ snapshots:
+     dependencies:
+       clone-response: 1.0.3
+       get-stream: 5.2.0
+-      http-cache-semantics: 4.2.0
++      http-cache-semantics: 4.3.0(patch_hash=c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403)
+       keyv: 4.5.4
+       lowercase-keys: 2.0.0
+       normalize-url: 6.1.0
+@@ -27764,8 +27760,6 @@ snapshots:
+       node-domexception: 1.0.0
+       web-streams-polyfill: 3.3.3
+ 
+-  fflate@0.8.2: {}
+-
+   fflate@0.8.3: {}
+ 
+   figures@6.1.0:
+@@ -28137,7 +28131,7 @@ snapshots:
+ 
+   html-void-elements@3.0.0: {}
+ 
+-  http-cache-semantics@4.2.0: {}
++  http-cache-semantics@4.3.0(patch_hash=c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403): {}
+ 
+   http-errors@2.0.1:
+     dependencies:
+@@ -29443,6 +29437,8 @@ snapshots:
+ 
+   pako@1.0.11: {}
+ 
++  papaparse@5.5.3: {}
++
+   papaparse@5.7.0: {}
+ 
+   parse-ms@4.0.0: {}

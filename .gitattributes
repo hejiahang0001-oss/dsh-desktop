@@ -14,3 +14,10 @@ LICENSE text eol=lf
 *.py text eol=lf
 *.ps1 text eol=crlf
 *.ico binary
+
+# Fixed upstream sources and patches are SHA-256 pinned. Preserve their LF bytes
+# on Windows checkouts as well as in the index; patch context spaces are syntax.
+runtime/**/*.ts text eol=lf
+runtime/**/*.patch text eol=lf
+runtime/**/*.txt text eol=lf
+runtime/**/*.map text eol=lf

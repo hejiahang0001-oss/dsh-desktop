@@ -142,6 +142,105 @@ const isAgentActionSettled = (action, state = {}) => (
   || (action === 'focus-latest-change' && !state.canFocusChange)
 );
 
+// Serialized into the official renderer; use public DOM semantics only. rc.2
+// supplies an Account menu launcher, while installations without that plugin
+// retain the direct Settings button. Neither path reads settings field values.
+async function navigateModelsSettings(labels) {
+  const visible = (element) => {
+    if (!element) return false;
+    const box = element.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0 || box.right <= 0 || box.bottom <= 0
+      || box.left >= innerWidth || box.top >= innerHeight) return false;
+    for (let node = element; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (node.hidden || node.inert || node.getAttribute('aria-hidden') === 'true'
+        || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)
+        || Number(style.opacity) === 0) return false;
+    }
+    return true;
+  };
+  const usable = (element) => {
+    if (!visible(element) || element.disabled || element.getAttribute('aria-disabled') === 'true') return false;
+    const box = element.getBoundingClientRect();
+    const x = (box.left + box.right) / 2, y = (box.top + box.bottom) / 2;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
+    const hit = document.elementFromPoint(x, y);
+    return hit === element || element.contains(hit);
+  };
+  const text = (node) => {
+    if (node.nodeType === 3) return node.textContent || '';
+    if (node.nodeType !== 1 || node.hidden || node.getAttribute('aria-hidden') === 'true') return '';
+    return Array.from(node.childNodes).map(text).join('');
+  };
+  const name = (element) => (element.getAttribute('aria-label') || text(element)).replace(/\s+/g, ' ').trim();
+  const named = (scope, selector, accepted) => Array.from(scope.querySelectorAll(selector))
+    .filter(element => visible(element) && accepted.includes(name(element)));
+  const unique = (scope, selector, accepted) => {
+    const candidates = named(scope, selector, accepted);
+    return candidates.length === 1 && usable(candidates[0]) ? candidates[0] : null;
+  };
+  const containers = selector => Array.from(document.querySelectorAll(selector)).filter(visible);
+  const settingsDialog = () => {
+    const dialogs = containers('[role="dialog"][aria-modal="true"]');
+    if (dialogs.length !== 1) return null;
+    const dialog = dialogs[0];
+    const title = (dialog.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
+      .map(id => document.getElementById(id)).filter(Boolean).map(text).join(' ').trim();
+    return dialog.getAttribute('data-shortcut-modal') === 'settings'
+      || labels.settings.includes(dialog.getAttribute('aria-label') || title) ? dialog : null;
+  };
+  const waitFor = async (check) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const value = check();
+      if (value) return value;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return null;
+  };
+  const click = element => { element.click(); element.focus({ preventScroll: true }); };
+  const accountLabels = ['账号菜单', 'Account menu'];
+  const accountSelector = 'button[aria-haspopup="menu"], [role="button"][aria-haspopup="menu"]';
+  const settingsItem = () => {
+    const account = unique(document, accountSelector, accountLabels);
+    if (!account || account.getAttribute('aria-expanded') !== 'true') return null;
+    const menus = containers('[role="menu"]');
+    return menus.length === 1 ? unique(menus[0], '[role="menuitem"]', labels.settings) : null;
+  };
+  if (!settingsDialog()) {
+    if (containers('[role="dialog"][aria-modal="true"]').length > 0) return false;
+    if (containers('[role="menu"]').length > 0) {
+      const item = settingsItem();
+      if (!item) return false;
+      click(item);
+    } else {
+      if (named(document, accountSelector, accountLabels).length > 0) {
+        const account = unique(document, accountSelector, accountLabels);
+        if (!account) return false;
+        click(account);
+        const item = await waitFor(settingsItem);
+        if (!item) return false;
+        click(item);
+      } else {
+        const direct = unique(document, 'button[aria-haspopup="dialog"], [role="button"][aria-haspopup="dialog"]', labels.settings);
+        if (!direct) return false;
+        click(direct);
+      }
+    }
+    if (!await waitFor(settingsDialog)) return false;
+  }
+  const modelsControl = () => {
+    const dialog = settingsDialog();
+    return dialog ? unique(dialog, 'button, [role="button"], [role="tab"]', labels.models) : null;
+  };
+  const models = await waitFor(modelsControl);
+  if (!models) return false;
+  click(models);
+  return Boolean(await waitFor(() => {
+    const selected = modelsControl();
+    return selected?.getAttribute('aria-current') === 'true' ? selected : null;
+  }));
+}
+
 const getHarnessUiActionScript = (action) => {
   if (!SUPPORTED_ACTIONS.includes(action)) {
     throw new Error(`Unsupported Harness UI action: ${action}`);
@@ -255,12 +354,7 @@ const getHarnessUiActionScript = (action) => {
       }
       return false;
     }
-    if (!activate(labels.settings)) return false;
-    const models = await waitForControl(labels.models);
-    if (!models || models.disabled) return false;
-    models.click();
-    models.focus({ preventScroll: true });
-    return true;
+    return (${navigateModelsSettings.toString()})(labels);
   })()`;
 };
 

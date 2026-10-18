@@ -50,6 +50,68 @@ function clientHarness(resolvePreview) {
   return { window, opened, switch: () => { current = otherId; }, subagent: () => { currentAddress = {}; }, dispose: () => dispose() };
 }
 
+function alpha2ClientHarness(resolvePreview) {
+  let plugin, dispose;
+  const list = { phase: 'ready', byId: { [sessionId]: { id: sessionId, retainedBy: { mainView: 1 } } } };
+  const state = { sessionId, openState: 'open', removed: false, subagent: false };
+  const diagnostics = { workspaceSync: { status: 'synced', sessionId } };
+  let binding = { sessionId, session: { getSnapshot: () => state } };
+  const opened = [];
+  const window = { desktopAPI: { files: { resolvePreview }, diagnostics: { getState: async () => diagnostics } },
+    __ModuleLoader__: { load: (row) => { plugin = row.factory(); } } };
+  vm.runInNewContext(fs.readFileSync(path.resolve('runtime/dsh-desktop-tools/client.js'), 'utf8'), { window });
+  plugin.apply({ sessions: { list: { getSnapshot: () => list }, binding: () => binding },
+    sidebarRight: { openResource: (address) => opened.push(address), openTab: (kind) => opened.push(kind) },
+    effect: (effect) => { dispose = effect(); } });
+  return { window, list, state, diagnostics, opened,
+    rebind: () => { binding = { ...binding }; }, dispose: () => dispose() };
+}
+
+test('alpha.2 file and terminal navigation use the one retained main-session binding', async () => {
+  const address = `dsh-resource://file/session/${sessionId}/中文.pdf`;
+  const client = alpha2ClientHarness(async () => ({ available: true, sessionId, address }));
+  assert.equal(await client.window.__DSH_OFFICIAL_FILES__.openFile('中文.pdf', 'C:/workspace'), true);
+  assert.equal(client.window.__DSH_OFFICIAL_FILES__.openTerminal(sessionId), true);
+  assert.deepEqual(client.opened, [address, 'terminal']);
+  client.dispose();
+  assert.equal(client.window.__DSH_OFFICIAL_FILES__, undefined);
+});
+
+test('alpha.2 navigation rejects unready, ambiguous, removed, subagent and unsynced sessions', async () => {
+  for (const invalidate of [
+    (client) => { client.list.phase = 'loading'; },
+    (client) => { client.list.byId[sessionId].retainedBy.mainView = 0; },
+    (client) => { client.list.byId[otherId] = { id: otherId, retainedBy: { mainView: 1 } }; },
+    (client) => { client.state.openState = 'closed'; },
+    (client) => { client.state.removed = true; },
+    (client) => { client.state.subagent = true; }
+  ]) {
+    let grants = 0;
+    const client = alpha2ClientHarness(async () => { grants += 1; });
+    invalidate(client);
+    await assert.rejects(client.window.__DSH_OFFICIAL_FILES__.openFile('a.pdf', 'C:/workspace'), /主会话/);
+    assert.throws(() => client.window.__DSH_OFFICIAL_FILES__.openTerminal(sessionId), /主会话/);
+    assert.equal(grants, 0);
+    assert.deepEqual(client.opened, []);
+  }
+  const unsynced = alpha2ClientHarness(async () => { assert.fail('unsynced session must not request a file grant'); });
+  unsynced.diagnostics.workspaceSync.status = 'pending';
+  await assert.rejects(unsynced.window.__DSH_OFFICIAL_FILES__.openFile('a.pdf', 'C:/workspace'), /主会话/);
+  assert.deepEqual(unsynced.opened, []);
+});
+
+test('alpha.2 preview drops a grant when the retained binding changes during resolution', async () => {
+  let finish, entered;
+  const resolving = new Promise((resolve) => { entered = resolve; });
+  const client = alpha2ClientHarness(() => new Promise((resolve) => { finish = resolve; entered(); }));
+  const opening = client.window.__DSH_OFFICIAL_FILES__.openFile('a.pdf', 'C:/workspace');
+  await resolving;
+  client.rebind();
+  finish({ available: true, sessionId, address: `dsh-resource://file/session/${sessionId}/a.pdf` });
+  await assert.rejects(opening, /会话或打开请求已变化/);
+  assert.deepEqual(client.opened, []);
+});
+
 test('desktop browser plugin delegates only to public official Sidebar navigation', async () => {
   const address = `dsh-resource://file/session/${sessionId}/a.pdf`;
   const client = clientHarness(async () => ({ available: true, sessionId, address }));

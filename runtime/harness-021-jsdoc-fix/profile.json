@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.1-alpha.1",
+  "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc",
+  "parentProfileSha256": "d2fc99e31af460d331086fd24d7bf34846e226219f75e6f3977d9444f7b25909",
+  "parentPatchSha256": "793617936b76cc3a630b8e8eaa22043dfd727f3e38dd8e008f91fb76b94f77e3",
+  "patchSha256": "3bcb3d670d08755afbe25202d53cfc9f2226a26db79da8714424ede17105a437",
+  "scope": "private-powershell-export-jsdoc-comments-only",
+  "review": {
+    "status": "independent-review-passed",
+    "reviewer": "stable_patch_review",
+    "commentStrippedTypeScriptUnchanged": true,
+    "emittedJavaScriptUnchanged": true
+  },
+  "verification": {
+    "proposal": "artifacts/stable-readiness-20261007/jsdoc/proposal-v1/result.json",
+    "command": "artifacts/stable-readiness-20261007/jsdoc/verify-RDeb9W/command.json",
+    "fullSourceBaseline": "artifacts/stable-readiness-20261007/attachment/export-jsdoc-WxCW8B/result.json",
+    "targetedRedViolations": 39,
+    "targetedGreenViolations": 0,
+    "targetedRedMatchesFullBaseline": true,
+    "patchReplayVerified": true,
+    "integratedFullGatePending": true
+  },
+  "files": [
+    {
+      "path": "packages/sandbox/sandbox-local/src/private-powershell.ts",
+      "beforeSha256": "2b814d63800b858054935e46edcd965f9a3686c46c512f07f75b55e0fd21a782",
+      "afterSha256": "c80732679c3d0b7bc694e7bd25923b4f64513f14c0eadc1285b603f7571f3657"
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/private-console.ts",
+      "beforeSha256": "4ff78061753d3298e35345946f8951e0245311f69be89f815a4683518c2d0a2d",
+      "afterSha256": "78ba8b85a4ec21a7ba0fc3ceae4fbbdb12b4fc05d66d6324c594838b55e964ae"
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/pty-console.ts",
+      "beforeSha256": "fa76edb733364b2acd9d6b46a1d405202b8b19ac7e87e1e744ab6f94333fd21c",
+      "afterSha256": "67ef0185096e8f09b99c7ff505cb8cba80625c87eb919857932433e9143d1544"
+    },
+    {
+      "path": "packages/shell/pwsh-local/src/resolve.ts",
+      "beforeSha256": "f46fe71ad195e742168f2bbdbff591f07ffa26c8292d81a99e96205b54d33b1a",
+      "afterSha256": "ae0ba4b432c6d939ae4f874409f22b350a02538aef22f1045d1e7af7246a0a46"
+    },
+    {
+      "path": "packages/subprocess/win32-process/src/extension-points.ts",
+      "beforeSha256": "6a7a407eb272a313ec8f72234eb023f31c7c33c42061794925062256ae75d3a7",
+      "afterSha256": "d3696c126172272c7ea07e91607ca9cb0eb76cdd9e4cccf793b982ab5ee5a566"
+    }
+  ],
+  "deployed": false,
+  "installed": false,
+  "promotionAllowed": false
+}

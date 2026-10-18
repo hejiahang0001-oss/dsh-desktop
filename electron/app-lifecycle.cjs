@@ -46,7 +46,7 @@ const buildVersionIdentity = ({ product, harness, electron, node }) => Object.fr
 });
 
 const versionIdentityLines = (identity) => [
-  `产品版本：DSH Desktop V${identity.product}`,
+  `产品版本：lulu V${identity.product}`,
   `Harness 内核：DeepSeek Harness ${identity.harness}`,
   `桌面运行时：Electron ${identity.electron}`,
   `Electron 内置 Node：${identity.node}`
@@ -136,7 +136,7 @@ class LifecycleTimeoutError extends Error {
 
 class ApplicationClosingError extends Error {
   constructor() {
-    super('DSH Desktop 正在安全退出。');
+    super('lulu 正在安全退出。');
     this.name = 'ApplicationClosingError';
     this.code = 'APP_QUITTING';
   }
