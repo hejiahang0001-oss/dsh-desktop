@@ -29,23 +29,24 @@ async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodeP
     }
     throw new Error(`Official terminal acceptance timed out: ${stage}.`);
   };
-  if ((await list()).length) throw new Error('Terminal smoke requires a fresh isolated Session.');
-  try {
-    await finishOfficialOnboarding({ evaluate });
-    await waitFor('Boolean(window.__DSH_OFFICIAL_FILES__?.openTerminal)');
-    const opened = await open();
-    if (!opened.ok) throw new Error(opened.message);
-    await waitFor('Boolean(document.querySelector("[data-sidebar-terminal] .xterm-helper-textarea"))');
-    const first = await poll(async () => (await list()).find((item) => item.state === 'running' && item.controllerId));
-    owned.add(first.id);
-    // Host metadata can precede the renderer's writable snapshot and shell prompt.
+  const runningTerminal = async (previousId) => {
+    const items = await list();
+    if (items.length !== (previousId ? 2 : 1)
+      || items.some((item) => item.state !== 'running' || typeof item.id !== 'string' || !item.id)
+      || new Set(items.map((item) => item.id)).size !== items.length
+      || (previousId && !items.some((item) => item.id === previousId))) return null;
+    return items.find((item) => item.id !== previousId);
+  };
+  const nativeReceipt = async (terminal, stage) => {
+    // rc.2 exposes attachment writability through its stream and public status
+    // UI, not WebTerminalInfo. Readiness alone is not proof: execute a fresh
+    // command through the visible textarea and validate its independent receipt.
     await waitFor(`Boolean(document.querySelector('[data-sidebar-terminal] .xterm-helper-textarea'))
       && !document.querySelector('[data-sidebar-terminal] [role="status"], [data-sidebar-terminal] [role="alert"]')
       && Array.from(document.querySelectorAll('[data-sidebar-terminal] .xterm-rows > div')).some(row => row.textContent.includes('>'))`);
-    const powershell = /^(powershell|pwsh)\.exe$/i.test(path.basename(first.shell.path));
-    const cmd = /^cmd\.exe$/i.test(path.basename(first.shell.path));
+    const powershell = /^(powershell|pwsh)\.exe$/i.test(path.basename(terminal.shell.path));
+    const cmd = /^cmd\.exe$/i.test(path.basename(terminal.shell.path));
     if (!powershell && !cmd) throw new Error('This Windows smoke covers discovered cmd/PowerShell only; no guessed shell commands were sent.');
-    checks.officialPtyRunning = true;
     const filename = `terminal-${randomUUID()}.json`, marker = randomUUID();
     // Only a fresh fixture in the isolated test workspace. Never print a Key.
     const script = `require('node:fs').writeFileSync('${filename}',JSON.stringify({cwd:process.cwd(),keyPresent:Boolean(process.env.DEEPSEEK_API_KEY),marker:'${marker}'})); console.log('DSH official terminal verified')`;
@@ -63,10 +64,26 @@ async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodeP
     const receipt = await poll(async () => {
       try { return JSON.parse(await fs.readFile(path.join(workspacePath, filename), 'utf8')); }
       catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return null; throw error; }
-    }, 'native keyboard receipt');
-    checks.nativeKeyboardExecutes = receipt.marker === marker;
-    checks.workspaceBound = path.resolve(receipt.cwd).toLowerCase() === path.resolve(workspacePath).toLowerCase();
-    checks.keyNotInherited = receipt.keyPresent === false;
+    }, `${stage} native keyboard receipt`);
+    const result = {
+      nativeKeyboardExecutes: receipt.marker === marker,
+      workspaceBound: typeof receipt.cwd === 'string' && path.resolve(receipt.cwd).toLowerCase() === path.resolve(workspacePath).toLowerCase(),
+      keyNotInherited: receipt.keyPresent === false,
+    };
+    if (!Object.values(result).every(Boolean)) throw new Error(`Official terminal receipt mismatch: ${stage}.`);
+    return result;
+  };
+  if ((await list()).length) throw new Error('Terminal smoke requires a fresh isolated Session.');
+  try {
+    await finishOfficialOnboarding({ evaluate });
+    await waitFor('Boolean(window.__DSH_OFFICIAL_FILES__?.openTerminal)');
+    const opened = await open();
+    if (!opened.ok) throw new Error(opened.message);
+    await waitFor('Boolean(document.querySelector("[data-sidebar-terminal] .xterm-helper-textarea"))');
+    const first = await poll(() => runningTerminal());
+    owned.add(first.id);
+    checks.officialPtyRunning = true;
+    Object.assign(checks, await nativeReceipt(first, 'first terminal'));
     await fs.writeFile(`${target}.official-terminal.png`, (await wc.capturePage()).toPNG());
     window.setContentSize(1024, 720);
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -78,13 +95,20 @@ async function runOfficialTerminalSmoke({ window, selected, workspacePath, nodeP
     })()`);
     await fs.writeFile(`${target}.official-terminal-compact.png`, (await wc.capturePage()).toPNG());
     if (!(await open()).ok) throw new Error('Second terminal navigation rejected.');
-    const second = await poll(async () => (await list()).find((item) => item.id !== first.id && item.state === 'running' && item.controllerId));
+    const second = await poll(() => runningTerminal(first.id));
     owned.add(second.id);
     checks.multipleIndependentTerminals = second.id !== first.id && (await list()).length === 2;
-    // A metadata read is intentionally not follow(); it must not steal input.
-    const metadata = await list();
-    checks.readOnlyInventoryRetainsUserInput = metadata.find((item) => item.id === second.id)?.controllerId
-      === (await list()).find((item) => item.id === second.id)?.controllerId;
+    // Establish real input on the second terminal before observing inventory.
+    // Do not open/follow/take control between the two native-keyboard receipts.
+    await nativeReceipt(second, 'second terminal before inventory');
+    const metadata = await list(), repeatedMetadata = await list();
+    if (![metadata, repeatedMetadata].every((items) => items.length === 2
+      && items.some((item) => item.id === first.id && item.state === 'running')
+      && items.some((item) => item.id === second.id && item.state === 'running'))) {
+      throw new Error('Official terminal inventory changed during the read-only check.');
+    }
+    checks.readOnlyInventoryRetainsUserInput = Object.values(
+      await nativeReceipt(second, 'second terminal after inventory')).every(Boolean);
     for (const id of owned) await remote('close', { agentId: selected.sessionId, id });
     owned.clear();
     checks.explicitCloseRemovesTerminals = (await list()).length === 0;

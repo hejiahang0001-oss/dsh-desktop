@@ -1,5 +1,85 @@
 # DSH Desktop 执行进度
 
+> 2026-10-19：本机已覆盖 lulu 1.1.17 / rc.2。独立恢复备份、安装负载16041文件、安装前后ACL111+5及首启前资料保全通过；真实界面版本/原会话/Key和代理入口正常，用户已托盘退出。29原文件及7草稿/密文/代理保留，唯一新增365字节格式文件的独立迁移核对通过，原比较失败保留。临停集成已精确恢复并通过五工具握手；源码CI和公开下载/Stable尚待收口，不重建已验候选。[证据与继续位置](docs/LULU_1.1.17_INSTALL_RELEASE_2026-10-19.md)。
+
+> 2026-10-18 22:27 Wiki交接同步完成：7项目页和index/hot/log/manifest共11文件精确回读通过，271旧来源、人工历史、其他项目与实际交付字段保留；新增后272条，关联链接有效，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-chzphk/verification.json` SHA256 `3ab3b42acfe0a4e63e176c221ede6829a7575b4242d87392d354e51e6c8b4ed3`；来源SHA256 `c6781180cfde5f741e7d99e1521de20622b523cb531a80a35a5bbe7a1790508a`。已准确记录失败候选清理、新包Portable功能通过/严格退出风险接受及dsh_agent临停等待重启；尚未覆盖或发布。
+
+> 2026-10-18 22:02 安装交接：新qihsES完整双包及真实Portable两轮功能通过，原strict失败保留、唯一SGTool残留由签名/路径/摘要补证限定为用户已接受风险。测试已结束，不重跑有效1148源码/构建/Portable。dsh_agent已按授权仅增加enabled=false一行且私有配置备份、精确差异通过；回执install117/config-handoff-disabled.json SHA256 `9a8869fc200156b8629b20c8f93c8276dbb6bff2b1275cc738347fd41ea04bd3`。等待用户完整重启Codex释放6个旧Node，再按install117/README执行新私有备份、固定qihsES覆盖、资料/凭据/ACL保全，恢复本次临停行后精确PR/CI/公开下载及已授权Stable晋升。尚未覆盖或发布；[不可丢失的继续位置](docs/LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。
+
+> 2026-10-18 续作：SGTool/SogouExe残留已获用户接受，不再待同一风险答复。真实Portable定位pluginInventory/list在3011ms内部超时，仅只读空参数清单增加一次有界重试，完整1148/1148通过、407输入不变。fA7r83/output已按授权删除1785910734字节且保留日志；替代dist-qihsES构建及16041文件完整双包内容检查通过，真实Portable定向复验中。未停用集成、覆盖或公开；[根因、证据和准确续作位置](docs/LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。Wiki实际回执另记。
+
+> 2026-10-18 12:13 Wiki续验同步完成：7项目页与index/hot/log/manifest共11文件回读通过，270条旧来源、人工历史、其他项目和实际交付字段保留，新增后271来源，关联链接有效，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-iiEBOg/verification.json` SHA256 `8bc1cdb9f618a44c22e26cde1d6998c5d1f3082b2b448b6f26badcdf8a5da0ac`；固定来源SHA256 `ed1cb70659a2773ec391f5f0e9be1e0d0ee0b38cae6845f652115800d8ac85a9`。本轮测试已结束，无fA7r83候选进程遗留；等待退出风险范围答复，未安装/公开/晋升Stable。
+
+> 2026-10-18 Stable续验：用户已授权迭代完成后晋升Stable。复用fA7r83，不重打包/全测/全量解包；最终包设置及7布局、终端8项通过且主程序正常退出。生命周期原功能通过，但owned Job仍残留4个SGTool/SogouExe命名成员，整体失败保留。取消输入法对照有效，已询问是否记录兼容风险继续后续验收，尚未得到答复；未覆盖、上传或改Stable。[本轮分层证据](docs/LULU_RC2_STABLE_CONTINUATION_2026-10-18.md)。
+
+> 2026-10-18 08:10 Wiki已增量同步本轮包内容证据：既有7项目页及index/hot/log/manifest共11文件，269旧来源/人工历史/其他项目/实际交付字段保留，新增后270来源，精确回读与关联链接通过；QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-vzbf4A/verification.json` SHA256 `e1a27b062756d722bf61ab7872453537fa6d8f4c3786a9cbbd7215976668cd4f`；冻结来源SHA256 `57f93ba9489a9201e271454129c51f46596f529f927e69dc60e22f8655eb1882`。本轮无构建/运行/安装/公开变更，静态检查已自然结束，不重复同一退出阻塞提醒或恢复被拒绝的输入法对照。
+
+> 2026-10-18 08:08 心跳续作：官方最高仍0.2.1-rc.2，完整tag/commit与源码一致，无新发布。对既有dist-fA7r83只执行一次最终包内容治理：Setup/Portable/win-unpacked各16041文件逐项一致，内核/Office/运行库/许可/身份检查通过，命令exit0已结束；未重打包或重跑全测/GUI/模型/输入法。静态packageReady不等于完整运行/安装，签名及SGTool历史退出项未闭合；本机/公开/Stable不变。[本轮证据及下一步](docs/LULU_RC2_PACKAGE_STATIC_2026-10-18.md)。
+
+> 2026-10-18 04:15 Wiki范围同步完成：按wiki-update更新既有DSH项目7页及index/hot/log/manifest共11文件；268条旧来源、人工历史、其他项目及实际交付字段保留，新增后269条，精确回读/关联链接通过，QMD未配置跳过。已明确取消输入法对照、完成失败候选清理和一次替代构建；旧待答复要求不再生效，SGTool失败仍保留。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-Yef7J5/verification.json` SHA256 `3544261cfa507c8d458ac02bbecf48a9b45fb4f1e37076f7c0d56d270e877382`；冻结来源SHA256 `f197fe90d85d596418ed0a461b66169b0f26e118e68e8941082d363ec3083e64`。未覆盖安装、公开或修改Stable，所有本轮构建/检查已结束。
+
+> 2026-10-18 04:12：替代候选dist-fA7r83一次构建完成，Setup/Portable已生成；输入与1140完整测试的407项完全一致，包内版本、设置导航/终端验收/主入口及rc.2描述检查通过。未重跑全测、GUI、模型、权限或被用户拒绝的输入法对照。基本检查首次参数名错误仅修辅助调用后通过，不重打包。SGTool历史退出问题保留；未覆盖/公开/改Stable。清理、构建、检查均已结束。[包路径、摘要及边界](docs/LULU_RC2_DELIVERY_SCOPE_2026-10-18.md)。
+
+> 2026-10-18 用户取消输入法对照并批准清理失败候选：dist-MoXZ8p/output的16046文件/约1.66GiB已永久删除，日志和保留文件摘要未变，不转存D盘；删除后C盘约5.67GiB。未修改输入法/系统或用户资料。407源码输入与1140已通过测试完全一致，直接复用；只进行一次替代构建，不再跑输入法、模型、权限和全量源码对照。SGTool失败仍保留为未解决项，当前安装/公开/Stable未变。[本轮决定](docs/LULU_RC2_DELIVERY_SCOPE_2026-10-18.md)。旧待答复事项由此取代。
+
+> 2026-10-18 03:34 Wiki续作同步已完成：按wiki-update更新原DSH项目7页及index/hot/log/manifest共11文件，写前比较、写后精确回读、关联链接、267条旧来源/人工历史/其他项目/交付字段保全通过；新增来源后268条，QMD未配置跳过，知识仍待人工审阅。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-LocPx8/verification.json` SHA256 `0660201561f2a3a5eeaa539048c1a83040bf69169dd31fa5d3bd9fbd84043f99`；冻结来源SHA256 `2c3da56e0ef2445373c359bef2fd0522fe1f04c05f1473ea1b9a540efad0150c`。同步覆盖最终1140源码通过、菜单归属审查闭合、开发态功能通过/退出失败、候选不可分发和待输入源对照/清理范围；没有把知识同步写成完整交付。
+
+> 2026-10-18 03:32 续作 V1.1.17 / rc.2：限定隔离ACL风险已获接受；官方账号菜单→模型设置接线及菜单归属保护已修，终端验收改按新公开契约。最终源码1140/1140、0跳过通过，开发态布局/设置及终端8项功能通过；隔离退出仍残留SGTool，整体Job验收失败。MoXZ8p旧候选静态/品牌通过但布局和终端失败，不含后续修正，不可安装或发布。下一步做已有微软拼音对照，待1.66GiB失效候选output清理范围答复后替代出包；未动输入法、系统或用户进程。全部测试已结束，本机1.1.16、公开Pre-release1.1.14、Stable1.1.12不变。[证据与剩余门禁](docs/LULU_RC2_CONTINUATION_2026-10-18.md)。下方保留历史时点，不重复已接受的风险决定。
+
+> 2026-10-18 02:06 Wiki同步已实际完成：按wiki-update更新原DSH项目7页及index/hot/log/manifest共11文件，写前比较、写后精确回读和链接核验通过；266条旧来源、人工历史、其他项目及安装/公开/Stable字段保留，新增来源后267条，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-QVnlL5/verification.json` SHA256 `85e004ae7740769ad61f367d2abcdd94e4463fa8ac1bbc11a69ee512f4a77ac6`；来源SHA256 `c40b5d08fb9a0783fb52b746a75ac5b8351577d2a2b5dd1dd84a935da16a0b7e`。同步包括正式rc.2、新候选双包、权限动作成功及Job/ACL/弹窗失败，不宣称交付完成。构建/测试命令均已结束，无测试lulu窗口遗留；仅等待新增环境风险决定，不重复询问已获批准的随机标记权限测试。
+
+> 2026-10-18 V1.1.17 / Harness 0.2.1-rc.2 已接入正式源码和新 vendor 运行库，原生 Office、受限终端、认证 Host 与会话恢复均已实测；新生产依赖603项审计零已知漏洞。最终源码1072/1072全测和候选双包16041文件一致性通过；真实权限拒绝/单次允许行为通过，但退出Job未归零、隔离搜狗/LocalLow出现新增宽权限风险，待用户范围决定；首次使用弹窗测试契约也待修。未覆盖安装或发布。**本机仍1.1.16/alpha.2，公开Pre-release1.1.14、Stable1.1.12不变。** 官方新增 Search/Fetch 默认关闭。完整来源、失败与分层证据见 [rc.2 记录](docs/HARNESS_UPSTREAM_v0.2.1-rc.2.md)。下方保留历史时点。
+
+> 2026-10-17 09:12 Wiki已同步：按wiki-update实写现有DSH项目7页及index/hot/log/manifest共11文件，写前比较与写后精确回读通过；265条旧来源、其他项目、人工历史及实际安装/发行字段保留，1条新来源登记，QMD未配置跳过，知识仍待人工审阅。回执 `artifacts/upstream-checks/2026-10-17/wiki-alpha5-Zxlumq/verification.json` SHA256 `f6cc5cd8a6f3433199cdb24b9d0fa1869d251cba46a2256b7904496320f6c694`；来源SHA256 `be64d57ed9870194043ac7e15876c184839c02aa5dc711b7e3c3de46cedb0f2a`。同步范围含新alpha.5组件包、独立复核、源闭包inventory及新工具56纯测试；未将未执行的生产装配写成通过。构建/打包命令均已结束，下一步接技术审查provider及派生生产锁，不重建已有有效证据；正式/本机1.1.16/alpha.2与公开/Stable均未变。
+
+> 2026-10-17 09:03续作：alpha.5新包集 `controlled-pack-alpha5-geM6OY` 六阶段/控制器均自然exit0，302组件/23320191字节逐包校验，16254源输入保持；回执SHA256 `40a403b7216b235040f427b19978a93a6d2e33453b3aaa322d0815d8ae5a4944`。源闭包inventory另得到302本地/373registry/27peer，必需account→util-values已纳入；尚未派生生产锁/安装运行库或改正式接线。下一步直接接生产闭包与真实Host，不重打已有效包；新Setup/Portable和公开仍未产生。仅组件pack按实测预算使用4GiB启动/2.5GiB运行底线，未额外删除；文档/版本一致性6/6通过，不代替全桌面测试。Wiki最终回执待随后记录。
+
+> 2026-10-17：官方新标签 `dsh-v0.2.1-alpha.5` / `1517a4dbca0a2789ff1d41ba439600f8547d23fa` 已核实，拟 1.1.17 改接这一已发布目标；保留 alpha.4 成功证据，不冒充新版本。新候选六层补丁40后像与16254源码冻结安装通过，640项源锁生产图审计零已知漏洞；37文件1016通过/1官方Windows跳过，原严格控制器失败保留，35安全消费者通过。完整9gate构建及输入/输出核对通过（`controlled-build-alpha5-3hvGDh`），尚待包集/生产闭包/真实Windows/来源链/最终桌面/覆盖交付。本机1.1.16/alpha.2、公开1.1.14、Stable1.1.12不变。详见[本轮当前记录](docs/HARNESS_UPSTREAM_v0.2.1-alpha.5.md)，下方为历史。
+
+> 2026-10-16 21:21 Wiki续作同步完成：按wiki-update更新原DSH项目7页及index/hot/log/manifest共11文件，写前比较与写后精确回读通过，旧来源、人工历史、其他项目和实际交付字段保留；QMD未配置跳过，知识仍待人工审阅。回执`artifacts/upstream-checks/2026-10-16/wiki-build-FmRUpH/verification.json` SHA256 `57fa2793cd0e19fea0f96801a591ce91b45dd0b1ab400c964e75736d3851ee5e`；新来源SHA256 `21f175e100ea015787d3237a5920ee7e2c534a3cf01bd0a1b9d6d5ab70d931f0`。同步清理、完整build和302包集，不代表新包安装/公开；成功build/pack均已结束，不留后台构建。
+
+> 2026-10-16 清理与构建续作完成：三套指定早期1.1.16 output共2.863GiB已永久删除，26个保留文件摘要不变；1.1.15/最终1.1.16、日志、资料保留，未转存D盘。alpha.4完整build的9 gate通过，六阶段pack完成302包并逐包核对，16,231源码输入不变；控制命令均已结束。下一步直接复用这些证据推进生产依赖闭包、真实Host及来源格式验收，不重新安装/编译。根/本机仍1.1.16/alpha.2，公开1.1.14、Stable1.1.12未变；旧退出/历史/ACL缺口保留。见[清理、构建与包集续作](docs/HARNESS_ALPHA4_BUILD_2026-10-16.md)。下方旧空间选择已由本段取代。
+
+> 2026-10-16 Wiki同步收据：按wiki-update实写既有DSH项目7页及index/hot/log/manifest共11文件，写前比较、写后精确回读、关联链接、旧来源/正文及其他项目保全通过；QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-16/wiki-KFRFJO/verification.json`，SHA256 `6415558b36a2752cf8e304227a5ed676a7655003da51e7bb53cca1c6ea3fb41a`。来源SHA256 `b734c681248c1fafa9113891978a07688f6f4433416bc308d1df5b28f7da3b13`，知识仍待人工审阅。同步的是alpha.4隔离源码进展和待空间选择，不是新包/安装/公开完成；本轮测试命令均已结束，未强停用户进程。
+
+> 2026-10-16：固定目标 `0.2.1-alpha.4` / `86a402200d95fecef4529d969836f1fe13c6cb0d`；独立工作树六层来源重放、派生锁640项生产审计零告警及冻结安装完成。官方源码专项521通过/1项Windows条件跳过，不替代ACL；普通插件操作转向官方，但独有持久历史回退保留。最终桌面插件影响域65/65、开发态界面及独立审查通过；早期983全测不是最终修正后全测。C盘约3.4GiB，等待三套早期1.1.16 output约2.87GiB清理答复，未删除。尚未构建新负载、改正式内核、覆盖或发布，旧隔离退出/历史/ACL失败保留。详细结果及续作顺序见 [alpha.4记录](docs/HARNESS_UPSTREAM_v0.2.1-alpha.4.md)。下面为此前时点。
+
+> 2026-10-11 19:08 Wiki已同步并回读：原DSH项目7页及index/hot/log/manifest共11文件，旧来源/历史/其他项目/Stable保留，QMD未配置跳过。证据 artifacts/upstream-checks/2026-10-10/wiki-continuation-7lfJyS/verification.json，SHA256 c19071df9f89eb1e33cd7525b74c6657c2ccae7d30e5b15d336ebdd8f146ed31；来源SHA256 4bc07012dbd70a48f8186df623595c723d334984149137cf54f4978a33d5ac88。同步包含原资料保留/集成恢复通过及隔离退出超时未闭合，不宣称完整交付。
+
+> 2026-10-11 19:05最新：本机lulu1.1.16/alpha.2已安装。原资料同次托盘正常退出及29历史/7草稿/加密Key/代理保留通过；唯一3+1官方空恢复标记由独立窄证明闭合，原比较失败保留。dsh_agent仅撤销本次临停行并保留其他设置，CLI启用及新Node限握手通过。隔离补测已验证即时清空/官方Stop归零，但等待退出超时被Job清理，退出后历史和该轮ACL仍未通过；无后台测试遗留，不重发全模型或打包。尚未完整交付，公开1.1.14/Stable1.1.12不变。 [证据及剩余验收](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。以下按原时点保留历史。
+
+> 2026-10-11 18:45 Wiki实写完成：wiki-update同步原DSH项目7页及index/hot/log/manifest共11文件，写前摘要及写后精确回读通过；同源修订、旧快照、人工历史、其他项目/来源和Stable保留，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-10/wiki-continuation-M4p0km/verification.json`（SHA `e0c7d190568e23b644207a9d0b6dafefc9e50c5cee845c6c802ef922371b2891`），来源SHA `59da59f286262f88e5d4b677b72d92c434cb3583dff759b62e978c9e0af95592`。同步的是本机1.1.16已覆盖/原资料UI通过/待同次正常退出及隔离补测失败，不是公开完成。测试命令已结束，正常原资料窗口等待用户托盘退出，dsh_agent暂临停待after完成精确恢复。
+
+> 2026-10-11 安装续验：first-profile-gBXDH6的严格首启前保全通过（29历史），原资料live-ui-Wbun8O通过（原工作区/17会话目录/加密Key/当前草稿附件）；PID28324原资料实例已提示用户托盘正常退出，等待同次退出和after。安装态narrow-TPVBpA在首条提交前输入框操作失败，原报告保留、隔离实例清理、原资料/工具保持，具体原因待诊断，不假称即时清空/Stop通过。dsh_agent仍临停，公开/Stable未变；下一步见[本轮记录](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-11 重启后：旧版占用已解除；新完整源码976/976通过、405代码输入不变。新备份末阶段元数据失败保留，经固定独立补证核验15,425旧程序/50资料/5保护/6LevelDB及全树私有ACL后，已覆盖安装lulu1.1.16/0.2.1-alpha.2。独立安装身份和15,640文件完整负载、111项资料权限及5祖先未变通过；正在首次启动前严格保全与安装态验收，dsh_agent仍临停。公开1.1.14、Stable1.1.12不变，未宣称交付完成。[本轮证据及准确继续位置](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-11 17:39 Wiki同步完成：wiki-update实写既有DSH项目7页与index/hot/log/manifest，11文件写前摘要和写后精确回读全部通过；同源修订、旧快照、人工历史、其他项目/来源与Stable保留，QMD未配置跳过。事务 `artifacts/upstream-checks/2026-10-10/wiki-continuation-pncgg7/verification.json`（沿用工具目录，实际时间10月11日），SHA `67d268519144feba851c55a408293727e4e4561703ebb5ff13fd7fb4065eb294`。知识仍待人工审阅；dsh_agent仍临停，下一步必须用户完整重启Codex，不声称1.1.16安装或公开完成。
+
+> 2026-10-11 17:36：最终JNNUUW候选生命周期、安全退出、真实限定权限、代理机器+实图、7情境布局和真实工作区交接均已补齐；归档12项/用户托盘退出后，74条历史+唯一官方恢复标记的独立严格补证通过，原聚合失败保留。405代码输入不变，命令全部结束，无候选进程残留；同核Office/附件仅按字节和行为范围复用。已按本次授权私有备份Codex配置，仅新增16字节 `enabled = false`，CLI确认dsh_agent临停，其他设置不变；旧安装13个Node仍占用，现需用户完整重启Codex，再做1.1.15→1.1.16备份覆盖、资料保全、安装态、恢复集成及CI/公开验收。本机1.1.15/alpha.1、公开1.1.14、Stable1.1.12不变；本轮Wiki同步收据见随后段落。[当前证据与精确续作顺序](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-11 08:45 Wiki闭环：按wiki-update更新原Obsidian DSH项目7页及index/hot/log/manifest共11文件，写前摘要和写后精确回读通过；同一alpha.2来源按修订登记，来源数、旧快照、其他项目/来源、人工历史及Stable保留，未提升知识信任等级。回执 `artifacts/upstream-checks/2026-10-10/wiki-continuation-NHs9EC/verification.json`（目录沿用既有工具位置，实际检查时间为10月11日）；QMD未配置跳过。同步的是候选/未完门禁状态，不代表1.1.16已安装或发布。
+
+> 本轮Portable补证已完成：同一JNNUUW的harness-YK0IMX/terminal-8VkjPZ两次原启动器实际运行通过，532闭包健康、必要模块及终端8项通过；真实解压PID/三摘要绑定，应用/launcher/Job/guardian自然退出、解压EXE自行清理、输入不变。命令已结束；不替代完整Safe Exit或历史落盘。解压等待样本257/204秒列入后续体验分析，长TEMP/输入法等边界仍未验证，没有覆盖或公开。以下本轮初始摘要与前日历史均按时间分层。
+
+> 2026-10-11：官方仍0.2.1-alpha.2/d743267，无新目标；继续已有1.1.16。最新品牌代码完整运行976项：975通过，唯一README包名断言修正后专项6/6通过；405冻结代码输入不变，README单列。新双包dist-JNNUUW构建、15,640文件负载/Windows身份/静态治理通过；包内浅/深/窄三情境实际噜噜显示与输入导航通过、主控回看实图。完整范围见[新证据](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。不重做未变298组件/审计，不下载已删旧包；差分基线仅本地1.1.15，不冒充公开1.1.14。模型审批、备份覆盖及公开交付仍待完成，原两项限定选择仍待答复，本机1.1.15、公开1.1.14、Stable1.1.12未变。
+
+> 2026-10-10 17:23 本次安装包清理完成：用户改为保留1.1.15及以后、永久删除更早包，不转存D盘。已删13个EXE、7个blockmap及7个旧展开目录，合计10.41GB；C盘约3.02→13.60GB可用。12个保留包与6个源码/现用安装保护文件摘要不变，重扫旧包0项；D盘9个指定归档/下载目录未发现旧包，未误删官方客户端/运行库/资料。27目标删除及保留校验均通过。取消此前1.1.16归档请求，两个其他权限/安装选择仍待答复；本轮未迭代打包或变更GitHub/Stable。[清理范围、清单与不可恢复性](docs/INSTALLER_CLEANUP_2026-10-10.md)。
+
+> 本轮后续Wiki已按wiki-update实写原DSH项目7页及index/hot/log/manifest，11文件写前摘要与写后回读通过；同一alpha.2来源按修订登记，原快照、来源数量、其他项目/人工历史和Stable均保留，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-10/wiki-continuation-ERmxxj/verification.json`；知识待人工审阅，不代表最新修复已经打包/安装/公开。
+
+> 2026-10-10 最新续作：正式内核已部署0.2.1-alpha.2；跨工作区附件回到原会话和三格式Office等预览在同一冻结候选SZqatc实际通过。布局观察器误把闭合details内容当可见，按HTML语义修复后5/5及开发态7组布局/模态恢复通过。之后975/975和YPbNuf双包负载/Windows身份/治理通过，但视觉复核发现官方编译CSS类名变化导致鲸鱼残留；精确品牌接线已修复，8/8和开发态浅/深/窄实际显示通过，尚未进入新包。前三套候选均不公开，原失败保留；详细摘要见[本次记录](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。C盘约3.3GiB，后续构建等待两套精确旧output归档选择；本轮限定审批测试与覆盖前临停集成/重启也待确认。没有移动/删除文件、临停集成、覆盖或发布，本机1.1.15、公开1.1.14、Stable1.1.12不变。下方保留各原始时点，不代表当前进度。
+
+> 2026-10-10 下午正式接线：用户“携带”已落实为源码1.1.16/内核0.2.1-alpha.2及当前新噜噜图标。受控build+六阶段pack真实成功，14,994输入前后不变，298个TGZ及descriptor逐字节相同；六层patch重放40文件一致。v2来源/部署专项75项、接线专项51项通过；实际27输入来源链只读通过。正在部署新vendor，尚未覆盖安装/公开。本机1.1.15、公开1.1.14、Stable1.1.12不变。下方早间缺口为已保留的历史记录。
+
+> 2026-10-10 发行范围已确认：用户回复“携带”，允许 1.1.16 携带当前新噜噜形象及图标公开 Pre-release。正在补齐 alpha.2 受控构建/打包来源并继续正式接线，尚未改变已安装 1.1.15 或 Stable 1.1.12；不再以视觉公开范围待定阻塞本次交付。
+
+> 2026-10-10 官方0.2.1-alpha.2/d743267隔离适配已推进到真实原生与宿主：源码HCS33/fflate3/附件43/破坏契约62/原生加载5，完整build与六阶段组件打包通过；298本地包+372registry派生锁冻结离线安装、670项审计零告警。14,389文件/完整Office733文件独立回验，五组原生运行（含三格式PDF和受限PTY）及认证宿主两次启动/同会话三条合成历史通过。旧20覆盖候选收敛2条，PS7/附件保护保留。正式发布仍缺构建前后输入快照，需受控build+pack补证及后续正式绑定/全桌面/双包/覆盖保全；旧结果按完整字节等价条件复用，不补造历史。暂拟1.1.16，源码/本机仍1.1.15/alpha.1、公开1.1.14、Stable1.1.12，未安装发布。[分层证据与剩余门禁](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 本轮wiki-update已实写原Obsidian DSH项目7页及index/hot/log/manifest，11文件/1新来源；影子演练、写前摘要和真实回读通过，253旧来源、其他2项目、人工历史与当前交付字段保留，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-10/wiki-9m1MEB/verification.json`；知识仍待人工审阅，不代表新核已安装发布。
+
+> 2026-10-09 视觉交付：V1.1.15 黑发、眼镜、比耶噜噜及九档等比图标已覆盖本机；完整912/912、包负载/运行、资料保全及安装版浅/深/窄三情境通过。备份收尾失败以同快照独立补证闭合，原失败不改；111项权限/身份前后不变。内核0.2.1-alpha.1、功能和用户资料身份不变；本轮未提交发布，公开1.1.14、Stable1.1.12不变。[本轮证据及Wiki校验入口](docs/RELEASE_NOTES_v1.1.15.md)。
+
 > 2026-10-09 02:46 收尾完成：本机 lulu1.1.14/0.2.1-alpha.1 已安装，真实资料退出保全与临停集成恢复通过。PR85、tag与成功CI37817814410绑定de113816；本地912/912，CI906通过/6环境跳过。四资产公开Pre-release并匿名完整下载/SHA核对通过，Portable一次网络中断后精确206续传，原失败及partial备份保留。wiki-update已实际写入原DSH项目7页和index/hot/log/manifest，11文件/2来源；影子、独审、写前和实际回读全部通过，250旧来源/2其他项目保留，QMD未配置跳过。事务证据 `artifacts/stable-readiness-20261007/wiki-release-20261009/tx-cdnmKe/verification.json`。确认范围内Stable-ready已完成，未晋升Stable，仍1.1.12；[实际发行与限制](docs/LULU_PUBLIC_DELIVERY_2026-10-09.md)。
 
 > 2026-10-09 01:14：用户确认第二次原资料托盘退出，同次clean/explicit-exit与原进程消失已验。first-profile-kfC60a完整选区比较和独立重算通过：28历史、7草稿、密文、代理及原设置保留，无新增V4待审。dsh_agent仅撤销16字节临停行，其他配置不变，CLI enabled=true。当前继续源码PR/CI/公开回下载，不以此阶段收口；Stable1.1.12不变。本轮Wiki最终更新待发行状态确定，[证据及限制](docs/LULU_RELEASE_READINESS_2026-10-09.md)。以下为各历史时点。

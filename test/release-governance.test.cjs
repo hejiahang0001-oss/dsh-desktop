@@ -157,16 +157,16 @@ test('package layout reports redundant app PTY files and keeps the isolated Win-
   assert.equal(report.pnpmRuntime.wrapperValid, false);
 });
 
-test('package layout binds the inspected app.asar to the V1.1.14 desktop manifest', async (context) => {
+test('package layout binds the inspected app.asar to the V1.1.17 desktop manifest', async (context) => {
   assert.equal(REQUIRED_DESKTOP_VERSION, require('../package.json').version, 'release gate must track the product version');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-app-version-governance-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const appRoot = path.join(root, 'app-source');
-  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.14' }));
+  writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.17' }));
   fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
   await createPackage(appRoot, path.join(root, 'resources', 'app.asar'));
   const ready = await inspectPackageLayout(root);
-  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.14' });
+  assert.deepEqual(ready.packagedApp, { name: 'dsh-desktop', version: '1.1.17' });
   assert.equal(ready.requiredPackagedAppReady, true);
 
   writeFile(path.join(appRoot, 'package.json'), JSON.stringify({ name: 'dsh-desktop', version: '1.1.5' }));
@@ -434,6 +434,9 @@ test('package manifest and layout include user-readable legal notices', async (c
   fs.copyFileSync(path.resolve(__dirname, '..', 'docs', 'THIRD_PARTY_LICENSES.md'), path.join(root, 'resources', 'legal', 'THIRD_PARTY_LICENSES.md'));
   assert.equal((await inspectPackageLayout(root)).requiredLegalNoticesReady, true);
   writeFile(path.join(root, 'resources', 'legal', 'LICENSE.txt'), 'fake license');
+  assert.equal((await inspectPackageLayout(root)).requiredLegalNoticesReady, false);
+  fs.copyFileSync(path.resolve(__dirname, '..', 'LICENSE'), path.join(root, 'resources', 'legal', 'LICENSE.txt'));
+  fs.appendFileSync(path.join(root, 'resources', 'legal', 'THIRD_PARTY_LICENSES.md'), '\nchanged inventory');
   assert.equal((await inspectPackageLayout(root)).requiredLegalNoticesReady, false);
 });
 

@@ -6,6 +6,11 @@ const path = require('node:path');
 
 function validateReviewedSourceChain({ root, profile, binding, records, inside, hashFile }) {
   const pin = binding.reviewedSourceChain;
+  if (pin?.schemaVersion === 2) {
+    return require('./reviewed-source-chain-v2.cjs').validateControlledSourceChain({ root, profile, binding, records, inside, hashFile });
+  }
+  assert.notEqual(profile.schemaVersion, 2, 'Controlled source evidence cannot downgrade to legacy validation');
+  assert.ok(!pin?.schemaVersion || pin.schemaVersion === 1, 'Unknown reviewed-source schema');
   const names = ['sourceIntegration', 'sourceBuild', 'sourcePack', 'assemblyInputs'];
   if (!pin) {
     assert.ok(names.every(name => !profile.inputs[name]), 'Unpinned supplemental source evidence');

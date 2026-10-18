@@ -10,6 +10,12 @@ function inspectOfficialModal() {
     for (let p = node; p; p = p.parentElement) {
       const s = getComputedStyle(p);
       if (p.hidden || p.inert || s.display === 'none' || ['hidden', 'collapse'].includes(s.visibility) || Number(s.opacity) === 0) return false;
+      // Closed details can retain descendant geometry; only its first direct
+      // summary is displayed. Check every ancestor for nested disclosures.
+      if (p.tagName === 'DETAILS' && !p.open) {
+        const summary = [...p.children].find(child => child.tagName === 'SUMMARY');
+        if (!summary || !summary.contains(node)) return false;
+      }
     }
     return true;
   };

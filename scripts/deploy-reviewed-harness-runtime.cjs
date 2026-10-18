@@ -78,6 +78,10 @@ function readInputs(root, profile) {
 }
 
 function validateEvidence(root, profile, binding, records) {
+  if (profile.schemaVersion === 2) {
+    return require('./reviewed-runtime-evidence-v2.cjs').validateRuntimeEvidenceV2({ root, profile, binding, records,
+      inside, hashFile, nativeChecks: NATIVE_CHECKS });
+  }
   assert.equal(profile.schemaVersion, 1);
   assert.equal(profile.channel, 'local-candidate');
   assert.equal(profile.promotionAllowed, false);

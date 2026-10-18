@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "version": "0.2.1-alpha.5",
+    "tag": "dsh-v0.2.1-alpha.5",
+    "commit": "1517a4dbca0a2789ff1d41ba439600f8547d23fa",
+    "repository": "https://github.com/deepseek-ai/deepseek-harness.git"
+  },
+  "source": "artifacts/harness-source-0.2.1-alpha.5-lulu",
+  "patchChain": [
+    {
+      "path": "runtime/harness-021-alpha4/security.patch",
+      "sha256": "0d5388addf1484ee2675c4f6c161dc4dc3a6ec13669420d6cc612cbac83ff90c"
+    },
+    {
+      "path": "runtime/harness-021-alpha4/security-lock.patch",
+      "sha256": "a4c74b946460154a7ac0c2968f0d285fe9b6ea48268e439c89fe5e5167911677"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/private-powershell-alpha2.patch",
+      "sha256": "ea8be19dd85ff0a637f1debee4381330022daa1fe0e1ef0597e5dc32de09902f"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/attachment-lifecycle-alpha2.patch",
+      "sha256": "729db1179cc614ad5f388db4b9582bc326c0175456f6baacc054323e315a8a51"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/attachment-types-alpha2.patch",
+      "sha256": "6fcd92dcdd9618baed95c2c040c317f33022ba5d66c97790dca91c803d5a9c2a"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/private-powershell-jsdoc-alpha2.patch",
+      "sha256": "3bcb3d670d08755afbe25202d53cfc9f2226a26db79da8714424ede17105a437"
+    }
+  ],
+  "lockReplay": {
+    "type": "localized-patch-replay-on-new-official-lock",
+    "path": "artifacts/upstream-checks/2026-10-17/source-replay-alpha5-i89xgt/result.json",
+    "sha256": "4a7fe2914a655c19a86080d45f23687e15b40b4b7609fa5ddf20b32d4622023e",
+    "reviewPath": "artifacts/upstream-checks/2026-10-17/replay-review.json",
+    "reviewSha256": "5f2798937e36416a18d715e91256a797cdef67ae577b24eb9b2c5ba7de3c3e3a",
+    "sourceReplayScriptPath": "artifacts/upstream-checks/2026-10-17/prepare-alpha5.cjs",
+    "sourceReplayScriptSha256": "0dad001076002b11686e7b98536866d992b6b3b691251c86ae790e8edf9e41dc",
+    "upstreamLockSha256": "952ca2f79998660dc690b739078a5d6052bc7c5c2193714b918b9d720baaeaba",
+    "replayedLockSha256": "a12d2048e4a4b72049c590db3859d41b5eb43e086707fe4bab934cc008ddc3e1",
+    "baselineVersion": "0.2.1-alpha.4",
+    "baselineCommit": "86a402200d95fecef4529d969836f1fe13c6cb0d",
+    "scope": "Six reviewed patch payloads replayed on alpha.5; derived lock retains exactly three new official local importer links. Not a pnpm lock-generation receipt."
+  },
+  "files": [
+    {
+      "path": "packages/client/ui-conversation/src/client/input/facade.ts",
+      "preimageSha256": "92d2f6ef003cb7d4eed264f0fe662d0c8ed11bfff16baa9c6d87bcbe2c707cb5",
+      "sha256": "c50faf16c197fe5d77524a6f16b038e0a1c36e76d8fb340f231b5ba7065859e3",
+      "matches": true
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/hub.ts",
+      "preimageSha256": "9e55d5dd1bf9ee63b30c9c50fd5e2c12139e0c1863623af927d379312daea1dd",
+      "sha256": "856e9a8894024436ae8949e26b4eb1cb67685b8ad84c893cfc0ac97672c2818b",
+      "matches": true
+    },
+    {
+      "path": "packages/client/ui-conversation/tests/attachment-navigation.client.spec.ts",
+      "preimageSha256": null,
+      "sha256": "21596bb944c1c5bd7fc626f57e2f715d1c5b4ef65d2acdb9da7c5c9607e2b5f2",
+      "matches": true
+    },
+    {
+      "path": "packages/client/ui-conversation/tests/service-orchestration.client.spec.ts",
+      "preimageSha256": "5a767f0a5a001b0e480ffe1e50b3afa9252474c163d93f3c0e3d981526b602ba",
+      "sha256": "d9e921d7915de6a728a06e149e762f9a07ad22f61233e9533444fe5b9e8f5c95",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-local/README.i18n.yaml",
+      "preimageSha256": "911a49b52928ecc9763888f4681b9b27fa5f52624839b539949a4e96a176618a",
+      "sha256": "e44b3285d8972585f4ff77a0a14e749c7b7bc0130a4304c80eba61c7c35a6500",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-local/README.md",
+      "preimageSha256": "8fe3e30b15e2411086a93f28ebbfdfd2bba30e21d47c52c225647333c141fbc1",
+      "sha256": "f6a4b60c89fce0a426da42a908766c67407d00c42980a72130dcd93a83ba4fa7",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-local/README.zh.md",
+      "preimageSha256": "1ed67cbb9d4cec9216f0274b986b76e4c05e636198d486e319d0875f99cf1c95",
+      "sha256": "4d1f8c1c81f706ef4f5f769660dd265c93b995a972142dfae9d432b59d80bf7a",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-local/src/index.ts",
+      "preimageSha256": "282709d0bf789ad3ab9ec6a706f3aeaeac1632d80a08ded507a7b7caff860ac2",
+      "sha256": "ae9aa2a1ee642cafbcb6b997451213a9aab9abe97da66086dd8f94e2d905ee6f",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-local/src/private-powershell.ts",
+      "preimageSha256": null,
+      "sha256": "c80732679c3d0b7bc694e7bd25923b4f64513f14c0eadc1285b603f7571f3657",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/README.i18n.yaml",
+      "preimageSha256": "81c5f53c0a493dea7bfac547b8e85b568df678eb5d4f0924a287141f2ecf6d76",
+      "sha256": "d037d25579fed301b83a28b76c307b15439dfedbfdd175867ae8be7f1a04484d",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/README.md",
+      "preimageSha256": "346a18ad34ec0342dcbaf69cd473b62d5496907e7b6a4495a52a29bec702ee8f",
+      "sha256": "08ca286017f77ce472776e1131a7a3947fe235fa919efd1910b3f0976b498e38",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/README.zh.md",
+      "preimageSha256": "d9c8d3e371162c10fdcf9595457944ef053db225875ae0a995ecfdb0620cc05c",
+      "sha256": "caf7403d292dd8ca68ddbdb55e8742f7369ac13277a446c41f27b4aad2748685",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/index.ts",
+      "preimageSha256": "d279f21d9e09d70e726d62b1d91d3dccd983fb75db23aa6b322315b35ee6a2e9",
+      "sha256": "8bbc29285f8c6d9780b97fea2579a953bf4d978dbd8f79a49980ca71bb6983d0",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/private-console.ts",
+      "preimageSha256": null,
+      "sha256": "78ba8b85a4ec21a7ba0fc3ceae4fbbdb12b4fc05d66d6324c594838b55e964ae",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/pty-console.ts",
+      "preimageSha256": null,
+      "sha256": "67ef0185096e8f09b99c7ff505cb8cba80625c87eb919857932433e9143d1544",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/runner.ts",
+      "preimageSha256": "542b77278d974f5f93c2a0b925468e96e52737366ed88df7d118a5af67c2eff0",
+      "sha256": "c0f3847a9547078117b7fcbf42c4083448711554a2c2edc4a9c5c95113cb2244",
+      "matches": true
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/src/spawn.ts",
+      "preimageSha256": "a72479eb80e2c8bb081373d1ed94f5b074c22bb3de4aa317cfbf0f5786b9c3f6",
+      "sha256": "a1d25ec52bc8158fcec9220ccf8ad36060b48c2fd17984ab3872b15c4ce7dc0a",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-local/README.i18n.yaml",
+      "preimageSha256": "b01e73674f25138e638653ca33d97e1c9a52fe10aca3fd872bd37ced761e8418",
+      "sha256": "c192585cb5fcda725c7f3d0b8f45252e64cae9b4be7c1293f7cc2aac9a77b2ad",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-local/README.md",
+      "preimageSha256": "d92bde6e6e8fafd7431a98dd90c27e19508920d30881e813d81a8020cf2696ef",
+      "sha256": "1afde51084ea315575ab661273f565116076fe57f5e9ed5a7a54af714f2e34d8",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-local/README.zh.md",
+      "preimageSha256": "e88823a9df762a6487a7ad61cef32fa773af88c4c501c6cab020fda3e2baf1df",
+      "sha256": "bacde6d19a795eeeacc0014ccdf0ee4687740156ea8ee3bbc9263e10fb5e6a90",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-local/src/index.ts",
+      "preimageSha256": "feebf120ba9c27590b138da54fbc4124bbf79a1a63b56008199676c30239f5a4",
+      "sha256": "f53e3ba057a4332235f6d77917579ae46f0274ba01dbfb28138fd7a391d0a489",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-local/src/resolve.ts",
+      "preimageSha256": "5c832a5a3cd944735dca27e608b40a1fd5e259ed5629b8c92d0ae899157fcf37",
+      "sha256": "ae0ba4b432c6d939ae4f874409f22b350a02538aef22f1045d1e7af7246a0a46",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-sandbox/README.i18n.yaml",
+      "preimageSha256": "b4fedd4052674387a6dcb4d1203e76c5c9277a69b95a7d860ef77da5292008ab",
+      "sha256": "c8393af1cc484b2f5f8d511ffd6f4e9f98236404bc43e42392b00af6b2098d7a",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-sandbox/README.md",
+      "preimageSha256": "bec2c35d383e306fd5f1eb4b77e3555a7822ecbbfd2c907bcfc96f2c94b2317f",
+      "sha256": "b823051c78d2043d6a4a85e2fab671ab46b77c2c89715bb3e7f9a4b050390b06",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-sandbox/README.zh.md",
+      "preimageSha256": "1c4e2b5d10aacafd525fa26f59d0a8a779f88eadb58fdb615dda0a32a441c1ee",
+      "sha256": "b966b5b78972671337b286dd98c45aab6d18e49df95c7e14940e1db2c1608c61",
+      "matches": true
+    },
+    {
+      "path": "packages/shell/pwsh-sandbox/src/index.ts",
+      "preimageSha256": "4bb0357149f229f554aa7db09140fce0ecdc66149dcab5d86480453267a069a6",
+      "sha256": "f75b0ecfa37078049f6996e484a2cc0f809541fa631275fae92435847996d9f1",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/README.i18n.yaml",
+      "preimageSha256": "495793106a799f896540069cef7ca2b309f2d768c394ffc056fe7b3de80b516e",
+      "sha256": "0cc5ff7c1c92b3a4229a49fea37305951a9e5ef3e5d75052584493ac392898dc",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/README.md",
+      "preimageSha256": "52a5a71f80fc3468c38b4114df112d0f4e9044db5094dcb6f0262e41dbf220dd",
+      "sha256": "07878d817d0c32c28ddbe7b8fc84d5f5a91ac82f1d8494cc953a99730f4c9b61",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/README.zh.md",
+      "preimageSha256": "7236ec5165c345c1e55abeea5a795dd93d067c14bdd6e97a4450a4b9ade99c63",
+      "sha256": "11ac0d61e36e8209d8da07e97a207af15413e44f402258d9ce3ce941185374c3",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/src/extension-points.ts",
+      "preimageSha256": null,
+      "sha256": "d3696c126172272c7ea07e91607ca9cb0eb76cdd9e4cccf793b982ab5ee5a566",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/src/ffi.ts",
+      "preimageSha256": "988331864f460138336a29f9290b46e4cd6b46ba5042b39b74621bfb3f72f940",
+      "sha256": "175d276896fbb43b84af56062ec7283dc7cf76f9a3dc88d9967046e1393741ad",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/src/index.ts",
+      "preimageSha256": "ef120e78e18da1f01fe27066d41eda6eca9ec214f2473e866c7e245b94b2d0bd",
+      "sha256": "4fe860415ff077246f504e01a58ba8464e828ebb5eed79fd2f3783dc27bfce9e",
+      "matches": true
+    },
+    {
+      "path": "packages/subprocess/win32-process/src/process.ts",
+      "preimageSha256": "2043f59d97f320f83d731fb2f81ec15c77065d4ff98f305be3a95cebb5e776be",
+      "sha256": "812e0d324a0b815d241cebfc3c4dbed0a7006f9dac22aecd7a38ffbe79ace46b",
+      "matches": true
+    },
+    {
+      "path": "packages/terminal/terminal-bash/README.i18n.yaml",
+      "preimageSha256": "eb219dcbc85dfd95bd71cb34cdfc0f6a55458a3f3be5d99f0810c67c43f861d1",
+      "sha256": "888c204da8a6a77df60e5a524ce5e18bfc828daff05c0e728b5e9469508125fa",
+      "matches": true
+    },
+    {
+      "path": "packages/terminal/terminal-bash/README.md",
+      "preimageSha256": "043217a57116b7770f38ae3a07212d72197097c755885fb0c9686705e8996748",
+      "sha256": "d4327860249e35480db46187aeddc19ff976558f663cd16d8df28b5c7d426597",
+      "matches": true
+    },
+    {
+      "path": "packages/terminal/terminal-bash/README.zh.md",
+      "preimageSha256": "30b123151090fc8ada99cf5c11dbc710f8a8c123ecd983b57ef3dbb79dc165f9",
+      "sha256": "953835fcb26a2c02b9bcbba6aa5cc1e544c5f539b6e8e10635d642fb0cded829",
+      "matches": true
+    },
+    {
+      "path": "packages/terminal/terminal-bash/src/index.ts",
+      "preimageSha256": "4e9c6e601275c51be71add010fdff1cd32b18034d0cd67a7d0ccf41b30a1772a",
+      "sha256": "3744ec6391caaa909142ef5e7e3d87010d575c116088510a245e60640790d6d0",
+      "matches": true
+    },
+    {
+      "path": "patches/http-cache-semantics@4.3.0.patch",
+      "preimageSha256": null,
+      "sha256": "c92799bb441a2cc6866b4468c2efe9efaeaa062f96811fd957afce97a0343403",
+      "matches": true
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "preimageSha256": "952ca2f79998660dc690b739078a5d6052bc7c5c2193714b918b9d720baaeaba",
+      "sha256": "a12d2048e4a4b72049c590db3859d41b5eb43e086707fe4bab934cc008ddc3e1",
+      "matches": true
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "preimageSha256": "3c624c26e58ab02ffc8d653bb8a9e8767a63fe0576bc0dbfaa3a5e43f88d973b",
+      "sha256": "e5776fa749e6877835eed3b24fcaab768b623921437805e262ff5ec64600aedc",
+      "matches": true
+    }
+  ],
+  "ok": true,
+  "scope": "Frozen source postimages only; not build, runtime or release acceptance.",
+  "buildVerified": false,
+  "runtimeDeployed": false,
+  "promotionAllowed": false
+}

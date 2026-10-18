@@ -6,7 +6,8 @@
   const extensionIssues = document.getElementById('extension-issues');
   const runtime = document.getElementById('runtime');
   const issues = document.getElementById('issues');
-  const catalog = document.getElementById('catalog');
+  const openOfficialButton = document.getElementById('open-official');
+  const historyRollbacks = document.getElementById('history-rollbacks');
   const profiles = document.getElementById('profiles');
   const summary = document.getElementById('profiles-summary');
   const status = document.getElementById('status');
@@ -14,26 +15,12 @@
   const closeButton = document.getElementById('close');
 
   const empty = (node) => { while (node.firstChild) node.firstChild.remove(); };
-  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '实时未连接', unsupported: '上游未提供', ready: '已就绪', installed: '已安装', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', verified: '兼容已验证', review: '需要审查', disabled: '已禁用', pending: '等待加载', loading: '加载中', unloading: '卸载中', failed: '加载失败', 'not-bundle': '不是扩展层' }[value] || '未知');
+  const label = (value) => ({ healthy: '正常', degraded: '需修复', invalid: '清单异常', unavailable: '实时未连接', unsupported: '上游未提供', ready: '已就绪', installed: '已安装', missing: '缺失', misdirected: '指向异常', blocked: '已阻止', disabled: '已禁用', pending: '等待加载', loading: '加载中', unloading: '卸载中', failed: '加载失败', 'not-bundle': '不是扩展层' }[value] || '未知');
   const makeBadge = (value) => {
     const node = document.createElement('span');
     node.className = `badge ${value || ''}`;
     node.textContent = label(value);
     return node;
-  };
-  const compatibilityText = (value) => {
-    if (!value) return '';
-    const source = {
-      'registry-exact': '固定 registry',
-      'registry-range': '浮动 registry',
-      'registry-tag': 'registry 标签',
-      local: '本地来源',
-      git: 'Git 来源'
-    }[value.sourceType] || '来源待确认';
-    const platform = { web: 'Web', host: 'Host', unsupported: '平台不支持' }[value.clientPlatform] || '平台待确认';
-    const patch = value.bundlePatch === 'ready' ? 'Patch 正常' : value.bundlePatch === 'missing' ? 'Patch 缺失' : 'Patch 已阻止';
-    const peer = value.peers || {};
-    return `${source} · ${platform} · ${patch} · Peer ${peer.healthy || 0}/${peer.expected || 0}`;
   };
   const extensionSurfaceCard = (item) => {
     const card = document.createElement('article');
@@ -78,7 +65,7 @@
       const node = document.createElement('p'); node.className = 'inventory-ok'; node.textContent = '官方实时清单没有报告禁用、过渡中或失败的加载项。'; extensionIssues.append(node);
     }
   };
-  const packageRow = (item, kind, profile) => {
+  const packageRow = (item, kind) => {
     const row = document.createElement('li');
     const body = document.createElement('div');
     const name = document.createElement('strong');
@@ -87,100 +74,39 @@
     const source = { runtime: '软件随附', profile: 'Profile 安装', none: '未解析', outside: '边界外' }[item.source] || '未知来源';
     detail.textContent = `${kind} · ${source}${item.version ? ` · ${item.version}` : ''}`;
     body.append(name, detail);
-    if (item.compatibility) {
-      const compatibility = document.createElement('span');
-      compatibility.className = 'compatibility-detail';
-      compatibility.textContent = compatibilityText(item.compatibility);
-      body.append(compatibility);
-    }
     const actions = document.createElement('div');
     actions.className = 'package-actions';
     actions.append(makeBadge(item.status));
-    if (item.compatibility) actions.append(makeBadge(item.compatibility.status));
-    if (kind === 'pnpm 管理' && item.toggleable) {
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'toggle-button';
-      toggle.textContent = item.enabled ? '关闭' : '启用';
-      toggle.addEventListener('click', async () => {
-        toggle.disabled = true;
-        status.textContent = `正在${item.enabled ? '关闭' : '启用'} ${item.name}…`;
-        try {
-          const result = await api.toggle(profile.id, item.name, !item.enabled);
-          if (result?.state) render(result.state);
-          status.textContent = result?.message || (result?.ok ? '扩展状态已更新。' : '扩展状态未更改。');
-        } catch {
-          status.textContent = '扩展变更失败；Profile 保持或恢复为原状态。';
-        } finally { toggle.disabled = false; }
-      });
-      actions.append(toggle);
-    }
     row.append(body, actions);
     return row;
-  };
-
-  const catalogCard = (item, pnpm) => {
-    const card = document.createElement('article');
-    card.className = 'catalog-card';
-    const header = document.createElement('div');
-    header.className = 'catalog-header';
-    const identity = document.createElement('div');
-    const name = document.createElement('h3');
-    name.textContent = item.displayName || item.name || '未命名扩展';
-    const packageName = document.createElement('code');
-    packageName.textContent = `${item.name || ''}@${item.version || ''}`;
-    identity.append(name, packageName);
-    header.append(identity, makeBadge(pnpm.status));
-    const detail = document.createElement('p');
-    detail.textContent = `固定 ${item.registry || 'registry'} · pnpm ${pnpm.version || '不可用'} · ${item.scriptsIgnored ? '安装脚本已禁止' : '安装策略未知'}`;
-    card.append(header, detail);
-    const targets = document.createElement('div');
-    targets.className = 'catalog-targets';
-    for (const target of item.targets || []) {
-      const row = document.createElement('div');
-      const text = document.createElement('span');
-      text.textContent = target.available ? `Profile：${target.profileName}` : `Profile：${target.profileName}（尚未初始化）`;
-      row.append(text);
-      const actions = document.createElement('div');
-      actions.className = 'catalog-actions';
-      if (target.installed) actions.append(makeBadge('installed'));
-      let actionCount = 0;
-      const addLifecycleButton = (action, caption, className = '') => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = `lifecycle-button ${className}`.trim();
-        button.dataset.action = action;
-        button.textContent = caption;
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          status.textContent = `正在${caption} ${item.name}；请勿关闭软件…`;
-          try {
-            const result = await api.lifecycle(target.profileId, item.id, action);
-            if (result?.state) render(result.state);
-            status.textContent = result?.message || (result?.ok ? '插件生命周期操作完成。' : '插件状态未更改。');
-          } catch {
-            status.textContent = '受控插件生命周期操作失败；将按持久事务保持或恢复原状态。';
-          } finally { button.disabled = false; }
-        });
-        actions.append(button);
-        actionCount += 1;
-      };
-      if (target.canInstall) addLifecycleButton('install', `安装到 ${target.profileName}`, 'install-button');
-      if (target.canUpgrade) addLifecycleButton('upgrade', `升级到 ${item.version}`, 'upgrade-button');
-      if (target.canUninstall) addLifecycleButton('uninstall', '卸载', 'uninstall-button');
-      if (target.canRollback) addLifecycleButton('rollback', '回退', 'rollback-button');
-      if (actionCount === 0) actions.append(makeBadge(target.available ? 'blocked' : 'unavailable'));
-      row.append(actions);
-      targets.append(row);
-    }
-    card.append(targets);
-    return card;
   };
 
   const render = (state = {}) => {
     root.textContent = state.profilesRoot || '本机 Harness 配置 / profiles';
     renderExtensionCenter(state.extensionCenter || {});
-    empty(runtime); empty(issues); empty(catalog); empty(profiles);
+    empty(historyRollbacks);
+    const history = state.historicalRollback || {};
+    for (const item of history.items || []) {
+      const row = document.createElement('article'); row.className = 'profile-card';
+      const name = document.createElement('p'); name.textContent = `${item.displayName || item.name} · ${item.profileName}`;
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'history-rollback-button'; button.textContent = '回退历史桌面事务';
+      button.disabled = item.canRollback !== true;
+      button.addEventListener('click', async () => {
+        button.disabled = true; status.textContent = '正在核对历史桌面事务，请在原生确认框中确认…';
+        try {
+          const result = await api.rollbackHistory(item.profileId, item.catalogId);
+          if (result?.state) render(result.state);
+          status.textContent = result?.message || '历史回退未完成，请刷新后检查。';
+        } catch { status.textContent = '历史回退未能确认完成；请刷新检查，原恢复记录不会自动删除。'; }
+        // Keep the old action disabled: only a fresh health state can enable it again.
+      });
+      row.append(name, button); historyRollbacks.append(row);
+    }
+    const historyNote = document.createElement('p'); historyNote.className = 'empty-state';
+    historyNote.textContent = (history.items || []).length ? history.message || ''
+      : `没有可安全回退的历史桌面事务。${history.message || '普通插件操作请使用官方插件页；历史记录不会因本页无可用操作而删除。'}`;
+    historyRollbacks.append(historyNote);
+    empty(runtime); empty(issues); empty(profiles);
     const rt = state.runtime || {};
     const title = document.createElement('div');
     title.className = 'runtime-title';
@@ -204,13 +130,6 @@
       const name = document.createElement('code'); name.textContent = issue.name || '未知包';
       row.append(name, makeBadge(issue.status)); issues.append(row);
     }
-    const pnpm = state.pnpm || { status: 'unavailable', version: '' };
-    const catalogItems = state.catalog || [];
-    for (const item of catalogItems) catalog.append(catalogCard(item, pnpm));
-    if (catalogItems.length === 0) {
-      const node = document.createElement('p'); node.className = 'empty-state'; node.textContent = '当前版本没有可安装的已验证扩展。'; catalog.append(node);
-    }
-
     const profileList = state.profiles || [];
     summary.textContent = profileList.length > 0
       ? `检测到 ${profileList.length} 个 Profile${state.profileLimitReached ? '（已达展示上限）' : ''}；仅显示扩展包元数据。`
@@ -240,7 +159,7 @@
         const ul = document.createElement('ul');
         if (list.length === 0) {
           const li = document.createElement('li'); li.className = 'empty-package'; li.textContent = titleText === '外部依赖' ? '未声明外部插件' : '未声明扩展层'; ul.append(li);
-        } else for (const item of list) ul.append(packageRow(item, kind, profile));
+        } else for (const item of list) ul.append(packageRow(item, kind));
         column.append(titleNode, ul); columns.append(column);
       }
       card.append(columns);
@@ -260,9 +179,7 @@
         : '';
     status.textContent = recoveryMessage || (state.available === false
       ? (state.message || '扩展中心暂时不可用。')
-      : pnpm.status !== 'ready'
-        ? '扩展状态检查完成；软件随附 pnpm 暂不可用，安装入口已关闭。'
-        : (state.extensionCenter?.message || state.message || '扩展状态检查完成。'));
+      : (state.extensionCenter?.message || state.message || '扩展状态检查完成。'));
   };
 
   const refresh = async () => {
@@ -270,6 +187,14 @@
     try { render(await api.refresh()); } catch { status.textContent = '刷新失败；没有放宽文件或 IPC 边界。'; }
     finally { refreshButton.disabled = false; }
   };
+  openOfficialButton.addEventListener('click', async () => {
+    openOfficialButton.disabled = true; status.textContent = '正在打开官方插件页…';
+    try {
+      const result = await api.openOfficial();
+      status.textContent = result?.message || (result?.ok ? '已打开官方插件页。' : '官方插件页暂不可用，请稍后重试。');
+    } catch { status.textContent = '官方插件页打开失败；没有安装或更改插件。'; }
+    finally { openOfficialButton.disabled = false; }
+  });
   refreshButton.addEventListener('click', () => void refresh());
   closeButton.addEventListener('click', () => window.close());
   document.addEventListener('keydown', (event) => {

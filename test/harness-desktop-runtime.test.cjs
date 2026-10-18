@@ -44,7 +44,7 @@ function fixture(t) {
   write('node_modules/@deepseek-ai/dsh/lib/extra.js', 'export const other = true;\n');
   write('node_modules/@deepseek-ai/dsh-desktop-host/package.json', { name: '@deepseek-ai/dsh-desktop-host', version });
   const descriptor = official.writeDesktopRuntime(runtime, {
-    schemaVersion: 1, version, nodeVersion: '24.19.0', pnpmVersion: '11.7.0', hostProtocolVersion: 4
+    schemaVersion: 1, version, nodeVersion: '24.19.0', pnpmVersion: '11.28.5', hostProtocolVersion: 4
   }, ['@deepseek-ai/dsh', '@deepseek-ai/dsh-desktop-host'], { platform: 'win32', arch: 'x64' });
   const profile = structuredClone(require('../runtime/harness/package.json'));
   const pin = () => { profile.dshDesktop.descriptor.sha256 = sha256(fs.readFileSync(path.join(runtime, 'desktop-runtime.json'))); };
@@ -54,19 +54,65 @@ function fixture(t) {
 }
 
 test('product candidate pin is exact, deeply frozen and separate from preparation promotion', () => {
-  assert.equal(product.HARNESS_VERSION, '0.2.1-alpha.1');
-  assert.equal(product.HARNESS_RUNTIME_DIRECTORY, 'harness-desktop-0.2.1-alpha.1-attachment-1');
-  assert.equal(product.PRODUCT_BINDING.descriptor.sha256, 'b0692fff88311e8cc326b7a7792b8e66620716176f3865c9a188dbaffcff82a7');
+  assert.equal(product.HARNESS_VERSION, '0.2.1-rc.2');
+  assert.equal(product.HARNESS_RUNTIME_DIRECTORY, 'harness-desktop-0.2.1-rc.2-attachment-1');
+  assert.equal(product.PRODUCT_BINDING.descriptor.sha256, '3660a0494ae0f5971973b16177f5fd3d5dc9c5dde344a94aeddf5d7f5e56d971');
   assert.equal(product.PRODUCT_BINDING.node.sha256, '3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237');
   assert.equal(product.PRODUCT_BINDING.powerShell.version, '7.6.6');
   assert.ok(Object.isFrozen(product.PRODUCT_BINDING.descriptor));
-  assert.equal(require('../runtime/harness-021-candidate/profile.json').promotionAllowed, false);
+  assert.equal(require('../runtime/harness-021-rc2/profile.json').promotionAllowed, false);
+});
+
+test('rc.2 source binding retains raw postimages and explicit independent replay verification', () => {
+  const profile = require('../runtime/harness-021-rc2/profile.json');
+  const chain = product.PRODUCT_BINDING.reviewedSourceChain;
+  assert.equal(chain.schemaVersion, 2);
+  assert.equal(chain.receiptFormat, 'source-frozen-v1');
+  assert.equal(Object.hasOwn(chain, 'sourceEquivalenceSha256'), false);
+  assert.equal(profile.postimagePath, 'runtime/harness-021-rc2/postimages.json');
+  assert.equal(profile.postimageSha256, '8356e4fefb70c75eeef54c47e714b834d3e7cbd0aff8e6a26b511454bd41d763');
+  assert.equal(chain.sourceIntegrationSha256, profile.postimageSha256);
+  const bytes = fs.readFileSync(path.join(root, profile.postimagePath));
+  assert.equal(sha256(bytes), profile.postimageSha256);
+  const integration = JSON.parse(bytes);
+  assert.equal(integration.schemaVersion, 1);
+  assert.equal(integration.ok, true);
+  assert.deepEqual(integration.identity, {
+    version: '0.2.1-rc.2', tag: 'dsh-v0.2.1-rc.2',
+    commit: '687f282e8625c6b8d11ff58211a90524be2e4317',
+    repository: 'https://github.com/deepseek-ai/deepseek-harness.git'
+  });
+  assert.equal(integration.source, 'artifacts/harness-source-0.2.1-rc.2-lulu');
+  for (const flag of ['buildVerified', 'runtimeDeployed', 'promotionAllowed']) assert.equal(integration[flag], false, flag);
+  assert.equal(integration.files.length, 40);
+  assert.equal(new Set(integration.files.map(file => file.path)).size, 40);
+  for (const file of integration.files) {
+    assert.equal(file.matches, true, file.path);
+    assert.match(file.sha256, /^[a-f0-9]{64}$/);
+    if (file.preimageSha256 !== null) assert.match(file.preimageSha256, /^[a-f0-9]{64}$/);
+  }
+  assert.equal(integration.patchChain.length, 6);
+  assert.deepEqual(integration.patchChain, profile.patchChain);
+  for (const patch of integration.patchChain) assert.equal(sha256(fs.readFileSync(path.join(root, patch.path))), patch.sha256);
+  assert.deepEqual(integration.lockReplay, profile.lockReplay);
+  assert.equal(integration.lockReplay.type, 'localized-patch-replay-on-new-official-lock');
+  assert.equal(integration.lockReplay.verificationType, 'independent-post-verification-of-applied-replay');
+  assert.deepEqual(integration.lockReplay.originalFailureScope, {
+    type: 'post-apply-source-metadata-assertion',
+    errorSha256: 'e8037fc840fde9c9573b36c8efb142dbe53128c317df46ed1091cee04614b875',
+    scriptPath: 'artifacts/upstream-checks/2026-10-17/rc1/prepare-rc2.cjs',
+    scriptSha256: 'e48c0692a99f40f9940c156c4211564c4548238c5039342ae7bcc45abfe92b75',
+    patchCount: 6, fileCount: 40
+  });
 });
 
 test('official CJS artifact and retained upstream sources match their reviewed build record', () => {
   const directory = path.join(root, 'runtime/harness-official');
   const record = JSON.parse(fs.readFileSync(path.join(directory, 'build-manifest.json')));
-  assert.equal(record.upstream.commit, product.PRODUCT_BINDING.commit);
+  const compatibility = JSON.parse(fs.readFileSync(path.join(directory, 'source-compatibility.json')));
+  assert.equal(compatibility.upstream.commit, product.PRODUCT_BINDING.commit);
+  assert.deepEqual(compatibility.historicalBuild.upstream, record.upstream);
+  assert.equal(sha256(fs.readFileSync(path.join(directory, 'build-manifest.json'))), compatibility.historicalBuild.sha256);
   for (const [name, expected] of Object.entries(record.sourceHashes)) {
     assert.equal(sha256(fs.readFileSync(path.join(directory, 'sources', name))), expected);
   }
@@ -102,6 +148,7 @@ for (const [name, change] of [
   ['wrong release', f => f.editDescriptor(d => { d.release.version = '0.1.6-alpha.2'; })],
   ['wrong host protocol', f => f.editDescriptor(d => { d.release.hostProtocolVersion = 3; })],
   ['wrong Node', f => f.editDescriptor(d => { d.release.nodeVersion = '24.18.0'; })],
+  ['wrong pnpm', f => f.editDescriptor(d => { d.release.pnpmVersion = '11.7.0'; })],
   ['wrong platform', f => f.editDescriptor(d => { d.platform = 'linux'; })],
   ['parent traversal', f => f.editDescriptor(d => { d.files[0].path = '../outside'; })],
   ['alternate stream', f => f.editDescriptor(d => { d.files[0].path = 'package.json:stream'; })],

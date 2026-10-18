@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "byte-identical-upstream-source-compatibility",
+  "upstream": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+    "tag": "dsh-v0.2.1-rc.2",
+    "commit": "687f282e8625c6b8d11ff58211a90524be2e4317"
+  },
+  "historicalBuild": {
+    "file": "build-manifest.json",
+    "sha256": "89f886a6bf0e5f8f5a602b1822a8e58fd22752e19db7f0e731d5c634bbbd170f",
+    "upstream": {
+      "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+      "tag": "dsh-v0.2.1-alpha.1",
+      "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc"
+    }
+  },
+  "verification": {
+    "verifiedOn": "2026-10-18",
+    "method": "Buffer equality of each retained source, candidate working-tree file and git show of the exact rc.2 commit; SHA-256 binding of the unchanged historical build manifest and its outputs.",
+    "sourceCount": 4,
+    "bundleRebuilt": false
+  },
+  "sources": [
+    {
+      "file": "runtime-tree.ts",
+      "vendoredPath": "sources/runtime-tree.ts",
+      "upstreamPath": "apps/desktop/src/runtime-tree.ts",
+      "sha256": "aaef471a94c1bb295c7aecd080f2bf9f4fa037a8fc3f2d76c63db9b367c80778"
+    },
+    {
+      "file": "core-package-set.ts",
+      "vendoredPath": "sources/core-package-set.ts",
+      "upstreamPath": "apps/desktop/src/core-package-set.ts",
+      "sha256": "578403a76103a378a6abff4257cf45ee65b9e31d0b87b83a475d12da33f85667"
+    },
+    {
+      "file": "release.ts",
+      "vendoredPath": "sources/release.ts",
+      "upstreamPath": "apps/desktop/src/release.ts",
+      "sha256": "ab4c40200893effa8e3ea0840c43630ba10403242f90ecccba49ae9a11c82140"
+    },
+    {
+      "file": "host-protocol.ts",
+      "vendoredPath": "sources/host-protocol.ts",
+      "upstreamPath": "apps/desktop/src/host-protocol.ts",
+      "sha256": "3ac3b9c5416144de212ed2e1fae3ae17a12dedd9389df99f07283012df5d77b9"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "runtime-tree.cjs",
+      "sha256": "1d862fa7d4027163f8761b8e63ff0678daba1c6bda3e1a8af35da6118db23b42"
+    },
+    {
+      "file": "runtime-tree.cjs.map",
+      "sha256": "9552f07931e02b47877fea4f39f94b180c93c2d27c5ee326982677b54e81079e"
+    }
+  ],
+  "scope": "Only the four official verifier sources are byte-identical across the recorded releases. The existing bundle retains its original alpha.1 build provenance and dependency inputs. This is not runtime payload, native behavior, desktop host, packaged installation or release acceptance.",
+  "runtimeAccepted": false,
+  "hostAccepted": false,
+  "installationAccepted": false,
+  "releaseAccepted": false
+}

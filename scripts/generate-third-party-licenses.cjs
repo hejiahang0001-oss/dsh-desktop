@@ -63,6 +63,23 @@ const verifyPdfNotices = (harnessModules) => {
     || pdfNotices.some((notice) => !previewBundle.includes(`// ${notice}\n`))) throw new Error('Official PDF.js bundle or license notices are incomplete.');
 };
 
+const sourceProvenanceLines = (binding, deployment) => {
+  const chain = binding.reviewedSourceChain;
+  if (!chain) return [];
+  if (chain.receiptFormat === 'source-frozen-v1') {
+    const source = deployment?.inputs?.sourceProfile;
+    if (chain.schemaVersion !== 2 || deployment?.schemaVersion !== 2 || deployment.version !== binding.packageVersion
+      || !/^runtime\/harness-[a-z0-9-]+\/profile\.json$/.test(source?.path || '') || !/^[a-f0-9]{64}$/.test(source?.sha256 || '')) {
+      throw new Error('Source-frozen provenance requires the matching deployment source profile.');
+    }
+    return [`- This is an independently maintained desktop build, not the unmodified upstream binary. Reviewed source increments retain Windows host protections and pending-attachment lifetime. The ordered source patches and fixed source identity are in \`${source.path}\`; the original source-frozen build/pack receipts, reviewed production dependency lock, and materialization/native/Host evidence are bound by \`runtime/harness/package.json\` and \`runtime/harness-desktop-021/deployment.json\`. This chain directly consumes the new package set; it does not claim equivalence to an older package set. Historical verifier build provenance remains unchanged with a separate byte-identical source compatibility record.`];
+  }
+  if (chain.receiptFormat !== undefined) throw new Error('Unknown source provenance receipt format.');
+  return [chain.schemaVersion === 2
+    ? '- This is an independently maintained desktop build, not the unmodified upstream binary. Reviewed source increments retain Windows host protections and pending-attachment lifetime. The ordered source patches and fixed source identity are in `runtime/harness-021-alpha2/profile.json`; the controlled build/pack and byte-equivalence identities are in `runtime/harness/package.json` and the deployment profile. Historical verifier build provenance remains unchanged with a separate byte-identical source compatibility record.'
+    : '- This is an independently maintained desktop build, not the unmodified upstream binary. Reviewed source increments retain the Windows host protections and fix pending-attachment lifetime; reproducible source patches are recorded under `runtime/harness-021-candidate`, `runtime/harness-021-attachment-fix` (including `type-only.patch`) and `runtime/harness-021-jsdoc-fix`. The fixed integration and assembly identities are in `runtime/harness/package.json`.'];
+};
+
 const generateThirdPartyLicenses = async () => {
   const binding = harnessDesktop.PRODUCT_BINDING;
   const runtime = await harnessDesktop.verifyHarnessDesktopRuntime(path.join(root, 'vendor', binding.runtimeDirectory));
@@ -73,6 +90,8 @@ const generateThirdPartyLicenses = async () => {
   verifyPdfNotices(harnessModules);
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const powerShell = JSON.parse(fs.readFileSync(path.join(root, 'runtime', 'powershell', 'profile.json'), 'utf8'));
+  const deployment = binding.reviewedSourceChain?.receiptFormat === 'source-frozen-v1'
+    ? JSON.parse(fs.readFileSync(path.join(root, 'runtime/harness-desktop-021/deployment.json'), 'utf8')) : undefined;
   const outputPath = path.join(root, 'docs', 'THIRD_PARTY_LICENSES.md');
 
   const groups = new Map();
@@ -92,7 +111,7 @@ const generateThirdPartyLicenses = async () => {
     '',
     `- DeepSeek Harness: \`${binding.package}@${runtime.version}\`, source tag \`${binding.tag}\`, commit \`${binding.commit}\`.`,
     `- Official desktop runtime descriptor: \`${binding.descriptor.file}\`, SHA-256 \`${runtime.descriptorSha256}\`; ${runtime.descriptor.sharedPackages.length} shared packages. Its complete file tree is verified before this inventory is generated.`,
-    ...(binding.reviewedSourceChain ? ['- This is an independently maintained desktop build, not the unmodified upstream binary. Reviewed source increments retain the Windows host protections and fix pending-attachment lifetime; reproducible source patches are recorded under `runtime/harness-021-candidate`, `runtime/harness-021-attachment-fix` (including `type-only.patch`) and `runtime/harness-021-jsdoc-fix`. The fixed integration and assembly identities are in `runtime/harness/package.json`.'] : []),
+    ...sourceProvenanceLines(binding, deployment),
     `- Node.js: \`v${binding.node.version.replace(/^v/, '')}\`; its official \`LICENSE\` file is bundled beside \`node.exe\`.`,
     `- Private PowerShell: \`${powerShell.version}\` / \`.NET ${powerShell.frameworkVersion}\`, official \`PowerShell/PowerShell\` tag \`${powerShell.tag}\`, commit \`${powerShell.commit}\`. The complete official Windows x64 ZIP payload, including MIT \`LICENSE.txt\` and \`ThirdPartyNotices.txt\`, is retained in \`resources/powershell/${powerShell.version}/win32-x64/\`; trusted application profile and full payload hashes are checked after packaging. This inventory does not establish Windows 10, installer, or Stable acceptance.`,
     `- Electron: \`${manifest.devDependencies.electron}\`; Electron and Chromium notices are emitted by the Windows packaging runtime.`,
@@ -131,4 +150,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { collectPackageLicenses, generateThirdPartyLicenses, verifyPdfNotices };
+module.exports = { collectPackageLicenses, generateThirdPartyLicenses, verifyPdfNotices, sourceProvenanceLines };

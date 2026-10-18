@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
-const { previewExpression, finishOfficialOnboarding } = require('../electron/official-office-preview-contract.cjs');
+const { previewExpression, finishOfficialOnboarding, observeAndAdvanceOfficialOnboarding } = require('../electron/official-office-preview-contract.cjs');
 
 function element(attributes = {}, parentElement = null) {
   const children = new Map();
@@ -11,7 +12,8 @@ function element(attributes = {}, parentElement = null) {
     querySelector: selector => children.get(selector)?.[0] || null,
     querySelectorAll: selector => children.get(selector) || [],
     getBoundingClientRect: () => ({ width: 500, height: 400, left: 0, top: 0, right: 500, bottom: 400 }),
-    getClientRects: () => [1]
+    getClientRects: () => [1],
+    contains(node) { for (; node; node = node.parentElement) if (node === this) return true; return false; }
   };
 }
 
@@ -134,15 +136,114 @@ for (const [welcomeTitle, credentialTitle, continueLabel, laterLabel] of [
   const unrelated = element({ 'aria-label': 'Other dialog' });
   const unrelatedButton = element(); unrelatedButton.textContent = '继续'; unrelatedButton.click = () => assert.fail('unrelated action');
   unrelated.children.set('button', [unrelatedButton]);
-  const welcome = element({ 'aria-label': welcomeTitle });
-  const later = element({ 'aria-label': credentialTitle });
+  const welcome = element({ 'aria-label': welcomeTitle, 'aria-modal': 'true' });
+  const later = element({ 'aria-label': credentialTitle, 'aria-modal': 'true' });
   let dialogs = [unrelated, welcome], clicked = [];
-  const button = element(); button.textContent = continueLabel;
+  const button = element({}, welcome); button.textContent = continueLabel;
   button.click = () => { clicked.push(continueLabel); dialogs = [later]; };
-  const skip = element(); skip.textContent = laterLabel;
+  const skip = element({}, later); skip.textContent = laterLabel;
   skip.click = () => { clicked.push(laterLabel); dialogs = []; root.inert = false; };
   welcome.children.set('button', [button]); later.children.set('button', [skip]);
-  const document = { querySelectorAll: () => dialogs, getElementById: () => root };
-  const result = await finishOfficialOnboarding({ evaluate: async code => vm.runInNewContext(code, { document, getComputedStyle: node => node.style }) });
+  const document = { querySelectorAll: () => dialogs, getElementById: () => root,
+    elementFromPoint: () => dialogs.at(-1).querySelectorAll('button')[0] };
+  const result = await finishOfficialOnboarding({ evaluate: async code => vm.runInNewContext(code, {
+    document, getComputedStyle: node => node.style, innerWidth: 1280, innerHeight: 880
+  }) });
   assert.deepEqual(clicked, [continueLabel, laterLabel]); assert.equal(result.rootInert, false);
+});
+
+function accountFixture(title = '开始使用', close = '关闭', key = '添加 API Key', login = '登录') {
+  const root = element();
+  const dialog = element({ 'aria-label': title, 'aria-modal': 'true' });
+  const button = element({ 'aria-label': close }, dialog);
+  const api = element({}, dialog); api.textContent = key;
+  const signIn = element({}, dialog); signIn.textContent = login;
+  const controls = [button, api, signIn]; dialog.children.set('button', controls);
+  let dialogs = [dialog], hit = button;
+  const clicks = [];
+  button.click = () => { clicks.push(close); dialogs = []; };
+  api.click = signIn.click = () => assert.fail('Must not invoke account or API-key setup');
+  const document = { querySelectorAll: () => dialogs, getElementById: () => root, elementFromPoint: () => hit };
+  return { root, dialog, button, api, signIn, controls, clicks,
+    context: { document, getComputedStyle: node => node.style, innerWidth: 1280, innerHeight: 880 },
+    dialogs: value => { dialogs = value; }, hit: value => { hit = value; } };
+}
+
+async function finishWithClock(fixture, beforeObserve = () => {}) {
+  let now = 1000, observations = 0;
+  const module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../electron/official-office-preview-contract.cjs'), 'utf8'), {
+    module, Date: { now: () => now },
+    setTimeout: (resolve, ms) => { assert.equal(ms, 100); now += ms; resolve(); }
+  });
+  let result, error;
+  try {
+    result = await module.exports.finishOfficialOnboarding({ evaluate: async code => {
+      beforeObserve(observations++, now); return vm.runInNewContext(code, fixture.context);
+    } });
+  } catch (caught) { error = caught; }
+  return { result, error, elapsed: now - 1000 };
+}
+
+for (const row of [
+  ['开始使用', '关闭', '添加 API Key', '登录'], ['Get started', 'Close', 'Add API Key', 'Sign in']
+]) test(`official idle account choice closes through the sole ${row[1]} action`, async () => {
+  const fixture = accountFixture(...row), actual = await finishWithClock(fixture);
+  assert.equal(actual.error, undefined); assert.equal(actual.result.ok, true);
+  assert.deepEqual(fixture.clicks, [row[1]]); assert.equal(actual.elapsed, 700);
+});
+
+const inspectOnboarding = fixture => vm.runInNewContext(`(${observeAndAdvanceOfficialOnboarding.toString()})()`, fixture.context);
+for (const [name, change] of [
+  ['unknown title', f => { f.dialog.attributes['aria-label'] = 'Delete all data'; }],
+  ['waiting login', f => { f.dialog.attributes['aria-label'] = '等待登录'; }],
+  ['failed login', f => { f.dialog.attributes['aria-label'] = '登录失败'; }],
+  ['expired login', f => { f.dialog.attributes['aria-label'] = '登录已超时'; }],
+  ['English waiting login', f => { f.dialog.attributes['aria-label'] = 'Waiting for sign in'; }],
+  ['English failed login', f => { f.dialog.attributes['aria-label'] = 'Could not sign in'; }],
+  ['English expired login', f => { f.dialog.attributes['aria-label'] = 'Sign in timed out'; }],
+  ['busy dialog with idle labels', f => { f.dialog.attributes['aria-busy'] = 'true'; }],
+  ['busy descendant with idle labels', f => { f.dialog.children.set('[aria-busy="true"]', [element({ 'aria-busy': 'true' }, f.dialog)]); }],
+  ['pending disabled key action', f => { f.api.disabled = true; }],
+  ['pending disabled sign-in action', f => { f.signIn.disabled = true; }],
+  ['pending aria-disabled sign-in action', f => { f.signIn.attributes['aria-disabled'] = 'true'; }],
+  ['missing idle key action', f => { f.controls.splice(1, 1); }],
+  ['missing idle sign-in action', f => { f.controls.splice(2, 1); }],
+  ['wrong locale close', f => { f.button.attributes['aria-label'] = 'Close'; }],
+  ['duplicate close', f => { f.controls.push(f.button); }],
+  ['hidden close', f => { f.button.hidden = true; }],
+  ['inert close', f => { f.button.inert = true; }],
+  ['disabled close', f => { f.button.disabled = true; }],
+  ['aria-disabled close', f => { f.button.attributes['aria-disabled'] = 'true'; }],
+  ['occluded close', f => { f.hit(element()); }],
+  ['offscreen close', f => { f.button.getBoundingClientRect = () => ({ left: 2000, top: 10, width: 40, height: 20 }); }],
+  ['nonmodal account title', f => { f.dialog.attributes['aria-modal'] = 'false'; }],
+  ['newer unknown foreground', f => { f.dialogs([f.dialog, element({ 'aria-label': 'Unknown', 'aria-modal': 'true' })]); }]
+]) test(`onboarding does not dismiss ${name}`, () => {
+  const fixture = accountFixture(); change(fixture);
+  assert.equal(inspectOnboarding(fixture).clear, false); assert.deepEqual(fixture.clicks, []);
+});
+
+test('onboarding uses dialog-local controls and allows a real nested icon hit', () => {
+  const fixture = accountFixture(); fixture.hit(element({}, fixture.button));
+  fixture.context.document.querySelector = () => assert.fail('Must not search page-global Close');
+  assert.equal(inspectOnboarding(fixture).action, '关闭'); assert.deepEqual(fixture.clicks, ['关闭']);
+});
+
+test('unknown dialog and inert root retain the original 15-second timeout', async () => {
+  const fixture = accountFixture('Unknown');
+  const unknown = await finishWithClock(fixture);
+  assert.match(unknown.error.message, /Official onboarding did not settle/); assert.equal(unknown.elapsed, 15000);
+  assert.deepEqual(fixture.clicks, []); fixture.dialogs([]); fixture.root.inert = true;
+  const inert = await finishWithClock(fixture);
+  assert.equal(inert.elapsed, 15000); assert.match(inert.error.message, /Official onboarding did not settle/);
+});
+
+test('another modal resets the original 600ms clear settling interval', async () => {
+  const fixture = accountFixture(); fixture.dialogs([]);
+  const actual = await finishWithClock(fixture, observation => {
+    if (observation === 5) { fixture.dialog.attributes['aria-label'] = 'Unknown'; fixture.dialogs([fixture.dialog]); }
+    if (observation === 7) fixture.dialogs([]);
+  });
+  assert.equal(actual.error, undefined); assert.equal(actual.elapsed, 1300); assert.deepEqual(fixture.clicks, []);
 });

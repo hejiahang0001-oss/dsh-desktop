@@ -6,27 +6,18 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('controlled plugin lifecycle is fixed-catalog, native-confirmed, busy-gated, and crash-recoverable', () => {
+test('legacy install entry is retired while its fixed-version crash recovery remains packaged', () => {
   const main = read('electron/main.cjs');
   const installer = read('electron/controlled-plugin-installer.cjs');
   const preload = read('electron/plugin-health-preload.cjs');
   const wrapper = read('build/pnpm/pnpm.cmd');
   const manifest = JSON.parse(read('package.json'));
 
-  assert.match(main, /ipcMain\.handle\('plugin-health:install'/);
-  assert.match(main, /ipcMain\.handle\('plugin-health:lifecycle'/);
-  assert.match(main, /if \(!pluginHealthIpcAllowed\(event\)\)/);
-  assert.match(main, /pluginTogglePromise \|\| pluginInstallPromise/);
-  assert.match(main, /\['install', 'upgrade', 'uninstall', 'rollback'\]\.includes\(action\)/);
-  assert.match(main, /buttons: \['取消', `\$\{selectedAction\.verb\}并重启 Harness`\]/);
-  assert.match(main, /defaultId: 0/);
-  assert.match(main, /cancelId: 0/);
-  assert.match(main, /controlledPluginInstaller\[selectedAction\.method\]/);
-  assert.match(main, /controlledPluginInstaller\.commit/);
-  assert.match(main, /controlledPluginInstaller\.rollback/);
-  assert.match(main, /verifiedDependency\?\.compatibility\?\.status === 'verified'/);
-  assert.match(preload, /install: \(profileId, catalogId\)/);
-  assert.match(preload, /lifecycle: \(profileId, catalogId, action\)/);
+  assert.match(main, /registerRetiredPluginMutations\(ipcMain, pluginHealthIpcAllowed\)/);
+  assert.doesNotMatch(main, /performPluginInstall|controlledPluginInstaller\[selectedAction\.method\]/);
+  assert.match(main, /controlledPluginInstaller\.recoverPending\(/);
+  assert.match(preload, /openOfficial:/);
+  assert.doesNotMatch(preload, /install:|lifecycle:|toggle:/);
   assert.doesNotMatch(preload, /packageSpec|pnpmArgs|command/);
 
   assert.match(installer, /id: 'catppuccin-0\.3\.1'/);
@@ -46,8 +37,7 @@ test('controlled plugin lifecycle is fixed-catalog, native-confirmed, busy-gated
   assert.match(installer, /normalized === 'NODE_OPTIONS'/);
   assert.match(installer, /environment\.ComSpec = path\.join\(windowsRoot, 'System32', 'cmd\.exe'\)/);
   assert.match(installer, /\[this\.pnpmRuntime\.binPath, 'prune'\]/);
-  assert.match(main, /error\?\.code === 'install-rollback-failed'/);
-  assert.match(main, /本次运行已封锁该 Profile/);
+  assert.match(installer, /install-rollback-failed/);
   assert.match(installer, /buildHarnessEnvironment/);
   assert.doesNotMatch(installer, /allowUnknownOption|passThroughOptions|shell: true/);
 

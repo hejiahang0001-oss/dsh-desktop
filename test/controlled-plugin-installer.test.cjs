@@ -292,6 +292,26 @@ test('reviewed 0.3.0 upgrades to 0.3.1 and last-known-good restores the exact pr
   assert.equal(manifest.dsh.profile.bundles.includes(plugin.name), false);
 });
 
+test('official or manual Profile changes refuse historical LKG rollback and preserve the record', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-history-conflict-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let created;
+  created = fixture(root, lifecycleCommand(() => created));
+  const installed = await created.manager.install({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root });
+  await created.manager.commit(installed.id);
+  const recordPath = path.join(created.profileDir, 'package.json.dsh-desktop-plugin-last-known-good.json');
+  const before = fs.readFileSync(recordPath);
+  const manifestPath = path.join(created.profileDir, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath));
+  manifest.officialManagedEdit = true;
+  writeJson(manifestPath, manifest);
+  const edited = fs.readFileSync(manifestPath);
+  assert.equal((await created.manager.inspectLifecycle({ profileDir: created.profileDir, catalogId: plugin.id })).canRollback, false);
+  await assert.rejects(created.manager.rollbackLastKnownGood({ profileDir: created.profileDir, catalogId: plugin.id, workspacePath: root }), { code: 'rollback-not-available' });
+  assert.deepEqual(fs.readFileSync(recordPath), before);
+  assert.deepEqual(fs.readFileSync(manifestPath), edited);
+});
+
 test('startup recovery rolls back an applied lifecycle transaction after a simulated crash', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-controlled-crash-recovery-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));

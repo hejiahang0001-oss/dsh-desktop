@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { collectPackageLicenses, verifyPdfNotices } = require('../scripts/generate-third-party-licenses.cjs');
+const { collectPackageLicenses, verifyPdfNotices, sourceProvenanceLines } = require('../scripts/generate-third-party-licenses.cjs');
 
 const fixture = (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-license-inventory-'));
@@ -62,4 +62,34 @@ test('license generation uses the central binding and verifies before writing', 
   assert.match(source, /verifyHarnessDesktopRuntime\(path\.join\(root, 'vendor', binding\.runtimeDirectory\)\)/);
   assert.match(source, /inspectDesktopOfficeEngine\(harnessModules\)/);
   assert.doesNotMatch(source, /harness-hoisted|Expected 599/);
+});
+
+test('source-frozen provenance names its actual profile and direct new package-set consumption', () => {
+  const binding = { packageVersion: '0.2.1-rc.2', reviewedSourceChain: { schemaVersion: 2, receiptFormat: 'source-frozen-v1' } };
+  const deployment = { schemaVersion: 2, version: binding.packageVersion,
+    inputs: { sourceProfile: { path: 'runtime/harness-021-rc2/profile.json', sha256: 'a'.repeat(64) } } };
+  const text = sourceProvenanceLines(binding, deployment).join('\n');
+  assert.match(text, /runtime\/harness-021-rc2\/profile\.json/);
+  assert.match(text, /original source-frozen build\/pack receipts/);
+  assert.match(text, /directly consumes the new package set/);
+  assert.match(text, /does not claim equivalence to an older package set/);
+  assert.doesNotMatch(text, /harness-021-alpha2|controlled build\/pack and byte-equivalence identities/);
+  assert.match(text, /Historical verifier build provenance remains unchanged/);
+});
+
+test('source-frozen provenance rejects missing, mismatched or unsafe profile metadata', () => {
+  const binding = { packageVersion: '0.2.1-rc.2', reviewedSourceChain: { schemaVersion: 2, receiptFormat: 'source-frozen-v1' } };
+  const good = { schemaVersion: 2, version: binding.packageVersion,
+    inputs: { sourceProfile: { path: 'runtime/harness-021-rc2/profile.json', sha256: 'a'.repeat(64) } } };
+  for (const deployment of [undefined, { ...good, version: '0.2.1-alpha.2' }, { ...good, schemaVersion: 1 },
+    { ...good, inputs: { sourceProfile: { path: '../other/profile.json', sha256: 'a'.repeat(64) } } }]) {
+    assert.throws(() => sourceProvenanceLines(binding, deployment), /matching deployment source profile/);
+  }
+  assert.throws(() => sourceProvenanceLines({ reviewedSourceChain: { schemaVersion: 2, receiptFormat: 'unknown' } }), /Unknown source provenance/);
+});
+
+test('legacy provenance stays unchanged and absent supplemental source emits no extra line', () => {
+  assert.deepEqual(sourceProvenanceLines({}), []);
+  assert.match(sourceProvenanceLines({ reviewedSourceChain: { schemaVersion: 2 } })[0], /harness-021-alpha2\/profile\.json.*controlled build\/pack and byte-equivalence identities/);
+  assert.match(sourceProvenanceLines({ reviewedSourceChain: { schemaVersion: 1 } })[0], /fixed integration and assembly identities/);
 });

@@ -88,7 +88,7 @@ function readRuntime(runtimeRoot) {
   requireValid(descriptor.schemaVersion === 1 && descriptor.platform === 'win32' && descriptor.arch === 'x64'
     && descriptor.release?.schemaVersion === 1 && descriptor.release.version === HARNESS_VERSION
     && descriptor.release.nodeVersion === PRODUCT_BINDING.node.version
-    && descriptor.release.pnpmVersion === '11.7.0' && descriptor.release.hostProtocolVersion === 4
+    && descriptor.release.pnpmVersion === '11.28.5' && descriptor.release.hostProtocolVersion === 4
     && Array.isArray(descriptor.sharedPackages) && Array.isArray(descriptor.files)
     && descriptor.files.length > 0 && descriptor.files.length <= MAX_FILES);
   const entries = new Map();

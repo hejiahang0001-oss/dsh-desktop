@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { observeDriver } = require('./fixtures/driver-observation.cjs');
 
 const root = path.resolve(__dirname, '..');
 const scriptPath = path.join(root, 'scripts', 'smoke-packaged-safe-exit.cjs');
@@ -216,35 +217,48 @@ test('driver termination makes the guardian close its Job and every detached des
     `const { launchWindowsJob } = require(${JSON.stringify(modulePath)})`,
     "const fs = require('node:fs')",
     "const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))",
+    "console.error('[safe-exit-driver] helper-loaded')",
     '(async () => {',
+    "console.error('[safe-exit-driver] job-launch-start')",
     `const job = await launchWindowsJob({ executablePath: process.execPath, args: ['-e', ${JSON.stringify(childCode)}], cwd: ${JSON.stringify(temporary)} })`,
+    "console.error('[safe-exit-driver] job-ready')",
     `while (!fs.existsSync(${JSON.stringify(childStateFile)})) await delay(25)`,
     `const state = JSON.parse(fs.readFileSync(${JSON.stringify(childStateFile)}, 'utf8'))`,
     `fs.writeFileSync(${JSON.stringify(driverStateFile)}, JSON.stringify({ ...state, guardianPid: job.guardian.pid }))`,
+    "console.error('[safe-exit-driver] state-written')",
     'setInterval(() => {}, 1000)',
     '})().catch((error) => { console.error(error); process.exit(1) })'
   ].join(';');
-  const driver = spawn(process.execPath, ['-e', driverCode], { cwd: temporary, stdio: 'ignore', windowsHide: true });
+  const driver = spawn(process.execPath, ['-e', driverCode], { cwd: temporary, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  const observation = observeDriver(driver);
   const captured = [];
   context.after(async () => {
     for (const identity of captured.reverse()) await terminateProcessHandle(identity).catch(() => undefined);
     try { driver.kill(); } catch { /* The driver already exited. */ }
+    observation.dispose();
     await removeTemporaryTree(temporary);
   });
-  await waitForFile(driverStateFile);
-  const state = JSON.parse(fs.readFileSync(driverStateFile, 'utf8'));
-  for (const pid of [driver.pid, state.guardianPid, state.rootPid, state.descendantPid]) {
-    const identity = await findProcessIdentity(pid);
-    assert.ok(identity, `process ${pid} must be alive before the driver exits`);
-    captured.push(identity);
+  try {
+    await observation.waitForFile(driverStateFile);
+    const state = JSON.parse(fs.readFileSync(driverStateFile, 'utf8'));
+    for (const [role, pid] of Object.entries({ driver: driver.pid, guardian: state.guardianPid, root: state.rootPid, descendant: state.descendantPid })) {
+      observation.setStage(`identify-${role}`);
+      const identity = await findProcessIdentity(pid);
+      assert.ok(identity, `process ${pid} must be alive before the driver exits`);
+      captured.push(identity);
+    }
+    observation.setStage('terminate-driver');
+    driver.kill();
+    if (driver.exitCode === null) await new Promise((resolve) => driver.once('exit', resolve));
+    observation.setStage('verify-owned-descendant-exit');
+    await Promise.all([
+      waitForPidExit(state.guardianPid),
+      waitForPidExit(state.rootPid),
+      waitForPidExit(state.descendantPid)
+    ]);
+  } catch (error) {
+    throw observation.withContext(error);
   }
-  driver.kill();
-  if (driver.exitCode === null) await new Promise((resolve) => driver.once('exit', resolve));
-  await Promise.all([
-    waitForPidExit(state.guardianPid),
-    waitForPidExit(state.rootPid),
-    waitForPidExit(state.descendantPid)
-  ]);
 });
 
 test('Job guardian reports the root exit and proves the complete Job became empty', { skip: process.platform !== 'win32', timeout: 20000 }, async (context) => {
@@ -264,4 +278,39 @@ test('Job guardian reports the root exit and proves the complete Job became empt
   assert.equal(rootExit.code, 0);
   assert.equal(empty.activeProcesses, 0);
   assert.equal((await job.close()).code, 0);
+});
+
+test('Job membership identifies a live detached descendant after the root exits without recording its command', { skip: process.platform !== 'win32', timeout: 20000 }, async (context) => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-safe-exit-members-'));
+  const pidFile = path.join(temporary, 'child.pid');
+  let job;
+  context.after(async () => {
+    await job?.close().catch(() => undefined);
+    await removeTemporaryTree(temporary);
+  });
+  const childCode = [
+    "const child = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' })",
+    `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(child.pid))`,
+    'child.unref()'
+  ].join(';');
+  job = await launchWindowsJob({ executablePath: process.execPath, args: ['-e', childCode], cwd: temporary });
+  await waitForFile(pidFile);
+  const childPid = Number(fs.readFileSync(pidFile, 'utf8'));
+  assert.equal((await job.waitForRootExit()).code, 0);
+  await assert.rejects(job.waitForEmpty(2000), /did not become empty/);
+  const frames = job.frames.filter(frame => frame.type === 'job-members');
+  assert.ok(frames.some(frame => frame.phase === 'root-exit'));
+  assert.ok(frames.some(frame => frame.phase === 'post-root-exit'));
+  const identity = await findProcessIdentity(childPid);
+  for (const frame of frames) {
+    assert.ok(Number.isFinite(Date.parse(frame.observedAt)));
+    const member = frame.members.find(entry => entry.pid === childPid);
+    assert.ok(member);
+    assert.deepEqual(Object.keys(member).sort(), ['creationFileTime', 'name', 'pid']);
+    assert.equal(member.creationFileTime, identity.creationFileTime);
+    assert.equal(member.name.toLowerCase(), path.basename(process.execPath).toLowerCase());
+    assert.equal(member.name.includes(path.sep), false);
+  }
+  await job.close();
+  await waitForPidExit(childPid);
 });

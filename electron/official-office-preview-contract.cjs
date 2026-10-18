@@ -117,23 +117,68 @@ function previewExpression(name, page = 1, action = 'inspect', selector) {
   return `(${inspectOfficialPreview.toString()})(${JSON.stringify(name)},${page},${JSON.stringify(action)},${JSON.stringify(selector)})`;
 }
 
+// Test-only observer: use the exact public controls of the foreground modal.
+// Never initiate an account flow, write a key or override onboarding state.
+function observeAndAdvanceOfficialOnboarding() {
+  const visible = element => {
+    if (!element) return false;
+    const box = element.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return false;
+    for (let node = element; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (node.hidden || node.inert || style.display === 'none'
+        || ['hidden', 'collapse'].includes(style.visibility) || Number(style.opacity) === 0) return false;
+    }
+    return true;
+  };
+  const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(visible);
+  const clear = dialogs.length === 0 && document.getElementById('root')?.inert === false;
+  if (!dialogs.length) return { clear };
+  const dialog = dialogs.at(-1);
+  if (dialog.getAttribute('aria-modal') !== 'true' || dialog.getAttribute('aria-busy') === 'true'
+    || dialog.querySelector('[aria-busy="true"]')) return { clear: false };
+  const title = dialog.getAttribute('aria-label') || '';
+  const legacy = {
+    '预览版说明': '继续', 'Preview Notice': 'Continue',
+    '添加一个 API Key 开始使用': '稍后配置', 'Add an API key to get started': 'Configure later'
+  };
+  const account = {
+    '开始使用': { close: '关闭', key: '添加 API Key', signIn: '登录' },
+    'Get started': { close: 'Close', key: 'Add API Key', signIn: 'Sign in' }
+  };
+  const buttons = [...dialog.querySelectorAll('button')].filter(visible);
+  const enabled = button => !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+  let targets = [];
+  if (Object.hasOwn(legacy, title)) {
+    targets = buttons.filter(button => button.textContent.trim() === legacy[title]);
+  } else if (Object.hasOwn(account, title)) {
+    const expected = account[title];
+    // Only the idle account choice; busy, waiting, error and expired states
+    // have different titles/actions and must remain untouched.
+    const keyActions = buttons.filter(button => button.textContent.trim() === expected.key);
+    const signInActions = buttons.filter(button => button.textContent.trim() === expected.signIn);
+    if (keyActions.length !== 1 || signInActions.length !== 1
+      || !enabled(keyActions[0]) || !enabled(signInActions[0])) return { clear: false };
+    targets = buttons.filter(button => button.getAttribute('aria-label') === expected.close);
+  }
+  if (targets.length !== 1) return { clear: false };
+  const button = targets[0];
+  if (!enabled(button)) return { clear: false };
+  const box = button.getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2;
+  if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return { clear: false };
+  const hit = document.elementFromPoint(x, y);
+  if (hit !== button && !button.contains(hit)) return { clear: false };
+  const action = button.getAttribute('aria-label') || button.textContent.trim();
+  button.click();
+  return { action };
+}
+
 async function finishOfficialOnboarding({ evaluate }) {
   const deadline = Date.now() + 15000;
   let settledAt = 0;
   const actions = [];
   while (Date.now() < deadline) {
-    const state = await evaluate(`(() => {
-      const visible = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-      const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(visible);
-      for (const dialog of dialogs) {
-        const title = dialog.getAttribute('aria-label') || '';
-        const labels = ['预览版说明', 'Preview Notice'].includes(title) ? ['继续', 'Continue']
-          : ['添加一个 API Key 开始使用', 'Add an API key to get started'].includes(title) ? ['稍后配置', 'Configure later'] : [];
-        const button = [...dialog.querySelectorAll('button')].find(el => labels.includes(el.textContent.trim()) && !el.disabled);
-        if (button) { const action = button.textContent.trim(); button.click(); return { action }; }
-      }
-      return { clear: dialogs.length === 0 && document.getElementById('root')?.inert === false };
-    })()`);
+    const state = await evaluate(`(${observeAndAdvanceOfficialOnboarding.toString()})()`);
     if (state.action) { actions.push(state.action); settledAt = 0; }
     else if (state.clear) {
       settledAt ||= Date.now();
@@ -144,4 +189,4 @@ async function finishOfficialOnboarding({ evaluate }) {
   throw new Error('Official onboarding did not settle: visible dialog or inert application root');
 }
 
-module.exports = { inspectOfficialPreview, previewExpression, finishOfficialOnboarding };
+module.exports = { inspectOfficialPreview, previewExpression, observeAndAdvanceOfficialOnboarding, finishOfficialOnboarding };

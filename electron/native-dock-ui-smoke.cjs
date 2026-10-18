@@ -2,8 +2,40 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const { dialog, desktopCapturer } = require('electron');
+const { finishOfficialOnboarding } = require('./official-office-preview-contract.cjs');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function waitFor(check, label, ms = 20000) { const end = Date.now() + ms; while (Date.now() < end) { if (await check()) return; await delay(100); } throw new Error(`Dock smoke timeout: ${label}`); }
+
+// Test-only public DOM facts, serialized into each brand appearance. Geometry
+// or programmatic focus alone cannot prove controls are usable behind a modal.
+function inspectBrandInteraction() {
+  const visible = element => {
+    if (!element) return false;
+    const box = element.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return false;
+    for (let node = element; node; node = node.parentElement) {
+      const css = getComputedStyle(node);
+      if (node.hidden || node.inert || css.display === 'none'
+        || ['hidden', 'collapse'].includes(css.visibility) || Number(css.opacity) === 0) return false;
+    }
+    return true;
+  };
+  const exposed = element => {
+    if (!visible(element)) return false;
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
+    const hit = document.elementFromPoint(x, y);
+    return hit === element || element.contains(hit);
+  };
+  return {
+    noVisibleDialog: ![...document.querySelectorAll('[role="dialog"]')].some(visible),
+    rootInteractive: document.getElementById('root')?.inert === false,
+    inputExposed: exposed(document.querySelector('[data-composer-input][contenteditable=true]')),
+    navigationExposed: exposed(document.querySelector('._9Bqw3q_root ._9Bqw3q_toggle'))
+  };
+}
+
 async function runNativeDockSmoke({ window, dock, terminal, broker, version, target, sessionId, origin, api, realModel }) {
   const assertions = {}, originalDialog = dialog.showMessageBox;
   let readConfirmations = 0;
@@ -31,20 +63,21 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
     if (process.argv.includes('--smoke-lulu-layout')) {
       return await require('./workbench-layout-smoke.cjs').runWorkbenchLayoutSmoke({ window, dock, target, version });
     }
+    // Reviewed 0.2.1-rc.2 decorative containers; keep functional icons unchanged.
     const brand = await window.webContents.executeJavaScript(`(() => {
       const marks = [...document.querySelectorAll('svg[viewBox="0 0 23.16 17.04"]')].map(svg => ({
         parent: svg.parentElement.className,
         ancestors: [svg.parentElement, svg.parentElement.parentElement, svg.parentElement.parentElement.parentElement].map(e => ({ tag: e.tagName, cls: e.className })),
         hidden: svg.getAttribute('aria-hidden'),
         visibility: getComputedStyle(svg).visibility,
-        mascotBackground: getComputedStyle(svg.closest('.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark') || svg.parentElement).backgroundImage.startsWith('url("data:image/png;base64,')
+        mascotBackground: getComputedStyle(svg.closest('.VNJnBa_fishHitbox, ._9Bqw3q_root ._9Bqw3q_railMark, ._9Bqw3q_root ._9Bqw3q_brandMark') || svg.parentElement).backgroundImage.startsWith('url("data:image/png;base64,')
       }));
       return { marks, configured: getComputedStyle(document.documentElement).getPropertyValue('--lulu-brand-image').includes('data:image/png;base64,') };
     })()`);
     await fsp.writeFile(`${target}.brand.json`, JSON.stringify(brand, null, 2));
     assertions.luluMascot = brand.configured && brand.marks.length > 0 && brand.marks.every(mark => mark.visibility === 'hidden' && mark.mascotBackground);
     if (process.argv.includes('--smoke-lulu-brand')) {
-      await window.webContents.executeJavaScript(`document.querySelectorAll('button').forEach(button => { if (button.textContent.trim() === '稍后配置') button.click(); })`, true);
+      const onboarding = await finishOfficialOnboarding({ evaluate: code => window.webContents.executeJavaScript(code, true) });
       const originalBounds = window.getBounds();
       const originalDark = await window.webContents.executeJavaScript('document.body.getAttribute("data-ds-dark-theme")');
       const appearances = [];
@@ -57,7 +90,7 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
           window.setSize(variant.width, variant.height); dock.layout();
           const state = await window.webContents.executeJavaScript(`(async () => {
             document.body.toggleAttribute('data-ds-dark-theme', ${variant.dark});
-            const containers = [...document.querySelectorAll('.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark')];
+            const containers = [...document.querySelectorAll('.VNJnBa_fishHitbox, ._9Bqw3q_root ._9Bqw3q_railMark, ._9Bqw3q_root ._9Bqw3q_brandMark')];
             const images = containers.map(element => getComputedStyle(element).backgroundImage);
             const decoded = await Promise.all([...new Set(images)].map(async source => {
               if (!source.startsWith('url("data:image/png;base64,') || !source.endsWith('")')) return false;
@@ -73,15 +106,17 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
             };
             const input = document.querySelector('[data-composer-input][contenteditable=true]');
             input?.focus();
-            return { dark: document.body.hasAttribute('data-ds-dark-theme'), imageCount: images.length,
+            return { ...(${inspectBrandInteraction.toString()})(),
+              dark: document.body.hasAttribute('data-ds-dark-theme'), imageCount: images.length,
               imagesDecoded: decoded.length > 0 && decoded.every(Boolean),
               inputVisible: fits(input), inputFocusable: Boolean(input && document.activeElement === input),
-              navigationVisible: fits(document.querySelector('.ghK-Yq_root .ghK-Yq_toggle')),
+              navigationVisible: fits(document.querySelector('._9Bqw3q_root ._9Bqw3q_toggle')),
               noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1 };
           })()`);
           appearances.push({ ...variant, ...state });
           assertions[`brand${variant.name}`] = state.dark === variant.dark && state.imagesDecoded
-            && state.inputVisible && state.inputFocusable && state.navigationVisible && state.noHorizontalOverflow;
+            && state.inputVisible && state.inputFocusable && state.navigationVisible && state.noHorizontalOverflow
+            && state.noVisibleDialog && state.rootInteractive && state.inputExposed && state.navigationExposed;
           await fsp.writeFile(`${target}.brand-${variant.name}.png`, (await window.webContents.capturePage()).toPNG());
         }
       } finally {
@@ -89,7 +124,7 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
         window.setBounds(originalBounds); dock.layout();
       }
       await fsp.writeFile(`${target}.appearances.json`, JSON.stringify(appearances, null, 2));
-      return { ok: Object.values(assertions).every(Boolean), version, assertions, appearances, realModel: false,
+      return { ok: Object.values(assertions).every(Boolean), version, assertions, appearances, onboarding, realModel: false,
         evidence: 'Real Harness decorative branding in light, dark and compact windows; images decoded before capture. No model request or full native tool assertions.' };
     }
     await act('select', 'terminal');
@@ -151,4 +186,4 @@ async function runNativeDockSmoke({ window, dock, terminal, broker, version, tar
       evidence: 'Real Harness, guarded native views and real PTY; exact native confirmations approved by isolated smoke only. Screenshots capture composed native window.' };
   } finally { dialog.showMessageBox = originalDialog; }
 }
-module.exports = { runNativeDockSmoke };
+module.exports = { runNativeDockSmoke, inspectBrandInteraction };

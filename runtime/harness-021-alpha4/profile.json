@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "version": "0.2.1-alpha.4",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+  "tag": "dsh-v0.2.1-alpha.4",
+  "commit": "86a402200d95fecef4529d969836f1fe13c6cb0d",
+  "packageManager": "pnpm@11.28.5",
+  "promotionAllowed": false,
+  "preflightOnly": true,
+  "lockStatus": "reviewed-derived-lock-source-replay-verified",
+  "upstreamLockSha256": "ee1c37b5429c535974bafa09475cb03fc473e87dded8f56d54d909ed621e1317",
+  "lockSha256": "ad519cb592d8365b6f0f0081ae3f73da1d4217269a292dba5e744ef8e707349c",
+  "workspaceSha256": "e5776fa749e6877835eed3b24fcaab768b623921437805e262ff5ec64600aedc",
+  "postimagePath": "runtime/harness-021-alpha4/postimages.json",
+  "postimageSha256": "f716931cb3afb76e175e9d90488f216183d81fef914174b62bf0d258d4301bbd",
+  "lockDerivation": {
+    "path": "artifacts/upstream-checks/2026-10-16/source-lock-online-az2zVB/result.json",
+    "sha256": "3eb9eee12171c98ba9a1753c41bdcb2c15a074b0da709159f3c005abd5431940",
+    "reviewPath": "artifacts/upstream-checks/2026-10-16/patch-preflight/lock-review.json",
+    "reviewSha256": "4295aba6ad744e8c67ee95bde874342ef062109065c6a06d3560a000d9910df1",
+    "sourceStepScriptPath": "artifacts/upstream-checks/2026-10-16/run-source-step.lock-generation.snapshot.cjs",
+    "sourceStepScriptSha256": "3154822e7026fa3f70643cd2861d76ffe92d4a7e59dcc59385ddc52b4fbacee2",
+    "packageManager": "pnpm@11.28.5",
+    "pnpmSha256": "67b035e322203961795e8e34ca63a08c37a4386eda94107fb3d28f3246d882ad",
+    "nodeSha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237",
+    "upstreamLockSha256": "ee1c37b5429c535974bafa09475cb03fc473e87dded8f56d54d909ed621e1317",
+    "derivedLockSha256": "ad519cb592d8365b6f0f0081ae3f73da1d4217269a292dba5e744ef8e707349c"
+  },
+  "patchChain": [
+    { "path": "runtime/harness-021-alpha4/security.patch", "sha256": "0d5388addf1484ee2675c4f6c161dc4dc3a6ec13669420d6cc612cbac83ff90c" },
+    { "path": "runtime/harness-021-alpha4/security-lock.patch", "sha256": "a4c74b946460154a7ac0c2968f0d285fe9b6ea48268e439c89fe5e5167911677" },
+    { "path": "runtime/harness-021-alpha2/private-powershell-alpha2.patch", "sha256": "ea8be19dd85ff0a637f1debee4381330022daa1fe0e1ef0597e5dc32de09902f" },
+    { "path": "runtime/harness-021-alpha2/attachment-lifecycle-alpha2.patch", "sha256": "729db1179cc614ad5f388db4b9582bc326c0175456f6baacc054323e315a8a51" },
+    { "path": "runtime/harness-021-alpha2/attachment-types-alpha2.patch", "sha256": "6fcd92dcdd9618baed95c2c040c317f33022ba5d66c97790dca91c803d5a9c2a" },
+    { "path": "runtime/harness-021-alpha2/private-powershell-jsdoc-alpha2.patch", "sha256": "3bcb3d670d08755afbe25202d53cfc9f2226a26db79da8714424ede17105a437" }
+  ],
+  "pending": [
+    "Source recipe alone is not runtime compatibility, a build, deployment or public-release acceptance.",
+    "Run official regressions, type checks, dependency audit and complete packaged/installed acceptance before promotion."
+  ]
+}

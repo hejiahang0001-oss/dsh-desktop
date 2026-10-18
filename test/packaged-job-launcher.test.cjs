@@ -12,6 +12,25 @@ const vm = require('node:vm');
 const scriptPath = path.resolve(__dirname, '../scripts/smoke-packaged-safe-exit.cjs');
 const source = fs.readFileSync(scriptPath, 'utf8');
 const load = createRequire(scriptPath);
+const { collectExitObservations } = require(scriptPath);
+
+test('exit observations preserve identity evidence when the independent Job wait fails', async () => {
+  const result = await collectExitObservations(
+    new Promise(resolve => setTimeout(() => resolve([]), 10)),
+    Promise.reject(new Error('Job still active'))
+  );
+  assert.deepEqual(result.identities, { status: 'fulfilled', value: [] });
+  assert.deepEqual(result.job, { status: 'rejected', error: 'Job still active' });
+});
+
+test('exit observations preserve Job empty evidence when identity observation fails', async () => {
+  const result = await collectExitObservations(
+    Promise.reject(new Error('Identity query failed')),
+    Promise.resolve({ activeProcesses: 0 })
+  );
+  assert.deepEqual(result.identities, { status: 'rejected', error: 'Identity query failed' });
+  assert.deepEqual(result.job, { status: 'fulfilled', value: { activeProcesses: 0 } });
+});
 
 test('guardian does not finish on transient empty accounting before the root handle signals', () => {
   // Real Windows evidence: Job accounting reached zero before the exact root
@@ -61,6 +80,8 @@ const createLauncher = (context, scenario) => {
       ...load(name),
       spawn: (executable, args, options) => {
         assert.equal(executable, 'powershell.exe');
+        // -EncodedCommand is subject to the Windows CreateProcess character cap.
+        assert.ok([executable, ...args].join(' ').length < 32700, 'Guardian command must fit below the Windows command-line cap');
         assert.equal(options.shell, false);
         assert.equal(options.windowsHide, true);
         queueMicrotask(() => {

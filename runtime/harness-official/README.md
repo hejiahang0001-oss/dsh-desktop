@@ -13,6 +13,25 @@ fixed candidate `esbuild@0.28.1` and its verified Windows binary; no package is
 installed and the tool itself is not embedded. Its MIT notice is retained for
 build provenance in `LICENSE.esbuild.txt`.
 
+`source-compatibility.json` separately records the 2026-10-18 comparison with
+tag `dsh-v0.2.1-rc.2`, commit
+`687f282e8625c6b8d11ff58211a90524be2e4317`. All four retained TypeScript files
+are byte-identical to both the exact rc.2 Git objects and candidate source
+files. The record binds their hashes, the existing build manifest, bundle and
+source map. No bundle was rebuilt: `build-manifest.json` continues to describe
+the original alpha.1 build and dependency inputs, not a new rc.2 compilation.
+This establishes verifier-source compatibility only, not acceptance of a
+runtime payload, native behavior, desktop host, installation or release.
+
+Check the retained compatibility record without an upstream checkout or network:
+
+```powershell
+& .\vendor\runtime\win32-x64\node.exe --test --test-concurrency=2 test/harness-official-compatibility.test.cjs
+```
+
+This test checks the committed attestation against the retained sources and
+build artifacts; it does not repeat the original upstream Git comparison.
+
 Rebuild from the project root using the project runtime:
 
 ```powershell

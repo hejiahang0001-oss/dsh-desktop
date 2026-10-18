@@ -1,9 +1,13 @@
 {
-  "origin": "User-provided local PNG, copied byte-for-byte on 2026-10-07 Asia/Shanghai",
-  "originalFilename": "ChatGPT 图像 2026年10月7日 22_25_27.png",
-  "width": 192,
-  "height": 208,
-  "sha256": "17688f54123d13cb33d6f309c19a5310543dfe9c43a53eec86affa76cf40c318",
-  "transformation": "None for PNG; ICO uses aspect-preserving resize and transparent square padding only",
+  "origin": "User-selected reference, AI-assisted transparent cutout using built-in imagegen on 2026-10-09 Asia/Shanghai; not original source bytes",
+  "originalFilename": "c714af2e95cbb3588115a4718ca19a0d.png",
+  "referenceSha256": "d7701d24fe5de6c1ac8497a263b5d6bd3c7a4694b686d5c7d7c838e685b5dfd5",
+  "videoReferenceFilename": "dc40b6451f8b5b2ebd0494510c33316d.mp4",
+  "videoReferenceSha256": "a7b65e2c8ab2ce09d5abef75b19dee9021c87fd53a31c00ff3fe31d4dbd58d3b",
+  "width": 1087,
+  "height": 1447,
+  "sha256": "e9d1619e79acb6711aec1198368f2482926fd37aa580fd02f1a8b9d80235f0ee",
+  "transformation": "AI-assisted identity-preserving transparent extraction: garden and text removed, haircut/glasses/fruit/peace-sign pose retained; generated alpha unchanged; ICO uses aspect-preserving resize and transparent padding only",
+  "promptFile": "PROMPT.md",
   "licensing": "Creation provenance and public redistribution rights not independently verified; not covered by the repository MIT code license. See SOURCE.md."
 }

@@ -60,7 +60,7 @@ const REQUIRED_WIKI_SKILL_FILES = Object.freeze([
 const WIKI_SKILL_IDS = new Set(['llm-wiki', 'wiki-setup', 'wiki-query', 'wiki-capture', 'wiki-update', 'wiki-history-ingest']);
 const REQUIRED_PNPM_VERSION = '11.19.0';
 const REQUIRED_DESKTOP_NAME = 'dsh-desktop';
-const REQUIRED_DESKTOP_VERSION = '1.1.14';
+const REQUIRED_DESKTOP_VERSION = '1.1.17';
 const LEGACY_HARNESS_REPOSITORY = 'https://github.com/deepseek-ai/deepseek-harness.git';
 const LEGACY_HARNESS_TAG = 'dsh-v0.1.6-alpha.2';
 const LEGACY_HARNESS_VERSION = '0.1.6-alpha.2';
@@ -101,7 +101,7 @@ const LEGACY_HARNESS_AUXILIARY_PACKAGES = new Map([
 const REQUIRED_LEGAL_FILES = Object.freeze(['LICENSE.txt', 'THIRD_PARTY_LICENSES.md']);
 const REQUIRED_LEGAL_SHA256 = new Map([
   ['LICENSE.txt', '5950dd1b2553b7797fa438d822ec55a3a5cf51f0dc75ea67ef612796d1131199'],
-  ['THIRD_PARTY_LICENSES.md', '8dcbf6d71b97e0908e1695baecaba6c49f0c723389cb1f18ccf084e30fb360fc']
+  ['THIRD_PARTY_LICENSES.md', 'a91e74a1984623853a786121ba794e72ba8b66a98caf888860f9ceda3cdf22b8']
 ]);
 
 const normalize = (value) => value.replaceAll('\\', '/');

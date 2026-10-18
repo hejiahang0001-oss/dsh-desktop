@@ -1,5 +1,81 @@
 # Validation evidence
 
+> 2026-10-19 installed acceptance: qihsES 1.1.17 / Harness 0.2.1-rc.2 now installed. Independent backup completion proof preserves the original INCOMPLETE failure; installed 16041-file payload, 111-entry/5-ancestor ACL comparison, strict pre-start preservation and real-profile read-only UI passed. User tray exit followed by 29 exact original session files, 7 preserved drafts, ciphertext/proxy/settings checks passed. A separate exact v3→v4 migration supplement covers the sole 365-byte generation; the original comparison refusal remains. Integration's temporary disabled line was removed with all other edits retained; five-tool MCP handshake passed. CI/public download/Stable not yet complete. See [current evidence](LULU_1.1.17_INSTALL_RELEASE_2026-10-19.md).
+
+## 2026-10-18 新Portable功能闭合与安装交接
+
+qihsES实际启动器两轮功能通过：Harness 541/541、196插件0失败；终端八项通过且0模型调用。启动器exit0、主程序身份消失、自动解压清理及输入保持均已验；Job唯一SGTool残留保留原strict=false，路径/摘要/签名独立证据将其限定为用户已接受风险。不是完全自然退出全绿。dsh_agent仅单行临停、私有配置备份完成，尚待完整重启Codex释放旧文件；未覆盖或公开。见[完整分层证据](LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。
+
+## 2026-10-18 Portable冷启动请求定位与源码修复
+
+已接受SGTool退出残留不等于所有门禁通过。真实Portable无暂停观察捕获pluginInventory/list于3011ms内部AbortError；只读清单有界单次重试已修复，完整源码1148/1148、0skip、exit0、407输入不变。fA7r83/output按授权清理，修复后qihsES一次构建及16041文件完整双包检查通过；真实Portable/安装/公开尚未完成。详见[新固定来源与证据摘要](LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。
+
+## 2026-10-18 Stable授权后最终包续验
+
+fA7r83设置/7布局与终端8项通过、主程序退出0、输入不变；生命周期原功能通过，但owned Job未自然归零，整体失败，不等于完整Safe Exit。复用1140全测和已有静态证据，不重建或重复全量解包。Stable晋升已有授权，但退出风险尚待范围决定，未覆盖或公开。见[新报告与摘要](LULU_RC2_STABLE_CONTINUATION_2026-10-18.md)。
+
+> 2026-10-18 08:10 Wiki静态包证据同步回读通过：7项目页+4跟踪文件，269旧来源/人工历史/其他项目/交付字段保全及链接核验通过，新增后270条，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-vzbf4A/verification.json` SHA256 `e1a27b062756d722bf61ab7872453537fa6d8f4c3786a9cbbd7215976668cd4f`；固定来源 `LULU_RC2_PACKAGE_STATIC_2026-10-18.md` SHA256 `57f93ba9489a9201e271454129c51f46596f529f927e69dc60e22f8655eb1882`。仅同步新包静态验收，不晋升知识信任状态，不代表完整交付。
+
+> 2026-10-18 08:08 替代包完整内容检查：dist-fA7r83/governance-heartbeat-20261018.json（位于artifacts/stable-readiness-20261007）exit0、packageReady=true、双包与展开目录各16041文件/1147303710字节逐项一致，负载树SHA256 `bcb7a0727643d33cd88a065d8ca1abbfc965321dd2842dba5149ba9e41ab778a`；回执SHA256 `f307424001f88a77a7d1070ed8d243f5b962887ea1189d1c0aeacc15d72a7e38`。一次静态治理，没有重复payload提取、全测、构建或GUI；本地1.1.16 blockmap不冒充公开1.1.14差分。安装包unsigned/automaticUpdateReady=false，退出/Portable运行/安装/公开未闭合。[完整范围](LULU_RC2_PACKAGE_STATIC_2026-10-18.md)。
+
+> 2026-10-18 04:15 Wiki精确回读通过：`artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-Yef7J5/verification.json` SHA256 `3544261cfa507c8d458ac02bbecf48a9b45fb4f1e37076f7c0d56d270e877382`。7项目页+4跟踪文件，268旧来源/人工历史/其他项目/交付字段保全及链接核验通过；新增来源后269条，QMD未配置跳过，知识仍待人工审阅。固定来源 `LULU_RC2_DELIVERY_SCOPE_2026-10-18.md` SHA256 `f197fe90d85d596418ed0a461b66169b0f26e118e68e8941082d363ec3083e64`。同步范围是用户取消对照、约1.66GiB失败候选清理、一次替代包和基本检查；不是完整新包运行/安装/公开或Stable通过。
+
+> 2026-10-18 04:12：用户明确取消输入法对照，不再要求或执行。获准的MoXZ8p/output约1.66GiB已删除且保留文件摘要一致；一次替代构建dist-fA7r83退出0/输入保持，基本检查退出0、407源码输入与原1140证据一致、包内三处修复字节及Windows版本/rc.2描述通过。首次辅助检查参数名写错的失败保留，改调用而非产品后复核通过。没有新GUI/模型/权限/Portable启动/覆盖/公开验证；原SGTool失败未改写为通过。[本轮范围及回执](LULU_RC2_DELIVERY_SCOPE_2026-10-18.md)。
+
+> 2026-10-18 03:34 Wiki写入与回读通过：`rc1/wiki-rc2-continuation-LocPx8/verification.json` SHA256 `0660201561f2a3a5eeaa539048c1a83040bf69169dd31fa5d3bd9fbd84043f99`；7项目页+4跟踪文件，旧267来源/人工历史/其他项目/交付状态保全，新增后268来源，链接有效，QMD未配置跳过。冻结来源SHA256 `2c3da56e0ef2445373c359bef2fd0522fe1f04c05f1473ea1b9a540efad0150c`。最终源码1140通过后文档版本专项6/6也通过；未以Wiki同步代替退出、最终包或安装/公开验收。
+
+> 2026-10-18 03:32：最终源码 `test-exIFOg/result.json` 1140/1140、0跳过、exit0、输入保持，SHA256 `4768ea01b391831a83a1a1f6f542ca83578c64df93cdcfaae1530729902dd24a`。新设置导航37专项及独立复核通过；开发态布局/设置、终端8项功能通过，但Job15秒仍残留SGTool，控制器整体失败。MoXZ8p静态3阶段及品牌通过、布局/终端失败，且早于修正，不能继承为最终包验收。原Abort/代理原生崩溃未定因，旧失败保留。未覆盖/公开，不重复模型权限测试，不豁免正常退出/Portable/资料保留。详见[本轮分层证据](LULU_RC2_CONTINUATION_2026-10-18.md)。
+
+> 2026-10-18 02:06：Wiki事务 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-QVnlL5/verification.json` 实际回读通过，SHA256 `85e004ae7740769ad61f367d2abcdd94e4463fa8ac1bbc11a69ee512f4a77ac6`；7项目页+4跟踪文件、旧来源/人工历史/其他项目/交付字段保全、链接有效，QMD未配置跳过，知识仍待人工审阅。冻结来源SHA256 `c40b5d08fb9a0783fb52b746a75ac5b8351577d2a2b5dd1dd84a935da16a0b7e`。最终包的权限产品smoke成功不抵消controller的Job/ACL失败；无模型safe-exit也留下active=1。未经新风险决定、正常退出及剩余交互验收，不覆盖安装/发布。
+
+> 2026-10-18 V1.1.17 / Harness 0.2.1-rc.2 已接入正式源码和新 vendor 运行库，原生 Office、受限终端、认证 Host 与会话恢复均已实测；新生产依赖603项审计零已知漏洞。最终源码1072/1072全测和候选双包16041文件一致性通过；真实权限拒绝/单次允许行为通过，但退出Job未归零、隔离搜狗/LocalLow出现新增宽权限风险，待用户范围决定；首次使用弹窗测试契约也待修。未覆盖安装或发布。**本机仍1.1.16/alpha.2，公开Pre-release1.1.14、Stable1.1.12不变。** 官方新增 Search/Fetch 默认关闭。完整来源、失败与分层证据见 [rc.2 记录](HARNESS_UPSTREAM_v0.2.1-rc.2.md)。下方保留历史时点。
+
+> 2026-10-17 09:12 Wiki精确回读通过：`artifacts/upstream-checks/2026-10-17/wiki-alpha5-Zxlumq/verification.json` SHA256 `f6cc5cd8a6f3433199cdb24b9d0fa1869d251cba46a2256b7904496320f6c694`。7页+4跟踪文件，旧来源/人工历史/其他项目/交付字段保留，链接有效，QMD未配置跳过；冻结来源SHA256 `be64d57ed9870194043ac7e15876c184839c02aa5dc711b7e3c3de46cedb0f2a`，未晋升知识信任状态。新生产闭包工具56/56纯契约测试、真实固定回执结构/cwd回归通过（`runtime-lock-review-alpha5/pure-tests-dumlyD/result.json`，SHA256 `df8b3359213dd286665942350f81bc4dfb9d83db0703fa2e820c785748abc806`），未执行prepare/派生锁/生产安装。
+
+> 2026-10-17 09:03 alpha.5 pack：`controlled-pack-alpha5-geM6OY`六阶段各真实exit/close0，控制器最终exit0/oktrue；302包共23320191字节、描述符与每包名称/版本/字节/SHA256/SRI/来源通过，四个native entry导出在TGZ中存在。16254源输入前后不变。回执SHA256 `40a403b7216b235040f427b19978a93a6d2e33453b3aaa322d0815d8ae5a4944`，仍非原生运行/生产闭包/新安装包验收。`release-version-test.json`记录6/6当前展示/身份/文档一致性，不声称本轮根全测。证据均位于 `artifacts/upstream-checks/2026-10-17/`。
+
+> 2026-10-17 alpha.5：`artifacts/upstream-checks/2026-10-17/` 内40后像重放、冻结安装（1401包/下载0/16254输入保持）与源锁640项审计通过；`all-Ebc4rm` 37文件1016通过/1官方Windows跳过，Vitest0但严格控制器1，不宣称全绿；独立跳过复核允许继续构建，不豁免终端实测。安全消费者35项零失败/零跳过。`controlled-build-alpha5-3hvGDh` 完整9gate/真实exit-close0、16254输入及固定依据不变、12614输出/323客户端产物通过；回执SHA256 `e91756e2e1229f67412ab2e797f35a30b5944bb5e2893ae55af23aa7051e6af9`。Windows native build阶段为官方no-op，不等于原生实测。仍未改正式绑定、安装或发布，未重跑未变根全测。见[本轮验证、失败与边界](HARNESS_UPSTREAM_v0.2.1-alpha.5.md)。
+
+> 2026-10-16 21:21 Wiki续作回读通过：原项目7页+4跟踪文件，旧来源/其他项目/历史/实际交付字段及关联链接保全通过；QMD未配置跳过。`wiki-build-FmRUpH/verification.json` SHA256 `57fa2793cd0e19fea0f96801a591ce91b45dd0b1ab400c964e75736d3851ee5e`（位于`artifacts/upstream-checks/2026-10-16/`），来源SHA256 `21f175e100ea015787d3237a5920ee7e2c534a3cf01bd0a1b9d6d5ab70d931f0`。独立只读核验另确认6stage/12日志、16,231输入、302实际TGZ和native四个非空普通导出文件；不将其写成运行/安装或Stable通过。
+
+> 2026-10-16 清理续作：三套用户明确批准的早期候选output已删除，3目标不存在、26保留文件SHA256不变；没有额外删除/D盘转存。隔离alpha.4完整build 9 gate通过（Windows host-addon步骤为空目标，非native运行通过），六阶段pack实际完成302包并核对真实tar成员/摘要/来源；16,231源码输入不变，仅允许native tsbuildinfo增量。新检查器7项纯测试通过且先红失败保留，真实构建/pack命令均已结束。没有正式部署/新安装包/覆盖/公开；源码阶段不能闭合旧隔离退出/历史/ACL。回执及边界见[本轮清理、构建与包集](HARNESS_ALPHA4_BUILD_2026-10-16.md)。
+
+> 2026-10-16 Wiki同步收据：按wiki-update实写既有DSH项目7页及index/hot/log/manifest共11文件，写前比较、写后精确回读、关联链接、旧来源/正文及其他项目保全通过；QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-16/wiki-KFRFJO/verification.json`，SHA256 `6415558b36a2752cf8e304227a5ed676a7655003da51e7bb53cca1c6ea3fb41a`。来源SHA256 `b734c681248c1fafa9113891978a07688f6f4433416bc308d1df5b28f7da3b13`，知识仍待人工审阅。同步的是alpha.4隔离源码进展和待空间选择，不是新包/安装/公开完成；本轮测试命令均已结束，未强停用户进程。
+
+> 2026-10-16 alpha.4隔离适配：来源六层/40后像、冻结安装、派生锁640项生产审计完成；原安全告警和离线缺包失败均保留。官方源码18文件521通过/1跳过（Windows跳过POSIX权限案例，非ACL/DPAPI通过）；桌面最终插件影响域65/65、合成Profile真实Electron界面及独立审查通过。983项根全测属于历史回退修正前，提交发布前仍需最终全测；界面证据不替代实际官方导航/回退或新内核完整构建。未覆盖安装或发布，旧Job强制清理/历史/ACL仍未闭合，C盘约3.4GiB待清理范围确认。[完整证据和未验证边界](HARNESS_UPSTREAM_v0.2.1-alpha.4.md)。
+
+> 2026-10-11 19:08 Wiki已同步并回读：原DSH项目7页及index/hot/log/manifest共11文件，旧来源/历史/其他项目/Stable保留，QMD未配置跳过。证据 artifacts/upstream-checks/2026-10-10/wiki-continuation-7lfJyS/verification.json，SHA256 c19071df9f89eb1e33cd7525b74c6657c2ccae7d30e5b15d336ebdd8f146ed31；来源SHA256 4bc07012dbd70a48f8186df623595c723d334984149137cf54f4978a33d5ac88。同步包含原资料保留/集成恢复通过及隔离退出超时未闭合，不宣称完整交付。
+
+> 2026-10-11 19:05最新：本机lulu1.1.16/alpha.2已安装。原资料同次托盘正常退出及29历史/7草稿/加密Key/代理保留通过；唯一3+1官方空恢复标记由独立窄证明闭合，原比较失败保留。dsh_agent仅撤销本次临停行并保留其他设置，CLI启用及新Node限握手通过。隔离补测已验证即时清空/官方Stop归零，但等待退出超时被Job清理，退出后历史和该轮ACL仍未通过；无后台测试遗留，不重发全模型或打包。尚未完整交付，公开1.1.14/Stable1.1.12不变。 [证据及剩余验收](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。以下按原时点保留历史。
+
+> 2026-10-11 18:45 Wiki回读通过：`artifacts/upstream-checks/2026-10-10/wiki-continuation-M4p0km/verification.json`，SHA `e0c7d190568e23b644207a9d0b6dafefc9e50c5cee845c6c802ef922371b2891`；11文件精确回读、旧来源/其他项目/历史/Stable保全，QMD未配置跳过。来源SHA `59da59f286262f88e5d4b677b72d92c434cb3583dff759b62e978c9e0af95592`。保留原备份失败和narrow-TPVBpA失败；当前真实资料窗口待用户托盘退出，after和安装态Stop未验，不宣称Stable-ready。
+
+> 2026-10-11 安装态分层：严格首启前保全before SHA `1704e4d591189802867c279d85d765d601874ae7f805fdd87d6e80be9d907000`，29份历史；实际原资料UI SHA `40d8de5deeb96abcfd8d33211a2de8d90f0c9426fe090546a795303ce40988e6`，版本/原工作区/17目录/加密Key/当前草稿附件状态通过，无模型或正文返回。用户同次托盘退出及after待验；隔离narrow-TPVBpA在首次输入阶段失败（提交计数缺失，不能证明零提交或零模型），forcedJobCleanup=true，原资料/输入保持，ACL通过，不当自然退出或插话/Stop通过。原始证据与未验边界见[本轮记录](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-11 重启后独立验证：test-WF5Zqk完整976/976/零失败跳过，405代码输入保持；备份原末阶段失败经独立恢复证明保留失败并逐项核验，未改写INCOMPLETE。安装器exit0另有收据；installed-identity-WOCxNJ独立证明1.1.16/alpha.2及15,640文件树SHA `4dcc9f599e3b3e774aef5bcf013503db9b824c1e9f8f1fa35ae0120ec2a39643`与固定JNNUUW一致（报告SHA `a58288fdd6653debf58ad3a31350916041476c45c19beeae4f6258e0462ba141`）。ACL安装前后111项/5祖先相同，identity/metadata变化均0；未读正文/解密或改ACL。首次启动前资料严格核验及安装态/真实资料UI仍待完成，不把安装器成功当完整验收。详细范围和后续见[本轮记录](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-11 17:39 Wiki实写回读通过：`artifacts/upstream-checks/2026-10-10/wiki-continuation-pncgg7/verification.json`，SHA `67d268519144feba851c55a408293727e4e4561703ebb5ff13fd7fb4065eb294`；7页/4跟踪文件精确比对，来源SHA `0bf6d9e22309f16a6a9e55c33fb9ff76a011604786d781140ab123f87800cd12`。源快照、旧来源数量、其他项目/人工历史及Stable保留，QMD未配置跳过；仅同步本次候选验收和临停/待重启状态，不宣称安装或公开完成。
+
+> 2026-10-11 下午最终候选分项：lifecycle-1XRcne、safe-exit-c3DdOd、approval-allow-6mMcoi、layout-e8c70L及handoff-fMSVRB通过；proxy-oFRWv8的11机器检查+主控两截图复核通过，原pending-visual报告不改。workflow-kwNixf原失败保留，归档PMqpPW的12项UI/同次托盘clean退出由post-exit-proof-M9DZo2独立严格补证闭合：74条前缀/header/业务不变，仅1条空end-seed/seq74/受控时间，39输入及源/读副本/模块不变，私有ACL/无owner通过，SHA `e25bc5acf465f3496b31e807e17778cdaf9074f446fbc7d9bb12c414deba6482`，独审无Blocking/Important。未重跑模型/打包。Codex集成仅加16字节临停行、私有备份字节及CLI解析已验，13旧Node待完整重启释放；未安装/公开/改变Stable。命令、原失败、复用范围及后续安装保全见[当前分层记录](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-11 Wiki实写回读：`artifacts/upstream-checks/2026-10-10/wiki-continuation-NHs9EC/verification.json`，7页/4跟踪文件通过，固定来源SHA `bf341b3e3d77d6545e6421e157b30434f53a94ff2c10ecc15dc298187856476b`；原来源数量、旧快照、其他项目/来源、历史与Stable保全通过。QMD未配置，知识仍待人工审阅；并非安装/公开验收。
+
+> 2026-10-11 Portable真实补证：JNNUUW原启动器harness-YK0IMX、terminal-8VkjPZ均通过，SHA分别`dd3200dae577121f3c845e6c6215c4c76def95c6f455858f84cc4e365a296170`、`10cca34d38ebf803a07c96c4016bfb334ab3f15fde294c0c8d16f2b2d1177eda`。532/532闭包健康与必要模块、官方终端8项，实际子进程身份/三摘要、root0/Job0/guardian0及launcher自行清理均通过；无强制清理、固定输入不变，测试命令已结束。两轮均隔离无真实资料/模型，仅覆盖短TEMP最大258字符；不是完整Safe Exit/所有插件/安装态结论。启动器→应用分别257.09/203.52秒，功能通过不等于体验优化完成。
+
+> 2026-10-11 新品牌候选：`test-NOSYBV`完整976/975通过/1失败/零跳过，失败为README包名断言；补文档后版本专项6/6，405冻结代码输入不变，README另记，不合并成一次完整绿。`dist-JNNUUW`构建code0/输入不变；`package-116-Y8W0yE`静态三门禁通过，双包各15,640文件全字节一致。实际`electron-brand-47hNol`浅/深/窄三情境图片解码、输入导航、根页面几何和自然退出通过，主控回看三截图。1.1.15仅是本地安装差分基线，不是公开1.1.14升级证据；无模型/真实资料或安装公开变更，Stable1.1.12不变。完整路径/SHA/未验范围见[当前分层记录](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-10 15:47 Wiki续作实写校验通过：`artifacts/upstream-checks/2026-10-10/wiki-continuation-ERmxxj/verification.json`。7页与4个跟踪文件精确回读、同源修订/旧快照/其他项目和来源/历史/Stable保全通过；QMD未配置跳过。对应来源SHA `a511f64c6e7ce117103f13e31f00f2ea19a695a4ceb6345ff9e2dc0fcc669d37`，明确标注最新品牌修正未全测/入包、三项用户选择待答复。未作信任等级晋升。
+
+> 2026-10-10 最新分层结果：闭合details观察器修复红测3项失败→5/5，开发态7组布局/模态退出与面板状态通过（`layout-n3poNj`）；冻结全测975/975（`test-S7rBvP`），双包YPbNuf的负载一致、Windows身份及治理通过（`package-116-FJ6YIh`）。**这些是品牌修复前证据**：随后实图发现鲸鱼残留，定位alpha.2编译CSS类名变化；精确接线和纯源码CI版本绑定测试修复后8/8，`lulu-visual-20261009/brand-mw0fkD`实际浅/深/窄三情境通过、输入不变、自然退出、零模型/真实资料使用，主控回看浅色/窄窗截图。最新品牌源码未重新全测/打包，不把旧包判为合格交付。跨工作区附件与Office预览实际成功属于SZqatc，首轮hover/启动超时失败保留，未证实唯一根因。安装/真实模型审批/Portable最终启动/公开下载待验，现有安装与Stable不变。完整路径、SHA及授权缺口见[分层记录](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-10 下午补证：独立受控build/pack记录齐全，14,994源码输入前后不变，全部298TGZ与descriptor逐字节一致，等价报告SHA `3248118fa897162161f8e6ae62dcc5c167dcbf16b2cf72c1906500514fceeac9`。官方提交上六层patch重放40文件一致；来源/deploy v1+v2专项75/75、正式接线51/51通过。部署前实际27输入/20JSON来源链重新校验通过（`runtime-lock-review/formal-v2-evidence-readback.json`）；尚未代表最终发行包、安装态或公开通过。修改前完整源码基线912/912通过；最终完整测试待跑。
+
+> 2026-10-10 alpha.2隔离验收：HCS33/fflate3/附件43/破坏契约62/加载器5，完整build与六阶段298包通过；670项派生生产闭包冻结离线安装/审计零告警，窄peer规则34项回归通过。14,389文件/Office733文件独立回读，实际五组原生+三种PDF页数/中文/数值、受限PTY取消复用及Job归零通过；真实Supervisor/worker认证两次启动和同ID三条合成历史保持通过，Host根进程已停止。所有原失败保留。缺正式门禁所需构建前后源码快照，不能补写；未完成新核正式部署/全UI/真实Key代理/Setup/Portable/覆盖验收。安装1.1.15/alpha.1、公开1.1.14、Stable1.1.12不变。[收据、范围及补证顺序](HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
+
+> 2026-10-10 Wiki实写回读通过：`artifacts/upstream-checks/2026-10-10/wiki-9m1MEB/verification.json`，7知识页+4跟踪文件，1新来源；253旧来源、另外2项目、历史与实际安装/发行字段保留，链接通过，QMD未配置跳过。来源原文SHA为`99e5f683f799591c2a1ded3a978640bad20f527f719532df7fcf3fdd3aa358fb`，仅将未完成范围如实登记，不等于新核发行完成。
+
+> 2026-10-09 视觉1.1.15已覆盖本机：912/912、29专项、根生产审计5项零告警、新双包完整负载/身份/运行通过；50语义/5敏感/6LevelDB保全与111项ACL身份比较通过。installed-brand-e7KWB1实际安装隔离profile浅/深/窄三情境通过，截图已回看，零模型调用。原版本文档、safe-exit、备份元数据与ASAR观察器失败分别保留，不夸大原资料迁移/模型重验或公开状态。证据见[1.1.15记录](RELEASE_NOTES_v1.1.15.md)。
+
 > 2026-10-09 最终交付：本地912/912且输入不变；发行提交de113816的CI37817814410三job成功（源码906通过/6项无vendor跳过）。四远端资产size/SHA与匿名实际下载完整文件一致，Setup/blockmap/checksum为200，Portable原200中断后精确206续传；原失败回执7f6ef2…4e920a保留，成功续传430fc5…5aedc4及聚合03c2e3…f784ce经主控和独立读回重算。既有安装与资料保全证据有效。Wiki事务tx-cdnmKe的11文件/2来源实写回读通过，旧来源/其他项目/历史风险保留；QMD未配置跳过。Stable-ready限已确认Windows11 x64手动未签名分发范围，未晋升Stable。[完整证据](LULU_PUBLIC_DELIVERY_2026-10-09.md)。
 
 > 2026-10-09 当前：原资料第二次正常退出后选区比较accepted=true，独立重算一致；28历史/7草稿/Key密文/代理保留、设置等字节import-rename、无新增V4。临停dsh_agent已只撤16字节并CLI enabled=true，其他配置字节保留。UI与磁盘证据分开、已接受主机风险不作消除声明。PR/CI和公开回下载尚待完成；[最终本地闭环证据](LULU_RELEASE_READINESS_2026-10-09.md)。
@@ -133,7 +209,7 @@ Existing Obsidian DSH project merged: 7 pages plus index/hot/log/manifest; no ne
 
 ## 2026-09-23 Harness 0.1.7-alpha.2 preflight and settings-backup preparation
 
-- Wiki synchronization verified at 2026-09-23T01:05:19.587Z: existing vault `D:/OBS/昆仑ERP`, 7 DSH pages updated / none created, index/hot/log/manifest included. Eleven pre-write backups matched; `verification.json` confirms 9 valid frontmatters, 136 internal links, 289 historical body lines retained, unrelated project/source records unchanged and append-only log. Source SHA-256 `f65c1a0f44934a8a67b346516773aa23877ea58a99f238e8c7cfb2ab32f80283`. QMD unset; native Obsidian visual inspection and human trust-ledger refresh not performed. This is a knowledge/preparation checkpoint, not completed adaptation or delivery.
+- Wiki synchronization verified at 2026-09-23T01:05:19.587Z: existing vault `%OBSIDIAN_VAULT_PATH%`, 7 DSH pages updated / none created, index/hot/log/manifest included. Eleven pre-write backups matched; `verification.json` confirms 9 valid frontmatters, 136 internal links, 289 historical body lines retained, unrelated project/source records unchanged and append-only log. Source SHA-256 `f65c1a0f44934a8a67b346516773aa23877ea58a99f238e8c7cfb2ab32f80283`. QMD unset; native Obsidian visual inspection and human trust-ledger refresh not performed. This is a knowledge/preparation checkpoint, not completed adaptation or delivery.
 
 - New published target: `dsh-v0.1.7-alpha.2` / `00102833dfaee1da9f48a3a8eae9d34005a75218`; clean exact checkout verified. The active fixed runtime remains `0.1.6-alpha.2`. Source comparison and unchanged delivery gates: [preflight](HARNESS_UPSTREAM_v0.1.7-alpha.2.md).
 - Evidence root: `artifacts/upstream-checks/2026-09-23-alpha7/`. Baseline `pnpm test`: 621 tests, 619 passed, zero failed/cancelled, two skipped, 289580.2575 ms. Final `pnpm test`: **623 tests, 621 passed, zero failed/cancelled, two skipped**, 212622.4411 ms (`baseline-test.log`, `final-test.log`). Both skips require the previously cleaned old upstream source checkout: launch proxy precedence and official Queue/Steer/Stop source-ownership checks. They are not counted as passes; the new checkout is not substituted for the old fixed version.

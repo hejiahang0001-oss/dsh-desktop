@@ -26,9 +26,18 @@ test('lulu display theme is connected to every packaged local surface without wi
     'assets/lulu/mascot.png', 'assets/lulu/SOURCE.md']) assert.ok(files.includes(file), file);
 });
 
-test('mascot is the user-selected sourced character with original bytes and explicit provenance', () => {
+test('mascot binds the user-selected haircut and glasses cutout to explicit AI-assisted provenance', () => {
   const png = fs.readFileSync(path.join(root, 'assets/lulu/mascot.png'));
-  assert.equal(crypto.createHash('sha256').update(png).digest('hex'), '17688f54123d13cb33d6f309c19a5310543dfe9c43a53eec86affa76cf40c318');
+  const sha256 = crypto.createHash('sha256').update(png).digest('hex');
+  assert.equal(sha256, 'e9d1619e79acb6711aec1198368f2482926fd37aa580fd02f1a8b9d80235f0ee');
+  const provenance = JSON.parse(read('assets/lulu/mascot.png.json'));
+  assert.equal(provenance.sha256, sha256);
+  assert.equal(provenance.width, png.readUInt32BE(16));
+  assert.equal(provenance.height, png.readUInt32BE(20));
+  assert.equal(png[25], 6, 'RGBA transparency retained');
+  assert.match(provenance.origin, /AI-assisted/);
+  assert.match(provenance.transformation, /haircut\/glasses\/fruit\/peace-sign/);
+  assert.match(read('assets/lulu/PROMPT.md'), /imagegen/);
   assert.match(read('assets/lulu/SOURCE.md'), /7560638679044361518/);
   assert.match(read('assets/lulu/SOURCE.md'), /授权.*未|没有取得授权/);
   const icon = fs.readFileSync(path.join(root, 'build/icon.ico'));

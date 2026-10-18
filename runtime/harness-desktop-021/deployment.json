@@ -1,17 +1,17 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "channel": "local-candidate",
   "promotionAllowed": false,
-  "version": "0.2.1-alpha.1",
-  "sourceRuntime": "artifacts/runtime-assembly-20261007/payload-review/materialized-uZiveE/dsh",
-  "runtimeDirectory": "harness-desktop-0.2.1-alpha.1-attachment-1",
+  "version": "0.2.1-rc.2",
+  "sourceRuntime": "artifacts/upstream-checks/2026-10-17/rc1/runtime-payload-review-rc2/materialized-IF7QVK/dsh",
+  "runtimeDirectory": "harness-desktop-0.2.1-rc.2-attachment-1",
   "descriptor": {
     "file": "desktop-runtime.json",
-    "sha256": "b0692fff88311e8cc326b7a7792b8e66620716176f3865c9a188dbaffcff82a7"
+    "sha256": "3660a0494ae0f5971973b16177f5fd3d5dc9c5dde344a94aeddf5d7f5e56d971"
   },
-  "runtimeFiles": 14173,
-  "runtimeBytes": 387510086,
-  "sharedPackages": 289,
+  "runtimeFiles": 14790,
+  "runtimeBytes": 391551993,
+  "sharedPackages": 304,
   "office": {
     "engine": "win32-x64",
     "directory": "node_modules/@deepseek-ai/libreoffice-kit-win32-x64",
@@ -25,56 +25,96 @@
   },
   "inputs": {
     "sourceProfile": {
-      "path": "runtime/harness-021-candidate/profile.json",
-      "sha256": "d2fc99e31af460d331086fd24d7bf34846e226219f75e6f3977d9444f7b25909"
+      "path": "runtime/harness-021-rc2/profile.json",
+      "sha256": "d9a3383a43ae3d94646de81b08e5898497558dc213508f904a2c56294fe8416c"
     },
-    "sourcePatch": {
-      "path": "runtime/harness-021-candidate/source.patch",
-      "sha256": "793617936b76cc3a630b8e8eaa22043dfd727f3e38dd8e008f91fb76b94f77e3"
+    "sourceIntegration": {
+      "path": "runtime/harness-021-rc2/postimages.json",
+      "sha256": "8356e4fefb70c75eeef54c47e714b834d3e7cbd0aff8e6a26b511454bd41d763"
+    },
+    "sourceBuild": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/controlled-build-rc2-LLh3fU/result.json",
+      "sha256": "a6a77f7920a3ebd72716236ca5427e3046118b677ecf002ed159ed1b3f169edd"
+    },
+    "sourcePack": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/controlled-pack-rc2-Z2D8w8/result.json",
+      "sha256": "6757c813e123c680ed1d654137ca1b584bc577222bd2cf8a3399e6bcd5546d5b"
     },
     "sourceLock": {
-      "path": "artifacts/harness-021-final-replay/pnpm-lock.yaml",
-      "sha256": "143bc6abfc8283456e79dae660a8a69cbe64dba73089e36d1f86cb330397d5c5"
+      "path": "artifacts/harness-source-0.2.1-rc.2-lulu/pnpm-lock.yaml",
+      "sha256": "5f786c8af40763e2f2400da0e162065a7dc489ac28c87c2891c59948b9876a3b"
     },
     "sourceWorkspace": {
-      "path": "artifacts/harness-021-final-replay/pnpm-workspace.yaml",
-      "sha256": "20150bdf7b5583bd30cc50dce582ccb840aa1d83586922f21820d20ba9e0a27d"
+      "path": "artifacts/harness-source-0.2.1-rc.2-lulu/pnpm-workspace.yaml",
+      "sha256": "e5776fa749e6877835eed3b24fcaab768b623921437805e262ff5ec64600aedc"
+    },
+    "preparationEvidence": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derived-jwzFus/preparation-evidence.json",
+      "sha256": "ce98893c805c694fdbc6cf499b599bc70b6065eb21de8e0116cc5bb3c29afedf"
     },
     "productionManifest": {
-      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/package.json",
-      "sha256": "72cf8b4dc08326261a5675b0fe76bba31aa0ed9dc16235e957ddeaf8cf00af05"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derived-jwzFus/package.json",
+      "sha256": "92aba07b5760dd1cd15a75bd8dc66b24b6ae82b191ec85a65103872ed0431969"
     },
     "productionWorkspace": {
-      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/pnpm-workspace.yaml",
-      "sha256": "631bd6b41032cdfe3ac8abd8c42c6efc36e7f2877a28297caf503cbc1c6e9c8b"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derived-jwzFus/pnpm-workspace.yaml",
+      "sha256": "23db0a6ee8876e9e1b14c2d7deba3512a3e40ec2ff223fb43cfd8081b15d2892"
     },
     "packageSet": {
-      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/desktop-packages.json",
-      "sha256": "cebc75a32e4de970f67ac11bd4dd1abc3d7089ed2c68dfab420bf70cb224892d"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derived-jwzFus/desktop-packages.json",
+      "sha256": "e2c59e206df54a380e151458a13d900734c1af96c1d40436ec8efbf2783bc479"
     },
     "productionLock": {
-      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/pnpm-lock.yaml",
-      "sha256": "6923f4310b4b65e48f1f4706bc71d00d7f89153a3aac9f8b4806d50fb9b6ac1e"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derived-jwzFus/pnpm-lock.yaml",
+      "sha256": "36560fc0a45074fd1a1bf08b4c34cd537be199c034eead40b5a38b6c4aaf8796"
     },
     "lockReport": {
-      "path": "artifacts/runtime-assembly-20261007/review/derived-G4LvOR/lock-verification.json",
-      "sha256": "d3c2135cec80727d6ae61ddfb4a7c30251b1985bd4c07d711e8654bda5858b78"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derived-jwzFus/lock-verification.json",
+      "sha256": "c631382510088953cf3a6092b3173936862f5d75b4e65198dbd3b618535b2045"
+    },
+    "lockValidator": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/lock-validator-v3.cjs",
+      "sha256": "ce0b93ee7d337c4237efcf796d889549058ad62eaad1f93780fae1be87ba4259"
+    },
+    "peerRules": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/zero-peer-rules.json",
+      "sha256": "f5e1fb00bff14979e7e23a81868b0d4f4903bc00ce548597d9d447163af35636"
     },
     "installation": {
-      "path": "artifacts/runtime-assembly-20261007/install-Jnxy60/result.json",
-      "sha256": "20948e621c3e25dc1a7d47c47d780449699a8b6437ee7fa15b2470cc5a2e2823"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/runtime-install-z8ofq0/result.json",
+      "sha256": "67233d71d7e6f3894d94a3fb8fbe3a77fb92e6e27f5594a683bcda37e5c3d8db"
+    },
+    "audit": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/runtime-audit-CEuacU/result.json",
+      "sha256": "8346a5b4acee94fb98ff54a4ec5c12e1872284ebcc5ad978682a597b2053188e"
     },
     "materialization": {
-      "path": "artifacts/runtime-assembly-20261007/payload-review/materialized-uZiveE/result.json",
-      "sha256": "3272d4a6cf3acea408bf556b92576839f96484253c18c5e74eaa383bf36c9f92"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-payload-review-rc2/materialized-IF7QVK/result.json",
+      "sha256": "5fb36d76e6511b8a7d6dc0afe37003625630e3baf594b2917ecc451e1cdf17ba"
     },
     "nativeVerification": {
-      "path": "artifacts/runtime-assembly-20261007/payload-review/native-4Jgmkr/runtime-verification-report.json",
-      "sha256": "f0d49fc64d2cbee5fef75e5bce42f9e536aecf220e940c4a5b7b6c02660f1399"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-live-review-rc2/native-TsBYCo/runtime-verification-report.json",
+      "sha256": "3679c5b5adebd8eac02f9d151f37ea2fd9398b1e2d87437b70dc2a9e32f089f9"
     },
     "hostAcceptance": {
-      "path": "artifacts/runtime-assembly-20261007/host-review/acceptance-QecWws/report.json",
-      "sha256": "09f3185fdf77bac9dabbb07da97604fc4585f3ebfafb2ad1def816d16941d2d2"
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-host-review-rc2/run-7QSbK3/result.json",
+      "sha256": "46a3840a82da275401df20c1a342a8cabb623c7e3b1ccc28d8903f125c418f23"
+    },
+    "snapshotReview": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/local-snapshots.reviewed-v3.json",
+      "sha256": "ef97d3052ec79ff80d82de70c996ab4b64ed79d7cc7d0072eeba723578590cc7"
+    },
+    "sourceGraphAudit": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/candidate-semantic-graph-v3.json",
+      "sha256": "94a5ab68ad73bded42feed86213bc65330bab1e46cba32fbc798d8fd85831457"
+    },
+    "dependencyController": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/derive-lock-v2.cjs",
+      "sha256": "170d9b7fd59444796ac56b80f6f5cdf5a31018dd97095e16f650135fb4ef1439"
+    },
+    "dependencyStageController": {
+      "path": "artifacts/upstream-checks/2026-10-17/rc1/runtime-lock-review-rc2/runtime-install-audit.cjs",
+      "sha256": "df4f36dddf62e81d304f4a8d883e0df6739f88ad328cd7437c730a2af371ccd3"
     },
     "node": {
       "path": "vendor/runtime/win32-x64/node.exe",
@@ -92,37 +132,9 @@
       "path": "vendor/powershell/7.6.6/win32-x64/pwsh.exe",
       "sha256": "bfb46af89433268872ddb43d1ca7a3f433452ee91ed356a9786940f90118e285"
     },
-    "officialRuntimeTree": {
-      "path": "artifacts/harness-021-final-replay/apps/desktop/src/runtime-tree.ts",
-      "sha256": "aaef471a94c1bb295c7aecd080f2bf9f4fa037a8fc3f2d76c63db9b367c80778"
-    },
-    "officialCorePackageSet": {
-      "path": "artifacts/harness-021-final-replay/apps/desktop/src/core-package-set.ts",
-      "sha256": "578403a76103a378a6abff4257cf45ee65b9e31d0b87b83a475d12da33f85667"
-    },
-    "officialRelease": {
-      "path": "artifacts/harness-021-final-replay/apps/desktop/src/release.ts",
-      "sha256": "ab4c40200893effa8e3ea0840c43630ba10403242f90ecccba49ae9a11c82140"
-    },
-    "officialHostProtocol": {
-      "path": "artifacts/harness-021-final-replay/apps/desktop/src/host-protocol.ts",
-      "sha256": "3ac3b9c5416144de212ed2e1fae3ae17a12dedd9389df99f07283012df5d77b9"
-    },
-    "sourceIntegration": {
-      "path": "artifacts/stable-readiness-20261007/build/integration-final.json",
-      "sha256": "fa314f79fc5a080fa1a0393830097f6954b8a8f8ba6bd00fcc8978765b5ccd4c"
-    },
-    "sourceBuild": {
-      "path": "artifacts/stable-readiness-20261007/build/build-final-NEF5BV/result.json",
-      "sha256": "e2fc89855e5ce2ce603f03907b5bea73d8dd82d1abbc142b750569153ae53957"
-    },
-    "sourcePack": {
-      "path": "artifacts/stable-readiness-20261007/build/pack-final-Q7Wk5z/result.json",
-      "sha256": "a3724d39ecccd315176793b8c9e15abd82bdf5a40aac5c98fe46110370ca5748"
-    },
-    "assemblyInputs": {
-      "path": "artifacts/stable-readiness-20261007/build/assembly-DEQYlz/assembly-inputs.json",
-      "sha256": "446aea6fce28310d01564c158b7d819fd94a0434cb5e1556529e82717a9d8d75"
+    "officialCompatibility": {
+      "path": "runtime/harness-official/source-compatibility.json",
+      "sha256": "385dca0b5aaa75d2027f3b25a1708f2a9aecd956896de47925010b284f7e489a"
     }
   }
 }

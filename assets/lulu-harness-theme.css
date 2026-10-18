@@ -65,16 +65,16 @@ html body[data-ds-dark-theme] {
   border-bottom-color: var(--dsw-alias-border-l2);
 }
 
-/* Pinned 0.2.1-alpha.1 decorative marks only. Retain official button geometry and events. */
-:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark):has(> svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"]),
-:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark):has(> div[data-slot] > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"]) {
+/* Pinned 0.2.1-rc.2 decorative marks only. Retain official button geometry and events. */
+:is(.VNJnBa_fishHitbox, ._9Bqw3q_root ._9Bqw3q_railMark, ._9Bqw3q_root ._9Bqw3q_brandMark):has(> svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"]),
+:is(.VNJnBa_fishHitbox, ._9Bqw3q_root ._9Bqw3q_railMark, ._9Bqw3q_root ._9Bqw3q_brandMark):has(> div[data-slot] > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"]) {
   background-image: var(--lulu-brand-image);
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
 }
-:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark) > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"],
-:is(.qVIJiq_fishHitbox, .ghK-Yq_root .ghK-Yq_railMark, .ghK-Yq_root .ghK-Yq_brandMark) > div[data-slot] > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"] {
+:is(.VNJnBa_fishHitbox, ._9Bqw3q_root ._9Bqw3q_railMark, ._9Bqw3q_root ._9Bqw3q_brandMark) > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"],
+:is(.VNJnBa_fishHitbox, ._9Bqw3q_root ._9Bqw3q_railMark, ._9Bqw3q_root ._9Bqw3q_brandMark) > div[data-slot] > svg[aria-hidden="true"][viewBox="0 0 23.16 17.04"] {
   visibility: hidden;
 }
 

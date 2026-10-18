@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "version": "0.2.1-rc.2",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+  "tag": "dsh-v0.2.1-rc.2",
+  "commit": "687f282e8625c6b8d11ff58211a90524be2e4317",
+  "packageManager": "pnpm@11.28.5",
+  "promotionAllowed": false,
+  "preflightOnly": true,
+  "lockStatus": "reviewed-replayed-lock-independently-post-verified",
+  "upstreamLockSha256": "4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4",
+  "lockSha256": "5f786c8af40763e2f2400da0e162065a7dc489ac28c87c2891c59948b9876a3b",
+  "workspaceSha256": "e5776fa749e6877835eed3b24fcaab768b623921437805e262ff5ec64600aedc",
+  "postimagePath": "runtime/harness-021-rc2/postimages.json",
+  "postimageSha256": "8356e4fefb70c75eeef54c47e714b834d3e7cbd0aff8e6a26b511454bd41d763",
+  "lockReplay": {
+    "type": "localized-patch-replay-on-new-official-lock",
+    "verificationType": "independent-post-verification-of-applied-replay",
+    "path": "artifacts/upstream-checks/2026-10-17/rc1/replay-verification-rc2-0B6tf8/result.json",
+    "sha256": "0d33129da0b0e4e81f7ea9d715a638bb5eba9878d152ec7f68d1802ed57cfd93",
+    "reviewPath": "artifacts/upstream-checks/2026-10-17/rc1/replay-verification-rc2-0B6tf8/review.json",
+    "reviewSha256": "59c80864c1530393c4bdd2ce2be18557529ce284499c44055b4c105e38029794",
+    "sourceReplayScriptPath": "artifacts/upstream-checks/2026-10-17/rc1/verify-replay-rc2.cjs",
+    "sourceReplayScriptSha256": "4e6a79cbe4ffc8442e80c5d76f82b2e4ed207a80c252430397454e3bf8fc6788",
+    "originalFailureScope": {
+      "type": "post-apply-source-metadata-assertion",
+      "errorSha256": "e8037fc840fde9c9573b36c8efb142dbe53128c317df46ed1091cee04614b875",
+      "scriptPath": "artifacts/upstream-checks/2026-10-17/rc1/prepare-rc2.cjs",
+      "scriptSha256": "e48c0692a99f40f9940c156c4211564c4548238c5039342ae7bcc45abfe92b75",
+      "patchCount": 6,
+      "fileCount": 40
+    },
+    "upstreamLockSha256": "4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4",
+    "replayedLockSha256": "5f786c8af40763e2f2400da0e162065a7dc489ac28c87c2891c59948b9876a3b",
+    "baselineVersion": "0.2.1-alpha.5",
+    "baselineCommit": "1517a4dbca0a2789ff1d41ba439600f8547d23fa",
+    "scope": "Six reviewed patch payloads applied on rc.2. Independent post-verification preserves the failed original receipt and proves exactly two new production links and two new official importers. Not a pnpm lock-generation receipt."
+  },
+  "patchChain": [
+    {
+      "path": "runtime/harness-021-alpha4/security.patch",
+      "sha256": "0d5388addf1484ee2675c4f6c161dc4dc3a6ec13669420d6cc612cbac83ff90c"
+    },
+    {
+      "path": "runtime/harness-021-alpha4/security-lock.patch",
+      "sha256": "a4c74b946460154a7ac0c2968f0d285fe9b6ea48268e439c89fe5e5167911677"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/private-powershell-alpha2.patch",
+      "sha256": "ea8be19dd85ff0a637f1debee4381330022daa1fe0e1ef0597e5dc32de09902f"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/attachment-lifecycle-alpha2.patch",
+      "sha256": "729db1179cc614ad5f388db4b9582bc326c0175456f6baacc054323e315a8a51"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/attachment-types-alpha2.patch",
+      "sha256": "6fcd92dcdd9618baed95c2c040c317f33022ba5d66c97790dca91c803d5a9c2a"
+    },
+    {
+      "path": "runtime/harness-021-alpha2/private-powershell-jsdoc-alpha2.patch",
+      "sha256": "3bcb3d670d08755afbe25202d53cfc9f2226a26db79da8714424ede17105a437"
+    }
+  ],
+  "validationRequirements": [
+    "Bind a successful closed frozen-install receipt with unchanged complete source inputs before building.",
+    "Run rc.2 Search/Fetch, model label, credentials, proxy, private PowerShell and attachment lifecycle regressions without enabling paid search.",
+    "Use fresh rc.2 build and pack evidence; do not relabel alpha.5 artifacts.",
+    "Validate local package peer, optional and platform metadata before production-lock acceptance.",
+    "Runtime deployment, packaged interaction, overwrite installation and release acceptance remain separate gates."
+  ]
+}
