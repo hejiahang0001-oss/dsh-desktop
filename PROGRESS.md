@@ -1,5 +1,9 @@
 # DSH Desktop 执行进度
 
+> 2026-10-19 05:01:53（北京时间）公开交付 Wiki 同步完成：既有7项目页及index/hot/log/manifest共11文件均精确匹配after，`ok=true`；QMD为`skipped_unset`，未配置跳过。回执 `artifacts/upstream-checks/2026-10-18/release117/wiki-public117-64LNJ1/verify-1792357313239.json`，checkedAt=`2026-10-18T21:01:53.238Z`，SHA256 `9367ce1bbb3d7854cb276f4b614befc24c2e3416559635487469616782de3fcc`。公开来源文档保留04:52历史检查点，SHA256仍为 `8b2720cf1db133c2049d0e8a6ba103abee8461bd3b81beed8d3982f29bf7910b`，不追写同步结果；安装来源亦未改。后续仅最终文档归档。
+
+> 2026-10-19 04:52:49（北京时间）：V1.1.17 / rc.2 已按授权晋升 Stable / GitHub Latest，release416619407、tag精确 `c5a5a811` 与四资产最终读回通过。CI39153336024 三项成功（1142通过/6跳过），PR85合并 `c0af2d49` 且 tree一致；独立 Windows runner39165094959 完整匿名下载4/4通过，workflow-only提交 `80aef48d` 不冒充产品源码。本机原下载两次HTTP200后各10分钟超时、0/4与源前后摘要一致的证据保留。本机安装/资料/集成及已接受风险不变；本阶段 Wiki 后于05:01:53同步完成，回执见上，不重建或重跑有效全测。[公开交付来源](docs/LULU_1.1.17_PUBLIC_DELIVERY_2026-10-19.md) 保留04:52历史状态。以下保留历史检查点。
+
 > 2026-10-19：本机已覆盖 lulu 1.1.17 / rc.2。独立恢复备份、安装负载16041文件、安装前后ACL111+5及首启前资料保全通过；真实界面版本/原会话/Key和代理入口正常，用户已托盘退出。29原文件及7草稿/密文/代理保留，唯一新增365字节格式文件的独立迁移核对通过，原比较失败保留。临停集成已精确恢复并通过五工具握手；源码CI和公开下载/Stable尚待收口，不重建已验候选。[证据与继续位置](docs/LULU_1.1.17_INSTALL_RELEASE_2026-10-19.md)。
 
 > 2026-10-18 22:27 Wiki交接同步完成：7项目页和index/hot/log/manifest共11文件精确回读通过，271旧来源、人工历史、其他项目与实际交付字段保留；新增后272条，关联链接有效，QMD未配置跳过。回执 `artifacts/upstream-checks/2026-10-17/rc1/wiki-rc2-continuation-chzphk/verification.json` SHA256 `3ab3b42acfe0a4e63e176c221ede6829a7575b4242d87392d354e51e6c8b4ed3`；来源SHA256 `c6781180cfde5f741e7d99e1521de20622b523cb531a80a35a5bbe7a1790508a`。已准确记录失败候选清理、新包Portable功能通过/严格退出风险接受及dsh_agent临停等待重启；尚未覆盖或发布。
