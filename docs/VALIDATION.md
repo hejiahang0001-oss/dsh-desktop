@@ -1,5 +1,11 @@
 # Validation evidence
 
+## 2026-10-19 04:52:49（北京时间）Stable公开交付检查点
+
+精确提交 `c5a5a811f6afd932338669f2f5c76e0f27adedd2` 的CI39153336024三个job均completed/success；总1148、1142通过、0失败、6跳过，不等同本机既有1148零跳过。PR85合并 `c0af2d492e3d2ecbf863708ed1dc2b9e86e355d6`，tree一致但提交身份分别保留。最终release/latest均为416619407/v1.1.17、draft=false/prerelease=false，tag精确绑定c5；四资产ID/size/digest未变。Stable读回SHA `79e29d9501cca3f405fb6b86f86fd56d47178c3473b7358ba8dca1a39a39d8d2`。
+
+独立GitHub Windows runner39165094959在公开Pre-release阶段完成4/4匿名完整HTTP200响应、长度/SHA及三条SUMS核验，21137毫秒；workflow-only提交 `80aef48d2d07199d7e3f7087e18919e3d9956646` 不是发行源码。runner回执SHA `e2a61f4610cb3db11ee828e7283da12b2b434df62c482181e2803b51c5d50f80`。原本机验证两次HTTP200后各10分钟超时、0/4完整通过，失败SHA `defcb14cf9ab456a8ea77344ce90c9ba4dc22c6609ba661db15a0237c56662e8`；四本地源前后摘要未变不等于本机下载成功。随后独立Stable读回闭合公开交付门禁，不改原严格失败或已接受SGTool/主机权限风险。本阶段Wiki已于05:01:53完成11/11精确after回读，回执SHA `9367ce1bbb3d7854cb276f4b614befc24c2e3416559635487469616782de3fcc`，QMD未配置跳过；[完整证据来源](LULU_1.1.17_PUBLIC_DELIVERY_2026-10-19.md) 保留04:52历史状态，回执路径见[执行进度](../PROGRESS.md)。以下为历史检查点。
+
 > 2026-10-19 installed acceptance: qihsES 1.1.17 / Harness 0.2.1-rc.2 now installed. Independent backup completion proof preserves the original INCOMPLETE failure; installed 16041-file payload, 111-entry/5-ancestor ACL comparison, strict pre-start preservation and real-profile read-only UI passed. User tray exit followed by 29 exact original session files, 7 preserved drafts, ciphertext/proxy/settings checks passed. A separate exact v3→v4 migration supplement covers the sole 365-byte generation; the original comparison refusal remains. Integration's temporary disabled line was removed with all other edits retained; five-tool MCP handshake passed. CI/public download/Stable not yet complete. See [current evidence](LULU_1.1.17_INSTALL_RELEASE_2026-10-19.md).
 
 ## 2026-10-18 新Portable功能闭合与安装交接

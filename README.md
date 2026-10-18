@@ -1,5 +1,7 @@
 # lulu（原 DSH Desktop）
 
+> **2026-10-19 04:52:49（北京时间）公开交付：** 本机为 lulu **1.1.17 / Harness 0.2.1-rc.2**，公开 **v1.1.17 已晋升 Stable / GitHub Latest**。精确源码 `c5a5a811` 的 CI 三项成功（1142通过、6跳过），PR85 已合并且 tree 一致；GitHub 独立 Windows runner 四资产匿名完整下载通过，本机两次 HTTP200 后超时、0/4完整通过的失败原样保留。未签名、手动安装、自动更新关闭和已接受的退出/主机权限风险不变。本阶段 Wiki 已于 05:01:53 完成 11/11 文件精确回读，QMD 未配置跳过；[公开交付来源](docs/LULU_1.1.17_PUBLIC_DELIVERY_2026-10-19.md) 保留 04:52 检查点、不追写 Wiki 结果。下方日期段落均为历史检查点。
+
 > **2026-10-19 本机已更新：** lulu **1.1.17 / Harness 0.2.1-rc.2** 已覆盖安装；16,041 个安装负载、资料权限、首启前保全和真实界面检查通过。正常退出后 29 个原会话文件、7 条草稿及 Key/代理保留；唯一新增会话格式文件已独立核对，集成已恢复。公开 Pre-release 仍 1.1.14，Stable 仍 1.1.12，正在完成源码 CI 和公开交付。[本轮安装与发布记录](docs/LULU_1.1.17_INSTALL_RELEASE_2026-10-19.md)。下方日期段落均保留其历史时点。
 
 > 2026-10-18 安装交接：qihsES真实Portable冷启动/541项运行库与终端八项通过；严格退出的唯一搜狗残留按用户接受风险单列，不称全绿。Codex dsh_agent已仅单行临停并私有备份，等待完整重启释放旧运行库后覆盖；本机1.1.16、公开1.1.14、Stable1.1.12尚未改变。[当前交接与证据](docs/LULU_RC2_PORTABLE_COLD_START_2026-10-18.md)。以下保留原时点。
@@ -22,7 +24,7 @@
 
 > 2026-10-11 19:05最新：本机lulu1.1.16/alpha.2已安装。原资料同次托盘正常退出及29历史/7草稿/加密Key/代理保留通过；唯一3+1官方空恢复标记由独立窄证明闭合，原比较失败保留。dsh_agent仅撤销本次临停行并保留其他设置，CLI启用及新Node限握手通过。隔离补测已验证即时清空/官方Stop归零，但等待退出超时被Job清理，退出后历史和该轮ACL仍未通过；无后台测试遗留，不重发全模型或打包。尚未完整交付，公开1.1.14/Stable1.1.12不变。 [证据及剩余验收](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。以下按原时点保留历史。
 
-1.1.17 的 `DSH-Desktop-Setup-1.1.17.exe` / `DSH-Desktop-Portable-1.1.17.exe` 当前包位于 `artifacts/stable-readiness-20261007/dist-qihsES/output/`；已包含设置导航、终端验收及插件清单冷启动修正，构建与完整双包内容、适用运行检查、覆盖安装及原资料保全已完成；已接受的严格退出残留风险仍保留，最终源码 CI 与公开交付尚未完成。失败候选 `dist-MoXZ8p/output`、`dist-fA7r83/output` 已按逐次授权删除，日志保留；更早 `dist-wktxIa` 仅为历史证据。上一版 1.1.16 的本地包保留于 `artifacts/stable-readiness-20261007/dist-JNNUUW/output/`，不是当前本机安装版本，亦未公开下载。
+1.1.17 的 `DSH-Desktop-Setup-1.1.17.exe` / `DSH-Desktop-Portable-1.1.17.exe` 固定本地包位于 `artifacts/stable-readiness-20261007/dist-qihsES/output/`，并已作为当前 Stable 公开；沿用原摘要，没有重建。设置导航、终端验收、插件清单冷启动修正及安装/资料证据见顶部当前交付记录；严格退出残留风险仍保留。失败候选 `dist-MoXZ8p/output`、`dist-fA7r83/output` 已按逐次授权删除，日志保留；更早 `dist-wktxIa` 仅为历史证据。上一版 1.1.16 的本地包保留于 `artifacts/stable-readiness-20261007/dist-JNNUUW/output/`，不是当前本机安装版本，亦未公开下载。
 
 > **2026-10-11 重启后最新状态：** 本机已覆盖为lulu1.1.16/官方0.2.1-alpha.2，独立版本身份、完整安装负载、资料权限及严格首启前保全已验；新完整源码976/976通过。原资料只读UI确认原工作区/17会话目录/加密Key/当前草稿附件正常，等待用户同次托盘退出及after核验。安装态窄测在首次输入阶段失败（提交计数缺失，不能证明零提交或零模型），正定位输入框操作，未宣称插话/Stop通过。dsh_agent暂时停用，恢复集成和CI/公开验收仍待完成。**公开Pre-release仍1.1.14，Stable仍1.1.12**。以下17:39之前的等待重启/未安装表述为历史时点。[准确进度](docs/HARNESS_UPSTREAM_v0.2.1-alpha.2.md)。
 
@@ -38,7 +40,7 @@
 
 > **2026-10-09 交付完成：lulu 1.1.14 / Harness 0.2.1-alpha.1 已覆盖本机并公开 Pre-release。** 本地 912/912、发行提交 CI、四份文件匿名下载与完整 SHA-256 均通过，原会话/草稿/Key/代理保全，Obsidian 已同步。本次确认的 Windows 11 x64 范围内已达到 Stable 就绪条件，但**未晋升，Stable 仍为 1.1.12**。安装包未签名，既有主机风险和其他未验证范围继续披露。详见[公开交付证据](docs/LULU_PUBLIC_DELIVERY_2026-10-09.md)。以下旧日期段落仅为历史。
 
-日常迭代下载：[1.1.14 发布页](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.14) · [安装版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.14/DSH-Desktop-Setup-1.1.14.exe) · [便携版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.14/DSH-Desktop-Portable-1.1.14.exe)。Stable 通道不随日常迭代自动变化。
+历史 2026-10-09 日常迭代下载：[1.1.14 发布页](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.14) · [安装版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.14/DSH-Desktop-Setup-1.1.14.exe) · [便携版](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.14/DSH-Desktop-Portable-1.1.14.exe)。当前 Stable 下载见下方 1.1.17 入口。
 
 > 2026-10-09 当前：本机已安装 **lulu 1.1.14 / Harness 0.2.1-alpha.1**；真实资料托盘退出后28份历史、7条草稿、Key及代理保留检查通过，临停集成已精确恢复。正在完成源码PR/CI及四资产公开Pre-release；尚未公开，Stable仍为1.1.12。详见[交付收尾记录](docs/LULU_RELEASE_READINESS_2026-10-09.md)。下方状态均保留其历史时点。
 
@@ -90,7 +92,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-1.1.12.exe"><strong>Download for Windows</strong></a>
+  <a href="https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.17/DSH-Desktop-Setup-1.1.17.exe"><strong>Download for Windows</strong></a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#中文说明">中文说明</a>
   · <a href="DSH_DESKTOP_ITERATION_PLAN.md">Roadmap</a>
@@ -104,15 +106,15 @@
 </p>
 
 > [!IMPORTANT]
-> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. V1.1.12 Stable pins `dsh-v0.1.5-rc.2` at `fb2c4b9e698e30edb738bca4cf0618587db7d203` with the documented `desktop-security-1` dependency fixes. The desktop Stable label does not change Harness's developer-preview status.
+> DSH Desktop is an independent community project. It is not affiliated with, endorsed by, or maintained by DeepSeek. V1.1.17 Stable adapts Harness `0.2.1-rc.2` at `687f282e8625c6b8d11ff58211a90524be2e4317`. The desktop Stable label does not make this upstream release candidate a stable API guarantee.
 
 ## Why DSH Desktop
 
 2026-09-23: the same unpublished V1.1.14 candidate is preparing for released Harness `0.1.7-alpha.2`; the active runtime is still `0.1.6-alpha.2`. Settings-migration backup coverage is fixed (621 passed / 2 skipped in the final source suite). V4, Messages-only, new-runtime and delivery gates remain unverified; no new installer or release. See the [new preflight](docs/HARNESS_UPSTREAM_v0.1.7-alpha.2.md). Existing evidence below is not acceptance of the new target.
 
-V1.1.14 is an unpublished source candidate for Harness `0.1.6-alpha.2`. Its 621 source tests and real source-mode Office sidebar preview pass, but package/install and Office-kit source-availability gates remain open. `DSH-Desktop-Setup-1.1.14.exe` is the planned filename, not a currently available download. See the [candidate notes](docs/RELEASE_NOTES_v1.1.14.md). The installed daily build remains V1.1.13; Stable downloads remain V1.1.12.
+Historical 2026-09-23 checkpoint: V1.1.14 was an unpublished source candidate for Harness `0.1.6-alpha.2`; its package/install gates were then open. See the [candidate notes](docs/RELEASE_NOTES_v1.1.14.md). This does not describe the current installed or published release.
 
-V1.1.12 (`DSH-Desktop-Setup-1.1.12.exe`) is the current Stable and is installed and verified locally. It adapts Harness `0.1.5-rc.2`, official Markdown/code/image/HTML/PDF previews and `present` deliverables. Duplicate ordinary desktop previews are removed; bounded search, Git Review, legacy references, Wiki and Office validation/receipts remain. Eight exact runtime security fixes are documented without changing upstream application sources. See the [release notes](docs/RELEASE_NOTES_v1.1.12.md) and [validation evidence](docs/VALIDATION.md).
+V1.1.17 is the current Stable and installed release, adapting Harness `0.2.1-rc.2`. It retains official previews and deliverables, bounded desktop integrations and the lulu identity, with duplicate plugin management delegated to the official page. See the [release notes](docs/RELEASE_NOTES_v1.1.17.md) and [layered delivery evidence](docs/LULU_1.1.17_PUBLIC_DELIVERY_2026-10-19.md).
 
 Session V3 upgrades require an independent pre-upgrade data backup. Do not let an older executable resume an upgraded active profile.
 
@@ -162,7 +164,7 @@ DeepSeek Harness already provides the agent and Web UI. DSH Desktop adds the Win
 
 ## Quick start
 
-1. Download [`DSH-Desktop-Setup-1.1.12.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/latest/download/DSH-Desktop-Setup-1.1.12.exe).
+1. Download [`DSH-Desktop-Setup-1.1.17.exe`](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.17/DSH-Desktop-Setup-1.1.17.exe).
 2. Install and launch DSH Desktop. The current installer is not code-signed, so Windows SmartScreen may show a warning.
 3. Open **Project → Open code repository…** or press `Ctrl+O`.
 4. Open **Model** to configure your DeepSeek API key, then start a Harness session.
@@ -171,17 +173,17 @@ The application stores profiles, sessions, settings, logs, and repository state 
 
 ## Current releases
 
-**V1.1.12 official preview and delivery adaptation** delegates ordinary previews and file delivery to Harness RC2 through public plugin services. Installed tests cover five preview formats, three Chinese PDF pages, keyboard search, real queue/steer/stop/present, Excel/Word reads and unchanged user data. The installer remains unsigned, with automatic installation disabled; Portable cold-start performance remains a known limitation. See the [release notes](docs/RELEASE_NOTES_v1.1.12.md), [validation record](docs/VALIDATION.md), and [upstream compatibility map](docs/HARNESS_UPSTREAM_v0.1.5-rc.2.md).
+**V1.1.17 / Harness 0.2.1-rc.2** cumulatively delivers the 1.1.15–1.1.17 lulu visual update, upstream adaptation, official plugin-page delegation and bounded read-only plugin-inventory cold-start fix. Installation and existing profile preservation passed on the maintained Windows 11 x64 machine. The installer remains unsigned; installation is manual and automatic updates remain disabled. Accepted SGTool exit residue and host-permission risks remain disclosed. See the [release notes](docs/RELEASE_NOTES_v1.1.17.md) and [validation record](docs/VALIDATION.md).
 
-**[V1.1.12 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.12)** is the maintainer-approved stable baseline and GitHub `Latest release` as of 2026-09-12. Promotion reuses the original tested binaries and SHA-256 values without rebuilding or reinstalling. See [release notes](docs/RELEASE_NOTES_v1.1.12.md), [credential migration](docs/KEY_STORAGE.md) and [verification history](docs/VALIDATION.md).
+**[V1.1.17 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.17)** is the explicitly authorized Stable and GitHub `Latest release`, read back on 2026-10-19 at 04:52:49 Beijing time. Promotion retained all four uploaded asset identities and hashes. Independent GitHub Windows runner downloads passed 4/4; the original local network timeout remains a failed 0/4 check, not a local success. See [delivery evidence](docs/LULU_1.1.17_PUBLIC_DELIVERY_2026-10-19.md) and [credential migration](docs/KEY_STORAGE.md).
 
-Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.12/DSH-Desktop-Setup-1.1.12.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.12/DSH-Desktop-Portable-1.1.12.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.12/SHA256SUMS-v1.1.12.txt). There is currently no newer public Pre-release; future iterations will use that separate channel.
+Download the [Windows installer](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.17/DSH-Desktop-Setup-1.1.17.exe), [portable build](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.17/DSH-Desktop-Portable-1.1.17.exe), or [SHA-256 checksums](https://github.com/hejiahang0001-oss/dsh-desktop/releases/download/v1.1.17/SHA256SUMS-v1.1.17.txt). The fourth asset is the Setup blockmap; no `latest.yml` is published.
 
 **Historical releases:** on 2026-09-12 the maintainer requested removal of all older installer assets, including V1.1.0 and V1.0.5. Release records and source tags remain available, but their old installer links no longer provide downloads. Local obsolete packages and duplicate transfer files were sent to the Windows Recycle Bin; verification records and independent user-data backups were retained.
 
 ### Release channels
 
-- **Stable:** V1.1.12 is the stable baseline and GitHub `Latest release`, explicitly promoted by the maintainer on 2026-09-12. Stable changes only after explicit approval of a tested Latest build.
+- **Stable:** V1.1.17 is the stable baseline and GitHub `Latest release`, explicitly authorized and verified on 2026-10-19. Stable changes only after explicit approval of a tested iteration.
 - **Latest:** validate each planned iteration before overwriting or publishing it as a GitHub Pre-release. Follow the maintainer's explicit authorization, including standing authorization for routine iterations; request new approval when authorization is absent or the action exceeds its scope. Latest can advance without replacing Stable.
 - Before upgrading, retain an independent backup of application data. Session v2 writes are not readable by older runtimes: do not point Stable or another older version at an already migrated active profile. Roll back only with a separate compatible pre-upgrade data backup; keeping an installer is not a data-downgrade guarantee.
 
@@ -219,7 +221,7 @@ The pinned runtime includes the complete official dependency closure required by
 
 - The Windows installer is not code-signed yet.
 - Software-managed DeepSeek credentials use encrypted `.credentials.dpapi.json` storage and take priority over environment variables; ordinary backups exclude credential files. Keys require re-entry on another Windows account or computer. See [Key storage and migration](docs/KEY_STORAGE.md).
-- V1.1.12 Stable embeds Harness `0.1.5-rc.2`, which remains a developer preview rather than a stable upstream API guarantee. DSH Desktop reports tool failures and never switches to Full Access automatically; validation covers key product paths but cannot prove every upstream plugin path. Stable promotion does not imply code signing, a second-machine test or 24-hour aging.
+- V1.1.17 Stable embeds Harness `0.2.1-rc.2`, an upstream release candidate rather than a stable API guarantee. DSH Desktop reports tool failures and never switches to Full Access automatically; accepted SGTool exit residue and host-permission risks remain, and validation cannot prove every upstream plugin path. Stable promotion does not imply code signing, a second-machine test or 24-hour aging.
 - V0.4.8 retains PNG, JPEG, WebP, GIF, and PDF preview with separate 24 MiB image and 40 MiB PDF limits. Device presets, browser developer tools, and remote URL preview are not included. Credential-like paths, links/junctions, traversal, and files outside the workspace remain blocked.
 - V0.5.20 Word editing performs exact replacement inside one OOXML text node; it does not guess across mixed-format runs, convert `.doc`, or provide tracked changes, comments, equations, or arbitrary Word DOM editing. Embedded images are limited to bounded workspace PNG/JPEG files.
 - V0.5.21 Excel supports bounded `.xlsx` creation, CSV import, explicit cell updates, formulas, styles, filters, frozen panes, and reconciliation. It does not execute macros, external links, connections, query tables, Power Query, arbitrary scripts, or legacy `.xls`; unsupported or risky content fails strict inspection.
@@ -256,11 +258,11 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), an iss
 
 DSH Desktop 是一个面向 Windows 的 **DeepSeek Harness 非官方社区桌面宿主**。它不重新实现 Agent，而是在官方 Harness Web UI 外增加 Windows 原生项目、会话、模型、Agent、工具和变更菜单。
 
-[V1.1.12 已按维护者指令晋升为 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.12)，沿用已验收安装包，不重新构建或安装。本次仅保留 V1.1.12 的发布文件，旧版本安装附件已从 GitHub 移除，本地旧包与重复传输文件已进入回收站；源码标签、发布历史、验收记录和用户数据备份保留。独立后台任务等前序能力继续保留：独立任务需要 Git，普通文档不需要 Git，完全退出软件后不执行定时任务。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)。
+[V1.1.17 已按用户授权晋升为 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.17)，沿用已验 qihsES 包，晋升未重建或替换四资产。本机已安装 1.1.17 / Harness 0.2.1-rc.2，原会话、草稿、密文 Key 和代理保留；公开匿名完整下载由独立 Windows runner 验证，本机超时失败仍保留。跨电脑和回退旧版本的 Key 边界见[迁移说明](docs/KEY_STORAGE.md)。
 
-发布通道规则：V1.1.12 为当前 Stable 和 GitHub `Latest release`，于 2026-09-12 经维护者明确授权晋升。后续迭代仍走独立 Latest / Pre-release，不自动修改 Stable；当前没有比此 Stable 更高的公开预发布版本。Stable 只有在维护者明确下达“更新 Stable”命令后才晋升，不代表安装器已签名或已完成 24 小时老化，边界见[发布说明](docs/RELEASE_NOTES_v1.1.12.md)。
+发布通道规则：V1.1.17 为当前 Stable 和 GitHub `Latest release`，于 2026-10-19 04:52:49（北京时间）完成读回。后续迭代仍可走独立 Pre-release，不自动修改 Stable；Stable 晋升必须有明确授权。此次不代表安装器已签名、自动更新可用或已完成其他电脑/长期老化验证，边界见[发布说明](docs/RELEASE_NOTES_v1.1.17.md)。
 
-本轮 [V1.1.12 Stable](https://github.com/hejiahang0001-oss/dsh-desktop/releases/tag/v1.1.12) 的内核固定为 `0.1.5-rc.2`，普通 Markdown、代码、图片、HTML、PDF 预览和 `present` 文件交付统一采用官方能力，删除重复普通预览。保留文件搜索、Git Review、旧引用、草稿、Office/Wiki 工具及安全收据。原发布的 602 项源码测试记录和安装态五类预览、真实插话/停止、Excel/Word 读取均通过；晋升未更改二进制、Key 或用户会话。四项资产再次通过匿名完整下载，默认下载入口已指向 V1.1.12。已验证范围见[验证记录](docs/VALIDATION.md)。
+本轮累计交付 1.1.15–1.1.17 的 lulu 形象、官方 rc.2 适配、重复插件管理入口退役及清单冷启动修复；仍保留文件搜索、Git Review、旧引用、草稿、Office/Wiki 工具及安全收据。精确源码 CI 为 1142 通过/6 跳过，本机既有 1148 零跳过证据独立保留；四资产独立 runner 完整校验通过，不冒充本机下载通过。默认下载已指向 1.1.17；本阶段 Wiki 已同步并精确回读通过，回执见 [执行进度](PROGRESS.md)。[完整分层来源](docs/LULU_1.1.17_PUBLIC_DELIVERY_2026-10-19.md) 保留 04:52 历史状态。
 
 - 选择本地代码仓库并同步到同路径 Harness Workspace；
 - 复用或创建该工作区的会话；
